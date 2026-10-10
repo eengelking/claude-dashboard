@@ -1,0 +1,968 @@
+# SPEC: Podium, a live fleet console for Claude Code orchestrators
+
+| | |
+|---|---|
+| Status | Draft 1, ready to implement |
+| Weight class | Phased (single implementing agent, one phase at a time) |
+| Visual reference | `mockup/podium.html` (authoritative for look, layout, copy and behavior of the UI) |
+| API reference for the mod | `plugin-authoring` skill, types file at `/private/tmp/claude-501/bundled-skills/2.1.296/d92c7b49108d4f84cc512e5d19a6266f/plugin-authoring/types/claude-code.d.ts` (see section 5.1 if that path is gone) |
+
+Podium shows every Claude Code session running on one machine in one browser tab. Each session is an
+**orchestrator**: a main agent that can launch **subagents** (blank slate) and **forks** (a copy of the
+orchestrator that keeps its context). Podium shows each orchestrator's model and effort, its plan, the tree
+of agents it launched, what each agent costs, how full its context window is, whether it blew out that
+window, why anything failed, and which git branch or worktree it works in. Orchestrators appear when a
+session starts and disappear when it ends, with no refresh.
+
+It is built from three parts: a **reporter mod** that runs inside every Claude Code session and sends
+snapshots, a **server** that stores and serves them, and a **browser UI** that renders them live.
+
+This repo already contains an earlier app (`server/`, `frontend/`) that charts Claude Code and Admin API usage.
+Podium is added next to it. Do not remove or break it.
+
+---
+
+## 1. Goals and non-goals
+
+### Goals
+
+1. Show all live Claude Code sessions on this machine, updating within about 2 seconds of a change, with no
+   page refresh. A new session appears by itself. An ended session leaves by itself.
+2. Per orchestrator: name, working directory, git branch, whether it is a worktree, ahead/behind/modified
+   counts, model, effort, status, context fill, estimated cost, token count, elapsed time, resume command.
+3. Per orchestrator: the plan it is working through (from its task list), step states, and which agent owns
+   which step where that can be determined.
+4. Per agent (subagent or fork): parent, kind, type, description, model, effort, status, context fill, tokens,
+   estimated cost, elapsed time, skills it loaded, last tool, and a failure record when it failed.
+5. Make context-window blowouts impossible to miss: count them per loop, flag a loop or session that blew
+   out twice or more as likely to have lost context, and show when each one happened.
+6. Make a failure explorable: show the failing call, its output, and the evidence for the likely cause.
+7. Sort and filter: by status, model, context blowouts, context fill, cost, newest; agents by any column.
+8. Activity stream that is capped in memory, pages 12 at a time, and links each row to the thing it is about.
+9. Charts per orchestrator for the last 60 seconds: tokens per second, peak context in any loop with
+   blowout markers, agents running. Fleet-level sparklines for cost and tokens.
+10. Light and dark themes, resizable side panels, keyboard accessible, usable at phone width.
+11. Survive restarts: sessions, agents and events persist in SQLite. A restart of the server loses nothing
+    that was already reported.
+12. A simulator script that feeds the server realistic reports so the UI can be developed and demoed with no
+    Claude sessions running.
+
+### Non-goals (do NOT build these)
+
+- No control surface. Podium observes. It never sends prompts, stops agents, approves permissions or edits
+  a session. (The dashboard may copy a resume command to the clipboard; that is all.)
+- No multi-machine or multi-user support. One machine, one user, localhost only. The server binds to
+  `127.0.0.1` by default.
+- No hosted deployment, accounts, or cloud sync.
+- No billing accuracy. Cost is an estimate from token counts and a price table. The UI always labels it as
+  an estimate. Never present it as an invoice.
+- No reading of conversation transcripts. Podium sends short excerpts only (section 6.4), never whole
+  messages or files.
+- No replacement of the existing usage dashboard. It stays reachable at `#/usage`.
+- No terminal UI or pane inside Claude Code in this spec. A minimal `/podium` command and a status-line entry
+  are in scope; a full pane is deferred (section 10).
+- No authentication system. An optional shared-secret header is in scope (section 7.7). Nothing more.
+- No new chart or UI libraries beyond those in section 2. Charts are inline SVG, as in the mockup.
+
+---
+
+## 2. Tech stack
+
+| Concern | Choice | Why |
+|---|---|---|
+| Reporter mod | TypeScript hooks module for Claude Code's mod API (`plugin.json` + `hooks/register.ts`) | The only mechanism that sees agent spawns, per-step usage, compaction, tool results and plans from inside a session, and can send them out (`$.http.fetch`). |
+| Server | Node 24 (already in use), Express 4 (already in the repo), TypeScript | Matches the existing `server/` workspace. |
+| Database | SQLite through Node's built-in `node:sqlite` (`DatabaseSync`) | No native build step, no new dependency, plenty for one machine. If `node:sqlite` proves unusable under vitest, fall back to `better-sqlite3` and say why in `docs/ARCHITECTURE.md`. Bump `@types/node` in `server/` to a version that declares `node:sqlite`. |
+| Live updates | Server-Sent Events (`text/event-stream`) | One-way push, built into browsers, no dependency, reconnects by itself. |
+| Frontend | React 18 + Vite + TypeScript (already in the repo) | Matches the existing `frontend/` workspace. |
+| Charts | Hand-written inline SVG | The mockup's charts are small polylines with markers; a library would fight the design. `recharts` stays only for the old usage page. |
+| Styling | Plain CSS with custom properties, ported from the mockup | The mockup defines the tokens for both themes. |
+| Tests | vitest (server, frontend), `claude plugin test` (mod) | vitest is already configured. The mod's tests must run on the engine itself. |
+| Fonts | Schibsted Grotesk and JetBrains Mono from Google Fonts, with system fallbacks | Same as the mockup. The app must still work offline with the fallbacks. |
+
+No other runtime dependencies without a written reason in `docs/ARCHITECTURE.md`.
+
+---
+
+## 3. Glossary
+
+| Term | Meaning |
+|---|---|
+| Session | One running Claude Code process conversation, identified by its session id (`$.session.id()`). A `/clear` ends a session and starts another in the same process. |
+| Orchestrator | The main loop of a session. Podium's top-level row. Same thing as a session. |
+| Agent | A loop the orchestrator started: a subagent, a fork, or a teammate. Has an `agentId`. |
+| Subagent | An agent that starts from a blank slate (only its prompt). Model and effort can be set at spawn. |
+| Fork | An agent that is a copy of its parent: keeps the parent's whole context. Always uses the parent's model and effort. The Agent tool spells it `subagent_type: "fork"`. |
+| Loop | The main loop or any agent. Context is measured per loop. |
+| Plan | The orchestrator's task list (`TaskCreate`/`TaskUpdate` tools, or `TodoWrite`), shown as steps. |
+| Blowout | A loop's context window filled up and was compacted automatically, or the API reported the window exceeded. The count per loop is the signal for lost context. |
+| Compaction | Summarizing older conversation to free context. Manual (`/compact`) is not a blowout. Automatic is. |
+| Reporter | The mod. Runs in the Claude Code process and posts reports. |
+| Report | One JSON snapshot of a session plus any new activity events, POSTed to the server. |
+| Stale | A session the server has not heard from for 15 seconds and that never reported ending. |
+| Effort | The reasoning-effort level: `low`, `medium`, `high`, `xhigh`, `max`. |
+| Mod / plugin | The Claude Code extension mechanism. This spec uses "mod" for the reporter. |
+
+---
+
+## 4. Architecture
+
+```
+ Claude Code session A  ──┐   POST /api/fleet/report (JSON, ~1/s while changing, heartbeat every 5 s)
+ Claude Code session B  ──┼──────────────────────────────►  Podium server (Express, 127.0.0.1:4317)
+ Claude Code session C  ──┘   (reporter mod, via $.http.fetch)     │  validate → upsert → derive → persist (SQLite)
+                                                                   │
+ Browser tab  ◄──────────  GET /api/fleet/stream (SSE)  ◄──────────┘  sweeper: stale / done / dropped
+              ───────────► GET /api/fleet/state (first paint + resync)
+```
+
+### 4.1 Repo layout (create exactly this; do not move existing files)
+
+```
+docs/SPEC.md                         this file
+docs/ARCHITECTURE.md                 written during the build (section 11)
+docs/fixtures/report.sample.json     one full valid Report (section 6); shared by mod and server tests
+mockup/podium.html                   visual reference, do not edit
+mod/podium-reporter/                 the Claude Code mod
+  .claude-plugin/plugin.json
+  hooks/hooks.json
+  hooks/register.ts                  wiring only: registers hooks, no logic
+  hooks/state.ts                     in-memory session model and pure reducers
+  hooks/report.ts                    builds a Report from state
+  hooks/transport.ts                 queue, flush, backoff, offline buffer
+  hooks/git.ts                       branch, worktree, ahead/behind, dirty
+  hooks/plan.ts                      Task*/TodoWrite → plan steps
+  hooks/failures.ts                  classify and excerpt failures
+  hooks/models.ts                    model family, context windows, price table
+  hooks/protocol.ts                  Report types (kept identical to server/src/fleet/protocol.ts)
+  hooks/*.test.ts                    run by `claude plugin test`
+server/src/fleet/
+  protocol.ts                        Report + view types, validators
+  db.ts                              schema, migrations, queries
+  ingest.ts                          Report → rows, events, blowouts, samples
+  derive.ts                          SessionView, KPIs, blowout level, series
+  sweeper.ts                         stale / linger / drop timers
+  sse.ts                             client registry and broadcast
+  routes.ts                          Express router mounted at /api/fleet
+  *.test.ts
+frontend/src/fleet/
+  FleetApp.tsx, useFleet.ts (SSE + reducer), store.ts, format.ts
+  components/…                       see section 8.2
+  fleet.css                          tokens and layout ported from the mockup
+  *.test.tsx
+scripts/podium-sim.ts                simulator (has --help)
+scripts/podium-smoke.sh              end-to-end smoke check (has --help)
+```
+
+`server/src/index.ts` mounts the fleet router and starts the sweeper. `frontend/src/main.tsx` renders
+`FleetApp` for `#/` (default) and the existing `App` for `#/usage`.
+
+### 4.2 Ports and addresses
+
+- Server: `PORT` env, default `4317` (already the repo's default). Binds `127.0.0.1` unless `HOST` is set.
+- Vite dev server proxies `/api` to the server (check `frontend/vite.config.ts`; add the proxy if missing).
+- Mod option `serverUrl`, default `http://127.0.0.1:4317`.
+
+### 4.3 Data ownership
+
+The mod owns what is true inside a session. The server owns time: staleness, lingering, dropping, series
+(tokens per second, peak context, running count) and blowout severity. The UI owns presentation only. The
+UI never computes anything it could not recompute from one `SessionView` (section 7.4).
+
+---
+
+## 5. The Claude Code mod API: everything the reporter needs
+
+This section is the working reference. Everything marked **Verified** was read from the engine's type
+declarations on the build this spec was written against (engine 2.1.296). Everything marked **Assumption** must be
+checked by the implementer against the types file or with `claude plugin validate` before relying on it, and
+any wrong assumption must be recorded in `docs/ARCHITECTURE.md` under "Mod API findings".
+
+### 5.1 Where the truth is
+
+- Types file (this build): `/private/tmp/claude-501/bundled-skills/2.1.296/d92c7b49108d4f84cc512e5d19a6266f/plugin-authoring/types/claude-code.d.ts` (about 21,000 lines; grep it, do not read it whole). Long form guide: `.../plugin-authoring/reference.md`. Examples: `.../plugin-authoring/examples/`.
+- If that path is gone, invoke the `plugin-authoring` skill (it rewrites the types and names the new folder). Once a mod is loaded from a folder the engine watches, the same types appear in `<mod folder>/.claude-plugin/types/` and `tsc -p <mod folder>` type-checks the mod.
+- The API is early access and moves between releases. The declaration file is the authority. This section is a map.
+
+### 5.2 Shape of a mod (Verified)
+
+A mod is three files plus optional extras:
+
+- `.claude-plugin/plugin.json`: `{ "name": "podium-reporter", "version": "0.1.0", "description": "…" }`. Add `"userConfig"` for options (see 5.9) and `"types"` only if the mod keeps values in `$.state`.
+- `hooks/hooks.json`: `{ "modules": ["./register.ts"] }`. Exactly one path, relative to that file.
+- `hooks/register.ts`: `export const register: Register = (on, options) => { … }` with `import type { Register } from 'claude-code'`.
+
+Rules the module must obey:
+
+- Runs in its own sandbox: **no DOM, no Node, no `import()`**. Everything outside is reached through `$`.
+- Every file the plugin imports must be `.ts`, `.tsx`, `.jsx`, `.js`, `.mjs`, `.cjs`, `.mts` or `.cts` and is an ES module. Import with `import` declarations only. **Assumption:** relative imports may need explicit extensions (`./state.ts`); try `validate` and keep whichever form it accepts.
+- A hook is `($, e, next)`. `next(e)` runs the plugins beneath and then the engine, resolving to the event's result. Returning without `next` answers for yourself (never do this in the reporter except for the commands and tool it registers). `next({ ...e, x })` rewrites. The reporter only observes: it must always call `next(e)` and return what it resolves to unchanged.
+- A hook that throws or outlasts its budget is skipped. Wrap every reporter hook body in `try/catch`; on error, record it in a bounded in-memory error list and still `return next(e)`. For hooks where `next` may already have run, never call it twice.
+- Module variables are lost on hot reload. That is fine for the reporter: rebuild state from `$.agent.list()`, `$.session.*` and `$.session.usage()` on `session.start` and on reload, and accept some lost event history.
+- Reload: a reload runs `register` again and fires `session.start` again. `$.store` (across sessions) and `$.state` (the session's) survive.
+
+Run during development:
+
+```
+claude plugin validate mod/podium-reporter          # manifest + source: lists every event hooked and every $ call made
+tsc -p mod/podium-reporter                           # only once the engine has laid types in .claude-plugin/types/
+claude plugin test mod/podium-reporter               # runs hooks/*.test.ts against the engine
+claude --plugin-dir mod/podium-reporter              # a session with the mod loaded (hot-reloads on save)
+claude --plugin-dir mod/podium-reporter -p "…"       # headless; always loads fresh
+```
+
+### 5.3 Events the reporter hooks
+
+`on(event, matcher?, hook)`. Matchers narrow by the event's key (for `tool.call`: `{ tool: 'Agent' }`).
+
+| Event | Raised when | Input fields the reporter uses (Verified unless noted) | Reporter's use |
+|---|---|---|---|
+| `session.start` | Session ready; also after every hot reload | `cwd`, `surface` (null for `-p`/SDK), `isInteractive` | Create the session model; start timers; register `/podium`; first report. |
+| `session.end` | Session ends, including `/clear` | `reason` (the classic SessionEnd reason, includes `clear`), `sessionId`, `resume.id` | Send a final report with `status: "done"`, `endReason`, `resumeId`. After `reason: "clear"` **no `session.start` fires**: the process continues under a new session id (see 5.8). |
+| `agent.spawn` | An agent is about to start (`agent.spawn` hook also covers `$.agent.spawn`) | `tool_use_id`, `prompt`, `description`, `subagentType`, `model?`, `parentModel`, `parentAgentId?` (absent = main loop), `background`, `fork` (true for a fork), `isTeammate?`, `name?`, `cwd?`, `provider` | Create an agent record. Result of `next(e)` is `{ model, agentId, teammateId? }` or `{ deny }`: key the agent by `agentId`. Effort is **not** on this event. |
+| `tool.call` | Any tool call, main loop or agent | `tool`, `tool_use_id`, the tool's own arguments (`e.command` for Bash, etc.), `agentId?` (set inside an agent). Result: `{ result, text, isError? }` or `{ deny }` | (a) For `tool: "Agent"`, read the requested `effort`, `model`, `subagent_type`, `description`, `name` and key them by `tool_use_id` (this is where effort at spawn is visible). (b) For `tool: "Skill"`, read `skill` and attach to the loop (`agentId` or main). (c) For `TaskCreate`, `TaskUpdate`, `TodoWrite`: update the plan. (d) For every tool: if the result `isError` or is `{ deny }`, record a failure candidate on that loop (section 6.4). |
+| `turn.start` | Main loop turn starts (a subagent's run raises none) | `text`, `turnId` | Mark the orchestrator `running`; remember `turnId`. |
+| `turn.step` | One model request of a turn, in any loop. **A streaming event: the hook must be an `async function*`** (`yield* next(e)` forwards and evaluates to the result). | Input: `turnId`, `index`, `model`, `effort?`, `messageCount`, `agentId?`. Result (after the stream): `answer`, `toolUses`, `stopReason`, `usage: { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, model } \| null` | Per loop: record model and **observed effort**; context tokens = `input + cache_read + cache_creation` of the latest step; accumulate token totals and cost; if `stopReason === "model_context_window_exceeded"` or `"compaction"`, record a blowout. |
+| `turn.complete` | A loop's turn ends | `answer`, `durationMs`, `isAborted`, `turnId`, `agentId?`, `usage?`, `reason` (`answer` \| `aborted` \| `refusal` \| `error`), `refusal?` when `reason` is `refusal` | Main loop: status `waiting` (waiting on the user). Agent: `answer` → `done`; `aborted` → `aborted`; `refusal`/`error` → `failed` with a failure record. |
+| `session.compact` | Compaction runs, main or in an agent's own transcript | `trigger` (`manual` \| `auto` \| `plugin` \| `precompute`), `agentId?`, `instructions?`, `messages`. Result: either `{ messages, tokensBefore?, tokensAfter?, usage? }` or `{ skip }` | Await `next(e)`. If the result has `messages` and `trigger === "auto"`: **blowout** with `tokensBefore`, `tokensAfter`, `agentId`. `manual`: log a `compact` event, not a blowout. Ignore `precompute` and `skip`. |
+| `session.measure` | The status line's figures changed | `context: { tokens?, window, percent? }`, `rateLimits: [{ kind, percentUsed, resetsAt? }]`, `cost?: { usd }`, `changed: ('context'\|'rateLimits'\|'cost')[]` | Cheap trigger for main-loop context, session cost and rate limits without polling. Mark state dirty. |
+| `classic.PermissionRequest` | A permission dialog is about to show (**Assumption:** hookable by that name; the doc says every settings-hook event is hookable as `classic.<Event>`) | `tool_name`, `tool_input` | Set orchestrator `status: "waiting"`, `waitReason: "permission"`, `waitNote: "<tool_name>(<short input>)"`. Cleared by the next `tool.call` of that loop or `turn.complete`. |
+| `classic.Notification` | Claude Code raises a notification (needs permission, idle for input) | `message`, `title?`, `notification_type` | Fallback signal for `waiting`. |
+| `classic.SubagentStart`, `classic.SubagentStop` | Subagent lifecycle | `agent_id`, `agent_type`, plus on stop `last_assistant_message?`, `agent_transcript_path` | Reconciliation only. `agent.spawn` + `turn.complete` are primary. |
+| `classic.PreCompact`, `classic.PostCompact` | Compaction | `trigger`, `compact_summary` (PostCompact) | Not needed if `session.compact` works. Fallback. |
+| `classic.TaskCreated`, `classic.TaskCompleted` | Task tool lifecycle | `task_id`, `task_subject`, `teammate_name?` | Fallback for plan tracking. |
+| `prompt.submit`, `prompt.compose`, `skill.prompt` | Prompt and skill events | `skill.prompt`: `skill`, `text` | `skill.prompt` is a second source for "skill loaded" (no `agentId`). |
+| `telemetry.*` (matcher `{ to: "collector" }` or `"anthropic"`) | Engine telemetry | varies | Optional, deferred. Not required. |
+
+All hook inputs are plain frozen data. Do not mutate them.
+
+### 5.4 Things on `$` the reporter calls (Verified)
+
+All calls are async unless noted. Read each one's doc comment in the types file before first use.
+
+| Call | Returns / does | Reporter's use |
+|---|---|---|
+| `$.session.id()` | session id (transcript file name) | Primary key. Re-read on every flush to detect a `/clear`. |
+| `$.session.cwd()`, `$.session.root()` | absolute dirs | Name, project path. `root()` follows `/cd` and worktree moves. |
+| `$.session.model()` | main loop model as `/model` shows it | Orchestrator model. |
+| `$.session.repo()` | `{ root, remote, internal, name } \| null` | Repository name (`name` may be null; fall back to the remote's `owner/name` parsed from `remote`, else directory name). |
+| `$.session.usage(args?)` | `{ startedAt, context: { tokens?, window, percent? }, rateLimits, cost?: { usd } }` | Main-loop context, **real session cost**, start time, rate limits. Plain call is free. Do **not** pass `breakdown`. |
+| `$.session.turns()`, `$.session.version()`, `$.session.messages()` | counts, engine version, transcript | `version()` goes in the report for debugging. **Never call `messages()` for reporting** (privacy, cost). |
+| `$.agent.list()` | `AgentInfo[]`: `{ id, teammateId?, description, type, status, parentId?, spawnedBy?, name? }`, `status` ∈ `pending` `running` `waiting` `idle` `completed` `failed` `killed` | Reconcile agent existence and status on every flush. Authority for "which agents exist now". |
+| `$.process.run(argv, { cwd, timeoutMs, env, stdin })` | `{ exitCode, stdout, stderr, isStdoutTruncated, isStderrTruncated }`, **no shell**, git runs with repo hooks off, default timeout 30 s | All git queries (section 5.7). CLI only. |
+| `$.http.fetch(url, { method, headers, body })` | `{ status, ok, headers, text }`, goes through the host, `http` or `https`. Rejects on network failure. | POST reports. Always set `Content-Type: application/json`. |
+| `$.clock.now()`, `$.clock.every(ms, fn)`, `$.clock.after(ms, fn)`, `$.clock.sleep(ms, { signal })` | `every`/`after` return a handle with `cancel()` | The flusher and git poller. Start timers from `session.start`; they run until cancelled or the module reloads. Cancel in `session.end` only when the whole process is ending (see 5.8). |
+| `$.store.get/set/delete/keys` | JSON key-value, per plugin, survives sessions (4 MiB cap) | Offline buffer spill (optional), session display names, last-seen server URL. |
+| `$.state` + `atom`, `read`, `update` (from `'claude-code'`) | Host-held session values with versions; redraw readers | Only if a pane is added later. The reporter needs none. If used, declare them in `types/index.d.ts` and name it in `plugin.json`. |
+| `$.settings.read()`, `$.env.get(NAME)` | merged settings; env var (name must be a **string literal**) | Optional: read `CLAUDE_EFFORT`, `LANG`. |
+| `$.command.register({ name, description, argumentHint? })` | Registers a slash command | `/podium`. Serve with `on('command.run', { command: 'podium' }, …)` returning `{ text }`. Call in `session.start`. |
+| `$.tool.register({ name, description, inputSchema, isDeferred? })` | Registers `mcp__podium-reporter__<name>` | Optional `plan` tool so an orchestrator can name its plan (section 6.3). Serve with `on('tool.call', { tool: 'mcp__podium-reporter__plan' }, …)` returning `{ result }`. |
+| `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium ● 4 live` or `podium ○ offline`. `log` to `debug` only. No toasts except on first successful connect and first failure. |
+| `$.model.complete({ model, prompt, effort? })` | `{ isAnswered, text?, usage, reason? }`, never rejects over provider errors | Optional failure explanation (Phase 5), default **off**. |
+| `$.agent.register(spec)`, `$.agent.spawn(args)` | Define or start agent types | **Not used.** Listed so the implementer does not reach for them. |
+
+`$.process`, `$.fs` and the UI nouns may be unavailable in some hosts (`-p`, SDK, desktop). Every call in the
+reporter must be wrapped so that a missing capability degrades the report (null field) instead of failing it.
+
+### 5.5 Tool inputs the reporter reads (Verified)
+
+```ts
+Agent:      { description: string; prompt: string; subagent_type?: string;
+              model?: 'sonnet'|'opus'|'haiku'|'fable'; effort?: 'low'|'medium'|'high'|'xhigh'|'max';
+              name?: string; isolation?: 'worktree'|'remote' }
+              // effort and model are IGNORED for subagent_type "fork": a fork inherits both.
+Skill:      { skill: string; args?: string }
+TaskCreate: { subject: string; description: string; activeForm?: string; metadata?: {} }
+            // result: { task: { id: string; subject: string } }
+TaskUpdate: { taskId: string; subject?; description?; activeForm?;
+              status?: 'pending'|'in_progress'|'completed'|'deleted';
+              addBlocks?: string[]; addBlockedBy?: string[]; owner?: string; metadata?: {} }
+            // result: { success, taskId, updatedFields, error?, statusChange?: { from, to } }
+TaskList:   {}   // result: { tasks: [{ id, subject, status, owner?, blockedBy }] }
+TaskGet:    { taskId }  // result: { task: { id, subject, description, status, blocks, blockedBy } | null }
+TodoWrite:  { todos: [{ content, status: 'pending'|'in_progress'|'completed', activeForm }] }
+            // result: { oldTodos, newTodos }
+```
+
+For a fork the model sets `subagent_type: "fork"`; in `agent.spawn` that arrives as `fork: true`.
+
+### 5.6 What the engine does and does not tell you (read before designing)
+
+| Wanted | Where it comes from | Caveat |
+|---|---|---|
+| Orchestrator model | `$.session.model()`, `turn.step.model` (no `agentId`) | Per step, so a mid-session `/model` shows up. |
+| Orchestrator effort | `turn.step.effort` (no `agentId`) | Absent for models without effort support: report `null`. |
+| Subagent model | `agent.spawn` result `model`, `turn.step.model` | Resolved alias, may be a full id. Map to a family (section 6.5). |
+| Subagent effort | `tool.call` Agent input `effort` (requested), then `turn.step.effort` for that `agentId` (observed, wins) | `agent.spawn` has no effort. Fork: copy the parent's. Record `effortSource`. |
+| Skills loaded | `tool.call` with `tool === "Skill"` (per loop via `agentId`), `skill.prompt` (no loop) | An agent definition may preload skills; that is not visible. Report what was observed. |
+| Context fill, main loop | `$.session.usage().context.percent`, `session.measure` | `tokens` may be absent before the first response. |
+| Context fill, an agent | `turn.step` result `usage` (input + cache read + cache creation tokens) over the model's window | No per-agent window API. Use the table in 6.5. Clamp to 100. |
+| Blowouts | `session.compact` (auto) and `turn.step` `stopReason` | If the build lacks `session.compact` for agents, fall back to the `stopReason` signal and note it. |
+| Cost, session | `$.session.usage().cost.usd` | Real ledger. Likely includes all agents. **Assumption:** verify by running a subagent and watching it grow. |
+| Cost, agent | tokens × price table | Estimate only. |
+| Plan | `tool.call` for Task*/TodoWrite | Built-in tools have no plan title or phase. |
+| Waiting on the user | `classic.PermissionRequest`, `classic.Notification`, `turn.complete` of the main loop | Best effort. If neither classic event is hookable, main-loop `turn.complete` ⇒ `waiting` with `waitReason: "input"`. |
+| Git | `$.process.run(["git", …])` | Section 5.7. |
+| Failures | `tool.call` results with `isError`/`{deny}`, `turn.complete.reason`, `turn.step.stopReason` | The engine gives evidence, not a diagnosis. |
+
+### 5.7 Git queries (run from the session's `cwd`; poll every 10 s and on `session.start`, never per event)
+
+```
+git rev-parse --abbrev-ref HEAD                  → branch ("HEAD" means detached; report the short sha instead)
+git rev-parse --git-dir ; git rev-parse --git-common-dir
+        → isWorktree = (resolve(git-dir) !== resolve(git-common-dir))
+git rev-parse --show-toplevel                    → worktreePath (when isWorktree)
+git status --porcelain=v1 -b                     → first line "## branch...origin/branch [ahead N, behind M]"; remaining lines = modified count (dirty)
+```
+
+If any call exits non-zero (not a repo), report `git: null`. Cache the result; send it with every report.
+
+### 5.8 Session identity, `/clear`, restarts
+
+- A session id changes on `/clear` and on resume. After `/clear` the engine fires `session.end` with `reason: "clear"` and **does not fire `session.start`** for the new id.
+- Therefore the reporter's flush loop calls `$.session.id()` every time. When it differs from the id in state: send a final `done` report for the old id (`endReason: "clear"`), reset per-session state (agents, plan, blowouts, event sequence), and begin reporting under the new id as a new session.
+- A hot reload re-runs `session.start` for a live session. State rebuilds from `$.agent.list()` and `$.session.*`. The first report after a reload carries the full agent list and may lack older event history. The server tolerates this: events are idempotent by id and agents are upserted.
+- Closing the terminal gives no hook in time. The server's stale logic (section 7.5) handles it.
+
+### 5.9 Mod configuration (userConfig)
+
+Declare in `plugin.json` (**Assumption:** confirm the exact `userConfig` field syntax with `claude plugin validate`; the reference says a field may list `options`, `default`, and secret fields are supported):
+
+| Option | Type | Default | Meaning |
+|---|---|---|---|
+| `serverUrl` | string | `http://127.0.0.1:4317` | Where to POST. |
+| `token` | string (secret if supported) | empty | Sent as `X-Podium-Token` when non-empty. |
+| `flushIntervalMs` | number | `1000` | Minimum time between reports while something changes. |
+| `heartbeatMs` | number | `5000` | Report at least this often even when nothing changed. |
+| `sessionName` | string | empty | Override display name for this machine's sessions (rare). |
+| `explainFailures` | boolean | `false` | Phase 5 only. When true, ask a small model to explain a failure (costs tokens). |
+
+Read via the `options` argument of `register`. A config change reloads the module.
+
+### 5.10 Alternatives and extras the implementer may use
+
+- **Settings command hooks** (`.claude/settings.json` `hooks`: `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `PreCompact`, `PostCompact`, `Notification`, `PermissionRequest`, `TaskCreated`, `TaskCompleted`, `Stop`) can `curl` the server without a mod. Every payload has `session_id`, `transcript_path`, `cwd`, `hook_event_name`, and inside a subagent `agent_id`, `agent_type`, and often `effort.level`. They lack per-step usage and context, so they can only drive a reduced display. Phase 5 adds `POST /api/fleet/hook` to accept them, for sessions started without the mod. The mod is the primary path.
+- **`CLAUDE_EFFORT` env var** is set for hook commands and Bash children; useful only for settings-hook scripts.
+- **`telemetry.*` hooks** can forward engine telemetry to a collector. Out of scope.
+- **Status line command** (`statusLine` setting) can show Podium's URL in the terminal. Out of scope; the mod uses `$.ui.status`.
+- **OpenTelemetry**: the engine can export OTel metrics natively. Out of scope; noted so nobody rebuilds it.
+- **`$.model.complete`** with `model: "haiku"`, `effort: "low"` is the cheapest way to produce a one-paragraph failure explanation (Phase 5, opt-in).
+- **`claude-api` skill** (invoke it) is the source for current model ids, context windows and prices when filling `models.ts`. Do not guess prices from memory.
+
+### 5.11 Testing a mod (Verified in the reference)
+
+`claude plugin test <folder>` runs `*.test.ts`. Import `test`, `expect`, `mock` from `'claude-code/testing'`. A test holds the engine's `$` and an `on` whose hooks sit beneath the plugin. Hooks beneath stand in for the engine, so what they answer is what the plugin receives. `test(name, { options }, body)` supplies `userConfig` values. `mock.session(on)` reads appended rows back. A UI test mounts a component per surface; the reporter has no UI components, so it needs none. Read the testing types (`grep -n "claude-code/testing"` in the types file) for the exact API, and write a test that raises each hooked event and asserts what the reporter posted through a mocked `http.fetch`.
+
+---
+
+## 6. The reporter protocol
+
+### 6.1 Endpoint
+
+`POST /api/fleet/report` with `Content-Type: application/json`, optional `X-Podium-Token`. Body is one `Report`. Response `200 { "ok": true, "serverTime": <epoch ms>, "ackedEvents": <n> }`, or `400 { "ok": false, "error": "…", "path": "…" }` for a body that fails validation (the mod drops that report and logs once to debug, it never retries a 400), or `413` above 512 KB.
+
+The mod sends a **full snapshot** every time (idempotent upsert) plus the **events not yet acknowledged**. The server never needs a previous report to understand a new one.
+
+### 6.2 The Report
+
+All times are epoch milliseconds. All token counts are integers. Unknown fields are ignored by the server. Missing optional fields are `null`, never omitted, so the shape is stable. `docs/fixtures/report.sample.json` is one full valid example and is the shared fixture for both test suites.
+
+```ts
+interface Report {
+  v: 1;
+  sentAt: number;
+  reporter: { name: 'podium-reporter'; version: string; engineVersion: string | null; hostSurface: string | null };
+  session: {
+    id: string;
+    name: string;                       // display name (6.6)
+    status: 'running' | 'waiting' | 'done';
+    waitReason: 'permission' | 'input' | null;
+    waitNote: string | null;            // e.g. "Bash(npm run e2e -- --retries=0)", ≤ 160 chars
+    endReason: string | null;           // set with status 'done'
+    resumeId: string | null;
+    startedAt: number;
+    cwd: string;
+    projectRoot: string | null;
+    repoName: string | null;            // "owner/name" or directory name
+    git: { branch: string | null; detached: boolean; isWorktree: boolean; worktreePath: string | null;
+           ahead: number; behind: number; dirty: number } | null;
+    model: string | null;               // as the engine reports it (alias or id)
+    effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null;
+    context: { tokens: number | null; window: number | null; percent: number | null };
+    costUsd: number | null;             // real session cost from the engine ledger
+    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };  // main loop only, cumulative
+    rateLimits: { kind: string; percentUsed: number; resetsAt: string | null }[];
+    blowouts: number;                   // main loop count, cumulative for this session id
+    plan: Plan | null;
+  };
+  agents: AgentReport[];                // every agent seen this session, running or finished
+  events: ActivityEvent[];              // not yet acknowledged
+}
+
+interface Plan {
+  title: string | null;
+  source: 'TaskCreate' | 'TodoWrite' | 'podium_plan';
+  steps: { id: string; text: string; state: 'pending' | 'active' | 'done' | 'blocked';
+           activeText: string | null; ownerAgentId: string | null; ownerLabel: string | null }[];
+}
+
+interface AgentReport {
+  id: string;                           // the engine's agentId
+  parentId: string | null;              // null = launched by the orchestrator
+  kind: 'subagent' | 'fork' | 'teammate';
+  type: string;                         // 'general-purpose', 'Explore', 'fork', a plugin agent…
+  name: string | null;
+  description: string;
+  model: string | null;
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null;
+  effortSource: 'requested' | 'observed' | 'inherited' | 'unknown';
+  status: 'queued' | 'running' | 'done' | 'failed' | 'aborted';
+  startedAt: number;
+  endedAt: number | null;
+  context: { tokens: number | null; window: number | null; percent: number | null };
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  costUsdEst: number;
+  skills: string[];
+  lastTool: string | null;
+  toolCalls: number;
+  blowouts: number;                     // this loop's cumulative blowouts
+  steps: { done: number; total: number | null } | null;   // model steps taken so far; total only when known, else null
+  promptExcerpt: string;                // first 400 chars of the task prompt
+  answerExcerpt: string | null;         // first 400 chars of its final answer
+  failure: Failure | null;
+}
+
+interface Failure {
+  class: 'Tool error' | 'Blocked by permission' | 'Model API error' | 'Refusal'
+       | 'Context window exhausted' | 'Aborted' | 'Unknown';
+  at: number;
+  tool: string | null;                  // e.g. "Bash", "Edit", "model request"
+  call: string | null;                  // the failing call, summarized, ≤ 300 chars
+  exitCode: number | null;
+  outputTail: string[];                 // last ≤ 12 lines of output, each ≤ 240 chars
+  evidence: string[];                   // short facts the reporter observed, ≤ 5 lines (e.g. "exceeded the window 3 times", "same file read 4 times")
+  explanation: string | null;           // only when explainFailures is on (Phase 5)
+  retriedAs: string | null;             // agent id that took over the step, when known
+}
+
+interface ActivityEvent {
+  id: string;                           // unique per event; idempotency key (sessionId:agentId|main:kind:t:n)
+  t: number;
+  kind: 'start' | 'end' | 'spawn' | 'skill' | 'done' | 'fail' | 'blow' | 'compact' | 'plan' | 'wait' | 'note';
+  agentId: string | null;
+  text: string;                         // ≤ 240 chars, plain
+  data: Record<string, unknown> | null;
+}
+```
+
+### 6.3 Plan building rules (`plan.ts`, a pure module)
+
+- Keep a map of tasks by id. `TaskCreate` result gives the id; `subject` becomes the step text; `activeForm` becomes `activeText`. `TaskUpdate` applies `status` (`pending`→`pending`, `in_progress`→`active`, `completed`→`done`, `deleted`→remove), `subject`, `activeForm`, `owner`, `addBlockedBy` (a step with an unfinished blocker is `blocked` unless it is `active` or `done`). `TodoWrite` replaces the whole list; ids are `todo-<index>`; the later of Task*/TodoWrite wins as `source`.
+- Plan title: the optional tool `mcp__podium-reporter__plan({ title, phase? })` sets it. Otherwise `metadata.planTitle` or `metadata.title` of the first TaskCreate. Otherwise `null` (the UI then shows "Plan").
+- Step owner: `TaskUpdate.owner` if it matches an agent `name`; else the running agent whose description, normalized (lowercase, alphanumerics only), equals or contains the step text or vice versa; else `null`. `ownerLabel` is `"<type> · <Model> <effort>"` for the matched agent.
+- No tasks yet ⇒ `plan: null`.
+
+### 6.4 Failure and excerpt rules (`failures.ts`, pure)
+
+- On every `tool.call` result with `isError` or a `{ deny }`, store a candidate on the loop: tool name, a summary of the call (Bash: the command; Edit/Read/Write: tool + `file_path`; others: tool + first argument, ≤ 300 chars), exit code parsed from the result text where present (best effort, `null` otherwise), and the last 12 lines of the result text.
+- A loop that ends `failed` takes its most recent candidate (≤ 60 s old) as the failure's `tool`/`call`/`outputTail`. Class: `deny` ⇒ `Blocked by permission`; `turn.complete.reason === "error"` ⇒ `Model API error` unless a candidate exists; `refusal` ⇒ `Refusal`; `stopReason === "model_context_window_exceeded"` or blowouts ≥ 3 ⇒ `Context window exhausted`; `aborted` ⇒ `Aborted`; else `Tool error` if a candidate exists, else `Unknown`.
+- `evidence` lines are factual and generated, never invented: blowout count and times, repeated identical failing calls ("same call failed 3 times"), repeated reads of one file, the permission denial text.
+- A loop with a failure candidate that later ends `done` is `done`; the candidate is discarded.
+- **Redaction.** Before anything leaves the machine, truncate to the limits above and replace anything that looks like a secret (`sk-ant-[A-Za-z0-9_-]{10,}`, `ghp_[A-Za-z0-9]{20,}`, `AKIA[0-9A-Z]{16}`, `Bearer [A-Za-z0-9._-]{20,}`, values after `password=`, `token=`, `secret=`, `apikey=`, `api_key=`) with `[redacted]`. The reporter unit-tests this.
+- Excerpts are the first 400 characters, whitespace collapsed.
+
+### 6.5 Models, windows, prices (`models.ts`, pure)
+
+- `family(modelIdOrAlias)`: lowercase substring match: `opus` → `opus`, `sonnet` → `sonnet`, `haiku` → `haiku`, `fable` → `fable`, else `other`. The UI colors by family (section 8.3).
+- `windowOf(model)`: **Assumption:** 200,000 for `haiku`, 1,000,000 for the others; for the main loop prefer `$.session.usage().context.window`. Verify with the `claude-api` skill and record the sources in `docs/ARCHITECTURE.md`.
+- `priceOf(family)`: USD per million tokens, split input / output / cache read / cache write. **Placeholder values must be replaced with current published prices** (use the `claude-api` skill). Keep all of it in this one file with a visible comment and a `PRICES_AS_OF` date constant. Cost estimate = Σ tokens × price / 1e6.
+
+### 6.6 Session display name
+
+In priority order: a name set with `/podium name <text>` (kept in `$.store` by session id); the `sessionName` option; for a worktree, the last segment of the branch (`refactor/invoice-v2` → `invoice-v2`) or of the worktree directory; else the repository directory's name; else `session-<first 6 of id>`.
+
+### 6.7 Reporting cadence
+
+- State changes mark `dirty`. A `$.clock.every(flushIntervalMs)` timer flushes when dirty or when `heartbeatMs` has passed since the last report.
+- Git is polled every 10 s, not per flush. `$.agent.list()` and `$.session.usage()` are read per flush (both cheap).
+- Never `await` a network call inside a hook that sits on the tool path. Hooks only mutate in-memory state and set `dirty`.
+- Events: assigned an id at creation, queued; the queue holds at most 500; acknowledged by `ackedEvents` count (the server acks all events in a valid report; the mod then clears them). If the server is unreachable: keep the latest snapshot and the event queue (oldest dropped past 500), retry with backoff 1 s → 2 s → 5 s → 10 s max, and update the status line to `podium ○ offline`. On the first success after failures, send the full snapshot plus queued events.
+- On `session.end`, flush synchronously (await the POST, 2 s timeout) before returning from the hook.
+
+---
+
+## 7. The server
+
+### 7.1 Endpoints (all JSON unless noted)
+
+| Method and path | Purpose |
+|---|---|
+| `POST /api/fleet/report` | Ingest (6.1). |
+| `GET /api/fleet/state` | `{ serverTime, sessions: SessionView[], kpis, clearedToday, events: ActivityView[] }`: everything live plus the latest 150 events. First paint and resync. |
+| `GET /api/fleet/stream` | SSE (7.3). |
+| `GET /api/fleet/sessions/:id` | One `SessionView`, live or historical. 404 if unknown. |
+| `GET /api/fleet/events?sessionId=&before=&limit=` | Page through stored events newest first (`limit` ≤ 200, default 50, `before` = event time). |
+| `GET /api/fleet/history?day=YYYY-MM-DD` | Ended or dropped sessions that day, summary rows only (name, project, model, duration, cost, blowouts, end reason). Phase 4. |
+| `DELETE /api/fleet/sessions/:id` | Remove a session and its rows (for stuck test data). Requires the token if one is configured. |
+| `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen }`. |
+| `POST /api/fleet/hook` | Phase 5: classic settings-hook payloads. |
+
+### 7.2 Database (SQLite)
+
+Path: `PODIUM_DB` env, default `<repo>/data/podium.sqlite` (add `data/` to `.gitignore`). Pragmas: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`. Migrations are a numbered list applied in order and recorded in `schema_migrations`.
+
+```sql
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL,           -- running | waiting | done
+  wait_reason TEXT, wait_note TEXT, end_reason TEXT, resume_id TEXT,
+  started_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, ended_at INTEGER, dropped_at INTEGER,
+  cwd TEXT NOT NULL, project_root TEXT, repo_name TEXT,
+  git_json TEXT,                                                           -- Report.session.git
+  model TEXT, effort TEXT,
+  context_tokens INTEGER, context_window INTEGER, context_percent REAL,
+  cost_usd REAL, tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER,
+  rate_limits_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
+  plan_json TEXT, reporter_version TEXT, engine_version TEXT
+);
+CREATE TABLE agents (
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
+  parent_id TEXT, kind TEXT NOT NULL, type TEXT NOT NULL, name TEXT, description TEXT NOT NULL,
+  model TEXT, effort TEXT, effort_source TEXT, status TEXT NOT NULL,
+  started_at INTEGER NOT NULL, ended_at INTEGER,
+  context_tokens INTEGER, context_window INTEGER, context_percent REAL,
+  tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER, cost_usd_est REAL,
+  skills_json TEXT, last_tool TEXT, tool_calls INTEGER, blowouts INTEGER NOT NULL DEFAULT 0,
+  steps_done INTEGER, steps_total INTEGER, prompt_excerpt TEXT, answer_excerpt TEXT, failure_json TEXT,
+  PRIMARY KEY (session_id, id)
+);
+CREATE TABLE events (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, agent_id TEXT, t INTEGER NOT NULL,
+  kind TEXT NOT NULL, text TEXT NOT NULL, data_json TEXT
+);
+CREATE INDEX events_session_t ON events(session_id, t DESC);  CREATE INDEX events_t ON events(t DESC);
+CREATE TABLE blowouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, agent_id TEXT, t INTEGER NOT NULL,
+  kind TEXT NOT NULL,                                                      -- auto-compact | window-exceeded | server-compaction
+  tokens_before INTEGER, tokens_after INTEGER, UNIQUE (session_id, agent_id, t, kind)
+);
+CREATE TABLE samples (                                                     -- one row per second per live session
+  session_id TEXT NOT NULL, t INTEGER NOT NULL,                            -- t = whole seconds
+  tokens_total INTEGER NOT NULL, tokens_delta INTEGER NOT NULL, peak_context REAL NOT NULL,
+  running_agents INTEGER NOT NULL, cost_usd REAL, PRIMARY KEY (session_id, t)
+);
+```
+
+Retention (run by the sweeper hourly): samples older than 24 h deleted; events older than 30 days deleted; sessions ended more than 30 days ago deleted with their rows. All three thresholds are env-configurable.
+
+### 7.3 Ingest rules (`ingest.ts`) and derivation (`derive.ts`)
+
+On a valid report, in one transaction:
+
+1. Upsert the session (`last_seen_at = serverTime`, never the reporter's clock; store clock skew `sentAt − serverTime` for debugging). A report with `status: 'done'` sets `ended_at`.
+2. Upsert every agent. An agent absent from a later report is **not** deleted (a reload may lose it); it stays as last reported, and if it was `running` and the session is `done`, mark it `aborted`.
+3. Insert events with `INSERT OR IGNORE` on `id`. Insert a `blowouts` row for each `blow` event carrying `data.kind`.
+4. Sample: compute `tokens_total` (main loop tokens + Σ agent tokens), `tokens_delta` against the previous sample (≥ 0), `peak_context = max(session context %, max over running agents' context %) / 100`, `running_agents`. At most one sample per session per second.
+5. Broadcast the changed `SessionView` and new events over SSE, throttled to one `session` message per session per 500 ms.
+
+**Blowout level** (the signal, computed in `derive.ts` and tested): `total = session.blowouts + Σ agent.blowouts`. `level = 0` if total is 0; `2` if the orchestrator has ≥ 2 blowouts or any single agent has ≥ 2 or total ≥ 3; else `1`. Level 2 is the red "likely losing context" state. Level 1 is the amber "context exceeded" state.
+
+**KPIs:** live orchestrators; counts running/waiting/stale; agents running and agents total; plan steps done/total across live sessions; est. cost today (Σ session `cost_usd` for sessions that started today, live or ended); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
+
+### 7.4 View types (server → UI; defined once in `protocol.ts`, imported by the UI)
+
+```ts
+interface SessionView {
+  id: string; name: string; project: string; repoName: string | null; resumeCommand: string;
+  git: { branch: string | null; detached: boolean; isWorktree: boolean; worktreePath: string | null; ahead: number; behind: number; dirty: number } | null;
+  model: string | null; modelFamily: 'opus'|'sonnet'|'haiku'|'fable'|'other'; effort: string | null;
+  status: 'running' | 'waiting' | 'stale' | 'done'; waitNote: string | null; endReason: string | null;
+  startedAt: number; lastSeenAt: number; secondsSinceSeen: number;
+  context: { tokens: number | null; window: number | null; percent: number | null };
+  costUsd: number | null; tokensTotal: number;
+  blowouts: { orchestrator: number; agents: number; total: number; level: 0 | 1 | 2; loopsHit: number; loopsTotal: number;
+              log: { t: number; agentId: string | null; kind: string; tokensBefore: number | null; tokensAfter: number | null }[] };
+  plan: Plan | null;
+  agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
+  series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
+}
+```
+
+`resumeCommand` is `cd <cwd> && claude --resume <resumeId ?? id>`. `project` is `projectRoot ?? cwd` with the home directory shortened to `~`.
+
+### 7.5 Lifecycle timers (`sweeper.ts`, runs every second, all values env-configurable)
+
+| Condition | Result | Default |
+|---|---|---|
+| `status ≠ done` and no report for `STALE_AFTER_MS` | Shown as `stale` (derived, not stored) | 15,000 |
+| `stale` for `DROP_AFTER_MS` more | `dropped_at` set, removed from the live set, event `end` "heartbeat lost" | 60,000 |
+| `status = done` for `LINGER_MS` | Removed from the live set, event `end` "session ended" | 8,000 |
+
+A stale session that reports again immediately returns to its stored status. A dropped session that reports again is revived (clear `dropped_at`, `ended_at`). On server start the sweeper treats every stored non-done session as stale until it reports. SSE broadcasts `removed` when a session leaves the live set.
+
+### 7.6 SSE stream
+
+`GET /api/fleet/stream` sends `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, and flushes headers at once. Messages (`event:` name, `data:` one JSON line):
+
+| Event | Data | When |
+|---|---|---|
+| `snapshot` | the full `/state` body | on connect |
+| `session` | one `SessionView` | on change (throttled per session) |
+| `activity` | one `ActivityView` | new event |
+| `removed` | `{ sessionId, reason: 'done'|'dropped'|'deleted' }` | leaves the live set |
+| `tick` | `{ serverTime, kpis }` | every 2 s (also serves as keepalive; the client treats 6 s of silence as disconnected) |
+
+The registry removes a client on `close`/`error`, and a write that throws never crashes the process. Supports 20 simultaneous clients. Send `retry: 2000`.
+
+### 7.7 Hardening
+
+- Bind `127.0.0.1` by default. If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads stay open on localhost.
+- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). Reject, never crash, on junk.
+- Never log report bodies. Log one line per error with the path.
+- Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
+- CORS: none needed (same origin). Do not enable `*`.
+
+---
+
+## 8. The UI
+
+`mockup/podium.html` is the specification. Open it, read all of it (about 1,100 lines), and reproduce its behavior in React. Where the mockup simulates data, the UI consumes `SessionView`. Do not redesign.
+
+### 8.1 What the UI must do (each line is a requirement)
+
+**Shell.** Top bar: logo and name; connection pill ("N reporters live, synced Xs ago", red "disconnected, retrying" when SSE is down); clock; theme toggle (light, dark, remembered in `localStorage` with try/catch; default follows the OS). No Pause or simulator buttons (those belong to the simulator script). Three columns: left rail (252 px), main, right panel (340 px), with drag handles between them exactly as the mockup (limits 180–440 and 260–700, main ≥ 420, double-click or Home resets, arrow keys 16 px, Shift 48 px, widths remembered, handles hidden and panels stacked below 1040 px).
+
+**Left rail.** "All orchestrators" item and one item per live session: status dot, name, blowout badge, model chip, plan bar and `done/total`, running/total agents. Red left edge when blowout level is 2. Follows the current sort. Rows enter and leave with the mockup's animations (respect `prefers-reduced-motion`).
+
+**Fleet wall (default view).** KPI tiles: orchestrators live, agents running, context blowouts, plan steps done, est. cost today (sparkline), tokens in the last minute (sparkline). Toolbar: status segments All / Running / Waiting / Stale / Blowouts; a Sort menu (Status, Model, Context blowouts, Context used, Cost, Newest); a text filter over name, project and branch; "N shown · M cleared today". Cards per session: name, status chip; project path; git line (branch icon, worktree chip or dashed "main checkout" chip, ahead/behind arrows, modified count or "clean"); model chip, effort meter, context chip with blowout badge; a red callout at level 2; plan title, current step, progress bar; an agent strip (square per agent, filled by model color; circle for a fork; faded when done; red outline when failed; dashed when queued; blinking when running); cost, tokens, elapsed time; sparkline; waiting and stale callouts. Legend row. Empty states with an instruction, never a blank panel.
+
+**Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: plan checklist (done, active, blocked, pending, with owner label) and the agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel and flashes the row.
+
+**Right panel.** *Activity*: newest first, **12 rows**, "Show 12 more" and "Show fewer", count text "Showing N of M", footnote "Only the latest 150 events are kept in memory." Each row is a button that selects the session and agent it is about, scrolls the agent row into view and flashes it; failure rows say "Show root cause", blowout rows "Show context history"; rows of sessions that have left the live set are greyed and say "Session ended" and do nothing. Filtered to the selected orchestrator when one is selected. *Agent detail*: status, **failure box** (class, failing call, output tail, evidence list, explanation if present, what happened next), **blowout box** (timeline of each overflow with time and token counts, explanation), kind, type, model and effort (marked "inherited" for a fork), context, tokens, cost, time, steps, last tool, skills as chips, prompt excerpt, child agents as buttons, back button.
+
+**Data flow.** `useFleet` loads `/api/fleet/state`, opens the SSE stream, applies `session`/`activity`/`removed`/`tick` with a pure reducer, and on reconnect refetches state. Elapsed times tick locally every second from `startedAt` so numbers move between server messages. Memory: keep at most 150 events; keep `series` as sent.
+
+**Copy resume command** copies `resumeCommand` with `navigator.clipboard.writeText` inside the click handler, catches rejection, and shows "Copied" for 1.6 s (or "Select and copy" fallback with the text selected).
+
+### 8.2 Components (create these; split further only if a file passes about 250 lines)
+
+`FleetApp`, `TopBar`, `Rail`, `Wall` (with `KpiStrip`, `Toolbar`, `SessionCard`, `Legend`), `FocusView` (with `FocusHeader`, `MiniCharts`, `FactsBar`, `BlowoutCallout`, `PlanPanel`, `AgentTree`, `AgentRow`), `SidePanel` (with `ActivityList`, `AgentDetail`, `FailureBox`, `BlowoutBox`), `Chips` (`ModelChip`, `EffortMeter`, `StatusChip`, `BlowBadge`, `GitLine`), `Sparkline`, `ResizeHandle`, `useFleet`, `useResizable`, `useTheme`, `format.ts` (`fmtTok`, `fmtUsd`, `fmtDur`, `fmtClock`, `shortenHome`). Pure logic (sorting, filtering, tree building, series to polyline points, reducer) lives in plain functions with their own tests.
+
+### 8.3 Visual tokens (copy from the mockup's `:root` blocks; dark is the base, light via `prefers-color-scheme` and `[data-theme]`)
+
+Surfaces `#0d0d0d` page, `#1a1a19` card, `#222220` raised; ink `#f0efec`, secondary `#c3c2b7`, muted `#898781`; grid `#2c2c2a`, axis `#383835`. Model colors: opus `#9085e9` (light `#6250d6`), sonnet `#3987e5` (`#2a78d6`), haiku `#199e70` (`#1baf7a`), fable `#d95926` (`#eb6834`). Status colors are fixed: good `#0ca30c`, warning `#fab219`, serious `#ec835a`, critical `#d03b3b`. Status is always shown as icon plus word, never color alone. Fonts: Schibsted Grotesk (UI), JetBrains Mono (ids, numbers, paths). Body 13 px. Numbers use tabular figures. `prefers-reduced-motion` disables animation.
+
+### 8.4 Accessibility and responsiveness
+
+Every interactive element is a real `button`, `a` or `input`, with a visible focus ring. Resize handles are `role="separator"` with `aria-orientation`, `aria-valuenow`, labels and arrow-key support. Charts have `role="img"` with an `aria-label`; the same numbers are in text elsewhere. No horizontal scroll of the page at 400 px; the agent tree scrolls inside its own container.
+
+---
+
+## 9. Phased build plan
+
+Phases run in order. Each ends with committed, passing, runnable work. Inside a phase, do tasks in the order listed unless a task says it is independent. **Commit at the end of each task** (conventional-commit style, matching the repo's history), on the branch you are on. Run `npm test` at the root before each commit.
+
+### Phase 0: Contract and scaffolding
+
+**Goal:** the shared contract exists as code and fixtures, and the workspace builds.
+
+#### T0.1 Protocol types and fixture
+- **Scope:** `server/src/fleet/protocol.ts`, `mod/podium-reporter/hooks/protocol.ts`, `docs/fixtures/report.sample.json`.
+- **Depends on:** none.
+- **Acceptance:**
+  1. `protocol.ts` exports `Report`, `Plan`, `AgentReport`, `Failure`, `ActivityEvent`, `SessionView`, `AgentView`, `ActivityView`, `Kpis` exactly as in sections 6.2 and 7.4, plus a hand-written `validateReport(unknown)` that returns `{ ok: true, report } | { ok: false, error, path }` and enforces every limit in 7.7.
+  2. The mod's `protocol.ts` has identical type declarations (types only). A test in each project reads the sibling's file and fails if the interface text differs after whitespace normalization.
+  3. `docs/fixtures/report.sample.json` is a full valid report with a running orchestrator, a plan with four steps in different states, one done subagent, one running fork, one failed subagent with a failure and one with two blowouts, and three events. `validateReport` accepts it.
+  4. `validateReport` rejects: a missing `v`, `v: 2`, a non-array `agents`, an agent with an unknown `status`, a 600-char event text (clamped, not rejected), 201 agents (rejected), a non-object body.
+
+#### T0.2 Repo plumbing
+- **Scope:** root `package.json`, `.gitignore`, `server/package.json`, `frontend/vite.config.ts`, `scripts/`.
+- **Depends on:** none (independent of T0.1).
+- **Acceptance:**
+  1. `.gitignore` ignores `data/` and `*.sqlite*`.
+  2. `server/package.json` has `@types/node` at a version that declares `node:sqlite`; `npm install` at the root succeeds; `npm test` and `npm run build` still pass unchanged for the existing app.
+  3. The Vite dev server proxies `/api` to the server port; the `/api/fleet/stream` proxy does not buffer (verify with the smoke script in T4.1).
+  4. Root `package.json` gains scripts `podium:sim` (runs the simulator) and `podium:smoke`.
+
+**Exit criterion:** `npm test` and `npm run build` pass; the fixture validates; both type files match.
+
+### Phase 1: Server
+
+**Goal:** a server that ingests reports, persists them, derives views, and streams them, proven by tests and the simulator.
+
+#### T1.1 Database and migrations
+- **Scope:** `server/src/fleet/db.ts` and its test.
+- **Depends on:** T0.1, T0.2.
+- **Acceptance:**
+  1. `openDb(path)` creates the schema in section 7.2 on an empty file and is idempotent on an existing one; `schema_migrations` records versions.
+  2. `:memory:` works for tests. WAL is on for file databases.
+  3. Parameterized queries only. A test inserts a session name containing `'); DROP TABLE sessions;--` and the table survives.
+
+#### T1.2 Ingest
+- **Scope:** `server/src/fleet/ingest.ts` and its test.
+- **Depends on:** T1.1.
+- **Acceptance:**
+  1. Ingesting the fixture creates one session, all its agents, its events and its blowout rows.
+  2. Ingesting the same report twice changes nothing but `last_seen_at` (idempotent), including event count and blowout count.
+  3. A later report that omits a previously reported agent keeps it. If the session ends `done`, a still-`running` agent becomes `aborted`.
+  4. A report with `status: "done"` sets `ended_at`. A later report for the same id with `status: "running"` revives it.
+  5. Samples: two reports 1 s apart with cumulative tokens 1,000 then 4,000 give `tokens_delta` 3,000; a decreasing total gives delta 0; at most one sample per second per session.
+  6. Server time, not reporter time, sets `last_seen_at`.
+
+#### T1.3 Derivation
+- **Scope:** `server/src/fleet/derive.ts` and its test.
+- **Depends on:** T1.2.
+- **Acceptance:**
+  1. `blowoutLevel` returns 0 for none; 1 for one blowout anywhere; 2 for an orchestrator with 2; 2 for any agent with 2; 2 for a total of 3 spread over three loops; with a table-driven test of at least 10 cases.
+  2. `SessionView.status` is `stale` when `now − lastSeenAt > STALE_AFTER_MS` and the stored status is not `done`.
+  3. `series` has exactly 60 points per array, zero-filled for seconds with no sample, `peakContext` in 0..1, and `blowoutSecondsAgo` containing the age in seconds of each blowout in the last 60 s.
+  4. KPIs match hand-computed values for a three-session fixture, including est. cost today and tokens in the last 60 s.
+  5. `resumeCommand` uses `resumeId` when present, else the session id, and quotes a `cwd` containing spaces.
+  6. `project` replaces the home directory prefix with `~`.
+
+#### T1.4 Sweeper and SSE
+- **Scope:** `server/src/fleet/sweeper.ts`, `server/src/fleet/sse.ts` and tests.
+- **Depends on:** T1.3.
+- **Acceptance:**
+  1. With an injectable clock, a session unheard for 15 s becomes `stale`; 75 s total drops it and emits `removed` with reason `dropped`; a `done` session lingers 8 s then emits `removed` with reason `done`.
+  2. A dropped session that reports again returns to the live set.
+  3. SSE sends `snapshot` on connect, `session` after ingest (throttled: ten ingests in 200 ms produce at most one `session` message), `activity` per new event, `removed` and `tick` every 2 s. A client that disconnects is removed; a write error does not crash the process.
+  4. Hourly retention deletes samples > 24 h, events > 30 d, old ended sessions, verified with injected old rows.
+
+#### T1.5 Routes and server wiring
+- **Scope:** `server/src/fleet/routes.ts`, `server/src/index.ts`, tests with supertest.
+- **Depends on:** T1.4.
+- **Acceptance:**
+  1. All endpoints in 7.1 except `history` and `hook` exist and behave as specified, including 400 with `{ ok:false, error, path }`, 413 over 512 KB, 401 without the token when `PODIUM_TOKEN` is set, 404 for an unknown session.
+  2. `GET /api/fleet/events` pages correctly with `before` and `limit`, newest first.
+  3. The existing `/api/claude-code` and `/api/api-usage` routes and tests are untouched and pass.
+  4. The server starts with `npm run dev -w server`, creates `data/podium.sqlite`, and logs the URL. It binds `127.0.0.1`.
+
+#### T1.6 Simulator
+- **Scope:** `scripts/podium-sim.ts`.
+- **Depends on:** T1.5 (can start once T0.1 is done, finish after T1.5).
+- **Acceptance:**
+  1. `--help` documents flags: `--url`, `--sessions N`, `--speed X`, `--seed N`, `--duration S`, `--chaos` (random stale sessions, failures, blowouts), `--token`.
+  2. It POSTs full reports once a second per simulated session using the exact `Report` type, with sessions that start, spawn subagents and forks, load skills, fail, blow out context (haiku-sized windows blow out often), finish, and get replaced, as in the mockup's simulation.
+  3. A seeded run is deterministic (same seed, same sequence of reports apart from timestamps).
+  4. It exits 0 on `--duration` expiry and leaves no sessions running; sessions it created are ended with `status: "done"` on exit and on SIGINT.
+
+**Exit criterion:** start the server and `npm run podium:sim -- --sessions 5 --chaos`; `curl -s localhost:4317/api/fleet/state` shows five sessions with agents, plans and series; `curl -N localhost:4317/api/fleet/stream` prints `snapshot`, then `session`, `activity` and `tick` messages; stopping the simulator ends its sessions and they leave the live set within the linger time.
+
+### Phase 2: Frontend
+
+**Goal:** the UI from the mockup, running on live server data.
+
+#### T2.1 Foundations
+- **Scope:** `frontend/src/fleet/` shell: `FleetApp`, `useFleet`, reducer, `format.ts`, `fleet.css` tokens, theme hook, `main.tsx` routing (`#/` fleet, `#/usage` old app, a link between them).
+- **Depends on:** T0.1, T1.5.
+- **Acceptance:**
+  1. `#/usage` renders the existing app unchanged (its tests still pass). `#/` renders the shell with the top bar.
+  2. The reducer is a pure function with tests for `snapshot`, `session` upsert, `activity` prepend with a 150 cap, `removed`, and `tick`.
+  3. With the server and simulator running, the connection pill shows the live reporter count; stopping the server shows "disconnected, retrying" within 6 s and recovers by itself when the server returns.
+  4. `fmtTok`, `fmtUsd`, `fmtDur` and `fmtClock` have tests including edge values (0, 999, 1000, 1.5M, 3,600 s, 86,400 s).
+  5. Dark and light themes match the mockup's tokens; the toggle works and the choice survives a reload.
+
+#### T2.2 Rail, KPI strip, wall, cards
+- **Scope:** `Rail`, `Wall`, `KpiStrip`, `Toolbar`, `SessionCard`, chips, `Sparkline`, `Legend`.
+- **Depends on:** T2.1.
+- **Acceptance:**
+  1. With the simulator running, new sessions appear in the rail and wall without reload; ended ones leave with the leave animation; `prefers-reduced-motion` disables both.
+  2. Sorting by each of the six keys reorders both the rail and the wall; sorting by Model orders Fable, Haiku, Opus, Sonnet and breaks ties by status then name. A unit test covers all six sorts.
+  3. Filters: each status segment and the Blowouts segment filter correctly; the text filter matches name, project and branch case-insensitively. Unit-tested.
+  4. A card renders the git line for all four cases (worktree with ahead/behind/dirty, main checkout clean, detached head, `git: null` shows nothing).
+  5. Blowout level 1 shows the amber badge; level 2 shows the red badge, the red card edge and the callout text.
+  6. Agent strip squares: fork is a circle, done is faded, failed has a red outline, queued is dashed.
+
+#### T2.3 Orchestrator page
+- **Scope:** `FocusView`, `FocusHeader`, `MiniCharts`, `FactsBar`, `BlowoutCallout`, `PlanPanel`, `AgentTree`, `AgentRow`.
+- **Depends on:** T2.2.
+- **Acceptance:**
+  1. Selecting a card or rail item shows the page; Back (the "All orchestrators" rail item) returns to the wall; the selection survives `session` updates and clears with a message if the session is removed.
+  2. The header, charts and facts bar match the mockup's layout at 1440 px; the **Copy resume command** button is the last cell of the facts bar.
+  3. Charts: three charts of 60 points from `series`; `peakContext` fixed 0..100%; red markers at `blowoutSecondsAgo`; caption counts markers; hover shows a crosshair and the value and time under the pointer and restores the live value on leave. A pure function converts a series to polyline points and is tested (empty, single point, all zeros, max scaling).
+  4. The agent tree builds from `parentId`; guides draw correctly for last and non-last children; sorting by Model/Effort/Context/Tokens/Cost/Time/Status switches to a flat list and clicking the same header again reverses it; "Show as tree" restores nesting. Unit-tested.
+  5. Plan panel shows state icons, the owner label, and "No plan reported. Agents were launched ad hoc." when `plan` is null.
+  6. Context bars turn amber at ≥ 75% and show red stripes for loops with ≥ 2 blowouts.
+
+#### T2.4 Side panel
+- **Scope:** `SidePanel`, `ActivityList`, `AgentDetail`, `FailureBox`, `BlowoutBox`.
+- **Depends on:** T2.3.
+- **Acceptance:**
+  1. Activity shows 12 rows; "Show 12 more" appends 12 more until the cap; "Show fewer" returns to 12; the count text is correct at each step; the 150-event memory note is present.
+  2. Clicking an activity row with an agent selects its orchestrator and agent, opens the agent detail, scrolls the row into view and flashes it. A failure row opens a detail that contains the failure box. A blowout row opens a detail containing the blowout timeline. A row of a removed session is inert and says "Session ended".
+  3. `FailureBox` shows class, call, output lines (as `pre` text, never HTML), evidence lines, optional explanation, and the "step went back to the plan" / "no retry queued" line from `retriedAs`.
+  4. Agent detail shows "inherited" next to model and effort for forks.
+  5. All text from reports renders as text nodes. A test puts `<img src=x onerror=…>` in a description, a failure output line and an event and asserts no element is created.
+
+#### T2.5 Resizable panels, copy button, responsive, accessibility
+- **Scope:** `ResizeHandle`, `useResizable`, copy handler, CSS breakpoints.
+- **Depends on:** T2.3.
+- **Acceptance:**
+  1. Drag, keyboard and double-click behave as in 8.1, limits enforced, widths persisted with try/catch, covered by tests that simulate pointer events and keys.
+  2. Copy writes `resumeCommand` to the clipboard (mocked) and shows "Copied" then reverts; a rejected promise shows the fallback.
+  3. At 400 px width there is no horizontal page scroll (assert `document.documentElement.scrollWidth <= innerWidth` in a browser check, see T4.2).
+  4. Every control is reachable by keyboard with a visible focus ring; `jest-dom` assertions for roles and labels on the handles and the charts.
+
+**Exit criterion:** `npm run dev`, then the simulator; open `http://localhost:5173/#/` (check the Vite port) and exercise every requirement in 8.1 with real clicks in a real browser (use the Claude in Chrome tools or Playwright if installed). Record what was checked and what could not be in the commit message of the last Phase 2 commit.
+
+### Phase 3: The reporter mod
+
+**Goal:** a real Claude Code session appears in the dashboard with everything section 6 describes.
+
+#### T3.1 Pure modules
+- **Scope:** `hooks/state.ts`, `hooks/plan.ts`, `hooks/failures.ts`, `hooks/models.ts`, `hooks/report.ts` and their tests.
+- **Depends on:** T0.1.
+- **Acceptance:**
+  1. `plan.ts` handles TaskCreate, TaskUpdate (every status incl. `deleted`, `addBlockedBy`, `owner`), TodoWrite replace, title rules and owner matching, with tests for each and for a malformed input (ignored, never throws).
+  2. `failures.ts` classifies per 6.4 in a table-driven test with at least 10 cases; redaction removes all the listed secret shapes; outputs obey every length limit.
+  3. `models.ts` maps aliases and full ids to families (`opus`, `claude-opus-5-5`, `sonnet`, `haiku`, `fable`, unknown); `windowOf` and `priceOf` are documented with their source and `PRICES_AS_OF`.
+  4. `state.ts` reducers (spawn, step, complete, tool result, compaction, skill, session id change) are pure functions; given a scripted sequence of events they produce the expected `Report` which validates against the fixture's shape. The effort rule holds: requested → observed wins → fork inherits parent's.
+  5. Blowout counting: auto compaction counts, manual does not, `model_context_window_exceeded` counts, duplicate signals within 2 s for the same loop count once.
+
+#### T3.2 Transport and git
+- **Scope:** `hooks/transport.ts`, `hooks/git.ts` and tests.
+- **Depends on:** T3.1.
+- **Acceptance:**
+  1. With a mocked `$.http.fetch`: a flush posts one JSON report with the right headers (`X-Podium-Token` only when configured); a 400 drops the report; a network error keeps the snapshot and events and retries with backoff 1/2/5/10 s; the queue holds at most 500 events, dropping oldest; success clears acknowledged events.
+  2. `git.ts` with a mocked `$.process.run` parses: normal branch with ahead/behind, detached head, worktree (differing git-dir and common-dir), non-repo (non-zero exit → `null`), and dirty counts from porcelain output (modified, untracked, renamed lines).
+  3. No function awaits the network from a tool-path hook (checked by a test that the `tool.call` hook resolves while a `fetch` promise is still pending).
+
+#### T3.3 Wiring
+- **Scope:** `hooks/register.ts`, `plugin.json`, `hooks/hooks.json`.
+- **Depends on:** T3.2.
+- **Acceptance:**
+  1. `claude plugin validate mod/podium-reporter` passes with no errors and lists the hooked events from section 5.3 and the `$` calls from 5.4. Attach its output to `docs/ARCHITECTURE.md`.
+  2. `tsc -p mod/podium-reporter` passes once types are laid, or the type-check recipe from the reference is used if not.
+  3. Every hook calls `next(e)` exactly once (or `yield*` for `turn.step`) and returns its result unchanged; a test with a hook that throws inside the reporter proves the session is unaffected.
+  4. `session.start` registers `/podium` and starts the flusher, git poller and (if enabled) status line. A session-id change detected by the flusher sends a `done` report for the old id and starts the new one.
+  5. `/podium` returns the dashboard URL, connection state, reports sent and failed, last error; `/podium name <text>` sets the name and persists it.
+  6. `session.end` flushes with `status: "done"` and `endReason` before the hook returns.
+  7. `claude plugin test mod/podium-reporter` passes, with an end-to-end hook test that raises `session.start`, `agent.spawn` (subagent and fork), `tool.call` (Agent, Skill, TaskCreate, TaskUpdate, a failing Bash), `turn.step` (with usage and a window-exceeded stop), `session.compact` (auto) and `session.end`, and asserts the final posted report's agents, plan, failure, blowouts and skills.
+
+#### T3.4 Real-session verification
+- **Scope:** running the real mod; no new files except notes in `docs/ARCHITECTURE.md`.
+- **Depends on:** T3.3, T1.5.
+- **Acceptance:**
+  1. Start the server. Run `claude --plugin-dir mod/podium-reporter --model haiku -p "<a tiny task that uses the Agent tool once and TaskCreate once>"` (see rules in 10.4 on cost). The session appears in `GET /api/fleet/state` with the right model, a git branch, at least one agent with a model and a state, and a plan with the task, then ends and leaves the live set.
+  2. Compare `session.costUsd` with what `/cost` or the final result reports. Record whether session cost includes subagents.
+  3. Record in `docs/ARCHITECTURE.md` under "Mod API findings": which Assumptions in section 5 were right and which were wrong, with the evidence, including whether `classic.PermissionRequest` and `classic.Notification` are hookable, whether `session.compact` fires for agents, whether effort is visible on spawn, and the exact import-extension rule.
+
+**Exit criterion:** one real session visible end to end in `GET /api/fleet/state`, and the findings recorded.
+
+### Phase 4: Integration and hardening
+
+**Goal:** it works as a product, documented, and survives abuse.
+
+#### T4.1 Smoke script
+- **Scope:** `scripts/podium-smoke.sh` (has `--help`).
+- **Depends on:** Phases 1 and 2.
+- **Acceptance:** one command starts the server on a free port with a temporary database, runs the simulator for 20 s, asserts via `curl` that `/state` has sessions, that `/stream` yields `snapshot` and `session` events, that a `done` session is removed after the linger time, then stops everything and deletes temporary files. Exit code is non-zero on any failed assertion. No process is left running (checked with `pgrep`).
+
+#### T4.2 Browser verification
+- **Scope:** a written checklist in `docs/ARCHITECTURE.md` plus the run itself.
+- **Depends on:** T2.5, T4.1.
+- **Acceptance:** with server and simulator running, in a real browser at 1440 px and 400 px, in dark and light: every item in 8.1 is exercised; screenshots are not required but findings are listed; any defect is fixed or recorded as a known issue with a reason. Includes: kill and restart the server (UI reconnects), 200 ms of 10 simultaneous reports (no UI jank, no duplicated rows), a session that never ends (goes stale, then leaves).
+
+#### T4.3 Robustness
+- **Scope:** server and mod.
+- **Depends on:** T3.3, T1.5.
+- **Acceptance:**
+  1. Server: sending malformed JSON, a 1 MB body, a report with 5,000 agents, strings with control characters and invalid UTF-8 never crash it and return 4xx.
+  2. Server restart mid-session: sessions reload from SQLite as stale and recover when their reporters send again.
+  3. Mod: server down for 2 minutes, then up; no events lost within the 500 queue; the Claude session was never slowed (hook latency with the server down is measured and recorded, target under 5 ms added per hook).
+  4. 10 concurrent simulated sessions with 20 agents each for 5 minutes: server memory stays flat (record start and end RSS) and SSE clients keep receiving.
+
+#### T4.4 Documentation
+- **Scope:** `README.md`, `docs/ARCHITECTURE.md`, `.env.example`.
+- **Depends on:** all above.
+- **Acceptance:**
+  1. `README.md` explains what Podium is, how to run the server and UI, how to install the mod (`claude --plugin-dir mod/podium-reporter` for a session; the `claude plugin` marketplace route is deferred), how to run the simulator, the env vars (`PORT`, `HOST`, `PODIUM_DB`, `PODIUM_TOKEN`, `STALE_AFTER_MS`, `DROP_AFTER_MS`, `LINGER_MS`) and what is sent off the session (section 6.4).
+  2. `docs/ARCHITECTURE.md` documents the final architecture, the mod API findings, deviations from this spec with reasons, known issues, and the verification evidence.
+  3. `.env.example` lists the new env vars with defaults.
+  4. No `TODO` is left in code without a matching entry under "Known issues".
+
+**Exit criterion:** a new reader can follow the README from a clean clone to a running dashboard with simulated sessions, and then to a real session, in under 10 minutes.
+
+### Phase 5: Optional extensions (do only after Phase 4 passes; each is independent)
+
+#### T5.1 Classic hook ingest
+- **Scope:** `server/src/fleet/hookIngest.ts`, route `POST /api/fleet/hook`, `docs/` snippet for `.claude/settings.json`.
+- **Acceptance:** a `SessionStart`/`SubagentStart`/`SubagentStop`/`SessionEnd`/`Notification` payload (fixtures from the types file) produces a reduced session (name, cwd, agents by type, no usage) marked `reporter: "hooks"` in the UI with a note that context and cost are unavailable.
+
+#### T5.2 Failure explanations
+- **Scope:** mod `explainFailures` option; `$.model.complete` with `model: "haiku"`, `effort: "low"`.
+- **Acceptance:** default off; when on, a failed agent gets a ≤ 400-char `explanation` generated from the redacted `Failure` fields only (never transcript), at most one call per failure, never retried on error, usage cost counted in the session estimate.
+
+#### T5.3 History page
+- **Scope:** `GET /api/fleet/history`, a `#/history` view.
+- **Acceptance:** lists past sessions by day with summary columns and opens a read-only orchestrator page from stored rows.
+
+---
+
+## 10. Rules for the implementing agent
+
+### 10.1 Repository rules (from this repo's `.claude/CLAUDE.md`)
+
+- You are on branch `feat/podium-fleet-console`. Stay on it. Never work on `main`.
+- Commit on this branch after each task (section 9). **Do not push, open a PR, merge, tag, or rewrite history.** The coordinating session does that after review.
+- Do not commit secrets. Do not commit `data/`, `.env`, `node_modules/`, or SQLite files.
+- Do not spawn forks. If you need help, use a fresh non-fork sub-agent and state its authority in its prompt (report only, no commits). Prefer doing the work yourself, in order.
+- When fixing a bug in code, first write a test that reproduces it and watch it fail for the expected reason.
+- Verify with real runs, not only type-checks. Say plainly in your final report what you could not run.
+- Leave no mess: stop every server, simulator and browser tab you start; check with `pgrep -fl "tsx|vite|node dist|podium"` at the end.
+- Before writing a one-off helper script, check `scripts/` for one that does it. New scripts go in `scripts/` with `--help` and stay.
+- Do not document architecture in `.claude/CLAUDE.md`. Use `docs/ARCHITECTURE.md`.
+- If code and this spec disagree, or the spec is silent where it matters, record the question and your chosen reading in `docs/ARCHITECTURE.md` under "Spec questions". Do not silently pick; do not stop for small ones.
+
+### 10.2 Quality bar
+
+- TypeScript strict. No `any` without a comment saying why.
+- Every new module has tests. Pure logic is tested without I/O.
+- No dependency added without a line in `docs/ARCHITECTURE.md` explaining why nothing existing would do.
+- No reported string is ever interpreted as HTML, SQL, a path, or a shell command.
+- The UI never blocks on the server: first paint renders the shell and a loading state; errors show a message with what to do.
+
+### 10.3 Order of work and checkpoints
+
+Do the phases in order. After each phase run `npm test` and `npm run build` at the root and fix failures before continuing. At the end of each phase append a short entry to `docs/ARCHITECTURE.md` ("Phase N: what was built, what was verified, what was not").
+
+### 10.4 Using the real Claude CLI (T3.4)
+
+Allowed: at most **three** `claude -p` smoke runs total, each with `--model haiku`, a prompt under 40 words, and `--plugin-dir mod/podium-reporter`. They use the user's quota; do not loop. Set `PORT` to a free port for the test server rather than 4317 if 4317 is busy, and pass it to the mod as `serverUrl` through settings or `pluginConfigs`. Never run an interactive `claude` session. If `claude -p` is unavailable or fails to authenticate, stop that task, record it under "Known issues", and finish the rest.
+
+### 10.5 What to report when done
+
+1. Per task: done or not, with the commit hash.
+2. Test and build results (counts), and the exact commands used.
+3. What you ran for real, and what you could not.
+4. Every Assumption in section 5 that proved wrong.
+5. Deviations from this spec and why.
+6. Known issues and anything left undone.
+7. The final `git log --oneline` of your commits.
+
+---
+
+## 11. Explicitly out of scope / deferred (the design must not preclude these)
+
+- A terminal pane or band inside Claude Code that shows the same fleet (the mod's `$.ui.open` and `ui.render` can draw it later; keep `state.ts` UI-free so a pane can read it).
+- Remote or multi-machine fleets: the `Report` already carries a session id and `reporter` info; a future `hostId` field fits without breaking v1.
+- Alerts and notifications (a blowout at level 2 pushes a desktop notification): `session.blowouts.level` and `$.ui.notify` are the hooks for it.
+- Budgets and forecasts, comparisons between runs, cost per plan step.
+- Installing the mod through a marketplace (`/plugin install`): needs a `.claude-plugin/marketplace.json`; add when the repo is public.
+- A scheduled-agent view (`CronCreate` tasks, `session_crons` on the Stop hook).
+- Authentication beyond the shared token.
+
+## 12. Open questions and flagged assumptions
+
+These were not resolvable from the type declarations alone. The implementer verifies each and records the answer in `docs/ARCHITECTURE.md`. None blocks starting.
+
+1. Does `$.session.usage().cost.usd` include subagent spend? (T3.4)
+2. Are `classic.PermissionRequest` and `classic.Notification` hookable from a mod, and do they fire for a permission dialog in a headless run? If not, `waiting` is derived from main-loop `turn.complete` only. (T3.4)
+3. Does `session.compact` fire with an `agentId` for a subagent's own compaction? If not, agent blowouts come only from `stopReason`. (T3.4)
+4. What are the real context windows per model family for subagents, and the current prices? Fill `models.ts` from the `claude-api` skill, not from memory.
+5. Does `tool.call` for the `Agent` tool run before or after `agent.spawn` for the same `tool_use_id`? The reporter must tolerate both orders (it keys pending data by `tool_use_id` and merges).
+6. Exact `userConfig` syntax in `plugin.json`, and whether relative imports need file extensions. `claude plugin validate` decides.
+7. How is a bash exit code exposed in a `tool.call` error result? The reporter parses `text` best effort; improve if the result carries a field.
+8. Should the dashboard also show teammates (agent-team members) distinctly? v1 shows them as agents with `kind: "teammate"` and the same row design.
+9. Does the sample worktree detection work when a session is started inside a worktree created by `isolation: "worktree"`? Verify with one real run.
+10. Name: "Podium" is a working name. Keep it in one constant (`APP_NAME`) so it can change.
