@@ -1,0 +1,89 @@
+{
+  "v": 1,
+  "sentAt": 1791648000000,
+  "reporter": { "name": "podium-reporter", "version": "0.1.0", "engineVersion": "2.1.296", "hostSurface": "terminal" },
+  "session": {
+    "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11",
+    "name": "invoice-v2",
+    "status": "running",
+    "waitReason": null,
+    "waitNote": null,
+    "endReason": null,
+    "resumeId": null,
+    "startedAt": 1791645260000,
+    "cwd": "/Users/dev/billing-service/.claude/worktrees/invoice-v2",
+    "projectRoot": "/Users/dev/billing-service",
+    "repoName": "acme/billing-service",
+    "git": { "branch": "refactor/invoice-v2", "detached": false, "isWorktree": true, "worktreePath": "/Users/dev/billing-service/.claude/worktrees/invoice-v2", "ahead": 7, "behind": 0, "dirty": 3 },
+    "model": "claude-opus-5-5",
+    "effort": "xhigh",
+    "context": { "tokens": 410000, "window": 1000000, "percent": 41 },
+    "costUsd": 12.84,
+    "tokens": { "input": 120000, "output": 48000, "cacheRead": 2100000, "cacheWrite": 310000 },
+    "rateLimits": [{ "kind": "five_hour", "percentUsed": 23.5, "resetsAt": "2026-10-10T18:00:00Z" }],
+    "blowouts": 0,
+    "plan": {
+      "title": "Migrate invoices to v2 schema",
+      "source": "TaskCreate",
+      "steps": [
+        { "id": "1", "text": "Map invoice call sites", "state": "done", "activeText": "Mapping invoice call sites", "ownerAgentId": "a1", "ownerLabel": "Explore · Haiku low" },
+        { "id": "2", "text": "Port invoice endpoints", "state": "active", "activeText": "Porting invoice endpoints", "ownerAgentId": "a2", "ownerLabel": "fork · Opus xhigh" },
+        { "id": "3", "text": "Run staging backfill", "state": "blocked", "activeText": null, "ownerAgentId": null, "ownerLabel": null },
+        { "id": "4", "text": "Write rollout notes", "state": "pending", "activeText": null, "ownerAgentId": null, "ownerLabel": null }
+      ]
+    }
+  },
+  "agents": [
+    {
+      "id": "a1", "parentId": null, "kind": "subagent", "type": "Explore", "name": null,
+      "description": "Map invoice call sites", "model": "claude-haiku-5-5", "effort": "low", "effortSource": "requested",
+      "status": "done", "startedAt": 1791645300000, "endedAt": 1791645480000,
+      "context": { "tokens": 61000, "window": 1000000, "percent": 6.1 },
+      "tokens": { "input": 9000, "output": 4100, "cacheRead": 140000, "cacheWrite": 22000 },
+      "costUsdEst": 0.08, "skills": ["repo-map"], "lastTool": "Grep", "toolCalls": 31, "blowouts": 0,
+      "steps": { "done": 14, "total": null },
+      "promptExcerpt": "Find every call site of the invoice v1 serializer and list them by module.",
+      "answerExcerpt": "Found 42 call sites across 9 modules.", "failure": null
+    },
+    {
+      "id": "a2", "parentId": null, "kind": "fork", "type": "fork", "name": null,
+      "description": "Port invoice endpoints", "model": "claude-opus-5-5", "effort": "xhigh", "effortSource": "inherited",
+      "status": "running", "startedAt": 1791647400000, "endedAt": null,
+      "context": { "tokens": 380000, "window": 1000000, "percent": 38 },
+      "tokens": { "input": 21000, "output": 9000, "cacheRead": 900000, "cacheWrite": 120000 },
+      "costUsdEst": 2.11, "skills": ["code-review"], "lastTool": "Edit", "toolCalls": 18, "blowouts": 0,
+      "steps": { "done": 9, "total": null },
+      "promptExcerpt": "Port the invoice endpoints to the v2 schema.", "answerExcerpt": null, "failure": null
+    },
+    {
+      "id": "a3", "parentId": null, "kind": "subagent", "type": "general-purpose", "name": null,
+      "description": "Backfill dry run", "model": "claude-sonnet-5-5", "effort": "medium", "effortSource": "requested",
+      "status": "failed", "startedAt": 1791647640000, "endedAt": 1791647700000,
+      "context": { "tokens": 88000, "window": 1000000, "percent": 8.8 },
+      "tokens": { "input": 8000, "output": 2000, "cacheRead": 70000, "cacheWrite": 8000 },
+      "costUsdEst": 0.53, "skills": [], "lastTool": "Bash", "toolCalls": 6, "blowouts": 0,
+      "steps": { "done": 4, "total": null },
+      "promptExcerpt": "Run the invoice backfill in dry-run mode against staging.", "answerExcerpt": null,
+      "failure": {
+        "class": "Tool error", "at": 1791647700000, "tool": "Bash", "call": "npm run backfill:dry -- --env=staging", "exitCode": 1,
+        "outputTail": ["Error: connect ECONNREFUSED 127.0.0.1:5432", "    at TCPConnectWrap.afterConnect (node:net:1555:16)", "backfill: could not open a database connection"],
+        "evidence": ["same call failed 3 times"], "explanation": null, "retriedAs": null
+      }
+    },
+    {
+      "id": "a4", "parentId": "a2", "kind": "subagent", "type": "general-purpose", "name": "pdf",
+      "description": "Rewrite PDF renderer", "model": "claude-opus-5-5", "effort": "high", "effortSource": "observed",
+      "status": "running", "startedAt": 1791647500000, "endedAt": null,
+      "context": { "tokens": 930000, "window": 1000000, "percent": 93 },
+      "tokens": { "input": 30000, "output": 14000, "cacheRead": 2600000, "cacheWrite": 400000 },
+      "costUsdEst": 5.42, "skills": ["frontend-design"], "lastTool": "Read", "toolCalls": 52, "blowouts": 2,
+      "steps": { "done": 40, "total": null },
+      "promptExcerpt": "Rewrite the PDF renderer to read v2 invoices.", "answerExcerpt": null, "failure": null
+    }
+  ],
+  "events": [
+    { "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11:a2:spawn:1791647400000:1", "t": 1791647400000, "kind": "spawn", "agentId": "a2", "text": "forked fork (inherits Opus xhigh): Port invoice endpoints", "data": null },
+    { "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11:a3:fail:1791647700000:2", "t": 1791647700000, "kind": "fail", "agentId": "a3", "text": "failed: Backfill dry run (Tool error)", "data": { "class": "Tool error" } },
+    { "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11:a4:blow:1791647900000:3", "t": 1791647900000, "kind": "blow", "agentId": "a4", "text": "context window exceeded (blowout #2) in “Rewrite PDF renderer”", "data": { "kind": "auto-compact", "tokensBefore": 1004000, "tokensAfter": 300000 } }
+  ]
+}
