@@ -1,0 +1,443 @@
+// SQLite storage for Podium (SPEC 7.2). Uses Node's built-in node:sqlite. It is loaded through
+// process.getBuiltinModule because Vite (vitest) strips the `node:` prefix from a static import and
+// then cannot resolve `sqlite`. Every statement is parameterized; no reported string is ever
+// interpolated into SQL.
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import type { DatabaseSync, StatementSync } from 'node:sqlite';
+
+const sqlite = process.getBuiltinModule('node:sqlite');
+
+const MIGRATIONS: { version: number; sql: string }[] = [
+  {
+    version: 1,
+    sql: `
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, status TEXT NOT NULL,
+  wait_reason TEXT, wait_note TEXT, end_reason TEXT, resume_id TEXT,
+  started_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, ended_at INTEGER, dropped_at INTEGER,
+  cwd TEXT NOT NULL, project_root TEXT, repo_name TEXT,
+  git_json TEXT,
+  model TEXT, effort TEXT,
+  context_tokens INTEGER, context_window INTEGER, context_percent REAL,
+  cost_usd REAL, tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER,
+  rate_limits_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
+  plan_json TEXT, reporter_version TEXT, engine_version TEXT
+);
+CREATE TABLE agents (
+  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
+  parent_id TEXT, kind TEXT NOT NULL, type TEXT NOT NULL, name TEXT, description TEXT NOT NULL,
+  model TEXT, effort TEXT, effort_source TEXT, status TEXT NOT NULL,
+  started_at INTEGER NOT NULL, ended_at INTEGER,
+  context_tokens INTEGER, context_window INTEGER, context_percent REAL,
+  tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER, cost_usd_est REAL,
+  skills_json TEXT, last_tool TEXT, tool_calls INTEGER, blowouts INTEGER NOT NULL DEFAULT 0,
+  steps_done INTEGER, steps_total INTEGER, prompt_excerpt TEXT, answer_excerpt TEXT, failure_json TEXT,
+  PRIMARY KEY (session_id, id)
+);
+CREATE TABLE events (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, agent_id TEXT, t INTEGER NOT NULL,
+  kind TEXT NOT NULL, text TEXT NOT NULL, data_json TEXT
+);
+CREATE INDEX events_session_t ON events(session_id, t DESC);
+CREATE INDEX events_t ON events(t DESC);
+CREATE TABLE blowouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, agent_id TEXT, t INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  tokens_before INTEGER, tokens_after INTEGER, UNIQUE (session_id, agent_id, t, kind)
+);
+CREATE TABLE samples (
+  session_id TEXT NOT NULL, t INTEGER NOT NULL,
+  tokens_total INTEGER NOT NULL, tokens_delta INTEGER NOT NULL, peak_context REAL NOT NULL,
+  running_agents INTEGER NOT NULL, cost_usd REAL, PRIMARY KEY (session_id, t)
+);
+`,
+  },
+];
+
+export interface SessionRow {
+  id: string;
+  name: string;
+  status: 'running' | 'waiting' | 'done';
+  wait_reason: string | null;
+  wait_note: string | null;
+  end_reason: string | null;
+  resume_id: string | null;
+  started_at: number;
+  last_seen_at: number;
+  ended_at: number | null;
+  dropped_at: number | null;
+  cwd: string;
+  project_root: string | null;
+  repo_name: string | null;
+  git_json: string | null;
+  model: string | null;
+  effort: string | null;
+  context_tokens: number | null;
+  context_window: number | null;
+  context_percent: number | null;
+  cost_usd: number | null;
+  tok_in: number;
+  tok_out: number;
+  tok_cr: number;
+  tok_cw: number;
+  rate_limits_json: string | null;
+  blowouts: number;
+  plan_json: string | null;
+  reporter_version: string | null;
+  engine_version: string | null;
+}
+
+export interface AgentRow {
+  session_id: string;
+  id: string;
+  parent_id: string | null;
+  kind: string;
+  type: string;
+  name: string | null;
+  description: string;
+  model: string | null;
+  effort: string | null;
+  effort_source: string | null;
+  status: string;
+  started_at: number;
+  ended_at: number | null;
+  context_tokens: number | null;
+  context_window: number | null;
+  context_percent: number | null;
+  tok_in: number;
+  tok_out: number;
+  tok_cr: number;
+  tok_cw: number;
+  cost_usd_est: number;
+  skills_json: string | null;
+  last_tool: string | null;
+  tool_calls: number;
+  blowouts: number;
+  steps_done: number | null;
+  steps_total: number | null;
+  prompt_excerpt: string | null;
+  answer_excerpt: string | null;
+  failure_json: string | null;
+}
+
+export interface EventRow {
+  id: string;
+  session_id: string;
+  agent_id: string | null;
+  t: number;
+  kind: string;
+  text: string;
+  data_json: string | null;
+}
+
+export interface BlowoutRow {
+  id: number;
+  session_id: string;
+  agent_id: string | null;
+  t: number;
+  kind: string;
+  tokens_before: number | null;
+  tokens_after: number | null;
+}
+
+export interface SampleRow {
+  session_id: string;
+  t: number;
+  tokens_total: number;
+  tokens_delta: number;
+  peak_context: number;
+  running_agents: number;
+  cost_usd: number | null;
+}
+
+export interface RetentionPolicy {
+  samplesMs: number;
+  eventsMs: number;
+  sessionsMs: number;
+}
+
+/** Opens (and migrates) a database. `:memory:` for tests; a file path gets WAL and its folder made. */
+export function openDb(file: string): DatabaseSync {
+  if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
+  const db = new sqlite.DatabaseSync(file);
+  if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
+  db.exec('PRAGMA foreign_keys = ON');
+  db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
+  const applied = new Set(
+    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((r) => r.version),
+  );
+  for (const m of MIGRATIONS) {
+    if (applied.has(m.version)) continue;
+    db.exec('BEGIN');
+    try {
+      db.exec(m.sql);
+      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(m.version, Date.now());
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+  return db;
+}
+
+type Params = Record<string, string | number | null>;
+
+/** Typed, prepared queries over one database. */
+export class FleetDb {
+  private readonly stmts = new Map<string, StatementSync>();
+
+  constructor(readonly db: DatabaseSync) {}
+
+  private stmt(sql: string): StatementSync {
+    let s = this.stmts.get(sql);
+    if (!s) {
+      s = this.db.prepare(sql);
+      this.stmts.set(sql, s);
+    }
+    return s;
+  }
+
+  /** Runs `fn` in one transaction; rolls back if it throws. */
+  tx<T>(fn: () => T): T {
+    this.db.exec('BEGIN');
+    try {
+      const out = fn();
+      this.db.exec('COMMIT');
+      return out;
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  close(): void {
+    this.db.close();
+  }
+
+  // ---- sessions -------------------------------------------------------------------------------
+
+  upsertSession(row: SessionRow): void {
+    const cols = Object.keys(row) as (keyof SessionRow)[];
+    const sql =
+      `INSERT INTO sessions (${cols.join(', ')}) VALUES (${cols.map((c) => `:${c}`).join(', ')}) ` +
+      `ON CONFLICT(id) DO UPDATE SET ${cols.filter((c) => c !== 'id').map((c) => `${c} = excluded.${c}`).join(', ')}`;
+    this.stmt(sql).run(row as unknown as Params);
+  }
+
+  getSession(id: string): SessionRow | undefined {
+    return this.stmt('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
+  }
+
+  /** Sessions that may be in the live set: not dropped, and either not ended or ended after `endedAfter`. */
+  liveCandidates(endedAfter: number): SessionRow[] {
+    return this.stmt(
+      'SELECT * FROM sessions WHERE dropped_at IS NULL AND (ended_at IS NULL OR ended_at > ?) ORDER BY started_at',
+    ).all(endedAfter) as unknown as SessionRow[];
+  }
+
+  setDropped(id: string, at: number): void {
+    this.stmt('UPDATE sessions SET dropped_at = ? WHERE id = ?').run(at, id);
+  }
+
+  deleteSession(id: string): boolean {
+    return this.tx(() => {
+      this.stmt('DELETE FROM events WHERE session_id = ?').run(id);
+      this.stmt('DELETE FROM blowouts WHERE session_id = ?').run(id);
+      this.stmt('DELETE FROM samples WHERE session_id = ?').run(id);
+      this.stmt('DELETE FROM agents WHERE session_id = ?').run(id);
+      return Number(this.stmt('DELETE FROM sessions WHERE id = ?').run(id).changes) > 0;
+    });
+  }
+
+  /** Sessions that ended (or were dropped) in [from, to). */
+  endedBetween(from: number, to: number): SessionRow[] {
+    return this.stmt(
+      `SELECT * FROM sessions WHERE (dropped_at >= :from AND dropped_at < :to)
+         OR (dropped_at IS NULL AND ended_at >= :from AND ended_at < :to) ORDER BY started_at`,
+    ).all({ from, to }) as unknown as SessionRow[];
+  }
+
+  /** Σ cost_usd of sessions that started at or after `since`. */
+  costSince(since: number): number {
+    const r = this.stmt('SELECT COALESCE(SUM(cost_usd), 0) AS c FROM sessions WHERE started_at >= ?').get(since) as {
+      c: number;
+    };
+    return r.c;
+  }
+
+  distinctReporterVersions(): string[] {
+    return (
+      this.stmt('SELECT DISTINCT reporter_version AS v FROM sessions WHERE reporter_version IS NOT NULL').all() as {
+        v: string;
+      }[]
+    ).map((r) => r.v);
+  }
+
+  // ---- agents ---------------------------------------------------------------------------------
+
+  upsertAgent(row: AgentRow): void {
+    const cols = Object.keys(row) as (keyof AgentRow)[];
+    const sql =
+      `INSERT INTO agents (${cols.join(', ')}) VALUES (${cols.map((c) => `:${c}`).join(', ')}) ` +
+      `ON CONFLICT(session_id, id) DO UPDATE SET ${cols
+        .filter((c) => c !== 'id' && c !== 'session_id')
+        .map((c) => `${c} = excluded.${c}`)
+        .join(', ')}`;
+    this.stmt(sql).run(row as unknown as Params);
+  }
+
+  getAgents(sessionId: string): AgentRow[] {
+    return this.stmt('SELECT * FROM agents WHERE session_id = ? ORDER BY started_at, id').all(
+      sessionId,
+    ) as unknown as AgentRow[];
+  }
+
+  /** Marks every running or queued agent of a session aborted. */
+  abortOpenAgents(sessionId: string, at: number): void {
+    this.stmt(
+      `UPDATE agents SET status = 'aborted', ended_at = COALESCE(ended_at, ?)
+       WHERE session_id = ? AND status IN ('running', 'queued')`,
+    ).run(at, sessionId);
+  }
+
+  // ---- events ---------------------------------------------------------------------------------
+
+  /** Inserts an event unless its id exists. Returns true when it was new. */
+  insertEvent(row: EventRow): boolean {
+    const r = this.stmt(
+      `INSERT OR IGNORE INTO events (id, session_id, agent_id, t, kind, text, data_json)
+       VALUES (:id, :session_id, :agent_id, :t, :kind, :text, :data_json)`,
+    ).run(row as unknown as Params);
+    return Number(r.changes) > 0;
+  }
+
+  /** Newest first. `before` is exclusive on event time. */
+  listEvents(opts: { sessionId?: string | null; before?: number | null; limit: number }): EventRow[] {
+    const before = opts.before ?? Number.MAX_SAFE_INTEGER;
+    if (opts.sessionId) {
+      return this.stmt(
+        'SELECT * FROM events WHERE session_id = ? AND t < ? ORDER BY t DESC, id DESC LIMIT ?',
+      ).all(opts.sessionId, before, opts.limit) as unknown as EventRow[];
+    }
+    return this.stmt('SELECT * FROM events WHERE t < ? ORDER BY t DESC, id DESC LIMIT ?').all(
+      before,
+      opts.limit,
+    ) as unknown as EventRow[];
+  }
+
+  countEvents(sessionId?: string): number {
+    const r = (
+      sessionId
+        ? this.stmt('SELECT COUNT(*) AS n FROM events WHERE session_id = ?').get(sessionId)
+        : this.stmt('SELECT COUNT(*) AS n FROM events').get()
+    ) as { n: number };
+    return r.n;
+  }
+
+  // ---- blowouts -------------------------------------------------------------------------------
+
+  insertBlowout(row: Omit<BlowoutRow, 'id'>): void {
+    this.stmt(
+      `INSERT OR IGNORE INTO blowouts (session_id, agent_id, t, kind, tokens_before, tokens_after)
+       VALUES (:session_id, :agent_id, :t, :kind, :tokens_before, :tokens_after)`,
+    ).run(row as unknown as Params);
+  }
+
+  getBlowouts(sessionId: string): BlowoutRow[] {
+    return this.stmt('SELECT * FROM blowouts WHERE session_id = ? ORDER BY t').all(sessionId) as unknown as BlowoutRow[];
+  }
+
+  countBlowouts(sessionId?: string): number {
+    const r = (
+      sessionId
+        ? this.stmt('SELECT COUNT(*) AS n FROM blowouts WHERE session_id = ?').get(sessionId)
+        : this.stmt('SELECT COUNT(*) AS n FROM blowouts').get()
+    ) as { n: number };
+    return r.n;
+  }
+
+  // ---- samples --------------------------------------------------------------------------------
+
+  /** The latest sample strictly before second `t`. */
+  sampleBefore(sessionId: string, t: number): SampleRow | undefined {
+    return this.stmt('SELECT * FROM samples WHERE session_id = ? AND t < ? ORDER BY t DESC LIMIT 1').get(
+      sessionId,
+      t,
+    ) as SampleRow | undefined;
+  }
+
+  latestSample(sessionId: string): SampleRow | undefined {
+    return this.stmt('SELECT * FROM samples WHERE session_id = ? ORDER BY t DESC LIMIT 1').get(sessionId) as
+      | SampleRow
+      | undefined;
+  }
+
+  /** Writes the sample for second `t`, replacing one already there (at most one per second). */
+  upsertSample(row: SampleRow): void {
+    this.stmt(
+      `INSERT INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd)
+       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd)
+       ON CONFLICT(session_id, t) DO UPDATE SET tokens_total = excluded.tokens_total,
+         tokens_delta = excluded.tokens_delta, peak_context = excluded.peak_context,
+         running_agents = excluded.running_agents, cost_usd = excluded.cost_usd`,
+    ).run(row as unknown as Params);
+  }
+
+  /** Writes a sample only if that second has none yet. */
+  insertSampleIfAbsent(row: SampleRow): void {
+    this.stmt(
+      `INSERT OR IGNORE INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd)
+       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd)`,
+    ).run(row as unknown as Params);
+  }
+
+  samplesSince(sessionId: string, fromT: number): SampleRow[] {
+    return this.stmt('SELECT * FROM samples WHERE session_id = ? AND t >= ? ORDER BY t').all(
+      sessionId,
+      fromT,
+    ) as unknown as SampleRow[];
+  }
+
+  /** Σ tokens_delta per second across all sessions, for seconds >= fromT. */
+  fleetTokensPerSecond(fromT: number): { t: number; v: number }[] {
+    return this.stmt('SELECT t, SUM(tokens_delta) AS v FROM samples WHERE t >= ? GROUP BY t ORDER BY t').all(
+      fromT,
+    ) as unknown as { t: number; v: number }[];
+  }
+
+  /** Positive cost increase per minute across all sessions, for seconds >= fromT (minute = floor(t/60)). */
+  fleetCostPerMinute(fromT: number): { m: number; v: number }[] {
+    return this.stmt(
+      `SELECT m, SUM(d) AS v FROM (
+         SELECT t / 60 AS m,
+           MAX(0, COALESCE(cost_usd, 0) - COALESCE(LAG(cost_usd) OVER (PARTITION BY session_id ORDER BY t), cost_usd, 0)) AS d
+         FROM samples WHERE t >= ?
+       ) GROUP BY m ORDER BY m`,
+    ).all(fromT) as unknown as { m: number; v: number }[];
+  }
+
+  // ---- retention ------------------------------------------------------------------------------
+
+  /** Deletes old samples, events and ended sessions (with their rows). Returns what was deleted. */
+  retain(now: number, p: RetentionPolicy): { samples: number; events: number; sessions: number } {
+    return this.tx(() => {
+      const samples = Number(this.stmt('DELETE FROM samples WHERE t < ?').run(Math.floor((now - p.samplesMs) / 1000)).changes);
+      const events = Number(this.stmt('DELETE FROM events WHERE t < ?').run(now - p.eventsMs).changes);
+      const cutoff = now - p.sessionsMs;
+      const old = this.stmt(
+        'SELECT id FROM sessions WHERE (ended_at IS NOT NULL AND ended_at < ?) OR (dropped_at IS NOT NULL AND dropped_at < ?)',
+      ).all(cutoff, cutoff) as { id: string }[];
+      for (const { id } of old) {
+        this.stmt('DELETE FROM events WHERE session_id = ?').run(id);
+        this.stmt('DELETE FROM blowouts WHERE session_id = ?').run(id);
+        this.stmt('DELETE FROM samples WHERE session_id = ?').run(id);
+        this.stmt('DELETE FROM agents WHERE session_id = ?').run(id);
+        this.stmt('DELETE FROM sessions WHERE id = ?').run(id);
+      }
+      return { samples, events, sessions: old.length };
+    });
+  }
+}
