@@ -1,0 +1,259 @@
+// Pure derivation (SPEC 7.3, 7.4): SessionView, blowout level, series, KPIs. No I/O here: callers
+// pass rows in and get views out, so every rule is unit-tested without a database.
+import type { AgentRow, BlowoutRow, EventRow, SampleRow, SessionRow } from './db.js';
+import { tokenSum } from './ingest.js';
+import type {
+  ActivityView,
+  AgentView,
+  EventKind,
+  Failure,
+  GitInfo,
+  Kpis,
+  ModelFamily,
+  Plan,
+  SessionStatusView,
+  SessionView,
+} from './protocol.js';
+
+export const SERIES_POINTS = 60;
+
+/** Model family by case-insensitive substring (SPEC 6.5). */
+export function family(model: string | null | undefined): ModelFamily {
+  const m = (model ?? '').toLowerCase();
+  if (m.includes('opus')) return 'opus';
+  if (m.includes('sonnet')) return 'sonnet';
+  if (m.includes('haiku')) return 'haiku';
+  if (m.includes('fable')) return 'fable';
+  return 'other';
+}
+
+/**
+ * 0: no blowout anywhere. 2 ("likely losing context"): the orchestrator has 2 or more, any single
+ * agent has 2 or more, or the total is 3 or more. 1 ("context exceeded"): anything else above zero.
+ */
+export function blowoutLevel(orchestrator: number, agents: readonly number[]): 0 | 1 | 2 {
+  const total = orchestrator + agents.reduce((a, b) => a + b, 0);
+  if (total === 0) return 0;
+  if (orchestrator >= 2 || agents.some((n) => n >= 2) || total >= 3) return 2;
+  return 1;
+}
+
+/** Replaces a leading home directory with `~`. */
+export function shortenHome(p: string, home: string): string {
+  if (!home) return p;
+  const h = home.endsWith('/') ? home.slice(0, -1) : home;
+  if (p === h) return '~';
+  if (p.startsWith(h + '/')) return '~' + p.slice(h.length);
+  return p;
+}
+
+/** Quotes a path for a POSIX shell when it holds anything but safe characters. */
+export function shellQuote(s: string): string {
+  if (/^[A-Za-z0-9_\/.,:@%+=-]+$/.test(s)) return s;
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+export function resumeCommand(cwd: string, resumeId: string | null, id: string): string {
+  return `cd ${shellQuote(cwd)} && claude --resume ${shellQuote(resumeId ?? id)}`;
+}
+
+function parse<T>(text: string | null, fallback: T): T {
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function agentView(a: AgentRow): AgentView {
+  return {
+    id: a.id,
+    parentId: a.parent_id,
+    kind: a.kind as AgentView['kind'],
+    type: a.type,
+    name: a.name,
+    description: a.description,
+    model: a.model,
+    effort: a.effort as AgentView['effort'],
+    effortSource: (a.effort_source ?? 'unknown') as AgentView['effortSource'],
+    status: a.status as AgentView['status'],
+    startedAt: a.started_at,
+    endedAt: a.ended_at,
+    context: { tokens: a.context_tokens, window: a.context_window, percent: a.context_percent },
+    tokens: { input: a.tok_in, output: a.tok_out, cacheRead: a.tok_cr, cacheWrite: a.tok_cw },
+    costUsdEst: a.cost_usd_est,
+    skills: parse<string[]>(a.skills_json, []),
+    lastTool: a.last_tool,
+    toolCalls: a.tool_calls,
+    blowouts: a.blowouts,
+    steps: a.steps_done === null ? null : { done: a.steps_done, total: a.steps_total },
+    promptExcerpt: a.prompt_excerpt ?? '',
+    answerExcerpt: a.answer_excerpt,
+    failure: parse<Failure | null>(a.failure_json, null),
+    modelFamily: family(a.model),
+  };
+}
+
+/** Sixty one-second points ending at `now`, oldest first, missing seconds zero-filled. */
+export function buildSeries(samples: readonly SampleRow[], blowouts: readonly Pick<BlowoutRow, 't'>[], now: number): SessionView['series'] {
+  const nowSec = Math.floor(now / 1000);
+  const first = nowSec - (SERIES_POINTS - 1);
+  const tokensPerSec = new Array<number>(SERIES_POINTS).fill(0);
+  const peakContext = new Array<number>(SERIES_POINTS).fill(0);
+  const running = new Array<number>(SERIES_POINTS).fill(0);
+  for (const s of samples) {
+    const i = s.t - first;
+    if (i < 0 || i >= SERIES_POINTS) continue;
+    tokensPerSec[i] = Math.max(0, s.tokens_delta);
+    peakContext[i] = Math.max(0, Math.min(1, s.peak_context));
+    running[i] = Math.max(0, s.running_agents);
+  }
+  const blowoutSecondsAgo = blowouts
+    .map((b) => nowSec - Math.floor(b.t / 1000))
+    .filter((age) => age >= 0 && age < SERIES_POINTS)
+    .sort((a, b) => a - b);
+  return { tokensPerSec, peakContext, running, blowoutSecondsAgo };
+}
+
+export interface DeriveConfig {
+  staleAfterMs: number;
+  home: string;
+}
+
+export interface SessionInput {
+  row: SessionRow;
+  agents: readonly AgentRow[];
+  blowouts: readonly BlowoutRow[];
+  samples: readonly SampleRow[];
+  /** False until the session reports after a server start: such a session shows as stale. */
+  heard: boolean;
+}
+
+export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
+  if (row.status === 'done') return 'done';
+  if (!heard || now - row.last_seen_at > staleAfterMs) return 'stale';
+  return row.status;
+}
+
+export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig): SessionView {
+  const { row } = input;
+  const agents = input.agents.map(agentView);
+  const agentBlows = agents.map((a) => a.blowouts);
+  const agentTotal = agentBlows.reduce((a, b) => a + b, 0);
+  return {
+    id: row.id,
+    name: row.name,
+    project: shortenHome(row.project_root ?? row.cwd, cfg.home),
+    repoName: row.repo_name,
+    resumeCommand: resumeCommand(row.cwd, row.resume_id, row.id),
+    git: parse<GitInfo | null>(row.git_json, null),
+    model: row.model,
+    modelFamily: family(row.model),
+    effort: row.effort,
+    status: sessionStatus(row, input.heard, now, cfg.staleAfterMs),
+    waitNote: row.wait_note,
+    endReason: row.end_reason,
+    startedAt: row.started_at,
+    lastSeenAt: row.last_seen_at,
+    secondsSinceSeen: Math.max(0, Math.floor((now - row.last_seen_at) / 1000)),
+    context: { tokens: row.context_tokens, window: row.context_window, percent: row.context_percent },
+    costUsd: row.cost_usd,
+    tokensTotal: tokenSum(row) + input.agents.reduce((n, a) => n + tokenSum(a), 0),
+    blowouts: {
+      orchestrator: row.blowouts,
+      agents: agentTotal,
+      total: row.blowouts + agentTotal,
+      level: blowoutLevel(row.blowouts, agentBlows),
+      loopsHit: (row.blowouts > 0 ? 1 : 0) + agentBlows.filter((n) => n > 0).length,
+      loopsTotal: agents.length + 1,
+      log: input.blowouts.map((b) => ({
+        t: b.t,
+        agentId: b.agent_id,
+        kind: b.kind,
+        tokensBefore: b.tokens_before,
+        tokensAfter: b.tokens_after,
+      })),
+    },
+    plan: parse<Plan | null>(row.plan_json, null),
+    agents,
+    series: buildSeries(input.samples, input.blowouts, now),
+  };
+}
+
+export function activityView(e: EventRow, session: { name: string; model: string | null } | undefined): ActivityView {
+  return {
+    id: e.id,
+    sessionId: e.session_id,
+    sessionName: session?.name ?? 'session',
+    modelFamily: family(session?.model),
+    agentId: e.agent_id,
+    t: e.t,
+    kind: e.kind as EventKind,
+    text: e.text,
+    data: parse<Record<string, unknown> | null>(e.data_json, null),
+  };
+}
+
+/** Local midnight of the day `now` falls in. */
+export function startOfDay(now: number): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export interface KpiInput {
+  views: readonly SessionView[];
+  /** Σ cost_usd of every session (live or ended) that started today. */
+  costToday: number;
+  /** Fleet Σ tokens_delta per second. */
+  tokensPerSecond: readonly { t: number; v: number }[];
+  /** Fleet cost added per minute (minute = floor(seconds / 60)). */
+  costPerMinute: readonly { m: number; v: number }[];
+}
+
+export function computeKpis(input: KpiInput, now: number): Kpis {
+  const k: Kpis = {
+    live: input.views.length,
+    running: 0,
+    waiting: 0,
+    stale: 0,
+    agentsRunning: 0,
+    agentsTotal: 0,
+    planDone: 0,
+    planTotal: 0,
+    costToday: input.costToday,
+    tokensLastMinute: 0,
+    blowoutsTotal: 0,
+    sessionsAtLevel2: 0,
+    costPerMinute: new Array<number>(SERIES_POINTS).fill(0),
+    tokensPerSec: new Array<number>(SERIES_POINTS).fill(0),
+  };
+  for (const v of input.views) {
+    if (v.status === 'running') k.running++;
+    else if (v.status === 'waiting') k.waiting++;
+    else if (v.status === 'stale') k.stale++;
+    k.agentsTotal += v.agents.length;
+    k.agentsRunning += v.agents.filter((a) => a.status === 'running').length;
+    if (v.plan) {
+      k.planTotal += v.plan.steps.length;
+      k.planDone += v.plan.steps.filter((s) => s.state === 'done').length;
+    }
+    k.blowoutsTotal += v.blowouts.total;
+    if (v.blowouts.level === 2) k.sessionsAtLevel2++;
+  }
+  const nowSec = Math.floor(now / 1000);
+  const firstSec = nowSec - (SERIES_POINTS - 1);
+  for (const { t, v } of input.tokensPerSecond) {
+    const i = t - firstSec;
+    if (i >= 0 && i < SERIES_POINTS) k.tokensPerSec[i] = v;
+  }
+  k.tokensLastMinute = k.tokensPerSec.reduce((a, b) => a + b, 0);
+  const nowMin = Math.floor(nowSec / 60);
+  const firstMin = nowMin - (SERIES_POINTS - 1);
+  for (const { m, v } of input.costPerMinute) {
+    const i = m - firstMin;
+    if (i >= 0 && i < SERIES_POINTS) k.costPerMinute[i] = v;
+  }
+  return k;
+}
