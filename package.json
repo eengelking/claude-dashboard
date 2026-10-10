@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "concurrently -n server,frontend -c blue,green \"npm run dev -w server\" \"npm run dev -w frontend\"",
     "build": "npm run build -w frontend && npm run build -w server",
-    "test": "npm run test -w server && npm run test -w frontend"
+    "test": "npm run test -w server && npm run test -w frontend",
+    "podium:sim": "tsx scripts/podium-sim.ts",
+    "podium:smoke": "bash scripts/podium-smoke.sh"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"
