@@ -241,6 +241,22 @@ export interface StateBody {
 
 export type RemovedReason = 'done' | 'dropped' | 'deleted';
 
+/** One ended or dropped session, as GET /api/fleet/history lists it. */
+export interface HistoryRow {
+  id: string;
+  name: string;
+  project: string;
+  model: string | null;
+  modelFamily: ModelFamily;
+  startedAt: number;
+  endedAt: number;
+  durationSec: number;
+  costUsd: number | null;
+  blowouts: number;
+  agents: number;
+  endReason: string | null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Validation (SPEC 7.7). Hand-written: strings are clamped, arrays over their limit are rejected.
 // ---------------------------------------------------------------------------------------------

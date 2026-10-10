@@ -2,9 +2,9 @@
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
 import type { FleetDb, RetentionPolicy, SessionRow } from './db.js';
-import { activityView, computeKpis, sessionStatus, sessionView, startOfDay, type DeriveConfig } from './derive.js';
+import { activityView, computeKpis, family, sessionStatus, sessionView, shortenHome, startOfDay, type DeriveConfig } from './derive.js';
 import { ingestReport, type IngestResult } from './ingest.js';
-import type { ActivityView, Kpis, RemovedReason, Report, SessionStatusView, SessionView, StateBody } from './protocol.js';
+import type { ActivityView, HistoryRow, Kpis, RemovedReason, Report, SessionStatusView, SessionView, StateBody } from './protocol.js';
 import { formatSse, SseHub } from './sse.js';
 
 export interface FleetConfig {
@@ -25,6 +25,30 @@ export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
   throttleMs: 500,
 };
+
+function envMs(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const v = env[name];
+  if (v === undefined || v === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** Lifecycle and retention settings from the environment (SPEC 7.2, 7.5). */
+export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPath: string }): FleetConfig {
+  const d = DEFAULT_CONFIG;
+  return {
+    ...base,
+    staleAfterMs: envMs(env, 'STALE_AFTER_MS', d.staleAfterMs),
+    dropAfterMs: envMs(env, 'DROP_AFTER_MS', d.dropAfterMs),
+    lingerMs: envMs(env, 'LINGER_MS', d.lingerMs),
+    throttleMs: d.throttleMs,
+    retention: {
+      samplesMs: envMs(env, 'RETAIN_SAMPLES_MS', d.retention.samplesMs),
+      eventsMs: envMs(env, 'RETAIN_EVENTS_MS', d.retention.eventsMs),
+      sessionsMs: envMs(env, 'RETAIN_SESSIONS_MS', d.retention.sessionsMs),
+    },
+  };
+}
 
 /** How many events /state returns and the UI keeps. */
 export const STATE_EVENTS = 150;
@@ -168,6 +192,28 @@ export class Fleet {
     return rows.map((e) => {
       if (!sessions.has(e.session_id)) sessions.set(e.session_id, this.db.getSession(e.session_id));
       return activityView(e, sessions.get(e.session_id));
+    });
+  }
+
+  /** Sessions that ended or were dropped in [from, to), as summary rows. */
+  history(from: number, to: number): HistoryRow[] {
+    return this.db.endedBetween(from, to).map((row) => {
+      const agents = this.db.getAgents(row.id);
+      const end = row.dropped_at ?? row.ended_at ?? row.last_seen_at;
+      return {
+        id: row.id,
+        name: row.name,
+        project: shortenHome(row.project_root ?? row.cwd, this.cfg.home),
+        model: row.model,
+        modelFamily: family(row.model),
+        startedAt: row.started_at,
+        endedAt: end,
+        durationSec: Math.max(0, Math.round((end - row.started_at) / 1000)),
+        costUsd: row.cost_usd,
+        blowouts: row.blowouts + agents.reduce((n, a) => n + a.blowouts, 0),
+        agents: agents.length,
+        endReason: row.dropped_at !== null ? 'heartbeat lost' : row.end_reason,
+      };
     });
   }
 
