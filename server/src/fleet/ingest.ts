@@ -12,6 +12,8 @@ export interface IngestResult {
   revived: boolean;
   /** The session was not stored before this report. */
   created: boolean;
+  /** The stored session had already ended (status 'done') before this report. */
+  wasDone: boolean;
   /** sentAt − serverTime, kept for debugging only. */
   clockSkewMs: number;
 }
@@ -159,6 +161,6 @@ export function ingestReport(f: FleetDb, report: Report, serverTime: number): In
       cost_usd: row.cost_usd,
     });
 
-    return { sessionId: sid, newEvents, ended, revived, created: !prev, clockSkewMs: report.sentAt - serverTime };
+    return { sessionId: sid, newEvents, ended, revived, created: !prev, wasDone: prev?.status === 'done', clockSkewMs: report.sentAt - serverTime };
   });
 }
