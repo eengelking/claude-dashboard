@@ -481,3 +481,27 @@ that failed for the reason described; one part is deliberately left as is.
 - **`clockSkew`** is forgotten when a session leaves the live set or is deleted.
 - **`GET /history`** rejects days that do not exist (2026-02-31) with a 400. The day is still the server's
   local calendar day, which is right for a tool that runs on one machine; a `tz` parameter is deferred.
+
+## Running as a service
+
+`bin/podiumctl.mjs` (plain ESM, no dependencies, `bin` entry in the root `package.json`) manages the
+server in one of two modes, chosen with `--mode` and saved in `~/.podium/config.env`:
+
+- **container**: `Containerfile` is a two-stage Node 24 build (build stage runs `npm ci` and both builds;
+  runtime stage has production deps for `server`, the two `dist` trees, user `node`, `/data` volume).
+  `podiumctl` runs it as `podium` with `--restart unless-stopped`, port published on the chosen bind
+  address, named volume `podium-data`, and a `--health-cmd` (the `HEALTHCHECK` instruction is dropped
+  by Podman's default OCI image format). Inside, the server binds `0.0.0.0:4317`; the host-side bind is
+  where access is limited.
+- **standalone**: a detached `node server/dist/index.js` with a pid file and `~/.podium/podium.log`.
+
+Secrets reach the server through the process environment (`podman run -e NAME` with no value), never
+the command line. The token is generated on first start; an empty `PODIUM_TOKEN` is the deliberate
+"auth off" setting. `enable` writes a launchd plist (macOS) or systemd user unit (Linux) that calls
+`podiumctl start` (container; idempotent) or `podiumctl run` (standalone; foreground, restarted only on
+a non-zero exit, so `stop` is not undone). The reporter mod is not containerized: it runs inside each
+Claude Code process and posts to the server's URL.
+
+Verified on macOS with Podman 6.1.2: build, start, token enforcement (401 without, accepted with),
+non-root user, restart, stop, standalone start/stop, launchd enable/disable in both modes, purge. The
+systemd path is covered by a unit test of the generated text only.

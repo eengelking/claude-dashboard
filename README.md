@@ -38,6 +38,43 @@ with Ctrl-C; it ends every session it started, and they leave the dashboard a fe
 For a production-style run, `npm run build` and then `npm run start -w server` serves the built UI and
 the API from http://127.0.0.1:4317.
 
+## Run it as a service (podiumctl)
+
+`bin/podiumctl.mjs` starts, stops and watches the server without a dev setup. It runs Podium either in
+a **Podman container** (the default when Podman is installed) or as a **standalone** Node process on the
+host, and has no dependencies of its own. Install it on your PATH from the repo with `npm link`, or run
+`node bin/podiumctl.mjs` / `npm run podiumctl --`.
+
+```sh
+podiumctl start                     # builds the image on first use, then runs it on http://127.0.0.1:4317
+podiumctl status                    # mode, state, health, URL, boot setting (exit 3 when stopped)
+podiumctl logs -f                   # follow the log
+podiumctl restart                   # after changing the config
+podiumctl stop
+podiumctl enable                    # start on boot / login (launchd on macOS, systemd user unit on Linux)
+podiumctl disable
+podiumctl start --mode standalone   # no container: needs `podiumctl build --mode standalone` once
+podiumctl rm --purge --yes          # remove the container, its data volume and the image
+```
+
+`--mode`, `--port` and `--bind` are saved, so later commands reuse them. Container mode keeps the
+database in the Podman volume `podium-data`; standalone keeps it in `~/.podium/data/`. Container mode
+publishes the port on `127.0.0.1` only.
+
+**Auth token.** The first `start` generates a random token and saves it as `PODIUM_TOKEN` in
+`~/.podium/config.env` (mode 0600). Find it any time with `podiumctl token`; `podiumctl token --rotate`
+makes a new one. Put it in the mod's `token` option (and in the `X-Podium-Token` header of the settings
+hooks below). To run without auth, `podiumctl config set PODIUM_TOKEN=` (empty on purpose).
+
+Other settings (`STALE_AFTER_MS`, `RETAIN_*`, and so on, see the table below) are set with
+`podiumctl config set KEY=VALUE` and applied on `restart`. Set `PODIUMCTL_HOME` to keep the files
+somewhere other than `~/.podium`. `podiumctl --help` lists everything.
+
+Start on boot: in container mode the boot service runs `podiumctl start`, which also starts the Podman
+machine on macOS; in standalone mode it runs the server in the foreground and restarts it if it crashes.
+On Linux, `loginctl enable-linger $USER` makes the user unit start before you log in. (The Linux unit is
+generated and unit-tested but has not been run on a Linux host.)
+
 ## Report a real session
 
 The reporter is a Claude Code mod in `mod/podium-reporter/`. Load it for a session with:
