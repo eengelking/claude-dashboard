@@ -67,6 +67,23 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 19. **Simulator haiku window.** The simulator runs its haiku agents as `claude-haiku-4-5` (200K window)
     so blowouts happen often, as 1.6.2 asks; the current Haiku 5.5 has a 1M window.
 
+20. **View fields the UI needed.** `SessionView` gained `cwd` (home-shortened working directory, for the
+    page header), `waitReason` (to word the waiting callout: "Permission prompt: ..." vs "Waiting for
+    your input"), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
+    "dropped from the fleet at 1:15" without hard-coding server settings). All additive.
+21. **CSS scoping.** The usage page shares the document, so every Podium rule is scoped under `.podium`
+    and the tokens are defined on `.podium`, not `:root`. The theme attribute still lives on `<html>`
+    (`data-theme`), as in the mockup.
+22. **Link between the apps.** `#/usage` renders the old `App` unchanged, with a one-line "← Podium fleet
+    console" link above it rendered by `main.tsx`; the fleet top bar has a "Usage dashboard" link. The
+    mockup's Pause, Start session and Clear buttons are left out (8.1 says they belong to the simulator).
+23. **Resync on reconnect.** The server sends a full `snapshot` (the `/state` body) on every SSE connect,
+    so a reconnect resyncs from it rather than issuing a separate `GET /state`. The first paint still
+    fetches `/state`.
+24. **"N reporters live"** counts live sessions that are not stale.
+25. **Activity rows of ended sessions.** A session that leaves the live set stays in the reducer's
+    `gone` map, so its activity rows stay greyed and inert even after its card is gone.
+
 ## Dependencies added
 
 None at run time. `@types/node` in `server/` went from 20 to 24 so `node:sqlite` is declared.
@@ -108,4 +125,44 @@ live set was empty with `clearedToday: 5`.
 
 Found while running: the newest series point was always 0 (the current second's sample is partial).
 Fixed test-first (see Spec question 10).
+
+### Phase 2: frontend
+
+Built: `frontend/src/fleet/` (`FleetApp`, `useFleet`, `store.ts` reducer, `logic.ts`, `chart.ts`,
+`format.ts`, `useTheme`, `useResizable`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
+hash routing in `main.tsx` (`#/` fleet, `#/usage` the old app).
+
+Verified by tests (frontend suite 89 tests, the old app's 15 unchanged): reducer actions and the 150 cap;
+formatters at 0, 999, 1000, 1.5M, 3,600 s and 86,400 s; all six sorts and every filter; tree guides,
+cycles and orphans; polyline points; git line in all four cases; blowout levels 1 and 2 on cards; agent
+strip classes; focus page navigation, selection kept across updates and cleared with a message on
+removal; facts bar order; charts (markers, caption, crosshair readout); tree sort, reverse and "Show as
+tree"; plan states and empty text; context bar thresholds; activity paging, navigation from fail and
+blow rows, inert rows of ended sessions; failure box; "inherited" on forks; hostile `<img onerror>`
+strings render as text; resize handles (keys, drag, double-click, limits, throwing storage); copy and
+its fallback; roles and labels; theme persistence; `useFleet` silence detection and reconnect.
+
+Verified in a real browser (Chrome, through Claude in Chrome) against the server and
+`podium-sim --sessions 6 --chaos`, at 1440 px and in light and dark: wall, rail, KPI strip, cards, legend,
+orchestrator page (header, three charts with hover crosshair and readout, a blowout marker and caption,
+facts bar, plan, agent tree, flash on select), side panel (activity paging, a click on an "Open agent"
+row opened the session and agent and flashed the row, failure box with "The step went back to the
+plan"), Model sort order in rail and wall, text filter and its empty message, a real mouse drag on the
+activity handle (340 to 510 px, saved), double-click reset, Tab focus ring, Copy resume command
+("Copied", then back), theme kept across a reload, `#/usage` unchanged. Stopping the server showed
+"disconnected, retrying" at once; restarting it brought the page back in 2.3 s with no reload.
+
+400 px: Chrome would not size the window that narrow, so the check ran in a 400 px same-origin iframe
+of the app (media queries follow the iframe's width). Wall, orchestrator page and agent detail had
+`scrollWidth` 381 in a 396 px viewport (15 px scrollbar): no horizontal scroll, in dark and light.
+
+Found and fixed while running in the browser: the page was 28 px taller than the viewport and 172 px
+too wide at 400 px, both from visually hidden labels whose containing block sat outside their scroll
+container (columns and the agent tree scroller now set `position: relative`); the resize handles shared
+the `.rail` / `.side` class names with the columns and lost their positioning (renamed `rz-rail` /
+`rz-side`); long output lines widened the failure box and clipped its text; a pointer event without a
+usable `clientX` produced a NaN width (fixed test-first); the "now" caption of the peak chart was red
+with no blowouts.
+
+Not verified: real touch input; screen reader output (roles and names are asserted in tests only).
 

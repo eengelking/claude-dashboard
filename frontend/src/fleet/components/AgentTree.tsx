@@ -1,0 +1,113 @@
+import { useEffect, useRef } from "react";
+import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { buildTree, sessionElapsedSec, sortAgents, type AgentSortKey } from "../logic";
+import type { SessionView } from "../types";
+import { AgentRow } from "./AgentRow";
+import { BlowBadge, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
+import { IconOrch } from "./Icons";
+
+export interface AgentSort {
+  key: AgentSortKey | null;
+  dir: 1 | -1;
+}
+
+const HEADERS: { key: AgentSortKey; label: string; cls?: string }[] = [
+  { key: "model", label: "Model" },
+  { key: "effort", label: "Effort" },
+  { key: "ctx", label: "Context" },
+  { key: "tok", label: "Tokens", cls: "num c-tok" },
+  { key: "cost", label: "Cost", cls: "num" },
+  { key: "time", label: "Time", cls: "num" },
+  { key: "status", label: "Status" },
+];
+
+export function AgentTree(props: {
+  s: SessionView;
+  now: number;
+  sort: AgentSort;
+  onSort: (key: AgentSortKey | null) => void;
+  selectedAgent: string | null;
+  flashAgent: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const { s, now, sort } = props;
+  const rows = sort.key ? sortAgents(s.agents, sort.key, sort.dir, now).map((a) => ({ agent: a, guides: [] })) : buildTree(s.agents);
+  const flashRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (props.flashAgent && flashRef.current?.scrollIntoView) flashRef.current.scrollIntoView({ block: "center" });
+  }, [props.flashAgent]);
+  return (
+    <section className="sec" aria-label="Agents">
+      <div className="sh">
+        <h2>Agents</h2>
+        <span className="src">
+          {sort.key ? (
+            <button type="button" className="btn" onClick={() => props.onSort(null)}>
+              Show as tree
+            </button>
+          ) : (
+            `${s.agents.length} launched · click a header to sort`
+          )}
+        </span>
+      </div>
+      <div className="tw">
+        <div className="trow hd" role="row">
+          <div>Task</div>
+          {HEADERS.map((h) => {
+            const on = sort.key === h.key;
+            return (
+              <div key={h.key} className={h.cls}>
+                <button type="button" aria-pressed={on} onClick={() => props.onSort(h.key)} title={`Sort by ${h.label.toLowerCase()}`}>
+                  {h.label}
+                  {on ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="trow root">
+          <div className="nm">
+            <IconOrch />
+            <span className="tx">
+              <b>{s.name}</b>
+              <em>orchestrator</em>
+            </span>
+          </div>
+          <div>
+            <ModelChip family={s.modelFamily} model={s.model} />
+          </div>
+          <div>
+            <EffortMeter effort={s.effort} />
+          </div>
+          <div className="ctxc">
+            <ContextBar percent={s.context.percent} blowouts={s.blowouts.orchestrator} />
+            <span>{fmtPct(s.context.percent)}</span>
+            <BlowBadge n={s.blowouts.orchestrator} />
+          </div>
+          <div className="num c-tok">{fmtTok(s.tokensTotal)}</div>
+          <div className="num">{fmtUsd(s.costUsd)}</div>
+          <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
+          <div>
+            <StatusChip status={s.status} />
+          </div>
+        </div>
+        {rows.length ? (
+          rows.map((r) => (
+            <AgentRow
+              key={r.agent.id}
+              ref={props.flashAgent === r.agent.id ? flashRef : undefined}
+              a={r.agent}
+              guides={r.guides}
+              now={now}
+              selected={props.selectedAgent === r.agent.id}
+              flash={props.flashAgent === r.agent.id}
+              onSelect={props.onSelect}
+            />
+          ))
+        ) : (
+          <div className="empty">No agents launched yet.</div>
+        )}
+      </div>
+    </section>
+  );
+}
