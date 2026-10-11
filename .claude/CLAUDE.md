@@ -90,6 +90,27 @@ Order of operations for any tracked change. The policy is the invariant that hol
 
 **Versioning:** If this repo opts into `spec-writing`'s Staged-DAG weight class, add a line here mapping each stage gate to the release version it produces (e.g. G-0 → `v0.1.0`, G-1 → `v0.2.0`, …) — that mapping is the one fact specific to this repo. The mechanics (independently verifying a gate before treating it as passed, what to bump and where, tagging) are `github-release`'s and `spec-writing`'s job to know, not this file's — load them when a gate task merges rather than re-deriving the steps here. Projects using Flat or Phased spec classes, or no `spec-writing` spec at all, don't need this row.
 
+## Releases
+
+`github-release` owns the steps. This is what is specific to this repo.
+
+- **Verify first:** `npm test` and `npm run build` (CI runs both). If the mod changed, also `npm run test:mod` and `npm run typecheck:mod`, which need Claude Code installed and cannot run in CI.
+- **Publish:** nothing. There is no package registry and no container registry; users build the image with `podiumctl build`. Skip the skill's publish step.
+- **Tag and GitHub Release:** `vMAJOR.MINOR.PATCH`, annotated, from `main` after the release PR has merged. The release notes are the CHANGELOG section verbatim. Propose the tag and wait for approval; never push one unprompted.
+- **Doc-only PRs get no release.** A mod-only fix between releases bumps only the mod's version (CI's `mod-version-check` enforces that) and does not need a release of its own. Pre-1.0, a minor release may include breaking changes.
+
+Everything below changes in the release PR itself, in the same commit, never as a follow-up after the tag:
+
+| File | What changes |
+|---|---|
+| `CHANGELOG.md` | Rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a fresh empty `[Unreleased]` above it. Update the two links at the bottom (`[Unreleased]` compares `vX.Y.Z...HEAD`; `[X.Y.Z]` points at the release) |
+| `package.json`, `server/package.json`, `frontend/package.json` | `version`, all three the same number |
+| `package-lock.json` | Run `npm install --package-lock-only` so its entries follow the manifests |
+| `mod/podium-reporter/.claude-plugin/plugin.json` | `version`, set to the same release number |
+| `mod/podium-reporter/hooks/register.ts` | `VERSION`, equal to `plugin.json` (`scripts/versions.test.ts` fails if they differ) |
+
+Then grep the repo for the old version string and look at every hit before assuming the table is complete. Known hits that are sample data and do not change: `docs/fixtures/report.sample.json`, the fixtures in `server/src/fleet/*.test.ts`, `mod/podium-reporter/hooks/scripted.ts`, the simulator's `0.1.0-sim`, and the manifest example in `docs/SPEC.md`.
+
 ## Issue Management
 
 | Phase | Policy | Skill |
