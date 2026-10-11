@@ -33,10 +33,11 @@ npm run podium:sim -- --sessions 5 --chaos
 
 `--chaos` adds sessions that go silent, more failures and more context blowouts. `--help` lists the
 other options (`--url`, `--speed`, `--seed`, `--duration`, `--agents`, `--token`, `--print`). Stop it
-with Ctrl-C; it ends every session it started, and they leave the dashboard a few seconds later.
+with Ctrl-C; it ends every session it started, and they leave the dashboard a few seconds later. If the
+server has a token (`podiumctl start` sets one), pass it: `--token "$(podiumctl token)"`.
 
-For a production-style run, `npm run build` and then `npm run start -w server` serves the built UI and
-the API from http://127.0.0.1:4317.
+To serve the built UI and the API without a container, `npm run build` and then `npm run start -w server`
+(http://127.0.0.1:4317). `podiumctl`, below, does the same thing and manages it for you.
 
 ## Run it as a service (podiumctl)
 
@@ -47,7 +48,6 @@ host, and has no dependencies of its own. Install it on your PATH from the repo 
 
 ```sh
 git clone https://github.com/eengelking/podium.git && cd podium && npm link
-```sh
 podiumctl start                     # builds the image on first use, then runs it on http://127.0.0.1:4317
 podiumctl status                    # mode, state, health, URL, boot setting (exit 3 when stopped)
 podiumctl logs -f                   # follow the log
@@ -65,8 +65,8 @@ publishes the port on `127.0.0.1` only.
 
 **Auth token.** The first `start` generates a random token and saves it as `PODIUM_TOKEN` in
 `~/.podium/config.env` (mode 0600). Find it any time with `podiumctl token`; `podiumctl token --rotate`
-makes a new one. Put it in the mod's `token` option (and in the `X-Podium-Token` header of the settings
-hooks below). To run without auth, `podiumctl config set PODIUM_TOKEN=` (empty on purpose).
+makes a new one. Enter it in the mod's `token` option (see "Report a real session") and in the
+`X-Podium-Token` header of the settings hooks below. To run without auth, `podiumctl config set PODIUM_TOKEN=` (empty on purpose).
 
 Other settings (`STALE_AFTER_MS`, `RETAIN_*`, and so on, see the table below) are set with
 `podiumctl config set KEY=VALUE` and applied on `restart`. Set `PODIUMCTL_HOME` to keep the files
@@ -101,10 +101,12 @@ The session appears in Podium at once.
 In the session, `/podium` prints the dashboard link, the connection state and report counts, and
 `/podium name <text>` gives the session a display name. The status line under the prompt reads
 `podium ● N live`, or `podium ○ offline` while the server is unreachable (reports queue up and go out
-when it is back).
+when it is back). Effort is read from each model request, so a change made with `/effort` shows after
+the session's next prompt, not when you pick it.
 
-The mod's options are set in Claude Code settings under `pluginConfigs`, keyed `podium-reporter`, or
-from the config menu:
+Set the mod's options with `/plugin configure podium-reporter@eengelking-marketplace`, or in Claude Code
+settings under `pluginConfigs`, `podium-reporter`, `options`. Everything except `token` also has a row in
+the `/config` menu.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -165,13 +167,14 @@ mark the session as waiting on you; the `Stop` hook does.
 
 ## Server settings
 
-Environment variables (see `.env.example`):
+Environment variables (see `.env.example`). Under `podiumctl` you set them with `podiumctl config set`,
+and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `4317` | Server port (the Vite proxy follows it) |
 | `HOST` | `127.0.0.1` | Bind address. Podium is for one machine; leave it on localhost |
-| `PODIUM_DB` | `data/podium.sqlite` | SQLite database file |
+| `PODIUM_DB` | `data/podium.sqlite` | SQLite database file (`podiumctl` uses `/data/podium.sqlite` in the container and `~/.podium/data/podium.sqlite` standalone) |
 | `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` |
 | `STALE_AFTER_MS` | `15000` | A session not heard from this long shows as stale |
 | `HOOK_STALE_AFTER_MS` | `600000` | Same as `STALE_AFTER_MS`, for sessions known only from settings hooks (they send no heartbeat) |
@@ -187,7 +190,7 @@ loses nothing that was reported: sessions come back as stale and recover when th
 ## Tests and checks
 
 ```sh
-npm test               # server and UI tests (vitest), plus the simulator's
+npm test               # server and UI tests (vitest), plus the simulator's and podiumctl's
 npm run test:mod       # the mod's tests, run by `claude plugin test` on the engine
 npm run typecheck:mod  # the mod against Claude Code's plugin API declarations
 npm run build          # UI, server and scripts type-check and build

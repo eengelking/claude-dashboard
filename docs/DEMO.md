@@ -43,7 +43,10 @@ viewer sees both at once.
 3. Pick the theme you want from the toggle in the top bar and size the window before you start
    recording. Layout changes mid-take are distracting.
 
-4. In the second terminal, start Claude Code with the mod loaded:
+4. In the second terminal, start Claude Code with the mod installed. Install it once from the
+   marketplace (`/plugin marketplace add eengelking/skills`, then
+   `/plugin install podium-reporter@eengelking-marketplace`), or load it from a checkout for this
+   session:
 
    ```sh
    claude --plugin-dir /path/to/podium/mod/podium-reporter
@@ -123,6 +126,8 @@ open a third terminal and start the simulator while the recording is going:
 ```sh
 npm run podium:sim -- --sessions 5 --chaos
 ```
+
+(Add `--token "$(podiumctl token)"` if the server has a token.)
 
 The simulator posts realistic reports for five fake sessions, so the wall fills up next to your real one.
 `--chaos` makes some of them go silent (they turn stale), fail more often and overflow their context

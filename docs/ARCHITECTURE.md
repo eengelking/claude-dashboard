@@ -164,6 +164,18 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     `costUsdEst`, the one estimate the report carries. Explanations are requested from the flush timer,
     never from a hook, at most once per failure; a call that errors is not retried.
 
+39. **The mod is installable from a marketplace (section 11 defers it).** Section 11 lists "installing the
+    mod through a marketplace" as deferred until the repo is public, with a `marketplace.json` in this repo.
+    It is done a different way: `eengelking/skills` already publishes `eengelking-marketplace`, and its
+    `.claude-plugin/marketplace.json` lists `podium-reporter` with a `git-subdir` source pointing at
+    `mod/podium-reporter` in this repo (full `https://` URL, because the `owner/repo` shorthand clones over
+    SSH). Install with `/plugin install podium-reporter@eengelking-marketplace`. This repo has no
+    marketplace file of its own. SPEC.md still says deferred; it has not been changed.
+40. **Inside the container the server binds `0.0.0.0`.** Section 3 says the server binds `127.0.0.1` by
+    default. In the image it has to listen on all interfaces for the published port to reach it, so
+    `podiumctl` publishes it only on the host's `127.0.0.1` (or the `--bind` address). The server's own
+    default outside the container is unchanged. SPEC.md has not been changed.
+
 ## Deviations from the spec
 
 The numbered Spec questions above are the full list, each with its reason. The ones that change behavior
@@ -175,6 +187,8 @@ a reader of the spec would expect:
 - The plan tool never sets `source: 'podium_plan'`; it only names the plan (27).
 - Escaped control characters in reported strings are stripped and the report accepted; raw control
   characters make the JSON invalid and get a 400 (T4.3.1 reading, Phase 4 below).
+- The mod is installed through a marketplace (39) and the container listens on all interfaces behind a
+  host-side `127.0.0.1` publish (40). SPEC.md section 3 and section 11 still say otherwise.
 - Extra fields, all additive: `SessionView.cwd` and `waitReason`, `/state.config`, `liveSessions` in the
   report ack, `HistoryRow` for `/history`, and a `showStatus` mod option (20, 31, 33).
 - Extra files: `server/src/fleet/fleet.ts`, `testing.ts`, `server/vitest.config.ts`, `frontend/src/fleet/`
@@ -189,9 +203,10 @@ a reader of the spec would expect:
 2. **No agent-scoped tool calls in the mod's end-to-end test.** The test kit mints `tool.call`'s
    `agentId`, so a Skill or failing Bash inside an agent is covered by the pure `state.ts` tests and the
    real runs, not by `register.test.ts`.
-3. **Not seen for real:** a subagent's own `session.compact`, a teammate, `classic.Notification`, `/clear`
-   in an interactive session, and the status line (all real runs were headless `-p`). Each is covered by
-   tests against the types.
+3. **Not seen for real:** a subagent's own `session.compact`, a teammate, `classic.Notification` and
+   `/clear` in an interactive session (the earlier real runs were headless `-p`). Each is covered by
+   tests against the types. The status line and `/podium` have since been seen in an interactive session
+   (October 2026), reporting to the container through the marketplace-installed mod.
 4. **Plan owner matching is literal.** A step "Count .ts files under server" and an agent "Count .ts
    files in server" do not match (6.3's normalized contains rule); run 3 showed it. Steps then show no
    owner.
@@ -207,6 +222,14 @@ a reader of the spec would expect:
    "waiting on you"; with many idle sessions the wall fills with waiting callouts.
 9. **The production build also compiles the server's test files into `server/dist`** (as the existing
    app already did). Harmless; not changed.
+10. **A change of effort shows after the next model request.** The mod reads the effort the session sends
+    on each `turn.step`; the API has no event for the setting changing. A level picked with `/effort`
+    appears in Podium after the session's next prompt, not when it is picked. A probe of `$.config.list()`
+    and `$.settings.read()` to catch it sooner has been proposed and not tried.
+11. **Claude Code draws a warning sign before the status line entry.** The mod sets plain text with
+    `$.ui.status`, which takes no severity, so the sign looks like the host's own styling of a plugin's
+    entry (inferred, not confirmed). `podium ● N live` is the normal state.
+12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
 
 ## Browser checklist (T4.2)
 
@@ -493,15 +516,21 @@ server in one of two modes, chosen with `--mode` and saved in `~/.podium/config.
   address, named volume `podium-data`, and a `--health-cmd` (the `HEALTHCHECK` instruction is dropped
   by Podman's default OCI image format). Inside, the server binds `0.0.0.0:4317`; the host-side bind is
   where access is limited.
-- **standalone**: a detached `node server/dist/index.js` with a pid file and `~/.podium/podium.log`.
+- **standalone**: a detached `node server/dist/index.js` with a pid file and `~/.podium/podium.log`. The
+  pid file is only trusted if that pid's command line is `podiumctl` or the server entry, so a reused pid
+  is never signalled. Under the boot service, `podiumctl run` writes its own pid (not the server child's),
+  so `stop` reaches its SIGTERM handler and the service does not restart the server.
 
 Secrets reach the server through the process environment (`podman run -e NAME` with no value), never
 the command line. The token is generated on first start; an empty `PODIUM_TOKEN` is the deliberate
 "auth off" setting. `enable` writes a launchd plist (macOS) or systemd user unit (Linux) that calls
 `podiumctl start` (container; idempotent) or `podiumctl run` (standalone; foreground, restarted only on
 a non-zero exit, so `stop` is not undone). The reporter mod is not containerized: it runs inside each
-Claude Code process and posts to the server's URL.
+Claude Code process and posts to the server's URL. It is installed from `eengelking-marketplace` (39); its
+`token` option is secret, so it is set with `/plugin configure`, not the `/config` menu.
 
 Verified on macOS with Podman 6.1.2: build, start, token enforcement (401 without, accepted with),
-non-root user, restart, stop, standalone start/stop, launchd enable/disable in both modes, purge. The
-systemd path is covered by a unit test of the generated text only.
+non-root user, restart, stop, standalone start/stop, `run` plus SIGTERM, launchd enable/disable in both
+modes, purge, and `claude plugin install podium-reporter@eengelking-marketplace` against the live
+marketplace with a clean config directory. The systemd path is covered by a unit test of the generated text
+only (known issue 12).

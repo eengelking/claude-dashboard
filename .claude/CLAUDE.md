@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 
 ## Project Overview
 
-_TODO: 1-2 paragraphs — what this project is, who it's for, and why it exists. Not how it's built (see `docs/ARCHITECTURE.md` instead). To be filled in by /init_
+Podium is a live fleet console for Claude Code. It shows every session running on one machine in one
+browser tab: each orchestrator's model, effort, plan, the agents it launched, what they cost, how full
+their context windows are, why anything failed, and which git branch it works in. It is for someone who
+runs several Claude Code sessions and agents at once and wants to see what they are doing and costing
+without watching each terminal. Podium only observes. It never sends a prompt or touches a session.
+
+It ships as a server and UI (this repo, run with `podiumctl` in a Podman container or as a plain Node
+process) and a reporter mod, `podium-reporter`, installed from `eengelking-marketplace`. The repo also
+holds the earlier usage dashboard (`#/usage`). `docs/SPEC.md` is the source of truth for intended
+behavior; `docs/ARCHITECTURE.md` records how it was built.
 
 ## Shortcuts
 
