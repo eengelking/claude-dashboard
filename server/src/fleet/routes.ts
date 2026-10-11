@@ -53,6 +53,22 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     }
   });
 
+  // Classic settings hooks (T5.1): each hook POSTs its stdin payload here.
+  router.post('/hook', requireToken, json, (req, res) => {
+    try {
+      const out = fleet.ingestHook(req.body);
+      if (!out.ok) {
+        log(`podium: rejected hook payload at ${out.path}: ${out.error}`);
+        res.status(400).json(out);
+        return;
+      }
+      res.json({ ok: true, sessionId: out.sessionId });
+    } catch (err) {
+      log(`podium: hook ingest failed: ${(err as Error).message}`);
+      res.status(500).json({ ok: false, error: 'ingest failed', path: '$' });
+    }
+  });
+
   router.get('/state', (_req, res) => {
     res.json(fleet.state());
   });

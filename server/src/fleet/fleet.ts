@@ -4,6 +4,8 @@
 import type { FleetDb, RetentionPolicy, SessionRow } from './db.js';
 import { activityView, computeKpis, family, sessionStatus, sessionView, shortenHome, startOfDay, type DeriveConfig } from './derive.js';
 import { ingestReport, type IngestResult } from './ingest.js';
+import { hookToReport } from './hookIngest.js';
+import { validateReport } from './protocol.js';
 import type { ActivityView, HistoryRow, Kpis, RemovedReason, Report, SessionStatusView, SessionView, StateBody } from './protocol.js';
 import { formatSse, SseHub } from './sse.js';
 
@@ -112,6 +114,18 @@ export class Fleet {
     }
     if (this.live.has(res.sessionId)) this.scheduleSession(res.sessionId);
     return res;
+  }
+
+  /** A classic settings-hook payload (T5.1): merged with what is stored, then ingested as a report. */
+  ingestHook(payload: unknown): { ok: true; sessionId: string } | { ok: false; error: string; path: string } {
+    const sid = typeof (payload as { session_id?: unknown })?.session_id === 'string' ? (payload as { session_id: string }).session_id : '';
+    const stored = sid ? { session: this.db.getSession(sid), agents: this.db.getAgents(sid) } : { agents: [] };
+    const res = hookToReport(payload, stored, this.now());
+    if (!res.ok) return res;
+    const v = validateReport(res.report);
+    if (!v.ok) return v;
+    this.ingest(v.report);
+    return { ok: true, sessionId: v.report.session.id };
   }
 
   /** Coalesces `session` messages: at most one per session per throttle window, carrying the latest state. */

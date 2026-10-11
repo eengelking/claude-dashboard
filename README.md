@@ -83,6 +83,31 @@ with `[redacted]`: `sk-ant-...` keys, `ghp_...` tokens, `AKIA...` keys, `Bearer 
 values after `password=`, `token=`, `secret=`, `apikey=` and `api_key=`. Podium never reads whole
 messages, transcripts or files.
 
+### Sessions without the mod
+
+Claude Code's settings hooks can report a reduced view of sessions that were started without the mod:
+the session, its working directory and model, agents by type, and waiting or ended states. They carry no
+token counts, so context, cost and the plan stay empty, and Podium marks those sessions "settings hooks".
+Add this to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "SubagentStart":    [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "SubagentStop":     [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "Notification":     [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "curl -s -m 2 -X POST -H 'Content-Type: application/json' --data-binary @- http://127.0.0.1:4317/api/fleet/hook >/dev/null || true" }] }]
+  }
+}
+```
+
+Each hook posts the payload Claude Code gives it on stdin and always exits 0, so a stopped server never
+gets in the session's way. When the server sets `PODIUM_TOKEN`, add `-H 'X-Podium-Token: <token>'`. Don't
+use these hooks and the mod in the same session; the mod already reports everything they would.
+
 ## Server settings
 
 Environment variables (see `.env.example`):
@@ -92,7 +117,7 @@ Environment variables (see `.env.example`):
 | `PORT` | `4317` | Server port (the Vite proxy follows it) |
 | `HOST` | `127.0.0.1` | Bind address. Podium is for one machine; leave it on localhost |
 | `PODIUM_DB` | `data/podium.sqlite` | SQLite database file |
-| `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report` and `DELETE` require `X-Podium-Token` |
+| `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` |
 | `STALE_AFTER_MS` | `15000` | A session not heard from this long shows as stale |
 | `DROP_AFTER_MS` | `60000` | A stale session leaves the fleet after this much more |
 | `LINGER_MS` | `8000` | An ended session stays on screen this long |

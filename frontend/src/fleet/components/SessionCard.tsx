@@ -5,6 +5,8 @@ import { BlowBadge, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanB
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
 
+export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens and the plan are unavailable.";
+
 export function waitText(s: Pick<SessionView, "waitReason" | "waitNote">): string {
   if (s.waitReason === "permission") return `Permission prompt: ${s.waitNote ?? "a tool call needs your approval"}`;
   if (s.waitReason === "input") return s.waitNote ? `Waiting for your input: ${s.waitNote}` : "Waiting for your input.";
@@ -40,6 +42,11 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           ctx <span className="mono">{fmtPct(s.context.percent)}</span>
         </span>
         <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
+        {s.reporter === "hooks" && (
+          <span className="chip" title={HOOKS_NOTE}>
+            settings hooks
+          </span>
+        )}
       </div>
       {risk && (
         <div className="alert risk">

@@ -35,6 +35,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
   return {
     id: "s1",
     name: "api-refactor",
+    reporter: "mod",
     project: "~/dev/billing-service",
     cwd: "~/dev/billing-service/.claude/worktrees/invoice-v2",
     repoName: "acme/billing-service",

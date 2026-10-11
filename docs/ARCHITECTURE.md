@@ -149,6 +149,15 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 35. **Plan tool registration.** The `plan` tool is registered deferred (behind ToolSearch, the default),
     so it costs a session nothing unless the model looks for it.
 
+36. **Settings-hook snippet location (T5.1).** The spec asks for a `docs/` snippet; this repo's CLAUDE.md
+    says not to start a new standing doc when an existing one can hold the content, so the
+    `.claude/settings.json` snippet is in the README ("Sessions without the mod").
+37. **Hook ingest merges with stored rows.** Each settings hook is one event, so `POST /hook` reads the
+    stored session and agents, applies the event, and ingests the result through the normal path
+    (`reporter.version: "hooks"`, shown as `SessionView.reporter: 'hooks'`). It never takes
+    `last_assistant_message` or prompts, so hooks send no excerpts at all. Unknown hook events are
+    heartbeats.
+
 ## Deviations from the spec
 
 The numbered Spec questions above are the full list, each with its reason. The ones that change behavior

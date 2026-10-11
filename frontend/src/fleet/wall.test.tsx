@@ -146,3 +146,12 @@ describe("session card", () => {
     expect(p.container.textContent).toContain("1/4");
   });
 });
+
+describe("sessions reported by settings hooks", () => {
+  it("are marked on the card and the orchestrator page says what is unavailable", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ reporter: "hooks", costUsd: null, plan: null, context: { tokens: null, window: null, percent: null } })] })} />);
+    expect(container.querySelector(".wall .card")!.textContent).toContain("settings hooks");
+    fireEvent.click(container.querySelector(".wall .card")!);
+    expect(screen.getByRole("note").textContent).toContain("context, cost, tokens and the plan are unavailable");
+  });
+});

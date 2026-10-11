@@ -154,6 +154,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
   return {
     id: row.id,
     name: row.name,
+    reporter: row.reporter_version === 'hooks' ? 'hooks' : 'mod',
     project: shortenHome(row.project_root ?? row.cwd, cfg.home),
     cwd: shortenHome(row.cwd, cfg.home),
     repoName: row.repo_name,

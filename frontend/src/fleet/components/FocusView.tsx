@@ -6,7 +6,7 @@ import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel } from "./PlanPanel";
-import { waitText } from "./SessionCard";
+import { HOOKS_NOTE, waitText } from "./SessionCard";
 
 export function FocusView(props: {
   s: SessionView;
@@ -22,6 +22,11 @@ export function FocusView(props: {
   return (
     <>
       <FocusHeader s={s} now={now} />
+      {s.reporter === "hooks" && (
+        <div className="callout" role="note">
+          <div>{HOOKS_NOTE} Load the mod with <code>claude --plugin-dir mod/podium-reporter</code> for the full view.</div>
+        </div>
+      )}
       <BlowoutCallout s={s} onAgent={props.onAgent} />
       {s.status === "waiting" && (
         <div className="card notice" style={{ cursor: "default" }}>

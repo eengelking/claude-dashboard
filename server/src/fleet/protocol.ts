@@ -169,6 +169,8 @@ export interface BlowoutLogEntry {
 export interface SessionView {
   id: string;
   name: string;
+  /** `mod`: the reporter mod (full detail); `hooks`: classic settings hooks only (no usage, cost, plan). */
+  reporter: 'mod' | 'hooks';
   project: string;
   /** The session's working directory, home shortened to `~`. */
   cwd: string;
