@@ -170,6 +170,8 @@ export interface SessionView {
   id: string;
   name: string;
   project: string;
+  /** The session's working directory, home shortened to `~`. */
+  cwd: string;
   repoName: string | null;
   resumeCommand: string;
   git: GitInfo | null;

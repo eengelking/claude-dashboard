@@ -155,6 +155,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     id: row.id,
     name: row.name,
     project: shortenHome(row.project_root ?? row.cwd, cfg.home),
+    cwd: shortenHome(row.cwd, cfg.home),
     repoName: row.repo_name,
     resumeCommand: resumeCommand(row.cwd, row.resume_id, row.id),
     git: parse<GitInfo | null>(row.git_json, null),

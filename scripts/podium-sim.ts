@@ -281,7 +281,7 @@ export class Simulator {
     const age = initial ? (tpl.ageSec ?? rng.int(5, 120)) : rng.int(1, 5);
     const s: SimSession = {
       id,
-      name: tpl.worktree ? leaf : tpl.name + (uses > 1 ? `-${uses}` : ''),
+      name: (tpl.worktree ? leaf : tpl.name) + (uses > 1 ? `-${uses}` : ''),
       tpl,
       cwd: tpl.worktree ? `${projectRoot}/.claude/worktrees/${leaf}` : projectRoot,
       projectRoot,
@@ -378,6 +378,10 @@ export class Simulator {
     }
     s.agents.push(a);
     if (stepIndex !== null && s.steps) {
+      // A step that failed before is taken up by this agent: record the hand-over on the failure.
+      for (const prev of s.agents) {
+        if (prev !== a && prev.stepIndex === stepIndex && prev.report.failure && prev.report.failure.retriedAs === null) prev.report.failure.retriedAs = id;
+      }
       const st = s.steps[stepIndex]!;
       st.agentId = id;
       st.state = status === 'done' ? 'done' : 'active';
