@@ -4,3 +4,4 @@ dist/
 *.tsbuildinfo
 data/
 *.sqlite*
+mod/podium-reporter/.claude-plugin/types/

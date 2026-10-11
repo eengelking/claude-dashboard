@@ -1,0 +1,51 @@
+{
+  "name": "podium-reporter",
+  "version": "0.1.0",
+  "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
+  "author": { "name": "Ed Engelking" },
+  "userConfig": {
+    "serverUrl": {
+      "type": "string",
+      "title": "Podium server URL",
+      "description": "Where the reporter posts session reports.",
+      "default": "http://127.0.0.1:4317"
+    },
+    "token": {
+      "type": "string",
+      "title": "Podium token",
+      "description": "Sent as X-Podium-Token when the server sets PODIUM_TOKEN. Leave empty otherwise.",
+      "default": "",
+      "sensitive": true
+    },
+    "flushIntervalMs": {
+      "type": "number",
+      "title": "Report interval (ms)",
+      "description": "Minimum time between reports while something changes.",
+      "default": 1000
+    },
+    "heartbeatMs": {
+      "type": "number",
+      "title": "Heartbeat (ms)",
+      "description": "Report at least this often even when nothing changed.",
+      "default": 5000
+    },
+    "sessionName": {
+      "type": "string",
+      "title": "Session name",
+      "description": "Display name for this machine's sessions. Usually left empty.",
+      "default": ""
+    },
+    "showStatus": {
+      "type": "boolean",
+      "title": "Status line",
+      "description": "Show 'podium ● N live' or 'podium ○ offline' under the prompt.",
+      "default": true
+    },
+    "explainFailures": {
+      "type": "boolean",
+      "title": "Explain failures",
+      "description": "Ask a small model to explain each failure (costs tokens). Off by default.",
+      "default": false
+    }
+  }
+}

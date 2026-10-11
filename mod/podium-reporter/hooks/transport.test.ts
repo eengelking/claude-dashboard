@@ -1,0 +1,113 @@
+import { describe, test, expect } from 'claude-code/testing'
+import { Transport, BACKOFF_MS, QUEUE_MAX, type FetchLike, type HttpResult } from './transport.ts'
+import type { ActivityEvent, Report } from './protocol.ts'
+import { scriptedReport } from './scripted.ts'
+
+const ev = (i: number): ActivityEvent => ({ id: `e${i}`, t: i, kind: 'note', agentId: null, text: `n${i}`, data: null })
+const build = (events: ActivityEvent[]): Report => ({ ...scriptedReport(), events })
+
+function fake(responses: (HttpResult | Error)[]) {
+  const calls: { url: string; headers: Record<string, string>; body: Report }[] = []
+  const fetch: FetchLike = async (url, init) => {
+    calls.push({ url, headers: init.headers, body: JSON.parse(init.body) as Report })
+    const r = responses.shift() ?? { status: 200, ok: true, text: '{"ok":true}' }
+    if (r instanceof Error) throw r
+    return r
+  }
+  return { fetch, calls }
+}
+
+const ok = (acked?: number, live?: number): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, ackedEvents: acked, liveSessions: live }) })
+
+describe('transport', () => {
+  test('posts one JSON report with the content type, and the token only when configured', async () => {
+    const a = fake([ok()])
+    await new Transport(a.fetch, { serverUrl: 'http://h:1/', token: '', heartbeatMs: 5000 }).send(build, 0)
+    expect(a.calls).toHaveLength(1)
+    expect(a.calls[0]!.url).toBe('http://h:1/api/fleet/report')
+    expect(a.calls[0]!.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(a.calls[0]!.body.v).toBe(1)
+    const b = fake([ok()])
+    await new Transport(b.fetch, { serverUrl: 'http://h:1', token: 's3', heartbeatMs: 5000 }).send(build, 0)
+    expect(b.calls[0]!.headers['X-Podium-Token']).toBe('s3')
+  })
+
+  test('success clears the acknowledged events and records the live count', async () => {
+    const f = fake([ok(2, 4)])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    t.enqueue([ev(1), ev(2), ev(3)])
+    expect(await t.send(build, 10)).toBe('ok')
+    expect(f.calls[0]!.body.events.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
+    expect(t.queue.map((e) => e.id)).toEqual(['e3'])
+    expect(t.statusText()).toBe('podium ● 4 live')
+    expect(t.online).toBe(true)
+  })
+
+  test('sends at most 100 events per report', async () => {
+    const f = fake([ok()])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    t.enqueue(Array.from({ length: 250 }, (_, i) => ev(i)))
+    await t.send(build, 0)
+    expect(f.calls[0]!.body.events).toHaveLength(100)
+    expect(t.queue).toHaveLength(150)
+  })
+
+  test('a 400 drops that report and its events, and is not retried', async () => {
+    const f = fake([{ status: 400, ok: false, text: '{"ok":false,"error":"bad","path":"$.v"}' }])
+    const logs: string[] = []
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 }, (l) => logs.push(l))
+    t.enqueue([ev(1)])
+    expect(await t.send(build, 0)).toBe('rejected')
+    expect(t.queue).toEqual([])
+    expect(t.rejected).toBe(1)
+    expect(t.nextAttemptAt).toBe(0)
+    expect(logs).toHaveLength(1)
+  })
+
+  test('a network error keeps the events and backs off 1, 2, 5, 10, 10 s', async () => {
+    const f = fake([new Error('ECONNREFUSED'), new Error('x'), new Error('x'), new Error('x'), { status: 503, ok: false, text: '' }])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    t.enqueue([ev(1), ev(2)])
+    const waits: number[] = []
+    let now = 0
+    for (let i = 0; i < 5; i++) {
+      expect(await t.send(build, now)).toBe('failed')
+      waits.push(t.nextAttemptAt - now)
+      expect(t.due(now + waits[i]! - 1, true)).toBe(false)
+      now = t.nextAttemptAt
+      expect(t.due(now, true)).toBe(true)
+    }
+    expect(waits).toEqual([...BACKOFF_MS, 10_000])
+    expect(t.queue.map((e) => e.id)).toEqual(['e1', 'e2'])
+    expect(t.statusText()).toBe('podium ○ offline')
+    expect(t.lastError).toBe('HTTP 503')
+    // the first success afterwards sends the full snapshot plus every queued event, and resets the backoff
+    expect(await t.send(build, now)).toBe('ok')
+    expect(f.calls.at(-1)!.body.events.map((e) => e.id)).toEqual(['e1', 'e2'])
+    expect(t.failures).toBe(0)
+    expect(t.queue).toEqual([])
+  })
+
+  test('the queue holds at most 500 events, dropping the oldest', () => {
+    const t = new Transport(fake([]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    t.enqueue(Array.from({ length: 520 }, (_, i) => ev(i)))
+    expect(t.queue).toHaveLength(QUEUE_MAX)
+    expect(t.queue[0]!.id).toBe('e20')
+    expect(t.dropped).toBe(20)
+  })
+
+  test('due: on change, on queued events, or when the heartbeat is due; never twice at once', async () => {
+    let release: (r: HttpResult) => void = () => {}
+    const fetch: FetchLike = () => new Promise((res) => (release = res))
+    const t = new Transport(fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    expect(t.due(1000, false)).toBe(true) // never sent: heartbeat due
+    const p = t.send(build, 1000)
+    expect(t.due(1001, true)).toBe(false)
+    expect(await t.send(build, 1001)).toBe('busy')
+    release(ok())
+    await p
+    expect(t.due(2000, false)).toBe(false)
+    expect(t.due(2000, true)).toBe(true)
+    expect(t.due(6000, false)).toBe(true)
+  })
+})
