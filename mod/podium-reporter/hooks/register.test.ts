@@ -231,6 +231,24 @@ describe('podium-reporter end to end', () => {
     expect(help.text).toMatch(/failed: [1-9]/)
   })
 
+  test('with the server down the reporter adds under 5 ms per hook (its own time, measured)', async ($, on) => {
+    const w = world(on)
+    w.fetchMode.mode = 'down'
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    for (let i = 0; i < 300; i++) {
+      await $.tool.call({ tool: 'Read', file_path: `/f${i % 7}` })
+      if (i % 10 === 0) await w.clock.advance(1000)
+      await stepOnce($, { turnId: 'q', index: i, model: 'claude-opus-5-5', effort: 'high', messageCount: i })
+    }
+    const text = (await $.command.run(podium(''))).text ?? ''
+    const line = text.split('\n').find((l) => l.startsWith('Reporter time per hook:')) ?? ''
+    console.log(`[podium-latency] ${line}`)
+    const avgs = [...line.matchAll(/([\w.]+) ([\d.]+) ms avg, ([\d.]+) max/g)].map((m) => ({ hook: m[1]!, avg: Number(m[2]), max: Number(m[3]) }))
+    expect(avgs.length).toBeGreaterThan(2)
+    for (const a of avgs) expect(a.avg).toBeLessThan(5)
+    expect(text).toContain('offline')
+  })
+
   test('a throw inside the reporter leaves the session unaffected', async ($, on) => {
     const w = world(on)
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })

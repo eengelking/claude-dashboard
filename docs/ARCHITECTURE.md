@@ -84,6 +84,98 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 25. **Activity rows of ended sessions.** A session that leaves the live set stays in the reducer's
     `gone` map, so its activity rows stay greyed and inert even after its card is gone.
 
+26. **Failure class order.** Read strictly, 6.4 ranks "`error` without a candidate ⇒ Model API error"
+    above "window exceeded or 3 blowouts ⇒ Context window exhausted". The engine's `error` reason
+    explicitly includes running out of context (`TurnCompleteUnrefused`: "dead on an API error
+    (retries exhausted, the context limit)"), so a loop whose last stop was
+    `model_context_window_exceeded` and then died on `error` ran out of context. Chosen order: denial,
+    refusal, exhausted window, API error with no failing call, abort, tool error, Unknown. Every other
+    pair keeps the spec's order. A loop that ends `aborted` also gets a failure record (class per the
+    same rules) so the UI can say why.
+27. **Plan `source` and the plan tool.** `podium_plan` would hide whether the steps came from TaskCreate
+    or TodoWrite, so the plan tool only sets the title and `source` stays the steps' source. `podium_plan`
+    is never sent.
+28. **TaskCreate/TaskUpdate from any loop, TodoWrite from the main loop only.** The task list is the
+    session's; a subagent's TodoWrite would otherwise replace the orchestrator's plan.
+29. **Plan owners stick.** A step is matched to a running agent when the agent spawns or the plan
+    changes, and keeps that owner after the agent finishes (6.3 matches "the running agent").
+30. **`session.end` deadline is 1 s, not 2 s.** The types say one ~1.5 s bound covers every
+    `session.end` hook and core together (`SessionEndInput` doc), so a 2 s wait would always be cut.
+31. **Extra option `showStatus`** (boolean, default on) turns the status line off. 3.3.4 says "(if
+    enabled) status line" without naming the switch.
+32. **`skill.prompt` attribution.** It has no `agentId`, so it is attributed to the main loop only when no
+    Skill tool call is in flight (that call records the right loop itself) and no agent is running (an
+    agent may be preloading the skill). Otherwise it is ignored.
+33. **The ack carries `liveSessions`.** `POST /report` answers `{ ok, serverTime, ackedEvents, sessionId,
+    liveSessions }` so the status line can say `podium ● N live` (5.4) without another request.
+34. **Waiting from start.** A new session is `waiting` (for input) until its first turn, and a session
+    whose main loop is idle is `running` while any agent still runs, `waiting` otherwise.
+35. **Plan tool registration.** The `plan` tool is registered deferred (behind ToolSearch, the default),
+    so it costs a session nothing unless the model looks for it.
+
+## Mod API findings
+
+Checked against the engine 2.1.296 type declarations, `claude plugin validate`, `claude plugin test`,
+and two real `claude -p` runs (haiku) on 2026-10-10.
+
+| Assumption (SPEC 5 and 12) | Result | Evidence |
+|---|---|---|
+| Relative imports may need explicit extensions | Both forms load. `./util.ts` and `./util` pass `validate` and run under `claude plugin test`; the mod uses `.ts` (also accepted by `tsc` with `allowImportingTsExtensions`) and loaded in both real runs. | probe mod in the scratchpad; run 1 `system/init` lists `podium-reporter@inline` |
+| `userConfig` field syntax | `{ type, title, description, default }`, `type` one of `string`, `number`, `boolean`, `directory`, `file`; `title` and `description` are required. `sensitive: true` is accepted. | `validate` errors for a bad type and a missing title/description |
+| `classic.PermissionRequest` hookable, fires headless | **Yes, both.** It is listed by `validate`, and in run 1 it fired for the model's Bash call under `-p` (a `wait` event "waiting on you: Bash(...)"). | run 1 events |
+| `classic.Notification` hookable | Hookable (listed by `validate`, raised in tests). Not observed in a headless run. | `validate` |
+| `session.compact` fires with `agentId` for a subagent's own compaction | Declared (`SessionCompactInput.agentId`: "for a subagent's or a fork's own transcript"). Not observed for real: neither run compacted. The reporter also counts `model_context_window_exceeded` stops, deduplicated within 2 s. | types |
+| Effort visible on spawn | Not on `agent.spawn` (no field). Visible on the `Agent` tool call's input, and observed per step on `turn.step.effort`. | run 2: spawn event "Haiku low" before any step |
+| `tool.call` (Agent) before or after `agent.spawn` | **Before.** The spawn event in run 2 already carried the requested effort, which only the tool call's input supplies. The reducer accepts both orders anyway. | run 2 |
+| `$.session.usage().cost.usd` includes subagent spend | **Yes.** Run 1: ledger $0.014450 equals the CLI's `total_cost_usd` ($0.014450345); the main loop's own token estimate is $0.006628 and the agent's $0.005742 (sum $0.01237, the rest is pricing detail the estimate does not model). | run 1, database |
+| Windows: 200,000 for haiku, 1,000,000 for others | **Wrong for the current Haiku.** Haiku 5.5 has a 1M window; only Haiku 4.5 (and older) has 200K. `windowOf` uses 200K only for `haiku-4`, `haiku-3`, `claude-3` ids. | `claude-api` skill, model table cached 2026-10-06 |
+| Bash exit code in an error result | No field: `tool.call` error results carry `text` ("Exit code 1 ..."); the reporter parses it. | `BuiltinToolResults.Bash` has no exit code |
+| Worktree detection when started inside a worktree | **Works.** Run 2 in a scratch worktree: `isWorktree: true`, `worktreePath` the worktree, branch `feat/wt-check`, `dirty: 1`, name `wt-check`, project the main checkout. | run 2 |
+| Teammates | Reported as `kind: 'teammate'` from `agent.spawn.isTeammate`; not observed for real. | types |
+| `$.session.version()` | Returns `{ version, base?, builtAt? }`, not a string. | types |
+| `turn.step.effort` | May be a number as well as a level name; numbers are ignored. | types |
+
+Further findings that shaped the code:
+
+- **`$` is checked statically.** `validate` refuses a module that passes `$` to anything but a function
+  declared at the top of the file, or that reads it as anything but `$.noun.event(...)` (so
+  `runtime.$.session.id()` is refused). All `$` helpers are top-level functions taking `$`; the runtime
+  lives in module variables that `register` resets.
+- **No `setTimeout` in the sandbox.** Deadlines use `$.clock.sleep`; scheduling uses `$.clock.now()` (in
+  tests that clock is mocked; a backoff computed from `Date.now()` never came due there, which a test
+  caught).
+- **`session.end` has one ~1.5 s bound** for all hooks and core; the final report waits at most 1 s.
+- **Gating hooks.** `validate` names every hook at a site that can refuse (tool calls, spawns,
+  compaction, classic events). Each reporter hook has a `.catch` that calls `next(e)` (it replays what
+  `next` settled to when it was already called), so a reporter failure never changes an outcome.
+- **Testing kit.** `claude plugin test` needs the test to answer the bottom of every event the plugin
+  raises (`on('session.start', () => ({ cwd }))`) and every `$` call (`on('http.fetch', () => ({ value
+  }))`). `tool.call`'s `agentId` and `tool_use_id` cannot be set from a test (the engine mints them), so
+  agent-scoped tool results are covered by the pure `state.ts` tests. A compaction result must keep at
+  least one message.
+- **Hook cost.** With the server down, the reporter's own work measured 0.00-0.01 ms average and 0.03 ms
+  at most per hook over 300 tool calls and steps (`register.test.ts`, via `/podium`). Target was under 5 ms.
+
+`claude plugin validate mod/podium-reporter` output (T3.3.1):
+
+```
+Validating plugin manifest: ~/dev/claude-dashboard/mod/podium-reporter/.claude-plugin/plugin.json
+
+Validating hooks: ~/dev/claude-dashboard/mod/podium-reporter/hooks/hooks.json
+
+  ❯ ./register.ts hooks: session.start, session.end, turn.start, turn.step, turn.complete, session.compact, session.measure, agent.spawn, tool.call, tool.call{tool=mcp__podium-reporter__plan}, skill.prompt, classic.PermissionRequest, classic.Notification, command.run{command=podium}
+  ❯ ./register.ts answers its own command: command.run{command=podium}
+  ❯ ./register.ts gating hook with .catch: session.compact
+  ❯ ./register.ts gating hook with .catch: agent.spawn
+  ❯ ./register.ts gating hook with .catch: tool.call
+  ❯ ./register.ts gating hook with .catch: tool.call{tool=mcp__podium-reporter__plan}
+  ❯ ./register.ts gating hook with .catch: classic.PermissionRequest
+  ❯ ./register.ts gating hook with .catch: classic.Notification
+  ❯ ./register.ts calls: $.agent.list (via readAgents), $.clock.every (via start), $.clock.now (via engineNow), $.clock.sleep (via end), $.command.register (via start), $.http.fetch (via start), $.process.run (via pollGit), $.session.id (via flush, start), $.session.model (via start), $.session.repo (via start), $.session.root (via start), $.session.usage (via readUsage, start, switchSession), $.session.version (via start), $.store.get (via loadName), $.store.set (via podiumCommand), $.tool.register (via start), $.ui.log (via record), $.ui.status (via showStatus), $.ui.toast (via toastOnce)
+
+✔ Validation passed
+```
+
 ## Dependencies added
 
 None at run time. `@types/node` in `server/` went from 20 to 24 so `node:sqlite` is declared.
@@ -165,4 +257,29 @@ usable `clientX` produced a NaN width (fixed test-first); the "now" caption of t
 with no blowouts.
 
 Not verified: real touch input; screen reader output (roles and names are asserted in tests only).
+
+### Phase 3: the reporter mod
+
+Built: `mod/podium-reporter/` with `plugin.json` (seven options), `hooks/hooks.json`, `register.ts`
+(wiring), `state.ts`, `plan.ts`, `failures.ts`, `models.ts`, `report.ts`, `transport.ts`, `git.ts`,
+`protocol.ts`, their tests, a `tsconfig.json` from the types header, and
+`scripts/podium-mod-typecheck.sh`.
+
+Verified: `claude plugin test mod/podium-reporter` (76 tests), `claude plugin validate` (passes, output
+above), `tsc` against the engine's declarations (`scripts/podium-mod-typecheck.sh`), and a vitest
+cross-check that a scripted mod Report passes the server's validator unchanged. Two real runs:
+
+1. `claude --plugin-dir mod/podium-reporter --model haiku --output-format json -p "Use TaskCreate to add
+   one task named 'List files'. Then use the Agent tool once (subagent_type Explore) to list the files in
+   this directory. Reply with the file count."` in this repo: the session appeared in `/api/fleet/state`
+   (28 one-second polls saw it running, waiting, then done) with model `claude-haiku-5-5`, effort
+   `medium`, branch `feat/podium-fleet-console`, repo `eengelking/claude-dashboard`, plan "List files"
+   (done), one Explore agent (done, its own tokens and estimate), cost $0.014450 equal to the CLI's
+   total; it ended (`endReason: other`) and left the live set ("session ended").
+2. The same mod in a scratch git worktree with "Use the Agent tool once, with subagent_type
+   general-purpose and effort low, asking it to reply with the word hello. Then reply done.": worktree
+   detected, effort `low` at spawn.
+
+Not verified for real: a subagent's own compaction, a teammate, `classic.Notification`, a `/clear` (the
+id switch is covered by tests), and the status line (both runs were headless).
 
