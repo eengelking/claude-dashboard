@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. The Admin view (upper right button) is where the server owner creates a token for each person, tied to that person's name. Dark first, as Podium is. Example data only; the names and tokens are made up. */
+/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. Groups (Frontend, Backend and so on) add a third way to read the wall: Group by People, Group or None. The Admin view (upper right button) is where the server owner creates a token for each person, tied to that person's name. Dark first, as Podium is. Example data only; the names and tokens are made up. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
@@ -179,6 +179,12 @@ table.tv .n { text-align: right; }
 .ev .by { color: var(--muted); }
 .tip { position: fixed; z-index: 20; pointer-events: none; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 240px; }
 .tip[hidden] { display: none; }
+/* groups */
+.gtile { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--axis); background: var(--raised); color: var(--ink2); font-size: 10px; font-weight: 700; letter-spacing: 0.02em; flex: none; }
+.gtile.lg { width: 30px; height: 30px; border-radius: 8px; font-size: 11.5px; }
+.gtile.sm { width: 18px; height: 18px; border-radius: 5px; font-size: 8.5px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ptab select.field { width: auto; padding: 3px 6px; font-size: 12px; }
 /* admin */
 .btn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); }
 .adminv { overflow: auto; padding: 18px 16px 32px; min-height: 0; }
@@ -240,13 +246,13 @@ table.tv .n { text-align: right; }
       <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="16" height="6" rx="1.5" fill="currentColor" opacity=".35"/><rect x="5" y="6" width="10" height="5" rx="1.5" fill="currentColor" opacity=".6"/><rect x="7.5" y="2" width="5" height="4" rx="1.5" fill="currentColor"/></svg>
       Podium
     </div>
-    <span class="pill"><span class="dot running"></span>3 people, 8 orchestrators live</span>
+    <span class="pill"><span class="dot running"></span>4 people, 9 orchestrators live</span>
     <span class="spacer"></span>
     <button type="button" class="btn" id="adminBtn" aria-pressed="false"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg><span id="adminBtnTxt">Admin</span></button>
     <button type="button" class="btn" id="themeBtn" aria-label="Toggle light and dark theme">Theme</button>
   </header>
   <div class="banner"><b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.</div>
-  <div class="mock">Mockup for the people view. Example data; the names are made up. Try the Group by control, a band header, a person in the left list, the chart and table toggle on the right, and the Admin button in the upper right.</div>
+  <div class="mock">Mockup for the people view. Example data; the names are made up. Try Group by People, Group and None, a band header, a person in the left list, the chart and table toggle on the right, and the Admin button in the upper right.</div>
 
   <div class="cols">
     <nav class="rail" aria-label="Orchestrators by person">
@@ -260,11 +266,12 @@ table.tv .n { text-align: right; }
         <span class="tg">Group by
           <span class="seg" role="group" aria-label="Group by">
             <button type="button" id="gPeople" aria-pressed="true">People</button>
+            <button type="button" id="gGroup" aria-pressed="false">Group</button>
             <button type="button" id="gNone" aria-pressed="false">None</button>
           </span>
         </span>
-        <span class="tg" id="sortWrap">Order people by
-          <span class="seg" role="group" aria-label="Order people by">
+        <span class="tg" id="sortWrap">Order by
+          <span class="seg" role="group" aria-label="Order by">
             <button type="button" data-sort="attn" aria-pressed="true">Needs attention</button>
             <button type="button" data-sort="cost" aria-pressed="false">Spend</button>
             <button type="button" data-sort="name" aria-pressed="false">Name</button>
@@ -279,14 +286,14 @@ table.tv .n { text-align: right; }
     <aside class="side" aria-label="Spend and activity" id="sideP">
       <section class="sec">
         <div class="sh">
-          <h2>Spend today, by person</h2>
+          <h2 id="spendTitle">Spend today, by person</h2>
           <span class="seg" role="group" aria-label="View">
             <button type="button" id="vChart" aria-pressed="true">Chart</button>
             <button type="button" id="vTable" aria-pressed="false">Table</button>
           </span>
         </div>
         <div id="spend"></div>
-        <div class="note">Each bar is one person, ordered by spend. Estimated from tokens.</div>
+        <div class="note">Each bar is one person or group, ordered by spend. Estimated from tokens.</div>
       </section>
       <div class="rail-head"><h2>Activity, all people</h2></div>
       <ul class="ev" id="events"></ul>
@@ -300,17 +307,20 @@ table.tv .n { text-align: right; }
 /* Example data. Costs are today's estimates in USD. */
 const MODELS = { opus: ["Opus 5.5", "var(--opus)"], sonnet: ["Sonnet 5.5", "var(--sonnet)"], haiku: ["Haiku 5.5", "var(--haiku)"], fable: ["Fable 5.1", "var(--fable)"] };
 const PEOPLE = [
-  { id: "ed",     name: "Ed E.",      host: "eds-mbp",    me: true },
-  { id: "priya",  name: "Priya N.",   host: "priya-mbp" },
-  { id: "marcus", name: "Marcus T.",  host: "build-01" },
+  { id: "ed",     name: "Ed E.",      host: "eds-mbp",    me: true, g: "fe" },
+  { id: "priya",  name: "Priya N.",   host: "priya-mbp", g: "be" },
+  { id: "dana",   name: "Dana K.",    host: "dana-mbp",  g: "be" },
+  { id: "marcus", name: "Marcus T.",  host: "build-01", g: "ops" },
   { id: "admin",  name: "Admin", host: "admin secret", special: true, hint: "These sessions report with the admin secret instead of a person's token. Create a token for them in Admin, then turn off reporting with the admin secret." }
 ];
+let GROUPS = [{ id: "fe", name: "Frontend" }, { id: "be", name: "Backend" }, { id: "ops", name: "DevOps" }, { id: "data", name: "Data" }];
 const S = [
   { n: "podium",         p: "~/dev/podium",         b: "feat/themes",   u: "ed",     m: "opus",   st: "running", ctx: 62, c: 8.42,  ag: "3 agents running" },
   { n: "skills",         p: "~/dev/skills",         b: "main",          u: "ed",     m: "sonnet", st: "waiting", ctx: 10, c: 0.97,  ag: "no agents", alert: "Waiting on you. Paused until you answer in its terminal." },
   { n: "claude-dashboard", p: "~/dev/claude-dashboard", b: "main",      u: "ed",     m: "sonnet", st: "running", ctx: 8,  c: 0.45,  ag: "no agents" },
   { n: "billing-api",    p: "~/work/billing-api",   b: "fix/rounding",  u: "priya",  m: "opus",   st: "running", ctx: 41, c: 6.10,  ag: "2 agents running" },
   { n: "infra-tf",       p: "~/work/infra-tf",      b: "main",          u: "priya",  m: "sonnet", st: "stale",   ctx: 77, c: 2.31,  ag: "no agents", alert: "Heartbeat lost 41s ago. The session may have ended." },
+  { n: "payments-svc",  p: "~/work/payments",     b: "feat/refunds",  u: "dana",   m: "sonnet", st: "running", ctx: 34, c: 3.15,  ag: "1 agent running" },
   { n: "ci-runner",      p: "/srv/ci/runner",       b: "release/3.2",   u: "marcus", m: "haiku",  st: "running", ctx: 23, c: 0.64,  ag: "5 agents running" },
   { n: "docs-site",      p: "/srv/docs",            b: "main",          u: "marcus", m: "sonnet", st: "done",    ctx: 31, c: 1.12,  ag: "finished 12m ago" },
   { n: "data-pipeline",  p: "/srv/etl",             b: "chore/backfill",u: "marcus", m: "fable",  st: "waiting", ctx: 88, c: 11.80, ag: "no agents", alert: "Waiting on you. Context is 88% full.", hot: true },
@@ -332,24 +342,35 @@ const mg = (p, cls = "") => `<span class="mono-g ${cls}" aria-hidden="true">${in
 const dotCls = (st) => (st === "waiting" ? "waiting" : st);
 const stText = { running: "running", waiting: "waiting on you", stale: "heartbeat lost", done: "done" };
 
-const state = { group: "people", sort: "attn", only: null, collapsed: new Set(), view: "chart" };
+const state = { group: "people", sort: "attn", only: null, onlyG: null, collapsed: new Set(), view: "chart" };
 const q = (s) => document.querySelector(s);
 const total = S.reduce((a, s) => a + s.c, 0);
 
-function stats(id) {
-  const rows = S.filter((s) => s.u === id);
+const groupOf = (uid) => by(uid).g || "none";
+const gname = (id) => (GROUPS.find((g) => g.id === id) || { name: "No group" }).name;
+const gInit = (n) => n.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "?";
+const gt = (n, cls = "") => `<span class="gtile ${cls}" aria-hidden="true">${gInit(n)}</span>`;
+const NOGROUP = { id: "none", name: "No group", special: true };
+const vis = (s) => (!state.only || s.u === state.only) && (!state.onlyG || groupOf(s.u) === state.onlyG);
+function statsOf(rows) {
   return { rows, cost: rows.reduce((a, s) => a + s.c, 0), waiting: rows.filter((s) => s.st === "waiting").length, stale: rows.filter((s) => s.st === "stale").length, live: rows.filter((s) => s.st !== "done").length };
 }
-function ordered() {
-  const list = PEOPLE.filter((p) => stats(p.id).rows.length);
-  const k = (p) => stats(p.id);
+const stats = (id) => statsOf(S.filter((s) => s.u === id));
+const rowsOf = (u) => S.filter((s) => (u.kind === "person" ? s.u === u.id : groupOf(s.u) === u.id));
+const membersOf = (u) => PEOPLE.filter((p) => !p.special && (p.g || "none") === u.id && stats(p.id).rows.length);
+function units() {
+  const base = state.group === "group" ? [...GROUPS, NOGROUP].map((g) => ({ ...g, kind: "group" })) : PEOPLE.map((p) => ({ ...p, kind: "person" }));
+  const k = (u) => statsOf(rowsOf(u));
+  const att = (u) => k(u).waiting + k(u).stale;
+  const mine = (u) => (u.kind === "person" ? !!u.me : PEOPLE.some((p) => p.me && (p.g || "none") === u.id));
   const sorters = {
-    attn: (a, b) => (b.me ? 1 : 0) - (a.me ? 1 : 0) || (k(b).waiting + k(b).stale) - (k(a).waiting + k(a).stale) || k(b).cost - k(a).cost,
+    attn: (a, b) => (mine(b) ? 1 : 0) - (mine(a) ? 1 : 0) || att(b) - att(a) || k(b).cost - k(a).cost,
     cost: (a, b) => k(b).cost - k(a).cost,
-    name: (a, b) => (a.special ? 1 : 0) - (b.special ? 1 : 0) || a.name.localeCompare(b.name)
+    name: (a, b) => a.name.localeCompare(b.name)
   };
-  return list.sort((a, b) => (a.special ? 1 : 0) - (b.special ? 1 : 0) || sorters[state.sort](a, b));
+  return base.filter((u) => k(u).rows.length).sort((a, b) => (a.special ? 1 : 0) - (b.special ? 1 : 0) || sorters[state.sort](a, b));
 }
+const isMine = (u) => (u.kind === "person" ? !!u.me : PEOPLE.some((p) => p.me && (p.g || "none") === u.id));
 
 function card(s, showOwner) {
   const [mn, mc] = MODELS[s.m];
@@ -376,50 +397,66 @@ function renderKpis() {
 }
 
 function renderRail() {
-  q("#railCount").textContent = S.length + " shown";
-  q("#rail").innerHTML = ordered().map((p) => {
-    const t = stats(p.id);
-    const items = t.rows.map((s) => `<button type="button" class="ritem" data-go="${s.n}"><span class="dot ${dotCls(s.st)}"></span><span class="nm">${s.n}</span><span class="c mono">${usd(s.c)}</span></button>`).join("");
+  const all = S.filter(vis);
+  q("#railCount").textContent = all.length + " shown";
+  const item = (s, owner) => `<button type="button" class="ritem" data-go="${s.n}"><span class="dot ${dotCls(s.st)}"></span><span class="nm">${s.n}</span>${owner ? mg(by(s.u), "sm") : ""}<span class="c mono">${usd(s.c)}</span></button>`;
+  if (state.group === "none") { q("#rail").innerHTML = `<div class="rgroup" style="padding-top:4px">${all.map((s) => item(s, true)).join("")}</div>`; return; }
+  q("#rail").innerHTML = units().map((u) => {
+    const t = statsOf(rowsOf(u));
+    const rows = t.rows.filter(vis);
+    if (!rows.length) return "";
     const attn = t.waiting + t.stale;
-    return `<div class="rgroup"><button type="button" class="rgh" data-person="${p.id}" aria-pressed="${state.only === p.id}" aria-label="Show only ${p.name}">
-      ${mg(p)}<span class="nm">${p.name}${p.me ? ' <span class="you">you</span>' : ""}</span>
-      ${attn ? `<span class="attn"><span class="dot waiting"></span>${attn}</span>` : ""}<span class="cnt mono">${t.rows.length}</span></button>${items}<div class="pad"></div></div>`;
+    const pressed = u.kind === "person" ? state.only === u.id : state.onlyG === u.id;
+    const attr = u.kind === "person" ? `data-person="${u.id}"` : `data-grp="${u.id}"`;
+    return `<div class="rgroup"><button type="button" class="rgh" ${attr} aria-pressed="${pressed}" aria-label="Show only ${u.name}">
+      ${u.kind === "person" ? mg(u) : gt(u.name)}<span class="nm">${u.name}${isMine(u) ? ` <span class="you">${u.kind === "person" ? "you" : "your group"}</span>` : ""}</span>
+      ${attn ? `<span class="attn"><span class="dot waiting"></span>${attn}</span>` : ""}<span class="cnt mono">${t.rows.length}</span></button>${rows.map((s) => item(s, u.kind === "group")).join("")}<div class="pad"></div></div>`;
   }).join("");
 }
 
 function renderWall() {
-  const people = ordered().filter((p) => !state.only || p.id === state.only);
-  q("#sortWrap").hidden = state.group !== "people";
+  q("#sortWrap").hidden = state.group === "none";
   if (state.group === "none") {
-    const rows = S.filter((s) => !state.only || s.u === state.only).sort((a, b) => (b.st === "waiting") - (a.st === "waiting") || b.c - a.c);
+    const rows = S.filter(vis).sort((a, b) => (b.st === "waiting") - (a.st === "waiting") || b.c - a.c);
     q("#wall").innerHTML = `<div class="flat">${rows.map((s) => card(s, true)).join("")}</div>`;
     return;
   }
-  q("#wall").innerHTML = people.map((p) => {
-    const t = stats(p.id);
-    const open = !state.collapsed.has(p.id);
+  const list = units().filter((u) => rowsOf(u).some(vis));
+  q("#wall").innerHTML = list.map((u) => {
+    const t = statsOf(rowsOf(u));
+    const key = state.group + ":" + u.id;
+    const open = !state.collapsed.has(key);
     const share = Math.round((t.cost / total) * 100);
     const attn = t.waiting + t.stale;
+    const person = u.kind === "person";
+    const mem = person ? [] : membersOf(u);
+    const hostTxt = person ? u.host : (u.special ? "Assign a group in Admin" : mem.map((m) => m.name).join(", "));
+    const hint = person ? (u.hint || "") : (u.special ? "People who have no group yet. Assign one in Admin." : "");
     return `<section class="band" data-open="${open}">
-      <button type="button" class="bh" data-band="${p.id}" aria-expanded="${open}">
+      <button type="button" class="bh" data-band="${key}" aria-expanded="${open}">
         <svg class="i chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-        <span class="who">${mg(p, "lg")}<b>${p.name}</b>${p.me ? '<span class="you">you</span>' : ""}<span class="h" ${p.hint ? `data-hint="${p.hint}"` : ""}>${p.host}</span></span>
+        <span class="who">${person ? mg(u, "lg") : gt(u.name, "lg")}<b>${u.name}</b>${isMine(u) ? `<span class="you">${person ? "you" : "your group"}</span>` : ""}${person && u.g ? `<span class="chip">${gname(u.g)}</span>` : ""}<span class="h" ${hint ? `data-hint="${hint}"` : ""}>${hostTxt}</span></span>
         <span class="counts"><span>${t.live} live</span>${attn ? `<span class="attn"><span class="dot ${t.waiting ? "waiting" : "stale"}"></span>${t.waiting ? t.waiting + " waiting on you" : ""}${t.waiting && t.stale ? ", " : ""}${t.stale ? t.stale + " stale" : ""}</span>` : ""}<span class="sum">${t.rows.length} hidden</span></span>
-        <span class="spend" data-hint="${p.name} is ${share}% of today's estimated spend (${usd(t.cost)} of ${usd(total)})"><span class="lab">Share of today's spend</span><span class="v mono">${usd(t.cost)} <span style="color:var(--muted);font-weight:500">${share}%</span></span><span class="share"><i style="width:${share}%"></i></span></span>
+        <span class="spend" data-hint="${u.name} is ${share}% of today's estimated spend (${usd(t.cost)} of ${usd(total)})"><span class="lab">Share of today's spend</span><span class="v mono">${usd(t.cost)} <span style="color:var(--muted);font-weight:500">${share}%</span></span><span class="share"><i style="width:${share}%"></i></span></span>
       </button>
-      <div class="bgrid">${t.rows.map((s) => card(s, false)).join("")}</div>
+      <div class="bgrid">${t.rows.filter(vis).map((s) => card(s, !person)).join("")}</div>
     </section>`;
   }).join("");
 }
 
 function renderSpend() {
-  const rows = PEOPLE.map((p) => ({ p, c: stats(p.id).cost })).filter((r) => r.c > 0).sort((a, b) => b.c - a.c);
+  const byGroup = state.group === "group";
+  q("#spendTitle").textContent = byGroup ? "Spend today, by group" : "Spend today, by person";
+  const rows = (byGroup ? [...GROUPS, NOGROUP].map((g) => ({ k: g.name, gl: true, c: statsOf(S.filter((s) => groupOf(s.u) === g.id)).cost, n: S.filter((s) => groupOf(s.u) === g.id).length }))
+                        : PEOPLE.map((p) => ({ k: p.name, p, c: stats(p.id).cost, n: stats(p.id).rows.length })))
+    .filter((r) => r.c > 0).sort((a, b) => b.c - a.c);
   const max = rows[0].c;
+  const badge = (r) => (r.gl ? gt(r.k, "sm") : mg(r.p, "sm"));
   if (state.view === "table") {
-    q("#spend").innerHTML = `<table class="tv"><thead><tr><th>Person</th><th class="n">Orchestrators</th><th class="n">Spend</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.p.name}</td><td class="n mono">${stats(r.p.id).rows.length}</td><td class="n mono">${usd(r.c)}</td></tr>`).join("")}<tr><td><b>Total</b></td><td class="n mono">${S.length}</td><td class="n mono"><b>${usd(total)}</b></td></tr></tbody></table>`;
+    q("#spend").innerHTML = `<table class="tv"><thead><tr><th>${byGroup ? "Group" : "Person"}</th><th class="n">Orchestrators</th><th class="n">Spend</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.k}</td><td class="n mono">${r.n}</td><td class="n mono">${usd(r.c)}</td></tr>`).join("")}<tr><td><b>Total</b></td><td class="n mono">${S.length}</td><td class="n mono"><b>${usd(total)}</b></td></tr></tbody></table>`;
     return;
   }
-  q("#spend").innerHTML = `<div class="hb" role="list">${rows.map((r) => `<div class="lbl" role="listitem">${mg(r.p, "sm")}<span>${r.p.name}</span></div><div class="trk" data-hint="${r.p.name}: ${usd(r.c)}, ${Math.round(r.c / total * 100)}% of ${usd(total)}"><i style="width:${(r.c / max) * 100}%"></i></div><div class="val mono">${usd(r.c)}</div>`).join("")}</div>`;
+  q("#spend").innerHTML = `<div class="hb" role="list">${rows.map((r) => `<div class="lbl" role="listitem">${badge(r)}<span>${r.k}</span></div><div class="trk" data-hint="${r.k}: ${usd(r.c)}, ${Math.round(r.c / total * 100)}% of ${usd(total)}"><i style="width:${(r.c / max) * 100}%"></i></div><div class="val mono">${usd(r.c)}</div>`).join("")}</div>`;
 }
 
 function renderEvents() {
@@ -428,19 +465,25 @@ function renderEvents() {
 
 function renderFilter() {
   const b = q("#clearF");
-  b.hidden = !state.only;
-  if (state.only) b.textContent = "Showing " + by(state.only).name + ". Show everyone";
+  const parts = [state.only && by(state.only).name, state.onlyG && gname(state.onlyG)].filter(Boolean);
+  b.hidden = !parts.length;
+  if (parts.length) b.textContent = "Showing " + parts.join(" in ") + ". Show everyone";
   q("#onlyMe").setAttribute("aria-pressed", String(state.only === "ed"));
 }
-function renderAll() { renderKpis(); renderRail(); renderWall(); renderSpend(); renderEvents(); renderFilter(); q("#gPeople").setAttribute("aria-pressed", state.group === "people"); q("#gNone").setAttribute("aria-pressed", state.group === "none"); }
+function renderAll() {
+  renderKpis(); renderRail(); renderWall(); renderSpend(); renderEvents(); renderFilter();
+  ["People", "Group", "None"].forEach((n) => q("#g" + n).setAttribute("aria-pressed", String(state.group === n.toLowerCase())));
+}
 
 document.addEventListener("click", (e) => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.id === "gPeople") { state.group = "people"; renderAll(); }
+  else if (t.id === "gGroup") { state.group = "group"; renderAll(); }
   else if (t.id === "gNone") { state.group = "none"; renderAll(); }
   else if (t.dataset.sort) { state.sort = t.dataset.sort; document.querySelectorAll("[data-sort]").forEach((b) => b.setAttribute("aria-pressed", String(b === t))); renderAll(); }
   else if (t.id === "onlyMe") { state.only = state.only === "ed" ? null : "ed"; renderAll(); }
-  else if (t.id === "clearF") { state.only = null; renderAll(); }
+  else if (t.id === "clearF") { state.only = null; state.onlyG = null; renderAll(); }
+  else if (t.dataset.grp) { state.onlyG = state.onlyG === t.dataset.grp ? null : t.dataset.grp; renderAll(); }
   else if (t.dataset.person) { state.only = state.only === t.dataset.person ? null : t.dataset.person; renderAll(); }
   else if (t.dataset.band) { const id = t.dataset.band; state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); renderWall(); q(`[data-band="${id}"]`).focus(); }
   else if (t.id === "vChart") { state.view = "chart"; q("#vChart").setAttribute("aria-pressed", "true"); q("#vTable").setAttribute("aria-pressed", "false"); renderSpend(); }
@@ -459,14 +502,16 @@ document.addEventListener("pointermove", (e) => {
 document.addEventListener("pointerleave", () => { tip.hidden = true; });
 /* ---- Admin view (mockup only: nothing is stored or sent) ---- */
 const A = {
-  open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
+  gpend: null, gErr: "", open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
   people: [
-    { name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a", made: "Oct 9",  last: "now",    state: "active" },
-    { name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21d", made: "Oct 10", last: "now",    state: "active" },
-    { name: "Marcus T.", machines: ["build-01"],             tail: "09be", made: "Oct 10", last: "now",    state: "active" },
+    { pid: "ed",     name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a", made: "Oct 9",  last: "now",    state: "active" },
+    { pid: "priya",  name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21d", made: "Oct 10", last: "now",    state: "active" },
+    { pid: "dana",   name: "Dana K.",   machines: ["dana-mbp"],             tail: "5b1c", made: "Oct 10", last: "now",    state: "active" },
+    { pid: "marcus", name: "Marcus T.", machines: ["build-01"],             tail: "09be", made: "Oct 10", last: "now",    state: "active" },
     { name: "Sofia R.",  machines: ["sofia-air"],            tail: "e4a8", made: "Oct 6",  last: "3 days ago", state: "revoked" }
   ],
   log: [
+    ["15:10", "Added Dana K. to Backend"],
     ["15:02", "Created a token for Marcus T."],
     ["14:40", "Unlocked Admin from 127.0.0.1"],
     ["13:12", "Failed unlock attempt from 192.168.1.14", true],
@@ -476,6 +521,8 @@ const A = {
 };
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const initOf = (n) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
+const pg = (p) => { const f = PEOPLE.find((x) => x.id === p.pid); return f ? (f.g || "") : (p.g || ""); };
+const setG = (i, gid) => { const p = A.people[i]; p.g = gid; const f = PEOPLE.find((x) => x.id === p.pid); if (f) f.g = gid || undefined; };
 const nowT = () => new Date().toTimeString().slice(0, 5);
 function fakeToken() {
   const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -507,6 +554,7 @@ function renderAdmin() {
       : p.state === "revoked" ? `<div class="acts"><button type="button" class="btn sm" data-del="${i}">Remove person</button></div>`
       : `<div class="acts"><button type="button" class="btn sm" data-rot="${i}">Rotate</button><button type="button" class="btn sm dng" data-rev="${i}">Revoke</button></div>`;
     return `<tr class="${p.state}"><td><span class="who"><span class="mono-g sm" aria-hidden="true">${initOf(p.name)}</span>${esc(p.name)}</span></td>
+      <td><label class="vh" for="grp${i}">Group for ${esc(p.name)}</label><select class="field" id="grp${i}" data-g="${i}" ${p.state === "revoked" ? "disabled" : ""}><option value="">No group</option>${GROUPS.map((g) => `<option value="${g.id}" ${pg(p) === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></td>
       <td><span class="mchips">${p.machines.map((m) => `<span class="chip mono">${esc(m)}</span>`).join("")}</span></td>
       <td><span class="tail">pdm_&hellip;${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
       <td>${p.state === "active" ? '<span class="badge ok"><span class="dot running"></span>active</span>' : '<span class="badge off"><span class="dot done"></span>revoked</span>'}</td><td>${acts}</td></tr>`;
@@ -519,8 +567,16 @@ function renderAdmin() {
       <div class="code" id="onceCode">userName: ${esc(c.name)}\ntoken: ${c.token}\nserverUrl: http://podium.example.lan:4317</div>
       <div class="row2"><button type="button" class="btn pri" id="copyOnce">Copy settings</button><button type="button" class="btn" id="doneOnce">I have saved it</button><span class="hint" id="copyMsg" role="status"></span></div></section>` : ""}
     <section class="box" aria-labelledby="pH"><div class="bt"><h2 id="pH">People</h2><span class="hint">${A.people.filter((p) => p.state === "active").length} active</span></div>
-      <div class="tw2"><table class="ptab"><thead><tr><th>Person</th><th>Machines seen</th><th>Token</th><th>Created</th><th>Last report</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="tw2"><table class="ptab"><thead><tr><th>Person</th><th>Group</th><th>Machines seen</th><th>Token</th><th>Created</th><th>Last report</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="bb" style="border-top:1px solid var(--border)"><form class="addrow" id="addForm" autocomplete="off"><div class="f"><label for="newName" style="font-weight:600">Add a person</label><input class="field" id="newName" placeholder="Full name, as it should appear" maxlength="40"></div><button type="submit" class="btn pri">Create token</button></form>${A.addErr ? `<div class="err" role="alert" style="margin-top:6px">${A.addErr}</div>` : ""}</div></section>
+    <section class="box" aria-labelledby="grH"><div class="bt"><h2 id="grH">Groups</h2><span class="hint">A person belongs to one group at most. Groups only change how the console is arranged.</span></div>
+      <div class="tw2"><table class="ptab"><thead><tr><th>Group</th><th>People</th><th></th></tr></thead><tbody>${GROUPS.map((g, i) => {
+        const mem = A.people.filter((p) => pg(p) === g.id);
+        const pend = A.gpend === g.id;
+        return `<tr><td><span class="who">${gt(g.name)}${esc(g.name)}</span></td><td>${mem.length ? `<span class="mchips">${mem.map((m) => `<span class="chip">${esc(m.name)}</span>`).join("")}</span>` : '<span class="hint">No one yet. Pick this group in the People table.</span>'}</td>
+          <td>${pend ? `<div class="confirm"><span>Delete? ${mem.length ? mem.length + (mem.length === 1 ? " person goes" : " people go") + " to No group." : "No one is in it."}</span><button type="button" class="btn sm dng" data-gyes="${g.id}">Delete group</button><button type="button" class="btn sm" data-gno="1">Cancel</button></div>` : `<div class="acts"><button type="button" class="btn sm dng" data-gdel="${g.id}">Delete</button></div>`}</td></tr>`;
+      }).join("")}</tbody></table></div>
+      <div class="bb" style="border-top:1px solid var(--border)"><form class="addrow" id="gForm" autocomplete="off"><div class="f"><label for="newGroup" style="font-weight:600">Create a group</label><input class="field" id="newGroup" placeholder="For example Frontend, Backend or DevOps" maxlength="24"></div><button type="submit" class="btn pri">Create group</button></form>${A.gErr ? `<div class="err" role="alert" style="margin-top:6px">${A.gErr}</div>` : ""}</div></section>
     <div class="two2">
       <section class="box" aria-labelledby="lH"><div class="bt"><h2 id="lH">Reporting with the admin secret</h2></div><div class="bb" style="display:grid;gap:10px">
         <div class="sw"><button type="button" role="switch" aria-checked="${A.legacy}" id="legacySw" aria-labelledby="legTxt"></button><span id="legTxt">${A.legacy ? "Allowed" : "Refused"}</span></div>
@@ -533,12 +589,20 @@ function renderAdmin() {
 }
 document.addEventListener("click", (e) => {
   const t = e.target.closest("button"); if (!t) return;
-  if (t.id === "adminBtn") { A.open = !A.open; if (!A.open) { A.unlocked = false; A.created = null; A.pending = null; } A.err = ""; renderAdmin(); return; }
+  if (t.id === "adminBtn") { A.open = !A.open; if (!A.open) { A.unlocked = false; A.created = null; A.pending = null; A.gpend = null; renderAll(); } A.err = ""; renderAdmin(); return; }
   if (!A.open) return;
   if (t.id === "lockNow") { A.unlocked = false; A.created = null; A.pending = null; renderAdmin(); }
   else if (t.dataset.rot) { A.pending = { kind: "rotate", i: +t.dataset.rot }; renderAdmin(); }
   else if (t.dataset.rev) { A.pending = { kind: "revoke", i: +t.dataset.rev }; renderAdmin(); }
   else if (t.dataset.no) { A.pending = null; renderAdmin(); }
+  else if (t.dataset.gdel) { A.gpend = t.dataset.gdel; renderAdmin(); }
+  else if (t.dataset.gno) { A.gpend = null; renderAdmin(); }
+  else if (t.dataset.gyes) {
+    const id = t.dataset.gyes, g = GROUPS.find((x) => x.id === id);
+    A.people.forEach((p, i) => { if (pg(p) === id) setG(i, ""); });
+    GROUPS = GROUPS.filter((x) => x.id !== id); if (state.onlyG === id) state.onlyG = null;
+    A.gpend = null; A.log.unshift([nowT(), "Deleted the group " + g.name]); renderAdmin();
+  }
   else if (t.dataset.yes) {
     const p = A.people[+t.dataset.yes];
     if (A.pending.kind === "rotate") { p.tail = fakeToken().slice(-4).toLowerCase(); A.created = { name: p.name, token: fakeToken() }; A.log.unshift([nowT(), "Rotated the token for " + p.name]); }
@@ -553,11 +617,23 @@ document.addEventListener("click", (e) => {
     (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { m.textContent = "Copied"; }, () => { const r = document.createRange(); r.selectNodeContents(q("#onceCode")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); m.textContent = "Select and copy the text above"; });
   }
 });
+document.addEventListener("change", (e) => {
+  const sel = e.target.closest("select[data-g]"); if (!sel) return;
+  const i = +sel.dataset.g, was = pg(A.people[i]);
+  setG(i, sel.value);
+  A.log.unshift([nowT(), sel.value ? `Added ${A.people[i].name} to ${gname(sel.value)}` : `Removed ${A.people[i].name} from ${gname(was)}`]);
+  renderAdmin(); q("#grp" + i).focus();
+});
 document.addEventListener("submit", (e) => {
   e.preventDefault();
   if (e.target.id === "lockForm") {
     if (!q("#secret").value.trim()) { A.err = "Enter the admin secret."; renderAdmin(); return; }
     A.unlocked = true; A.err = ""; A.log.unshift([nowT(), "Unlocked Admin from 127.0.0.1"]); renderAdmin();
+  } else if (e.target.id === "gForm") {
+    const n = q("#newGroup").value.trim().replace(/\s+/g, " ");
+    if (!n) { A.gErr = "Enter a group name."; renderAdmin(); q("#newGroup").focus(); return; }
+    if (GROUPS.some((g) => g.name.toLowerCase() === n.toLowerCase())) { A.gErr = "A group called " + n + " already exists."; renderAdmin(); q("#newGroup").focus(); return; }
+    A.gErr = ""; GROUPS.push({ id: "g" + Date.now(), name: n }); A.log.unshift([nowT(), "Created the group " + n]); renderAdmin(); q("#newGroup").focus();
   } else if (e.target.id === "addForm") {
     const n = q("#newName").value.trim().replace(/\s+/g, " ");
     if (!n) { A.addErr = "Enter a name."; renderAdmin(); q("#newName").focus(); return; }
