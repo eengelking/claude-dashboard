@@ -230,6 +230,10 @@ a reader of the spec would expect:
     `$.ui.status`, which takes no severity, so the sign looks like the host's own styling of a plugin's
     entry (inferred, not confirmed). `podium ● N live` is the normal state.
 12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
+13. **The usage page is empty for Claude Code in container mode.** The scanner reads
+    `os.homedir()/.claude/projects` (`server/src/claudeCode.ts`), and the container's home holds no logs, so
+    `/api/claude-code` answers with empty lists. Standalone mode reads them. A read-only bind mount of the
+    host's logs would fix it and has not been built.
 
 ## Browser checklist (T4.2)
 

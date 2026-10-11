@@ -1,0 +1,41 @@
+name: Mod version bump check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine whether this PR changes the mod
+        id: changed
+        run: |
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > /tmp/changed_files.txt
+          if grep -E '^mod/podium-reporter/' /tmp/changed_files.txt | grep -Evq '\.test\.ts$'; then
+            echo "mod_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mod_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require a plugin.json version bump when the mod changed
+        if: steps.changed.outputs.mod_changed == 'true'
+        run: |
+          path=mod/podium-reporter/.claude-plugin/plugin.json
+          base_version=$(git show "${{ github.event.pull_request.base.sha }}:$path" | jq -r '.version')
+          head_version=$(git show "${{ github.event.pull_request.head.sha }}:$path" | jq -r '.version')
+          echo "base version: $base_version"
+          echo "head version: $head_version"
+          if [ "$base_version" = "$head_version" ]; then
+            echo "::error::This PR changes the mod but $path's version ($base_version) was not bumped. Installed copies only update when it changes. See CONTRIBUTING.md."
+            exit 1
+          fi

@@ -1,0 +1,71 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows [Semantic Versioning](https://semver.org/). Podium is
+pre-1.0, so a minor release can include breaking changes.
+
+A release sets the version in `package.json` (root, `server` and `frontend`) and in
+`mod/podium-reporter/.claude-plugin/plugin.json` to the same number. Between releases the mod's version can
+be ahead, because a mod fix is bumped in its own PR.
+
+## [Unreleased]
+
+## [0.1.0] - 2026-10-11
+
+First release. The repo started as a usage dashboard and became Podium, a live
+fleet console for Claude Code sessions, with a container, a command-line manager
+and a plugin you can install from a marketplace.
+
+### Added
+
+- **Podium fleet console** (`#/`, the default view). Every Claude Code session
+  running with the reporter mod shows up in one browser tab within about two
+  seconds: model and effort, plan, the agents it launched (subagents and forks),
+  estimated cost, context-window fill, context blowouts, failures with the
+  failing call and its last output, and the git branch or worktree. Sessions
+  appear and leave on their own. Podium only observes; it never sends a prompt or
+  touches a session. (PR #2)
+- **Reporter mod** (`mod/podium-reporter/`): a Claude Code mod that reports a
+  full snapshot plus unacknowledged events, redacts anything that looks like a
+  secret, queues reports while the server is down, and adds the `/podium`
+  command and a status line entry. Options: `serverUrl`, `token`,
+  `flushIntervalMs`, `heartbeatMs`, `sessionName`, `showStatus`,
+  `explainFailures`. (PR #2)
+- **Server** (`server/src/fleet/`): hand-written validation of every report,
+  SQLite storage through `node:sqlite`, Server-Sent Events for live updates,
+  stale and drop timers, retention, and a `/history` endpoint. A shared token
+  (`PODIUM_TOKEN`) guards reports, hooks and deletes. (PR #2)
+- **Settings-hook ingest** (`POST /api/fleet/hook`): a reduced view of sessions
+  started without the mod, from Claude Code's settings hooks. (PR #2)
+- **History page** (`#/history`) listing the sessions that ended on a chosen
+  day. (PR #2)
+- **Simulator, smoke and soak scripts** (`scripts/podium-sim.ts`,
+  `podium-smoke.sh`, `podium-soak.sh`) for developing and checking Podium with no
+  real sessions. (PR #2)
+- **`podiumctl`** (`bin/podiumctl.mjs`): start, stop, restart, status, logs,
+  health, token, config, enable and disable (start on boot through launchd or a
+  systemd user unit), shell and rm, in either a Podman container or a standalone
+  Node process. The first start generates an auth token and saves it to
+  `~/.podium/config.env`. (PR #3)
+- **Container image** (`Containerfile`): a two-stage Node 24 build that runs as
+  a non-root user and keeps its database in a `/data` volume. (PR #3)
+- **Marketplace install.** `podium-reporter` is listed in
+  `eengelking-marketplace` (`eengelking/skills`):
+  `/plugin install podium-reporter@eengelking-marketplace`. (`eengelking/skills`
+  PRs #32 and #33)
+- **Docs:** `docs/SPEC.md`, `docs/ARCHITECTURE.md`, `docs/DEMO.md`,
+  `docs/DECISIONS.md`, `docs/GOTCHAS.md`, `docs/USER_GUIDE.md`, `CONTRIBUTING.md`
+  and the `.github/` community files, issue and PR templates, and CI.
+  (PRs #1, #4, #6 and this release)
+- **Usage dashboard** (`#/usage`, the earlier app): charts Claude Code and
+  Anthropic Admin API usage from local logs and the Admin API.
+
+### Changed
+
+- The project was renamed from `claude-dashboard` to `podium`
+  (`eengelking/podium`). (PR #5)
+
+[Unreleased]: https://github.com/eengelking/podium/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/eengelking/podium/releases/tag/v0.1.0

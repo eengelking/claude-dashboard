@@ -10,6 +10,8 @@ Two dashboards for Claude Code on one machine, served by one local server:
   never sends prompts or touches a session.
 - **Usage** (`#/usage`): the earlier dashboard that charts Claude Code and Admin API usage.
 
+New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
+
 Cost in Podium is an estimate from token counts and a price table (see
 `mod/podium-reporter/hooks/models.ts`), except the orchestrator's own figure, which is the session's
 cost ledger. It is never a bill.
@@ -198,6 +200,19 @@ npm run podium:smoke   # end to end: server, simulator, SSE directly and through
 scripts/podium-soak.sh --help   # load and restart check
 ```
 
-`docs/SPEC.md` is the build spec for Podium. `docs/ARCHITECTURE.md` describes how it was built, where it
-departs from the spec and why, what was verified, and the known issues. `docs/DEMO.md` is a script and
-a paste-in prompt for showing Podium to other people.
+## Docs and project files
+
+| File | What it is |
+|---|---|
+| [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | Setting Podium up and reading the dashboard |
+| [`docs/SPEC.md`](docs/SPEC.md) | The build spec: intended behavior and requirements |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How it was built, where it departs from the spec and why, what was verified, known issues |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why the significant choices were made |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | Sharp edges that are easy to hit |
+| [`docs/DEMO.md`](docs/DEMO.md) | A script and a paste-in prompt for showing Podium to other people |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose and land a change |
+| [`.github/SECURITY.md`](.github/SECURITY.md) | How to report a vulnerability (privately) |
+| [`.github/CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | Community expectations |
+
+Podium is released under the [MIT License](LICENSE).
