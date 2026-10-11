@@ -79,6 +79,10 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
+    if (fleet.hub.isFull) {
+      res.end('event: error\ndata: {"error":"too many clients"}\n\n');
+      return;
+    }
     res.flushHeaders();
     req.socket.setNoDelay(true);
     req.socket.setTimeout(0);
@@ -92,10 +96,8 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       },
       [fleet.snapshotMessage()],
     );
-    if (id === null) {
-      res.end('event: error\ndata: {"error":"too many clients"}\n\n');
-      return;
-    }
+    // null here means the client vanished while being added: there is nobody left to tell.
+    if (id === null) return;
     const drop = () => fleet.hub.remove(id);
     req.on('close', drop);
     res.on('error', drop);
@@ -137,8 +139,16 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       res.status(400).json({ ok: false, error: 'day must be YYYY-MM-DD', path: '$.query.day' });
       return;
     }
-    const from = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
-    const to = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1).getTime();
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const start = new Date(y, mo - 1, d);
+    // Date rolls 2026-02-31 over to March 3rd; a day that does not exist is a 400.
+    if (start.getFullYear() !== y || start.getMonth() !== mo - 1 || start.getDate() !== d) {
+      res.status(400).json({ ok: false, error: 'day is not a real date', path: '$.query.day' });
+      return;
+    }
+    // The day's boundaries are the server's local midnight (the dashboard is for one machine).
+    const from = start.getTime();
+    const to = new Date(y, mo - 1, d + 1).getTime();
     res.json({ day, sessions: fleet.history(from, to) });
   });
 

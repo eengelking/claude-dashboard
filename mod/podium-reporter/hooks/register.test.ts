@@ -319,6 +319,31 @@ describe('podium-reporter end to end', () => {
     expect(a.costUsdEst).toBeGreaterThan(0)
   })
 
+  test('explainFailures on: a later failure of the same agent is explained again, but one failure only once', { options: { explainFailures: true } }, async ($, on) => {
+    const w = world(on)
+    const prompts: string[] = []
+    on('model.complete', (_$, e) => {
+      prompts.push(String(e.prompt))
+      return { value: { isAnswered: true, text: `explanation ${prompts.length}`, usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+    })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await $.agent.spawn(spawnInput({ tool_use_id: 'r1', description: 'Backfill dry run', subagentType: 'general-purpose' }))
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a-fail', reason: 'error' })
+    await w.clock.advance(1000)
+    await w.clock.advance(3000)
+    await w.clock.advance(3000) // several flushes later: still one call for this failure
+    expect(prompts).toHaveLength(1)
+    expect(w.posts.at(-1)!.agents.find((a) => a.id === 'a-fail')!.failure!.explanation).toBe('explanation 1')
+    // the same agent id is retried and fails again later: a new failure, a new explanation
+    await $.agent.spawn(spawnInput({ tool_use_id: 'r2', description: 'Backfill dry run', subagentType: 'general-purpose' }))
+    await w.clock.advance(5000)
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'y', agentId: 'a-fail', reason: 'error' })
+    await w.clock.advance(1000)
+    await w.clock.advance(3000)
+    expect(prompts).toHaveLength(2)
+    expect(w.posts.at(-1)!.agents.find((a) => a.id === 'a-fail')!.failure!.explanation).toBe('explanation 2')
+  })
+
   test('a throw inside the reporter leaves the session unaffected', async ($, on) => {
     const w = world(on)
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })

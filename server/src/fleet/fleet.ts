@@ -2,7 +2,7 @@
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
 import type { FleetDb, RetentionPolicy, SessionRow } from './db.js';
-import { activityView, computeKpis, family, sessionStatus, sessionView, shortenHome, startOfDay, type DeriveConfig } from './derive.js';
+import { activityView, computeKpis, family, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
 import { ingestReport, type IngestResult } from './ingest.js';
 import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
@@ -11,6 +11,8 @@ import { formatSse, SseHub } from './sse.js';
 
 export interface FleetConfig {
   staleAfterMs: number;
+  /** Sessions known only from settings hooks send no heartbeat, so they get a much longer silence allowance. */
+  hookStaleAfterMs: number;
   dropAfterMs: number;
   lingerMs: number;
   retention: RetentionPolicy;
@@ -22,6 +24,7 @@ export interface FleetConfig {
 
 export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   staleAfterMs: 15_000,
+  hookStaleAfterMs: 600_000,
   dropAfterMs: 60_000,
   lingerMs: 8_000,
   retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
@@ -41,6 +44,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
   return {
     ...base,
     staleAfterMs: envMs(env, 'STALE_AFTER_MS', d.staleAfterMs),
+    hookStaleAfterMs: envMs(env, 'HOOK_STALE_AFTER_MS', d.hookStaleAfterMs),
     dropAfterMs: envMs(env, 'DROP_AFTER_MS', d.dropAfterMs),
     lingerMs: envMs(env, 'LINGER_MS', d.lingerMs),
     throttleMs: d.throttleMs,
@@ -84,7 +88,7 @@ export class Fleet {
   }
 
   private get derive(): DeriveConfig {
-    return { staleAfterMs: this.cfg.staleAfterMs, home: this.cfg.home };
+    return { staleAfterMs: this.cfg.staleAfterMs, hookStaleAfterMs: this.cfg.hookStaleAfterMs, home: this.cfg.home };
   }
 
   isLive(id: string): boolean {
@@ -122,6 +126,7 @@ export class Fleet {
     const stored = sid ? { session: this.db.getSession(sid), agents: this.db.getAgents(sid) } : { agents: [] };
     const res = hookToReport(payload, stored, this.now());
     if (!res.ok) return res;
+    if ('ignored' in res) return { ok: true, sessionId: res.sessionId };
     const v = validateReport(res.report);
     if (!v.ok) return v;
     this.ingest(v.report);
@@ -266,6 +271,7 @@ export class Fleet {
 
   deleteSession(id: string): boolean {
     const wasLive = this.live.delete(id);
+    this.clockSkew.delete(id);
     const t = this.pending.get(id);
     if (t) clearTimeout(t);
     this.pending.delete(id);
@@ -277,6 +283,7 @@ export class Fleet {
   private leave(row: SessionRow, reason: 'done' | 'dropped', text: string): void {
     const now = this.now();
     this.live.delete(row.id);
+    this.clockSkew.delete(row.id);
     const t = this.pending.get(row.id);
     if (t) clearTimeout(t);
     this.pending.delete(row.id);
@@ -311,9 +318,10 @@ export class Fleet {
         if (now - (row.ended_at ?? now) >= this.cfg.lingerMs) this.leave(row, 'done', 'session ended');
         continue;
       }
-      const status = sessionStatus(row, entry.heard, now, this.cfg.staleAfterMs);
+      const staleAfterMs = staleAfterFor(row, this.derive);
+      const status = sessionStatus(row, entry.heard, now, staleAfterMs);
       if (status === 'stale') {
-        const base = row.last_seen_at + this.cfg.staleAfterMs;
+        const base = row.last_seen_at + staleAfterMs;
         const staleSince = entry.heard ? base : Math.max(base, this.startedAt);
         if (now - staleSince >= this.cfg.dropAfterMs) {
           this.leave(row, 'dropped', 'heartbeat lost');

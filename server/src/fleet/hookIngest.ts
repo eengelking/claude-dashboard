@@ -2,6 +2,7 @@
 // the reporter mod. A settings hook `curl`s its stdin here; each payload is one event, so the server
 // merges it with what it already stored for that session and ingests the result like any report.
 // Hooks carry no per-step usage: context, cost, tokens and the plan stay empty.
+import { createHash } from 'node:crypto';
 import type { AgentRow, SessionRow } from './db.js';
 import { agentView } from './derive.js';
 import type { ActivityEvent, AgentReport, Effort, Report, SessionReport } from './protocol.js';
@@ -9,7 +10,11 @@ import type { ActivityEvent, AgentReport, Effort, Report, SessionReport } from '
 export const HOOKS_REPORTER_VERSION = 'hooks';
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-type HookResult = { ok: true; report: Report } | { ok: false; error: string; path: string };
+type HookResult =
+  | { ok: true; report: Report }
+  /** The session is reported by the mod, which knows far more than a hook does: the hook is acknowledged and dropped. */
+  | { ok: true; ignored: true; sessionId: string }
+  | { ok: false; error: string; path: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown, max = 200): string | null => (typeof v === 'string' && v.trim() ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max) : null);
@@ -63,6 +68,11 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
   if (!event) return { ok: false, error: 'missing hook_event_name', path: '$.hook_event_name' };
   const sid = str(payload.session_id);
   if (!sid) return { ok: false, error: 'missing session_id', path: '$.session_id' };
+  // A session the mod reports must not be overwritten by a reduced hook view of itself (that would blank
+  // its cost, plan and tokens and flip it to the reduced display). The mod's reports are the truth.
+  if (stored.session?.reporter_version && stored.session.reporter_version !== HOOKS_REPORTER_VERSION) {
+    return { ok: true, ignored: true, sessionId: sid };
+  }
   const cwd = str(payload.cwd, 1024) ?? stored.session?.cwd ?? '/';
   const agentId = str(payload.agent_id);
   const agentType = str(payload.agent_type, 120);
@@ -70,8 +80,18 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
   const session = storedSession(stored.session, sid, cwd, now);
   const agents = new Map(stored.agents.map((r) => [r.id, storedAgent(r)]));
   const events: ActivityEvent[] = [];
+  // The id depends on the payload, so two different hooks in one millisecond keep both events, and the very
+  // same payload sent twice in the same second (a retry) is still one event.
+  const digest = createHash('sha1').update(JSON.stringify(payload)).digest('hex').slice(0, 12);
   const ev = (kind: ActivityEvent['kind'], text: string, agent: string | null = null) =>
-    events.push({ id: `${sid}:hook:${event}:${agent ?? 'main'}:${now}`, t: now, kind, agentId: agent, text: text.slice(0, 240), data: { source: 'settings-hook' } });
+    events.push({
+      id: `${sid}:hook:${event}:${agent ?? 'main'}:${Math.floor(now / 1000)}:${digest}`,
+      t: now,
+      kind,
+      agentId: agent,
+      text: text.slice(0, 240),
+      data: { source: 'settings-hook' },
+    });
   const anyRunning = () => [...agents.values()].some((a) => a.status === 'running');
   const idle = () => {
     session.status = anyRunning() ? 'running' : 'waiting';
@@ -147,14 +167,19 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
         endedAt: now,
       });
       ev('done', `finished: ${a?.description ?? agentType ?? 'agent'}`, agentId);
-      if (session.status !== 'done' && !anyRunning() && session.waitReason !== 'permission') idle();
+      // A subagent finishing says nothing about the main loop, which usually carries on: only the Stop hook
+      // means the session is idle.
       break;
     }
     case 'Notification': {
       const type = str(payload.notification_type, 60) ?? '';
       const message = str(payload.message, 160);
+      // Only notifications that block on the person count as waiting; others (auth_success and the like)
+      // are heartbeats.
+      const reason: SessionReport['waitReason'] = /permission/i.test(type) ? 'permission' : /idle|elicitation|input/i.test(type) ? 'input' : null;
+      if (!reason) break;
       session.status = 'waiting';
-      session.waitReason = /permission/i.test(type) ? 'permission' : 'input';
+      session.waitReason = reason;
       session.waitNote = message;
       ev('wait', `waiting on you: ${message ?? type}`);
       break;

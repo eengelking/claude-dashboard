@@ -458,3 +458,26 @@ Done after Phases 0 to 4 passed.
   checked in Chrome by DOM (86 sessions listed for the day, one opened, no horizontal overflow); the
   window was hidden by then, so no screenshot.
 
+### Code review pass (before the PR)
+
+One `/code-review` pass over the branch found ten issues. Nine are fixed, each with a test written first
+that failed for the reason described; one part is deliberately left as is.
+
+- **SubagentStop flipped a working session to waiting** (`hookIngest.ts`). Only `Stop` means the main loop
+  is idle now.
+- **Hooks overwrote a mod-reported session** (cost, tokens, plan, blowouts, reporter). A hook for a session
+  whose stored reporter is not `hooks` is acknowledged and ignored.
+- **Hook-only sessions went stale after 15 s and were dropped at 75 s** though alive, because hooks send
+  no heartbeat. They now use `HOOK_STALE_AFTER_MS` (default 10 minutes); the drop window follows it.
+- **A rejected (400/413) report was re-posted every flush tick.** The transport now backs off 1, 2, 5, 10 s
+  after a rejection as it does after a failure, and a success clears it.
+- **`explained` was keyed by agent only,** so a retried agent that failed again was never explained. It is
+  keyed by the failure's time too. A failed model call is still not retried, as the spec says.
+- **Every Notification counted as a wait.** Only permission, idle and elicitation notifications do.
+- **Hook event ids** now carry a digest of the payload and the second, so two different hooks in one
+  millisecond keep both events, and the same payload retried at once is still one event.
+- **`SseHub.add` returning null was reported as "too many clients"** even when the client had gone. The
+  route checks `isFull` first and says nothing to a client that is already gone.
+- **`clockSkew`** is forgotten when a session leaves the live set or is deleted.
+- **`GET /history`** rejects days that do not exist (2026-02-31) with a 400. The day is still the server's
+  local calendar day, which is right for a tool that runs on one machine; a `tz` parameter is deferred.

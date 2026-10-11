@@ -38,6 +38,7 @@ export class Transport {
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
+  private rejectStreak = 0;
 
   constructor(
     private readonly fetch: FetchLike,
@@ -72,7 +73,8 @@ export class Transport {
 
   /**
    * Posts one report built from the oldest queued events (at most 100). 200 acks them; 400 or 413 drops
-   * that report and its events (it would never be accepted); anything else keeps them and backs off.
+   * that report and its events (it would never be accepted) and backs off before the next attempt;
+   * anything else keeps them and backs off.
    */
   send(build: (events: ActivityEvent[]) => Report, now: number): Promise<SendOutcome> {
     if (this.inFlight) return Promise.resolve('busy');
@@ -106,6 +108,7 @@ export class Transport {
         this.ack(events, acked);
         this.online = true;
         this.failures = 0;
+        this.rejectStreak = 0;
         this.nextAttemptAt = 0;
         this.lastSentAt = now;
         this.lastError = null;
@@ -115,6 +118,10 @@ export class Transport {
       if (res.status === 400 || res.status === 413) {
         this.ack(events, events.length);
         this.rejected++;
+        // Back off like a failure: a snapshot the server keeps refusing (a mod/server version mismatch, say)
+        // would otherwise be rebuilt and re-posted on every flush tick while state is dirty.
+        this.rejectStreak++;
+        this.nextAttemptAt = now + Transport.backoff(this.rejectStreak);
         this.lastSentAt = now;
         this.lastError = `server rejected a report (${res.status})`;
         if (!this.loggedReject) {

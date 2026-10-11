@@ -60,8 +60,25 @@ describe('transport', () => {
     expect(await t.send(build, 0)).toBe('rejected')
     expect(t.queue).toEqual([])
     expect(t.rejected).toBe(1)
-    expect(t.nextAttemptAt).toBe(0)
     expect(logs).toHaveLength(1)
+  })
+
+  test('a rejected report backs off like a failure, so a persistently rejected snapshot is not re-posted every tick', async () => {
+    const bad: HttpResult = { status: 400, ok: false, text: '{"ok":false}' }
+    const f = fake([bad, bad, bad, ok()])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    expect(await t.send(build, 100)).toBe('rejected')
+    expect(t.due(100, true)).toBe(false)
+    expect(t.due(1099, true)).toBe(false)
+    expect(t.due(1100, true)).toBe(true)
+    expect(await t.send(build, 1100)).toBe('rejected')
+    expect(t.nextAttemptAt).toBe(1100 + 2000)
+    expect(await t.send(build, 3100)).toBe('rejected')
+    expect(t.nextAttemptAt).toBe(3100 + 5000)
+    // a success clears the backoff
+    expect(await t.send(build, 8100)).toBe('ok')
+    expect(t.nextAttemptAt).toBe(0)
+    expect(t.due(8101, true)).toBe(true)
   })
 
   test('a network error keeps the events and backs off 1, 2, 5, 10, 10 s', async () => {

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { openDb, FleetDb } from './db.js';
 import { DEFAULT_CONFIG, Fleet } from './fleet.js';
 import { createFleetRouter } from './routes.js';
+import { fixtureReport } from './testing.js';
 
 // Payloads as Claude Code's settings hooks receive them on stdin (BaseHookInput + the event's fields,
 // from the engine's ClassicHookInputs declarations).
@@ -86,6 +87,110 @@ describe('POST /api/fleet/hook', () => {
     await request(app).post('/api/fleet/hook').send({ ...base, hook_event_name: 'CwdChanged' });
     tick(14_000);
     expect(fleet.view('hk-1')!.status).toBe('waiting');
+    fleet.close();
+  });
+
+  // ---- code-review fixes ----------------------------------------------------------------------
+
+  it('SubagentStop while the main loop is still working does not flip the session to waiting', async () => {
+    const { app, fleet, tick } = setup();
+    const send = async (p: object) => {
+      tick(1000);
+      await request(app).post('/api/fleet/hook').send(p);
+    };
+    await send(P.start);
+    await send(P.prompt);
+    await send(P.subStart);
+    await send(P.subStop);
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'running', waitReason: null });
+    // only the Stop hook means the main loop is idle
+    await send(P.stop);
+    expect(fleet.view('hk-1')!.status).toBe('waiting');
+    fleet.close();
+  });
+
+  it('a hook for a session the mod reports leaves the mod\'s cost, plan, tokens and reporter alone', async () => {
+    const { app, fleet, tick } = setup();
+    const r = fixtureReport();
+    fleet.ingest({ ...r, sentAt: fleet.now() });
+    const before = fleet.view(r.session.id)!;
+    expect(before.reporter).toBe('mod');
+    expect(before.costUsd).not.toBeNull();
+    expect(before.plan).not.toBeNull();
+    tick(1000);
+    const res = await request(app).post('/api/fleet/hook').send({ ...base, session_id: r.session.id, hook_event_name: 'SubagentStop', agent_id: 'zz', agent_type: 'Explore' });
+    expect(res.status).toBe(200);
+    const after = fleet.view(r.session.id)!;
+    expect(after.reporter).toBe('mod');
+    expect(after.costUsd).toBe(before.costUsd);
+    expect(after.plan).toEqual(before.plan);
+    expect(after.tokensTotal).toBe(before.tokensTotal);
+    expect(after.blowouts.total).toBe(before.blowouts.total);
+    expect(after.agents.map((a) => a.id)).toEqual(before.agents.map((a) => a.id));
+    fleet.close();
+  });
+
+  it('a hook-only session has no heartbeat: it stays live through a long silent turn, then goes stale and is dropped on the hook windows', async () => {
+    const { app, fleet, tick } = setup();
+    await request(app).post('/api/fleet/hook').send(P.start);
+    await request(app).post('/api/fleet/hook').send(P.prompt);
+    // 5 minutes with no hook firing (a long model turn): still shown as running, not stale, not dropped
+    for (let i = 0; i < 300; i++) {
+      tick(1000);
+      fleet.sweep();
+    }
+    expect(fleet.isLive('hk-1')).toBe(true);
+    expect(fleet.view('hk-1')!.status).toBe('running');
+    // past the hook window (default 10 minutes) it goes stale, and is dropped a drop-window later
+    for (let i = 0; i < 301; i++) {
+      tick(1000);
+      fleet.sweep();
+    }
+    expect(fleet.view('hk-1')!.status).toBe('stale');
+    expect(fleet.isLive('hk-1')).toBe(true);
+    for (let i = 0; i < 61; i++) {
+      tick(1000);
+      fleet.sweep();
+    }
+    expect(fleet.isLive('hk-1')).toBe(false);
+    fleet.close();
+  });
+
+  it('only notifications that block on the person put the session in waiting', async () => {
+    const { app, fleet, tick } = setup();
+    const send = async (p: object) => {
+      tick(1000);
+      await request(app).post('/api/fleet/hook').send(p);
+    };
+    await send(P.start);
+    await send(P.prompt);
+    await send({ ...base, hook_event_name: 'Notification', message: 'Signed in', notification_type: 'auth_success' });
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'running', waitNote: null });
+    await send({ ...base, hook_event_name: 'Notification', message: 'Claude is waiting for your input', notification_type: 'idle_prompt' });
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: 'input' });
+    await send(P.prompt);
+    await send({ ...base, hook_event_name: 'Notification', message: 'Pick one', notification_type: 'elicitation_dialog' });
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: 'input' });
+    await send(P.prompt);
+    await send(P.notify);
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: 'permission' });
+    fleet.close();
+  });
+
+  it('two different hooks in the same millisecond both keep their activity event', async () => {
+    const { app, fleet } = setup();
+    await request(app).post('/api/fleet/hook').send(P.start);
+    await request(app).post('/api/fleet/hook').send({ ...P.notify, message: 'first ask' });
+    await request(app).post('/api/fleet/hook').send({ ...P.notify, message: 'second ask' });
+    await request(app).post('/api/fleet/hook').send({ ...P.subStart, agent_id: 'ag-a' });
+    await request(app).post('/api/fleet/hook').send({ ...P.subStart, agent_id: 'ag-b' });
+    const texts = fleet.events({ sessionId: 'hk-1', limit: 20 }).map((e) => e.text);
+    expect(texts.filter((t) => t.includes('first ask'))).toHaveLength(1);
+    expect(texts.filter((t) => t.includes('second ask'))).toHaveLength(1);
+    expect(texts.filter((t) => t.startsWith('spawned'))).toHaveLength(2);
+    // the very same payload retried in the same instant is still one event
+    await request(app).post('/api/fleet/hook').send({ ...P.notify, message: 'first ask' });
+    expect(fleet.events({ sessionId: 'hk-1', limit: 20 }).filter((e) => e.text.includes('first ask'))).toHaveLength(1);
     fleet.close();
   });
 });

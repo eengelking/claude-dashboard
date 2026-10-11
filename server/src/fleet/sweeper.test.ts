@@ -182,3 +182,22 @@ describe('startSweeper', () => {
     expect(sweep).toHaveBeenCalledTimes(4);
   });
 });
+
+describe('per-session bookkeeping', () => {
+  it('forgets a session\'s clock skew when it leaves the live set or is deleted', () => {
+    const fleet = makeFleet();
+    const skew = () => (fleet as unknown as { clockSkew: Map<string, number> }).clockSkew;
+    const a = fixtureReport();
+    const b = { ...fixtureReport(), session: { ...fixtureReport().session, id: 'second-session' } };
+    fleet.ingest(a);
+    fleet.ingest(b);
+    expect(skew().size).toBe(2);
+    advance(fleet, 75_000); // both go stale, then dropped
+    expect(fleet.isLive(a.session.id)).toBe(false);
+    expect(skew().size).toBe(0);
+    fleet.ingest(a);
+    expect(skew().size).toBe(1);
+    fleet.deleteSession(a.session.id);
+    expect(skew().size).toBe(0);
+  });
+});

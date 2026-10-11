@@ -295,8 +295,10 @@ async function engineNow($: Engine): Promise<number> {
 function requestExplanations($: Engine, r: Runtime): void {
   for (const id of r.state.order) {
     const a = r.state.agents[id];
-    if (!a?.failure || a.failure.explanation || explained.has(`${r.state.id}:${id}`)) continue;
-    explained.add(`${r.state.id}:${id}`);
+    // Keyed by the failure itself (its time), not just the agent: a retried agent that fails again is a new failure.
+    const key = a?.failure ? `${r.state.id}:${id}:${a.failure.at}` : '';
+    if (!a?.failure || a.failure.explanation || explained.has(key)) continue;
+    explained.add(key);
     void explain($, r.state.id, id, explainPrompt(a.failure));
   }
 }

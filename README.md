@@ -105,8 +105,12 @@ Add this to `~/.claude/settings.json` (or a project's `.claude/settings.json`):
 ```
 
 Each hook posts the payload Claude Code gives it on stdin and always exits 0, so a stopped server never
-gets in the session's way. When the server sets `PODIUM_TOKEN`, add `-H 'X-Podium-Token: <token>'`. Don't
-use these hooks and the mod in the same session; the mod already reports everything they would.
+gets in the session's way. When the server sets `PODIUM_TOKEN`, add `-H 'X-Podium-Token: <token>'`.
+
+A session that the mod reports is never changed by hooks: the server acknowledges a hook for it and drops
+it, so enabling both is harmless. Settings hooks send no heartbeat, so a hook-only session is allowed to
+stay silent for `HOOK_STALE_AFTER_MS` (10 minutes) before it shows as stale. A finishing subagent does not
+mark the session as waiting on you; the `Stop` hook does.
 
 ## Server settings
 
@@ -119,6 +123,7 @@ Environment variables (see `.env.example`):
 | `PODIUM_DB` | `data/podium.sqlite` | SQLite database file |
 | `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` |
 | `STALE_AFTER_MS` | `15000` | A session not heard from this long shows as stale |
+| `HOOK_STALE_AFTER_MS` | `600000` | Same as `STALE_AFTER_MS`, for sessions known only from settings hooks (they send no heartbeat) |
 | `DROP_AFTER_MS` | `60000` | A stale session leaves the fleet after this much more |
 | `LINGER_MS` | `8000` | An ended session stays on screen this long |
 | `RETAIN_SAMPLES_MS` | 24 hours | Per-second chart samples kept |

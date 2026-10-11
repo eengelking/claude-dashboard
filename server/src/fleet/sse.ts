@@ -23,7 +23,12 @@ export class SseHub {
     return this.clients.size;
   }
 
-  /** Registers a client and sends it `retry` plus the given first messages. Returns its id, or null when full. */
+  /** True when `add` would refuse a new client. */
+  get isFull(): boolean {
+    return this.clients.size >= this.maxClients;
+  }
+
+  /** Registers a client and sends it `retry` plus the given first messages. Returns its id, or null when full or when the client was already gone. */
   add(sink: SseSink, first: string[] = []): number | null {
     if (this.clients.size >= this.maxClients) return null;
     const id = this.nextId++;

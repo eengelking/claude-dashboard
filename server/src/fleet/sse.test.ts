@@ -58,6 +58,16 @@ describe('SseHub', () => {
     expect(hub.add(sink())).not.toBeNull();
     expect(hub.add(sink())).toBeNull();
   });
+
+  it('says whether it is full, apart from a client that vanished while being added', () => {
+    const hub = new SseHub(1);
+    expect(hub.isFull).toBe(false);
+    const dead = { write() { throw new Error('closed'); } };
+    expect(hub.add(dead)).toBeNull(); // gone, not "too many"
+    expect(hub.isFull).toBe(false);
+    expect(hub.add(sink())).not.toBeNull();
+    expect(hub.isFull).toBe(true);
+  });
 });
 
 describe('Fleet broadcasts', () => {

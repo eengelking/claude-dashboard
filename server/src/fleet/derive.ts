@@ -128,7 +128,14 @@ export function buildSeries(samples: readonly SampleRow[], blowouts: readonly Pi
 
 export interface DeriveConfig {
   staleAfterMs: number;
+  /** For sessions known only from settings hooks (no heartbeat); falls back to `staleAfterMs`. */
+  hookStaleAfterMs?: number;
   home: string;
+}
+
+/** How long a session may stay silent before it shows as stale: hook-only sessions have no heartbeat. */
+export function staleAfterFor(row: SessionRow, cfg: DeriveConfig): number {
+  return row.reporter_version === 'hooks' ? (cfg.hookStaleAfterMs ?? cfg.staleAfterMs) : cfg.staleAfterMs;
 }
 
 export interface SessionInput {
@@ -163,7 +170,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     model: row.model,
     modelFamily: family(row.model),
     effort: row.effort,
-    status: sessionStatus(row, input.heard, now, cfg.staleAfterMs),
+    status: sessionStatus(row, input.heard, now, staleAfterFor(row, cfg)),
     waitReason: row.wait_reason === 'permission' || row.wait_reason === 'input' ? row.wait_reason : null,
     waitNote: row.wait_note,
     endReason: row.end_reason,
