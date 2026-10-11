@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. Groups (Frontend, Backend and so on) add a third way to read the wall: Group by People, Group or None. The Admin view (upper right button) is where the server owner creates a token for each person, tied to that person's name. Dark first, as Podium is. Example data only; the names and tokens are made up. */
+/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. Groups (Frontend, Backend and so on) add a third way to read the wall: Group by People, Group or None. The Admin view (upper right button) is split into tabs, one per section, and every list in it is paged (50 rows by default) so it still works with a hundred people. is where the server owner creates a token for each person, tied to that person's name. Dark first, as Podium is. Example data only; the names and tokens are made up. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
@@ -185,6 +185,22 @@ table.tv .n { text-align: right; }
 .gtile.sm { width: 18px; height: 18px; border-radius: 5px; font-size: 8.5px; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ptab select.field { width: auto; padding: 3px 6px; font-size: 12px; }
+/* admin tabs and paging */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; }
+.tab { padding: 9px 14px; font-weight: 500; color: var(--ink2); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: inline-flex; gap: 8px; align-items: center; }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.tab .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+.ptool { display: flex; gap: 10px 16px; align-items: end; justify-content: space-between; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.ptool .f { display: grid; gap: 4px; }
+.ptool .grow { flex: 1 1 240px; max-width: 360px; }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 9px 14px; border-top: 1px solid var(--border); }
+.pager select.field { width: auto; padding: 3px 6px; font-size: 12px; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn:disabled:hover { background: var(--raised); }
+.ptab th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.tw2.scroll { max-height: min(62vh, 640px); overflow: auto; }
+.empty { padding: 22px 14px; color: var(--muted); }
 /* admin */
 .btn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); }
 .adminv { overflow: auto; padding: 18px 16px 32px; min-height: 0; }
@@ -502,7 +518,7 @@ document.addEventListener("pointermove", (e) => {
 document.addEventListener("pointerleave", () => { tip.hidden = true; });
 /* ---- Admin view (mockup only: nothing is stored or sent) ---- */
 const A = {
-  gpend: null, gErr: "", open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
+  tab: "people", pgs: { people: { page: 1, size: 50, q: "" }, groups: { page: 1, size: 50 }, log: { page: 1, size: 50 } }, gpend: null, gErr: "", open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
   people: [
     { pid: "ed",     name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a", made: "Oct 9",  last: "now",    state: "active" },
     { pid: "priya",  name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21d", made: "Oct 10", last: "now",    state: "active" },
@@ -521,6 +537,24 @@ const A = {
 };
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const initOf = (n) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
+(function seed() {
+  const F = ["Aiko","Ben","Chen","Dara","Eli","Farah","Gus","Hana","Ivan","Jo","Kai","Lena","Mo","Nia","Omar","Pia","Quinn","Raj","Sam","Tess","Uma","Vik","Wen","Xia","Yara","Zed"];
+  const L = "ABCDEFGHJKLMNPRSTUVW".split("");
+  const used = new Set(A.people.map((p) => p.name));
+  const ids = ["fe", "be", "ops", "data", ""];
+  let seedN = 7; const rnd = () => (seedN = (seedN * 9301 + 49297) % 233280) / 233280;
+  let n = 0;
+  for (const l of L) for (const f of F) {
+    if (n >= 120) break;
+    const name = f + " " + l + ".";
+    if (used.has(name)) continue;
+    used.add(name); n++;
+    const revoked = rnd() < 0.08;
+    A.people.push({ name, machines: rnd() < 0.2 ? [f.toLowerCase() + "-mbp", f.toLowerCase() + "-linux"] : [f.toLowerCase() + "-mbp"], tail: Math.floor(rnd() * 65535).toString(16).padStart(4, "0"), made: ["Oct 2", "Oct 4", "Oct 7", "Oct 9", "Oct 10"][Math.floor(rnd() * 5)], last: revoked ? "4 days ago" : ["now", "now", "2h ago", "yesterday"][Math.floor(rnd() * 4)], state: revoked ? "revoked" : "active", g: revoked ? "" : ids[Math.floor(rnd() * ids.length)] });
+    if (n % 3 === 0) A.log.push([["Oct 9", "Oct 8", "Oct 7", "Oct 6"][n % 4], "Created a token for " + name]);
+  }
+  for (let i = 0; i < 12; i++) A.log.push(["Oct 5", "Failed unlock attempt from 10.0.4." + (20 + i), true]);
+})();
 const pg = (p) => { const f = PEOPLE.find((x) => x.id === p.pid); return f ? (f.g || "") : (p.g || ""); };
 const setG = (i, gid) => { const p = A.people[i]; p.g = gid; const f = PEOPLE.find((x) => x.id === p.pid); if (f) f.g = gid || undefined; };
 const nowT = () => new Date().toTimeString().slice(0, 5);
@@ -529,6 +563,67 @@ function fakeToken() {
   const r = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => a[b % a.length]).join("");
   return "pdm_" + r(6) + "_" + r(32);
 }
+function pager(key, total) {
+  const g = A.pgs[key], pages = Math.max(1, Math.ceil(total / g.size));
+  if (g.page > pages) g.page = pages;
+  const a = total ? (g.page - 1) * g.size + 1 : 0, b = Math.min(total, g.page * g.size);
+  return `<div class="pager"><span class="hint" role="status">Showing ${a} to ${b} of ${total}</span>
+    <span class="row2"><label class="hint" for="size-${key}">Rows per page</label><select class="field" id="size-${key}" data-size="${key}">${[25, 50, 100].map((n) => `<option ${n === g.size ? "selected" : ""}>${n}</option>`).join("")}</select>
+    <button type="button" class="btn sm" id="pg-${key}-prev" data-pg="${key}:-1" ${g.page <= 1 ? "disabled" : ""}>Previous</button><span class="hint">Page ${g.page} of ${pages}</span><button type="button" class="btn sm" id="pg-${key}-next" data-pg="${key}:1" ${g.page >= pages ? "disabled" : ""}>Next</button></span></div>`;
+}
+const pageOf = (key, arr) => { const g = A.pgs[key]; const pages = Math.max(1, Math.ceil(arr.length / g.size)); if (g.page > pages) g.page = pages; return arr.slice((g.page - 1) * g.size, g.page * g.size); };
+
+function personRow([p, i]) {
+  const pend = A.pending && A.pending.i === i;
+  const acts = pend
+    ? `<div class="confirm"><span>${A.pending.kind === "rotate" ? "Rotate? Their reporter stops until it has the new token." : "Revoke? Their reporter is refused at once."}</span><button type="button" class="btn sm ${A.pending.kind === "revoke" ? "dng" : ""}" data-yes="${i}">${A.pending.kind === "rotate" ? "Rotate token" : "Revoke token"}</button><button type="button" class="btn sm" data-no="1">Cancel</button></div>`
+    : p.state === "revoked" ? `<div class="acts"><button type="button" class="btn sm" data-del="${i}">Remove person</button></div>`
+    : `<div class="acts"><button type="button" class="btn sm" data-rot="${i}">Rotate</button><button type="button" class="btn sm dng" data-rev="${i}">Revoke</button></div>`;
+  return `<tr class="${p.state}"><td><span class="who"><span class="mono-g sm" aria-hidden="true">${initOf(p.name)}</span>${esc(p.name)}</span></td>
+    <td><label class="vh" for="grp${i}">Group for ${esc(p.name)}</label><select class="field" id="grp${i}" data-g="${i}" ${p.state === "revoked" ? "disabled" : ""}><option value="">No group</option>${GROUPS.map((g) => `<option value="${g.id}" ${pg(p) === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></td>
+    <td><span class="mchips">${p.machines.map((m) => `<span class="chip mono">${esc(m)}</span>`).join("")}</span></td>
+    <td><span class="tail">pdm_&hellip;${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
+    <td>${p.state === "active" ? '<span class="badge ok"><span class="dot running"></span>active</span>' : '<span class="badge off"><span class="dot done"></span>revoked</span>'}</td><td>${acts}</td></tr>`;
+}
+function drawPeople() {
+  const g = A.pgs.people, ql = g.q.trim().toLowerCase();
+  const all = A.people.map((p, i) => [p, i]);
+  const list = ql ? all.filter(([p]) => (p.name + " " + gname(pg(p) || "none") + " " + p.machines.join(" ")).toLowerCase().includes(ql)) : all;
+  const rows = pageOf("people", list);
+  q("#pList").innerHTML = rows.length
+    ? `<div class="tw2 scroll"><table class="ptab"><thead><tr><th>Person</th><th>Group</th><th>Machines seen</th><th>Token</th><th>Created</th><th>Last report</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(personRow).join("")}</tbody></table></div>${pager("people", list.length)}`
+    : `<div class="empty">${ql ? "No one matches " + esc(g.q) + ". Check the spelling, or search by group or machine." : "No one has a token yet. Add the first person above."}</div>`;
+}
+function panelHtml() {
+  if (A.tab === "people") {
+    return `<div class="ptool"><div class="f grow"><label for="pSearch" style="font-weight:600">Find a person</label><input class="field" id="pSearch" type="search" placeholder="Name, group or machine" value="${esc(A.pgs.people.q)}"></div>
+      <form class="addrow" id="addForm" autocomplete="off" style="flex:1 1 320px;justify-content:flex-end"><div class="f" style="max-width:300px"><label for="newName" style="font-weight:600">Add a person</label><input class="field" id="newName" placeholder="Full name, as it should appear" maxlength="40"></div><button type="submit" class="btn pri">Create token</button></form></div>
+      ${A.addErr ? `<div class="err" role="alert" style="padding:6px 14px 0">${A.addErr}</div>` : ""}<div id="pList"></div>`;
+  }
+  if (A.tab === "groups") {
+    const mem = (g) => A.people.filter((p) => pg(p) === g.id);
+    const rows = pageOf("groups", GROUPS.map((g) => g));
+    return `<div class="ptool"><span class="hint" style="max-width:56ch">A person belongs to one group at most. Groups only change how the console is arranged; they grant nothing.</span>
+      <form class="addrow" id="gForm" autocomplete="off" style="flex:1 1 320px;justify-content:flex-end"><div class="f" style="max-width:300px"><label for="newGroup" style="font-weight:600">Create a group</label><input class="field" id="newGroup" placeholder="For example Frontend, Backend or DevOps" maxlength="24"></div><button type="submit" class="btn pri">Create group</button></form></div>
+      ${A.gErr ? `<div class="err" role="alert" style="padding:6px 14px 0">${A.gErr}</div>` : ""}
+      <div class="tw2 scroll"><table class="ptab"><thead><tr><th>Group</th><th>People</th><th></th></tr></thead><tbody>${rows.map((g) => {
+        const m = mem(g), pend = A.gpend === g.id;
+        return `<tr><td><span class="who">${gt(g.name)}${esc(g.name)}</span></td><td>${m.length ? `<span class="mchips">${m.slice(0, 5).map((x) => `<span class="chip">${esc(x.name)}</span>`).join("")}${m.length > 5 ? `<span class="hint">and ${m.length - 5} more</span>` : ""}</span><span class="hint" style="margin-left:8px">${m.length} in total</span>` : '<span class="hint">No one yet. Pick this group in the People tab.</span>'}</td>
+          <td>${pend ? `<div class="confirm"><span>Delete? ${m.length ? m.length + (m.length === 1 ? " person goes" : " people go") + " to No group." : "No one is in it."}</span><button type="button" class="btn sm dng" data-gyes="${g.id}">Delete group</button><button type="button" class="btn sm" data-gno="1">Cancel</button></div>` : `<div class="acts"><button type="button" class="btn sm dng" data-gdel="${g.id}">Delete</button></div>`}</td></tr>`;
+      }).join("")}</tbody></table></div>${pager("groups", GROUPS.length)}`;
+  }
+  if (A.tab === "reporting") {
+    return `<div class="two2" style="padding:14px">
+      <section aria-labelledby="lH"><h2 id="lH" style="margin:0 0 10px;font-size:13px">Reporting with the admin secret</h2><div style="display:grid;gap:10px">
+        <div class="sw"><button type="button" role="switch" aria-checked="${A.legacy}" id="legacySw" aria-labelledby="legTxt"></button><span id="legTxt">${A.legacy ? "Allowed" : "Refused"}</span></div>
+        <div class="hint" style="color:var(--ink2)">${A.legacy ? "1 orchestrator reports this way today. It shows in the Admin band. Anyone who has this secret can also open Admin, so keep it to your own machine and give everyone else their own token." : "Reporters that still send the admin secret are refused. Create a token for them first."}</div></div></section>
+      <section aria-labelledby="sH"><h2 id="sH" style="margin:0 0 10px;font-size:13px">What protects this</h2><ul style="margin:0;padding-left:18px;color:var(--ink2);display:grid;gap:4px">
+        <li>Tokens are stored hashed. Podium cannot show one again.</li><li>Podium decides who a report is from by its token, not by the name in it.</li><li>Revoking takes effect on the next report.</li><li>Wrong guesses are slowed down and logged in the Admin log.</li></ul></section></div>`;
+  }
+  const rows = pageOf("log", A.log);
+  return `<div class="tw2 scroll"><table class="ptab"><thead><tr><th>When</th><th>What happened</th></tr></thead><tbody>${rows.map(([t, m, bad]) => `<tr><td class="mono" style="color:var(--muted);white-space:nowrap">${t}</td><td class="${bad ? "bad" : ""}" style="${bad ? "color:var(--crit-text)" : ""}">${esc(m)}</td></tr>`).join("")}</tbody></table></div>${pager("log", A.log.length)}`;
+}
+function renderPanel() { q("#tabPanel").innerHTML = panelHtml(); if (A.tab === "people") drawPeople(); }
 function renderAdmin() {
   const el = q("#admin");
   q("#adminBtn").setAttribute("aria-pressed", String(A.open));
@@ -547,50 +642,36 @@ function renderAdmin() {
     const i = q("#secret"); if (i) i.focus();
     return;
   }
-  const rows = A.people.map((p, i) => {
-    const pend = A.pending && A.pending.i === i;
-    const acts = pend
-      ? `<div class="confirm"><span>${A.pending.kind === "rotate" ? "Rotate? Their reporter stops until it has the new token." : "Revoke? Their reporter is refused at once."}</span><button type="button" class="btn sm ${A.pending.kind === "revoke" ? "dng" : ""}" data-yes="${i}">${A.pending.kind === "rotate" ? "Rotate token" : "Revoke token"}</button><button type="button" class="btn sm" data-no="1">Cancel</button></div>`
-      : p.state === "revoked" ? `<div class="acts"><button type="button" class="btn sm" data-del="${i}">Remove person</button></div>`
-      : `<div class="acts"><button type="button" class="btn sm" data-rot="${i}">Rotate</button><button type="button" class="btn sm dng" data-rev="${i}">Revoke</button></div>`;
-    return `<tr class="${p.state}"><td><span class="who"><span class="mono-g sm" aria-hidden="true">${initOf(p.name)}</span>${esc(p.name)}</span></td>
-      <td><label class="vh" for="grp${i}">Group for ${esc(p.name)}</label><select class="field" id="grp${i}" data-g="${i}" ${p.state === "revoked" ? "disabled" : ""}><option value="">No group</option>${GROUPS.map((g) => `<option value="${g.id}" ${pg(p) === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></td>
-      <td><span class="mchips">${p.machines.map((m) => `<span class="chip mono">${esc(m)}</span>`).join("")}</span></td>
-      <td><span class="tail">pdm_&hellip;${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
-      <td>${p.state === "active" ? '<span class="badge ok"><span class="dot running"></span>active</span>' : '<span class="badge off"><span class="dot done"></span>revoked</span>'}</td><td>${acts}</td></tr>`;
-  }).join("");
   const c = A.created;
+  const tabs = [["people", "People", A.people.length], ["groups", "Groups", GROUPS.length], ["reporting", "Reporting and security", null], ["log", "Admin log", A.log.length]];
   el.innerHTML = `<div class="wrap">
     <div class="row2" style="justify-content:space-between"><div><h1>Admin</h1><p class="lead">Each person gets a token that only works with their own name. A report is accepted when the two match.</p></div><button type="button" class="btn" id="lockNow">Lock Admin</button></div>
     ${c ? `<section class="once" aria-labelledby="onceH"><h2 id="onceH">Token for ${esc(c.name)}</h2>
-      <div class="hint" style="color:var(--ink2)">This is the only time the token is shown. Put both lines in ${esc(c.name)}'s reporter settings. The token does nothing without the matching name.</div>
+      <div class="hint" style="color:var(--ink2)">This is the only time the token is shown. Put both lines in ${esc(c.name)}'s reporter settings. The token does nothing without the matching name. It stays here while you switch tabs.</div>
       <div class="code" id="onceCode">userName: ${esc(c.name)}\ntoken: ${c.token}\nserverUrl: http://podium.example.lan:4317</div>
       <div class="row2"><button type="button" class="btn pri" id="copyOnce">Copy settings</button><button type="button" class="btn" id="doneOnce">I have saved it</button><span class="hint" id="copyMsg" role="status"></span></div></section>` : ""}
-    <section class="box" aria-labelledby="pH"><div class="bt"><h2 id="pH">People</h2><span class="hint">${A.people.filter((p) => p.state === "active").length} active</span></div>
-      <div class="tw2"><table class="ptab"><thead><tr><th>Person</th><th>Group</th><th>Machines seen</th><th>Token</th><th>Created</th><th>Last report</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="bb" style="border-top:1px solid var(--border)"><form class="addrow" id="addForm" autocomplete="off"><div class="f"><label for="newName" style="font-weight:600">Add a person</label><input class="field" id="newName" placeholder="Full name, as it should appear" maxlength="40"></div><button type="submit" class="btn pri">Create token</button></form>${A.addErr ? `<div class="err" role="alert" style="margin-top:6px">${A.addErr}</div>` : ""}</div></section>
-    <section class="box" aria-labelledby="grH"><div class="bt"><h2 id="grH">Groups</h2><span class="hint">A person belongs to one group at most. Groups only change how the console is arranged.</span></div>
-      <div class="tw2"><table class="ptab"><thead><tr><th>Group</th><th>People</th><th></th></tr></thead><tbody>${GROUPS.map((g, i) => {
-        const mem = A.people.filter((p) => pg(p) === g.id);
-        const pend = A.gpend === g.id;
-        return `<tr><td><span class="who">${gt(g.name)}${esc(g.name)}</span></td><td>${mem.length ? `<span class="mchips">${mem.map((m) => `<span class="chip">${esc(m.name)}</span>`).join("")}</span>` : '<span class="hint">No one yet. Pick this group in the People table.</span>'}</td>
-          <td>${pend ? `<div class="confirm"><span>Delete? ${mem.length ? mem.length + (mem.length === 1 ? " person goes" : " people go") + " to No group." : "No one is in it."}</span><button type="button" class="btn sm dng" data-gyes="${g.id}">Delete group</button><button type="button" class="btn sm" data-gno="1">Cancel</button></div>` : `<div class="acts"><button type="button" class="btn sm dng" data-gdel="${g.id}">Delete</button></div>`}</td></tr>`;
-      }).join("")}</tbody></table></div>
-      <div class="bb" style="border-top:1px solid var(--border)"><form class="addrow" id="gForm" autocomplete="off"><div class="f"><label for="newGroup" style="font-weight:600">Create a group</label><input class="field" id="newGroup" placeholder="For example Frontend, Backend or DevOps" maxlength="24"></div><button type="submit" class="btn pri">Create group</button></form>${A.gErr ? `<div class="err" role="alert" style="margin-top:6px">${A.gErr}</div>` : ""}</div></section>
-    <div class="two2">
-      <section class="box" aria-labelledby="lH"><div class="bt"><h2 id="lH">Reporting with the admin secret</h2></div><div class="bb" style="display:grid;gap:10px">
-        <div class="sw"><button type="button" role="switch" aria-checked="${A.legacy}" id="legacySw" aria-labelledby="legTxt"></button><span id="legTxt">${A.legacy ? "Allowed" : "Refused"}</span></div>
-        <div class="hint" style="color:var(--ink2)">${A.legacy ? "1 orchestrator reports this way today. It shows in the Admin band. Anyone who has this secret can also open Admin, so keep it to your own machine and give everyone else their own token." : "Reporters that still send the admin secret are refused. Create a token for them first."}</div></div></section>
-      <section class="box" aria-labelledby="sH"><div class="bt"><h2 id="sH">What protects this</h2></div><ul class="hint" style="margin:0;padding:12px 14px 14px 30px;color:var(--ink2);display:grid;gap:4px">
-        <li>Tokens are stored hashed. Podium cannot show one again.</li><li>Podium decides who a report is from by its token, not by the name in it.</li><li>Revoking takes effect on the next report.</li><li>Wrong guesses are slowed down and logged below.</li></ul></section>
-    </div>
-    <section class="box" aria-labelledby="gH"><div class="bt"><h2 id="gH">Admin log</h2></div><ul class="alog">${A.log.map(([t, m, bad]) => `<li><span class="t mono">${t}</span><span class="${bad ? "bad" : ""}">${esc(m)}</span></li>`).join("")}</ul></section>
+    <section class="box"><div class="tabs" role="tablist" aria-label="Admin sections">${tabs.map(([id, name, n]) => `<button type="button" role="tab" class="tab" id="tab-${id}" data-tab="${id}" aria-selected="${A.tab === id}" aria-controls="tabPanel" tabindex="${A.tab === id ? 0 : -1}">${name}${n === null ? "" : `<span class="n">${n}</span>`}</button>`).join("")}</div>
+      <div id="tabPanel" role="tabpanel" aria-labelledby="tab-${A.tab}" tabindex="0"></div></section>
   </div>`;
+  renderPanel();
 }
+document.addEventListener("input", (e) => { if (e.target.id === "pSearch") { A.pgs.people.q = e.target.value; A.pgs.people.page = 1; drawPeople(); } });
+document.addEventListener("keydown", (e) => {
+  const t = e.target.closest && e.target.closest("[role=tab]"); if (!t) return;
+  const ids = ["people", "groups", "reporting", "log"]; let i = ids.indexOf(A.tab);
+  if (e.key === "ArrowRight") i = (i + 1) % ids.length; else if (e.key === "ArrowLeft") i = (i + ids.length - 1) % ids.length; else if (e.key === "Home") i = 0; else if (e.key === "End") i = ids.length - 1; else return;
+  e.preventDefault(); A.tab = ids[i]; A.pending = null; A.gpend = null; renderAdmin(); q("#tab-" + A.tab).focus();
+});
 document.addEventListener("click", (e) => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.id === "adminBtn") { A.open = !A.open; if (!A.open) { A.unlocked = false; A.created = null; A.pending = null; A.gpend = null; renderAll(); } A.err = ""; renderAdmin(); return; }
   if (!A.open) return;
+  if (t.dataset.tab) { A.tab = t.dataset.tab; A.pending = null; A.gpend = null; renderAdmin(); q("#tab-" + A.tab).focus(); return; }
+  if (t.dataset.pg) {
+    const [k, d] = t.dataset.pg.split(":"); A.pgs[k].page += +d;
+    if (k === "people") { drawPeople(); } else { renderPanel(); }
+    const nb = q("#pg-" + k + "-" + (+d > 0 ? "next" : "prev")); (nb && !nb.disabled ? nb : q("#size-" + k)).focus(); return;
+  }
   if (t.id === "lockNow") { A.unlocked = false; A.created = null; A.pending = null; renderAdmin(); }
   else if (t.dataset.rot) { A.pending = { kind: "rotate", i: +t.dataset.rot }; renderAdmin(); }
   else if (t.dataset.rev) { A.pending = { kind: "revoke", i: +t.dataset.rev }; renderAdmin(); }
@@ -618,6 +699,8 @@ document.addEventListener("click", (e) => {
   }
 });
 document.addEventListener("change", (e) => {
+  const sz = e.target.closest("select[data-size]");
+  if (sz) { const k = sz.dataset.size; A.pgs[k].size = +sz.value; A.pgs[k].page = 1; if (k === "people") drawPeople(); else renderPanel(); q("#size-" + k).focus(); return; }
   const sel = e.target.closest("select[data-g]"); if (!sel) return;
   const i = +sel.dataset.g, was = pg(A.people[i]);
   setG(i, sel.value);
@@ -633,13 +716,13 @@ document.addEventListener("submit", (e) => {
     const n = q("#newGroup").value.trim().replace(/\s+/g, " ");
     if (!n) { A.gErr = "Enter a group name."; renderAdmin(); q("#newGroup").focus(); return; }
     if (GROUPS.some((g) => g.name.toLowerCase() === n.toLowerCase())) { A.gErr = "A group called " + n + " already exists."; renderAdmin(); q("#newGroup").focus(); return; }
-    A.gErr = ""; GROUPS.push({ id: "g" + Date.now(), name: n }); A.log.unshift([nowT(), "Created the group " + n]); renderAdmin(); q("#newGroup").focus();
+    A.gErr = ""; GROUPS.push({ id: "g" + Date.now(), name: n }); A.pgs.groups.page = Math.ceil(GROUPS.length / A.pgs.groups.size); A.log.unshift([nowT(), "Created the group " + n]); renderAdmin(); q("#newGroup").focus();
   } else if (e.target.id === "addForm") {
     const n = q("#newName").value.trim().replace(/\s+/g, " ");
     if (!n) { A.addErr = "Enter a name."; renderAdmin(); q("#newName").focus(); return; }
     if (A.people.some((p) => p.name.toLowerCase() === n.toLowerCase())) { A.addErr = n + " already has a token. Rotate it instead."; renderAdmin(); q("#newName").focus(); return; }
     A.addErr = ""; const tk = fakeToken();
-    A.people.push({ name: n, machines: [], tail: tk.slice(-4).toLowerCase(), made: "Today", last: "never", state: "active" });
+    A.people.unshift({ name: n, machines: [], tail: tk.slice(-4).toLowerCase(), made: "Today", last: "never", state: "active" }); A.pgs.people.page = 1; A.pgs.people.q = "";
     A.created = { name: n, token: tk }; A.log.unshift([nowT(), "Created a token for " + n]); renderAdmin(); q("#onceH").scrollIntoView({ block: "nearest" });
   }
 });
