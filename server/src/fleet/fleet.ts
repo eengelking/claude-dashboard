@@ -147,7 +147,7 @@ export class Fleet {
         row,
         agents: this.db.getAgents(row.id),
         blowouts: this.db.getBlowouts(row.id),
-        samples: this.db.samplesSince(row.id, Math.floor(now / 1000) - 59),
+        samples: this.db.samplesSince(row.id, Math.floor(now / 1000) - 61),
         heard: entry ? entry.heard : true,
       },
       now,
@@ -174,7 +174,7 @@ export class Fleet {
       {
         views,
         costToday: this.db.costSince(startOfDay(now)),
-        tokensPerSecond: this.db.fleetTokensPerSecond(nowSec - 59),
+        tokensPerSecond: this.db.fleetTokensPerSecond(nowSec - 61),
         costPerMinute: this.costMinuteCache.rows,
       },
       now,

@@ -71,9 +71,11 @@ describe('buildSeries', () => {
     session_id: 's', t, tokens_total: 0, tokens_delta: 10, peak_context: 0.5, running_agents: 2, cost_usd: null, ...over,
   });
 
-  it('has 60 zero-filled points per array, oldest first', () => {
-    const s = buildSeries([sample(nowSec), sample(nowSec - 59, { tokens_delta: 7 }), sample(nowSec - 60), sample(nowSec - 10, { peak_context: 4 })], [], now);
+  it('has 60 zero-filled points per array, oldest first, ending at the last complete second', () => {
+    const s = buildSeries([sample(nowSec, { tokens_delta: 99 }), sample(nowSec - 1), sample(nowSec - 60, { tokens_delta: 7 }), sample(nowSec - 61), sample(nowSec - 11, { peak_context: 4 })], [], now);
     for (const arr of [s.tokensPerSec, s.peakContext, s.running]) expect(arr).toHaveLength(60);
+    // the second still in progress is left out: its sample is partial
+    expect(s.tokensPerSec).not.toContain(99);
     expect(s.tokensPerSec[59]).toBe(10);
     expect(s.tokensPerSec[0]).toBe(7);
     expect(s.tokensPerSec[30]).toBe(0);
@@ -83,7 +85,8 @@ describe('buildSeries', () => {
 
   it('lists the age in seconds of each blowout in the last 60 s', () => {
     const s = buildSeries([], [{ t: now - 9_000 }, { t: now - 33_000 }, { t: now - 90_000 }, { t: now }], now);
-    expect(s.blowoutSecondsAgo).toEqual([0, 9, 33]);
+    // ages count back from the newest point (the last complete second); a blowout this second is age 0
+    expect(s.blowoutSecondsAgo).toEqual([0, 8, 32]);
   });
 });
 
@@ -173,7 +176,7 @@ describe('computeKpis', () => {
     });
     expect(k.costToday).toBeCloseTo(12.84 + 1.5);
     expect(k.tokensPerSec).toHaveLength(60);
-    expect(k.tokensPerSec[58]).toBe(3000);
+    expect(k.tokensPerSec[59]).toBe(3000);
     expect(k.costPerMinute).toHaveLength(60);
     expect(k.costPerMinute.reduce((a, b) => a + b, 0)).toBeCloseTo(0.5);
   });

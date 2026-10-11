@@ -95,10 +95,18 @@ export function agentView(a: AgentRow): AgentView {
   };
 }
 
-/** Sixty one-second points ending at `now`, oldest first, missing seconds zero-filled. */
+/**
+ * The last whole second before `now`: the newest series point. The second in progress is left out
+ * because its sample is still partial (it would always read as a dip).
+ */
+export function lastCompleteSecond(now: number): number {
+  return Math.floor(now / 1000) - 1;
+}
+
+/** Sixty one-second points ending at the last complete second, oldest first, missing seconds zero-filled. */
 export function buildSeries(samples: readonly SampleRow[], blowouts: readonly Pick<BlowoutRow, 't'>[], now: number): SessionView['series'] {
-  const nowSec = Math.floor(now / 1000);
-  const first = nowSec - (SERIES_POINTS - 1);
+  const endSec = lastCompleteSecond(now);
+  const first = endSec - (SERIES_POINTS - 1);
   const tokensPerSec = new Array<number>(SERIES_POINTS).fill(0);
   const peakContext = new Array<number>(SERIES_POINTS).fill(0);
   const running = new Array<number>(SERIES_POINTS).fill(0);
@@ -109,9 +117,11 @@ export function buildSeries(samples: readonly SampleRow[], blowouts: readonly Pi
     peakContext[i] = Math.max(0, Math.min(1, s.peak_context));
     running[i] = Math.max(0, s.running_agents);
   }
+  // Age counts back from the newest point; a blowout in the second in progress counts as age 0.
   const blowoutSecondsAgo = blowouts
-    .map((b) => nowSec - Math.floor(b.t / 1000))
-    .filter((age) => age >= 0 && age < SERIES_POINTS)
+    .map((b) => endSec - Math.floor(b.t / 1000))
+    .filter((age) => age >= -1 && age < SERIES_POINTS)
+    .map((age) => Math.max(0, age))
     .sort((a, b) => a - b);
   return { tokensPerSec, peakContext, running, blowoutSecondsAgo };
 }
@@ -242,14 +252,14 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
     k.blowoutsTotal += v.blowouts.total;
     if (v.blowouts.level === 2) k.sessionsAtLevel2++;
   }
-  const nowSec = Math.floor(now / 1000);
-  const firstSec = nowSec - (SERIES_POINTS - 1);
+  const endSec = lastCompleteSecond(now);
+  const firstSec = endSec - (SERIES_POINTS - 1);
   for (const { t, v } of input.tokensPerSecond) {
     const i = t - firstSec;
     if (i >= 0 && i < SERIES_POINTS) k.tokensPerSec[i] = v;
   }
   k.tokensLastMinute = k.tokensPerSec.reduce((a, b) => a + b, 0);
-  const nowMin = Math.floor(nowSec / 60);
+  const nowMin = Math.floor(now / 60_000);
   const firstMin = nowMin - (SERIES_POINTS - 1);
   for (const { m, v } of input.costPerMinute) {
     const i = m - firstMin;
