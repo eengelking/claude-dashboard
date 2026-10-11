@@ -1,5 +1,5 @@
 {
-  "name": "claude-dashboard",
+  "name": "podium",
   "private": true,
   "type": "module",
   "workspaces": [

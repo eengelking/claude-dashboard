@@ -46,7 +46,7 @@ viewer sees both at once.
 4. In the second terminal, start Claude Code with the mod loaded:
 
    ```sh
-   claude --plugin-dir /path/to/claude-dashboard/mod/podium-reporter
+   claude --plugin-dir /path/to/podium/mod/podium-reporter
    ```
 
    The session should appear on the wall at once. The status line under the prompt reads

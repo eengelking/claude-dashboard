@@ -1,4 +1,4 @@
-# claude-dashboard
+# podium
 
 Two dashboards for Claude Code on one machine, served by one local server:
 
@@ -80,7 +80,7 @@ generated and unit-tested but has not been run on a Linux host.)
 The reporter is a Claude Code mod in `mod/podium-reporter/`. Load it for a session with:
 
 ```sh
-claude --plugin-dir /path/to/claude-dashboard/mod/podium-reporter
+claude --plugin-dir /path/to/podium/mod/podium-reporter
 ```
 
 (Installing it through a plugin marketplace is not set up yet.) The session appears in Podium at once.
