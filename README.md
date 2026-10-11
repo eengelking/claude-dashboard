@@ -182,4 +182,5 @@ scripts/podium-soak.sh --help   # load and restart check
 ```
 
 `docs/SPEC.md` is the build spec for Podium. `docs/ARCHITECTURE.md` describes how it was built, where it
-departs from the spec and why, what was verified, and the known issues.
+departs from the spec and why, what was verified, and the known issues. `docs/DEMO.md` is a script and
+a paste-in prompt for showing Podium to other people.
