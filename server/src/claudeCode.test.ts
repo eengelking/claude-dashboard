@@ -24,7 +24,7 @@ async function writeSession(dir: string, project: string, file: string, lines: A
 
 describe("scanClaudeCodeUsage", () => {
   it("aggregates tokens by day, model, and project, and computes rollups", async () => {
-    tmpDir = await mkdtemp(path.join(os.tmpdir(), "claude-dashboard-test-"));
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "podium-test-"));
 
     await writeSession(tmpDir, "-Users-eengelking-dev-app-a", "session1.jsonl", [
       {

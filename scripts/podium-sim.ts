@@ -122,7 +122,7 @@ const TEMPLATES: Template[] = [
     S('Port invoice endpoints', 'fork', '', '', '', ['code-review']), S('Rewrite PDF renderer', 'sub', 'general-purpose', 'opus', 'high', ['frontend-design']),
     S('Add contract tests for PDF fonts', 'sub', 'general-purpose', 'haiku', 'low', [], 7), S('Review the full diff', 'sub', 'code-review', 'opus', 'xhigh', ['code-review']),
     S('Run staging backfill', 'sub', 'general-purpose', 'sonnet', 'medium'), S('Write rollout notes', 'sub', 'general-purpose', 'haiku', 'low')] },
-  { name: 'dashboard-mods', project: 'claude-dashboard', branch: 'main', worktree: false, ahead: 2, behind: 0, dirty: 5, fam: 'sonnet', effort: 'high', plan: 'Fleet console mockup', done: 2, ageSec: 905, steps: [
+  { name: 'dashboard-mods', project: 'podium', branch: 'main', worktree: false, ahead: 2, behind: 0, dirty: 5, fam: 'sonnet', effort: 'high', plan: 'Fleet console mockup', done: 2, ageSec: 905, steps: [
     S('Research mod API', 'sub', 'Explore', 'haiku', 'low', ['plugin-authoring']), S('Study savvy-progress source', 'sub', 'general-purpose', 'sonnet', 'medium'),
     S('Build clickable mockup', 'fork', '', '', '', ['frontend-design', 'dataviz']), S('Write reporter mod', 'sub', 'general-purpose', 'sonnet', 'high', ['plugin-authoring']), S('Add heartbeat cleanup', 'sub', 'general-purpose', 'haiku', 'low')] },
   { name: 'ci-flakes', project: 'web-platform', branch: 'fix/flaky-e2e', worktree: true, ahead: 1, behind: 3, dirty: 1, fam: 'fable', effort: 'max', plan: 'Stabilize e2e suite', done: 3, ageSec: 1380, waitNote: 'Bash(npm run e2e -- --retries=0)', steps: [

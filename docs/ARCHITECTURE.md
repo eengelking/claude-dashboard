@@ -316,9 +316,9 @@ Further findings that shaped the code:
 `claude plugin validate mod/podium-reporter` output (T3.3.1):
 
 ```
-Validating plugin manifest: ~/dev/claude-dashboard/mod/podium-reporter/.claude-plugin/plugin.json
+Validating plugin manifest: ~/dev/podium/mod/podium-reporter/.claude-plugin/plugin.json
 
-Validating hooks: ~/dev/claude-dashboard/mod/podium-reporter/hooks/hooks.json
+Validating hooks: ~/dev/podium/mod/podium-reporter/hooks/hooks.json
 
   ❯ ./register.ts hooks: session.start, session.end, turn.start, turn.step, turn.complete, session.compact, session.measure, agent.spawn, tool.call, tool.call{tool=mcp__podium-reporter__plan}, skill.prompt, classic.PermissionRequest, classic.Notification, command.run{command=podium}
   ❯ ./register.ts answers its own command: command.run{command=podium}
@@ -430,7 +430,7 @@ cross-check that a scripted mod Report passes the server's validator unchanged. 
    one task named 'List files'. Then use the Agent tool once (subagent_type Explore) to list the files in
    this directory. Reply with the file count."` in this repo: the session appeared in `/api/fleet/state`
    (28 one-second polls saw it running, waiting, then done) with model `claude-haiku-5-5`, effort
-   `medium`, branch `feat/podium-fleet-console`, repo `eengelking/claude-dashboard`, plan "List files"
+   `medium`, branch `feat/podium-fleet-console`, repo `eengelking/podium`, plan "List files"
    (done), one Explore agent (done, its own tokens and estimate), cost $0.014450 equal to the CLI's
    total; it ended (`endReason: other`) and left the live set ("session ended").
 2. The same mod in a scratch git worktree with "Use the Agent tool once, with subagent_type

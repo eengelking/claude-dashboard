@@ -34,7 +34,7 @@ app.get("*", (_req, res) => {
 });
 
 const server = app.listen(PORT, HOST, () => {
-  console.log(`Claude dashboard server listening on http://${HOST}:${PORT}`);
+  console.log(`Podium server listening on http://${HOST}:${PORT}`);
   console.log(`Podium fleet console: http://${HOST}:${PORT}/#/  (database ${DB_PATH})`);
 });
 

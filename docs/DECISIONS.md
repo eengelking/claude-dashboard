@@ -136,5 +136,4 @@ Claude Code clone over SSH, which fails for anyone without a GitHub SSH key.
 dashboard stays in the same repo at `#/usage`.
 **Why.** The repo is published, and the name should say what the product is. "Podium" was already the
 working name in the spec (open question 10, kept in one constant).
-**Cost.** Old links to `claude-dashboard` rely on GitHub's redirect. Historical docs under
-`docs/superpowers/` keep the old name on purpose.
+**Cost.** Old links to `claude-dashboard` rely on GitHub's redirect.
