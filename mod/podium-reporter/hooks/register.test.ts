@@ -249,6 +249,23 @@ describe('podium-reporter end to end', () => {
     expect(text).toContain('offline')
   })
 
+  test('server down for 2 minutes, then up: no event is lost', async ($, on) => {
+    const w = world(on)
+    w.fetchMode.mode = 'down'
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    // events keep arriving all through the outage: 24 skills, one every 5 s
+    for (let i = 0; i < 24; i++) {
+      await $.tool.call({ tool: 'Skill', skill: `outage-${i}` })
+      await w.clock.advance(5000)
+    }
+    expect(w.posts.length).toBe(0)
+    w.fetchMode.mode = 'ok'
+    await w.clock.advance(12_000)
+    const texts = new Set(w.posts.flatMap((p) => p.events).map((e) => e.text))
+    for (let i = 0; i < 24; i++) expect(texts.has(`outage-${i} loaded into orchestrator`)).toBe(true)
+    expect(texts.has('session.start · Opus')).toBe(true)
+  })
+
   test('a throw inside the reporter leaves the session unaffected', async ($, on) => {
     const w = world(on)
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
