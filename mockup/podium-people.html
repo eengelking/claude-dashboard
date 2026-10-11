@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. Dark first, as Podium is. Example data only; the names are made up. */
+/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. The Admin view (upper right button) is where the server owner creates a token for each person, tied to that person's name. Dark first, as Podium is. Example data only; the names and tokens are made up. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
@@ -46,7 +46,7 @@ svg { display: block; }
 svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 /* shell */
-.app { height: 100%; display: grid; grid-template-rows: auto auto auto 1fr; }
+.app { height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); }
 .top { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
 .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); white-space: nowrap; }
@@ -179,6 +179,58 @@ table.tv .n { text-align: right; }
 .ev .by { color: var(--muted); }
 .tip { position: fixed; z-index: 20; pointer-events: none; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 240px; }
 .tip[hidden] { display: none; }
+/* admin */
+.btn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); }
+.adminv { overflow: auto; padding: 18px 16px 32px; min-height: 0; }
+.adminv .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 16px; }
+.adminv h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.adminv .lead { color: var(--ink2); margin: 4px 0 0; max-width: 62ch; }
+.box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.box > .bt { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.box > .bt h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.box > .bb { padding: 12px 14px; }
+.lock { max-width: 460px; margin: 40px auto 0; display: grid; gap: 12px; }
+.lock label { font-weight: 600; }
+.field { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 7px 10px; font: inherit; width: 100%; }
+.field:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; }
+.hint { color: var(--muted); font-size: 12px; }
+.err { color: var(--crit-text); font-size: 12.5px; }
+.btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.pri:hover { background: var(--ink2); }
+.btn.dng { color: var(--crit-text); }
+.btn.sm { padding: 3px 8px; font-size: 11.5px; }
+.ptab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ptab th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 8px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ptab td { padding: 9px 14px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+.ptab tr:last-child td { border-bottom: 0; }
+.ptab .who { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+.ptab .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.ptab .mchips { display: flex; gap: 4px; flex-wrap: wrap; }
+.ptab tr.revoked td { color: var(--muted); }
+.tw2 { overflow-x: auto; }
+.tail { font-family: var(--font-mono); color: var(--ink2); }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+.badge.ok { color: var(--good-text); } .badge.off { color: var(--muted); } .badge.wait { color: var(--warn); }
+.confirm { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; color: var(--ink2); font-size: 12px; }
+.once { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 8px; padding: 14px; display: grid; gap: 10px; }
+.once h2 { margin: 0; font-size: 14px; }
+.code { font-family: var(--font-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; color: var(--ink); }
+.row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+.addrow .f { flex: 1 1 220px; display: grid; gap: 4px; }
+.sw { display: inline-flex; align-items: center; gap: 8px; }
+.sw button { width: 34px; height: 20px; border-radius: 999px; background: var(--axis); border: 1px solid var(--border); position: relative; flex: none; }
+.sw button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); transition: transform .15s; }
+.sw button[aria-checked="true"] { background: var(--good); }
+.sw button[aria-checked="true"]::after { transform: translateX(14px); background: #fff; }
+.sw button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 2px; }
+.alog { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.alog li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--grid); }
+.alog li:last-child { border-bottom: 0; }
+.alog .t { color: var(--muted); font-size: 11.5px; }
+.alog .bad { color: var(--crit-text); }
+.two2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .two2 { grid-template-columns: minmax(0, 1fr); } }
 </style>
 </head>
 <body>
@@ -188,12 +240,13 @@ table.tv .n { text-align: right; }
       <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="16" height="6" rx="1.5" fill="currentColor" opacity=".35"/><rect x="5" y="6" width="10" height="5" rx="1.5" fill="currentColor" opacity=".6"/><rect x="7.5" y="2" width="5" height="4" rx="1.5" fill="currentColor"/></svg>
       Podium
     </div>
-    <span class="pill"><span class="dot running"></span>4 people, 8 orchestrators live</span>
+    <span class="pill"><span class="dot running"></span>3 people, 8 orchestrators live</span>
     <span class="spacer"></span>
+    <button type="button" class="btn" id="adminBtn" aria-pressed="false"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg><span id="adminBtnTxt">Admin</span></button>
     <button type="button" class="btn" id="themeBtn" aria-label="Toggle light and dark theme">Theme</button>
   </header>
   <div class="banner"><b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.</div>
-  <div class="mock">Mockup for the people view. Example data; the names are made up. Try the Group by control, a band header, a person in the left list, and the chart and table toggle on the right.</div>
+  <div class="mock">Mockup for the people view. Example data; the names are made up. Try the Group by control, a band header, a person in the left list, the chart and table toggle on the right, and the Admin button in the upper right.</div>
 
   <div class="cols">
     <nav class="rail" aria-label="Orchestrators by person">
@@ -223,7 +276,7 @@ table.tv .n { text-align: right; }
       <div id="wall"></div>
     </main>
 
-    <aside class="side" aria-label="Spend and activity">
+    <aside class="side" aria-label="Spend and activity" id="sideP">
       <section class="sec">
         <div class="sh">
           <h2>Spend today, by person</h2>
@@ -239,6 +292,7 @@ table.tv .n { text-align: right; }
       <ul class="ev" id="events"></ul>
     </aside>
   </div>
+<main class="adminv" id="admin" hidden aria-label="Admin"></main>
 </div>
 <div class="tip" id="tip" role="tooltip" hidden></div>
 
@@ -249,7 +303,7 @@ const PEOPLE = [
   { id: "ed",     name: "Ed E.",      host: "eds-mbp",    me: true },
   { id: "priya",  name: "Priya N.",   host: "priya-mbp" },
   { id: "marcus", name: "Marcus T.",  host: "build-01" },
-  { id: "none",   name: "Unassigned", host: "older reporter", unassigned: true, hint: "These sessions come from a reporter older than the version that sends a name, or from a machine with no name set." }
+  { id: "admin",  name: "Admin", host: "admin secret", special: true, hint: "These sessions report with the admin secret instead of a person's token. Create a token for them in Admin, then turn off reporting with the admin secret." }
 ];
 const S = [
   { n: "podium",         p: "~/dev/podium",         b: "feat/themes",   u: "ed",     m: "opus",   st: "running", ctx: 62, c: 8.42,  ag: "3 agents running" },
@@ -260,7 +314,7 @@ const S = [
   { n: "ci-runner",      p: "/srv/ci/runner",       b: "release/3.2",   u: "marcus", m: "haiku",  st: "running", ctx: 23, c: 0.64,  ag: "5 agents running" },
   { n: "docs-site",      p: "/srv/docs",            b: "main",          u: "marcus", m: "sonnet", st: "done",    ctx: 31, c: 1.12,  ag: "finished 12m ago" },
   { n: "data-pipeline",  p: "/srv/etl",             b: "chore/backfill",u: "marcus", m: "fable",  st: "waiting", ctx: 88, c: 11.80, ag: "no agents", alert: "Waiting on you. Context is 88% full.", hot: true },
-  { n: "legacy-job",     p: "/opt/jobs/legacy",     b: "main",          u: "none",   m: "sonnet", st: "running", ctx: 15, c: 0.30,  ag: "no agents" }
+  { n: "legacy-job",     p: "/opt/jobs/legacy",     b: "main",          u: "admin",  m: "sonnet", st: "running", ctx: 15, c: 0.30,  ag: "no agents" }
 ];
 const EVENTS = [
   ["15:31", "ed", "podium", "launched an agent, theme-tokens"],
@@ -273,7 +327,7 @@ const EVENTS = [
 ];
 const usd = (n) => "$" + n.toFixed(2);
 const by = (id) => PEOPLE.find((x) => x.id === id);
-const initials = (p) => p.unassigned ? "?" : p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
+const initials = (p) => p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
 const mg = (p, cls = "") => `<span class="mono-g ${cls}" aria-hidden="true">${initials(p)}</span>`;
 const dotCls = (st) => (st === "waiting" ? "waiting" : st);
 const stText = { running: "running", waiting: "waiting on you", stale: "heartbeat lost", done: "done" };
@@ -292,9 +346,9 @@ function ordered() {
   const sorters = {
     attn: (a, b) => (b.me ? 1 : 0) - (a.me ? 1 : 0) || (k(b).waiting + k(b).stale) - (k(a).waiting + k(a).stale) || k(b).cost - k(a).cost,
     cost: (a, b) => k(b).cost - k(a).cost,
-    name: (a, b) => (a.unassigned ? 1 : 0) - (b.unassigned ? 1 : 0) || a.name.localeCompare(b.name)
+    name: (a, b) => (a.special ? 1 : 0) - (b.special ? 1 : 0) || a.name.localeCompare(b.name)
   };
-  return list.sort((a, b) => (a.unassigned ? 1 : 0) - (b.unassigned ? 1 : 0) || sorters[state.sort](a, b));
+  return list.sort((a, b) => (a.special ? 1 : 0) - (b.special ? 1 : 0) || sorters[state.sort](a, b));
 }
 
 function card(s, showOwner) {
@@ -314,7 +368,7 @@ function renderKpis() {
   const live = S.filter((s) => s.st !== "done");
   const wait = S.filter((s) => s.st === "waiting").length;
   q("#kpis").innerHTML = [
-    ["People live", PEOPLE.filter((p) => stats(p.id).live).length - 0, "of 4 reporting"],
+    ["People live", PEOPLE.filter((p) => !p.special && stats(p.id).live).length, "plus Admin"],
     ["Orchestrators live", live.length, ""],
     ["Waiting on someone", wait, "across 2 people"],
     ["Est. cost today", usd(total), ""]
@@ -403,6 +457,116 @@ document.addEventListener("pointermove", (e) => {
   tip.style.left = Math.min(e.clientX + 12, innerWidth - 250) + "px"; tip.style.top = e.clientY + 14 + "px";
 });
 document.addEventListener("pointerleave", () => { tip.hidden = true; });
+/* ---- Admin view (mockup only: nothing is stored or sent) ---- */
+const A = {
+  open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
+  people: [
+    { name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a", made: "Oct 9",  last: "now",    state: "active" },
+    { name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21d", made: "Oct 10", last: "now",    state: "active" },
+    { name: "Marcus T.", machines: ["build-01"],             tail: "09be", made: "Oct 10", last: "now",    state: "active" },
+    { name: "Sofia R.",  machines: ["sofia-air"],            tail: "e4a8", made: "Oct 6",  last: "3 days ago", state: "revoked" }
+  ],
+  log: [
+    ["15:02", "Created a token for Marcus T."],
+    ["14:40", "Unlocked Admin from 127.0.0.1"],
+    ["13:12", "Failed unlock attempt from 192.168.1.14", true],
+    ["Oct 10", "Revoked the token for Sofia R."],
+    ["Oct 10", "Created a token for Priya N."]
+  ]
+};
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const initOf = (n) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
+const nowT = () => new Date().toTimeString().slice(0, 5);
+function fakeToken() {
+  const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const r = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => a[b % a.length]).join("");
+  return "pdm_" + r(6) + "_" + r(32);
+}
+function renderAdmin() {
+  const el = q("#admin");
+  q("#adminBtn").setAttribute("aria-pressed", String(A.open));
+  q("#adminBtnTxt").textContent = A.open ? "Back to fleet" : "Admin";
+  q(".cols").hidden = A.open; el.hidden = !A.open;
+  if (!A.open) return;
+  if (!A.unlocked) {
+    el.innerHTML = `<form class="lock" id="lockForm" autocomplete="off">
+      <div><h1>Admin</h1><p class="lead">Create and revoke the tokens people use to report to this Podium. Enter the admin secret to continue.</p></div>
+      <label for="secret">Admin secret</label>
+      <input class="field mono" id="secret" type="password" autocomplete="off" aria-describedby="secretHint">
+      ${A.err ? `<div class="err" role="alert">${A.err}</div>` : ""}
+      <div class="row2"><button type="submit" class="btn pri">Unlock Admin</button></div>
+      <div class="hint" id="secretHint">Podium made this secret the first time the server started. On the server's machine, <span class="mono">podiumctl token</span> prints it. It is held in memory only and Admin locks again after 10 minutes without activity. After 5 wrong tries Admin locks for 15 minutes. In this mockup, any text unlocks it.</div>
+    </form>`;
+    const i = q("#secret"); if (i) i.focus();
+    return;
+  }
+  const rows = A.people.map((p, i) => {
+    const pend = A.pending && A.pending.i === i;
+    const acts = pend
+      ? `<div class="confirm"><span>${A.pending.kind === "rotate" ? "Rotate? Their reporter stops until it has the new token." : "Revoke? Their reporter is refused at once."}</span><button type="button" class="btn sm ${A.pending.kind === "revoke" ? "dng" : ""}" data-yes="${i}">${A.pending.kind === "rotate" ? "Rotate token" : "Revoke token"}</button><button type="button" class="btn sm" data-no="1">Cancel</button></div>`
+      : p.state === "revoked" ? `<div class="acts"><button type="button" class="btn sm" data-del="${i}">Remove person</button></div>`
+      : `<div class="acts"><button type="button" class="btn sm" data-rot="${i}">Rotate</button><button type="button" class="btn sm dng" data-rev="${i}">Revoke</button></div>`;
+    return `<tr class="${p.state}"><td><span class="who"><span class="mono-g sm" aria-hidden="true">${initOf(p.name)}</span>${esc(p.name)}</span></td>
+      <td><span class="mchips">${p.machines.map((m) => `<span class="chip mono">${esc(m)}</span>`).join("")}</span></td>
+      <td><span class="tail">pdm_&hellip;${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
+      <td>${p.state === "active" ? '<span class="badge ok"><span class="dot running"></span>active</span>' : '<span class="badge off"><span class="dot done"></span>revoked</span>'}</td><td>${acts}</td></tr>`;
+  }).join("");
+  const c = A.created;
+  el.innerHTML = `<div class="wrap">
+    <div class="row2" style="justify-content:space-between"><div><h1>Admin</h1><p class="lead">Each person gets a token that only works with their own name. A report is accepted when the two match.</p></div><button type="button" class="btn" id="lockNow">Lock Admin</button></div>
+    ${c ? `<section class="once" aria-labelledby="onceH"><h2 id="onceH">Token for ${esc(c.name)}</h2>
+      <div class="hint" style="color:var(--ink2)">This is the only time the token is shown. Put both lines in ${esc(c.name)}'s reporter settings. The token does nothing without the matching name.</div>
+      <div class="code" id="onceCode">userName: ${esc(c.name)}\ntoken: ${c.token}\nserverUrl: http://podium.example.lan:4317</div>
+      <div class="row2"><button type="button" class="btn pri" id="copyOnce">Copy settings</button><button type="button" class="btn" id="doneOnce">I have saved it</button><span class="hint" id="copyMsg" role="status"></span></div></section>` : ""}
+    <section class="box" aria-labelledby="pH"><div class="bt"><h2 id="pH">People</h2><span class="hint">${A.people.filter((p) => p.state === "active").length} active</span></div>
+      <div class="tw2"><table class="ptab"><thead><tr><th>Person</th><th>Machines seen</th><th>Token</th><th>Created</th><th>Last report</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="bb" style="border-top:1px solid var(--border)"><form class="addrow" id="addForm" autocomplete="off"><div class="f"><label for="newName" style="font-weight:600">Add a person</label><input class="field" id="newName" placeholder="Full name, as it should appear" maxlength="40"></div><button type="submit" class="btn pri">Create token</button></form>${A.addErr ? `<div class="err" role="alert" style="margin-top:6px">${A.addErr}</div>` : ""}</div></section>
+    <div class="two2">
+      <section class="box" aria-labelledby="lH"><div class="bt"><h2 id="lH">Reporting with the admin secret</h2></div><div class="bb" style="display:grid;gap:10px">
+        <div class="sw"><button type="button" role="switch" aria-checked="${A.legacy}" id="legacySw" aria-labelledby="legTxt"></button><span id="legTxt">${A.legacy ? "Allowed" : "Refused"}</span></div>
+        <div class="hint" style="color:var(--ink2)">${A.legacy ? "1 orchestrator reports this way today. It shows in the Admin band. Anyone who has this secret can also open Admin, so keep it to your own machine and give everyone else their own token." : "Reporters that still send the admin secret are refused. Create a token for them first."}</div></div></section>
+      <section class="box" aria-labelledby="sH"><div class="bt"><h2 id="sH">What protects this</h2></div><ul class="hint" style="margin:0;padding:12px 14px 14px 30px;color:var(--ink2);display:grid;gap:4px">
+        <li>Tokens are stored hashed. Podium cannot show one again.</li><li>Podium decides who a report is from by its token, not by the name in it.</li><li>Revoking takes effect on the next report.</li><li>Wrong guesses are slowed down and logged below.</li></ul></section>
+    </div>
+    <section class="box" aria-labelledby="gH"><div class="bt"><h2 id="gH">Admin log</h2></div><ul class="alog">${A.log.map(([t, m, bad]) => `<li><span class="t mono">${t}</span><span class="${bad ? "bad" : ""}">${esc(m)}</span></li>`).join("")}</ul></section>
+  </div>`;
+}
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "adminBtn") { A.open = !A.open; if (!A.open) { A.unlocked = false; A.created = null; A.pending = null; } A.err = ""; renderAdmin(); return; }
+  if (!A.open) return;
+  if (t.id === "lockNow") { A.unlocked = false; A.created = null; A.pending = null; renderAdmin(); }
+  else if (t.dataset.rot) { A.pending = { kind: "rotate", i: +t.dataset.rot }; renderAdmin(); }
+  else if (t.dataset.rev) { A.pending = { kind: "revoke", i: +t.dataset.rev }; renderAdmin(); }
+  else if (t.dataset.no) { A.pending = null; renderAdmin(); }
+  else if (t.dataset.yes) {
+    const p = A.people[+t.dataset.yes];
+    if (A.pending.kind === "rotate") { p.tail = fakeToken().slice(-4).toLowerCase(); A.created = { name: p.name, token: fakeToken() }; A.log.unshift([nowT(), "Rotated the token for " + p.name]); }
+    else { p.state = "revoked"; A.log.unshift([nowT(), "Revoked the token for " + p.name]); }
+    A.pending = null; renderAdmin(); if (A.created) q("#onceH").scrollIntoView({ block: "nearest" });
+  }
+  else if (t.dataset.del) { const p = A.people.splice(+t.dataset.del, 1)[0]; A.log.unshift([nowT(), "Removed " + p.name]); renderAdmin(); }
+  else if (t.id === "legacySw") { A.legacy = !A.legacy; A.log.unshift([nowT(), A.legacy ? "Allowed reporting with the admin secret" : "Refused reporting with the admin secret"]); renderAdmin(); q("#legacySw").focus(); }
+  else if (t.id === "doneOnce") { A.created = null; renderAdmin(); }
+  else if (t.id === "copyOnce") {
+    const txt = q("#onceCode").textContent, m = q("#copyMsg");
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { m.textContent = "Copied"; }, () => { const r = document.createRange(); r.selectNodeContents(q("#onceCode")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); m.textContent = "Select and copy the text above"; });
+  }
+});
+document.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (e.target.id === "lockForm") {
+    if (!q("#secret").value.trim()) { A.err = "Enter the admin secret."; renderAdmin(); return; }
+    A.unlocked = true; A.err = ""; A.log.unshift([nowT(), "Unlocked Admin from 127.0.0.1"]); renderAdmin();
+  } else if (e.target.id === "addForm") {
+    const n = q("#newName").value.trim().replace(/\s+/g, " ");
+    if (!n) { A.addErr = "Enter a name."; renderAdmin(); q("#newName").focus(); return; }
+    if (A.people.some((p) => p.name.toLowerCase() === n.toLowerCase())) { A.addErr = n + " already has a token. Rotate it instead."; renderAdmin(); q("#newName").focus(); return; }
+    A.addErr = ""; const tk = fakeToken();
+    A.people.push({ name: n, machines: [], tail: tk.slice(-4).toLowerCase(), made: "Today", last: "never", state: "active" });
+    A.created = { name: n, token: tk }; A.log.unshift([nowT(), "Created a token for " + n]); renderAdmin(); q("#onceH").scrollIntoView({ block: "nearest" });
+  }
+});
 renderAll();
 </script>
 </body>
