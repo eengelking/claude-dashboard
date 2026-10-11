@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft 1, ready to implement |
+| Status | Implemented. Amended after the first build for the container, `podiumctl` and the marketplace install (4.4) |
 | Weight class | Phased (single implementing agent, one phase at a time) |
 | Visual reference | `mockup/podium.html` (authoritative for look, layout, copy and behavior of the UI) |
 | API reference for the mod | `plugin-authoring` skill, types file at `/private/tmp/claude-501/bundled-skills/2.1.296/d92c7b49108d4f84cc512e5d19a6266f/plugin-authoring/types/claude-code.d.ts` (see section 5.1 if that path is gone) |
@@ -52,8 +52,9 @@ Podium is added next to it. Do not remove or break it.
 - No control surface. Podium observes. It never sends prompts, stops agents, approves permissions or edits
   a session. (The dashboard may copy a resume command to the clipboard; that is all.)
 - No multi-machine or multi-user support. One machine, one user, localhost only. The server binds to
-  `127.0.0.1` by default.
-- No hosted deployment, accounts, or cloud sync.
+  `127.0.0.1` by default. In the container image it listens on all interfaces inside the container, and
+  the port is published only on the host's `127.0.0.1` (4.4).
+- No hosted deployment, accounts, or cloud sync. A container on the same machine is not a hosted deployment.
 - No billing accuracy. Cost is an estimate from token counts and a price table. The UI always labels it as
   an estimate. Never present it as an invoice.
 - No reading of conversation transcripts. Podium sends short excerpts only (section 6.4), never whole
@@ -152,6 +153,9 @@ frontend/src/fleet/
   *.test.tsx
 scripts/podium-sim.ts                simulator (has --help)
 scripts/podium-smoke.sh              end-to-end smoke check (has --help)
+scripts/podiumctl.test.ts            tests for podiumctl (4.4)
+bin/podiumctl.mjs                    command-line manager for the server (4.4; has --help)
+Containerfile, .containerignore      the server and UI as a Podman image (4.4)
 ```
 
 `server/src/index.ts` mounts the fleet router and starts the sweeper. `frontend/src/main.tsx` renders
@@ -160,6 +164,7 @@ scripts/podium-smoke.sh              end-to-end smoke check (has --help)
 ### 4.2 Ports and addresses
 
 - Server: `PORT` env, default `4317` (already the repo's default). Binds `127.0.0.1` unless `HOST` is set.
+  The container image sets `HOST=0.0.0.0` and `PORT=4317` inside the container (4.4).
 - Vite dev server proxies `/api` to the server (check `frontend/vite.config.ts`; add the proxy if missing).
 - Mod option `serverUrl`, default `http://127.0.0.1:4317`.
 
@@ -168,6 +173,39 @@ scripts/podium-smoke.sh              end-to-end smoke check (has --help)
 The mod owns what is true inside a session. The server owns time: staleness, lingering, dropping, series
 (tokens per second, peak context, running count) and blowout severity. The UI owns presentation only. The
 UI never computes anything it could not recompute from one `SessionView` (section 7.4).
+
+### 4.4 Packaging, running and distribution
+
+Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") records how it was built.
+
+- **Image.** `Containerfile` builds the server and the UI into one image: a build stage that runs `npm ci`
+  and both builds, and a runtime stage with the server's production dependencies, the two `dist` trees, a
+  non-root user and a `/data` volume for the SQLite file. Nothing else is needed; there is no second
+  service.
+- **`podiumctl`** (`bin/podiumctl.mjs`, no dependencies, a `bin` entry in the root `package.json`) manages
+  the server in one of two modes, `container` (the default when Podman is installed) or `standalone` (a
+  Node process on the host). It has `build`, `start`, `stop`, `restart`, `status`, `logs`, `health`, `url`,
+  `token`, `config`, `enable`, `disable`, `shell`, `rm` and `run`, and a `--help`. `status` exits 3 when the
+  server is stopped. `--mode`, `--port` and `--bind` are saved in `~/.podium/config.env` (mode 0600, home
+  overridable with `PODIUMCTL_HOME`).
+- **Network.** In container mode the port is published on `127.0.0.1` unless `--bind` says otherwise. Inside
+  the container the server listens on `0.0.0.0`; that is the only place the `127.0.0.1` default (7.7) is
+  not what the server binds.
+- **Token.** The first `start` generates a random `PODIUM_TOKEN` and saves it in `config.env`. `podiumctl
+  token` prints it and `--rotate` replaces it. An empty value is the deliberate "auth off" setting and is
+  passed through to the server as empty. Secrets reach the server through its environment, never a
+  command line.
+- **Start on boot.** `enable` and `disable` write and remove a launchd agent (macOS) or a systemd user unit
+  (Linux). In container mode the unit runs `podiumctl start`; in standalone mode it runs `podiumctl run`
+  (foreground, restarted only after a non-zero exit, so `stop` is not undone).
+- **The mod is not containerized.** It runs inside each Claude Code process and posts to `serverUrl`.
+  It is installed from `eengelking-marketplace`: `eengelking/skills` lists `podium-reporter` in its
+  `.claude-plugin/marketplace.json` with a `git-subdir` source pointing at `mod/podium-reporter` in this
+  repo (a full `https://` URL; the `owner/repo` shorthand clones over SSH). Users run
+  `/plugin install podium-reporter@eengelking-marketplace`. This repo carries no marketplace file. The
+  mod's `plugin.json` `version` is the one place a version is set. The `token` option is `sensitive`, so it
+  is set with `/plugin configure`, not the `/config` menu. `claude --plugin-dir` stays the way to work on
+  the mod.
 
 ---
 
@@ -291,7 +329,7 @@ For a fork the model sets `subagent_type: "fork"`; in `agent.spawn` that arrives
 | Wanted | Where it comes from | Caveat |
 |---|---|---|
 | Orchestrator model | `$.session.model()`, `turn.step.model` (no `agentId`) | Per step, so a mid-session `/model` shows up. |
-| Orchestrator effort | `turn.step.effort` (no `agentId`) | Absent for models without effort support: report `null`. |
+| Orchestrator effort | `turn.step.effort` (no `agentId`) | Absent for models without effort support: report `null`. Read on each model request, and no event fires when the setting changes, so a `/effort` change shows after the next prompt. |
 | Subagent model | `agent.spawn` result `model`, `turn.step.model` | Resolved alias, may be a full id. Map to a family (section 6.5). |
 | Subagent effort | `tool.call` Agent input `effort` (requested), then `turn.step.effort` for that `agentId` (observed, wins) | `agent.spawn` has no effort. Fork: copy the parent's. Record `effortSource`. |
 | Skills loaded | `tool.call` with `tool === "Skill"` (per loop via `agentId`), `skill.prompt` (no loop) | An agent definition may preload skills; that is not visible. Report what was observed. |
@@ -615,7 +653,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 
 ### 7.7 Hardening
 
-- Bind `127.0.0.1` by default. If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads stay open on localhost.
+- Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads stay open on localhost.
 - Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
@@ -876,7 +914,7 @@ Phases run in order. Each ends with committed, passing, runnable work. Inside a 
 - **Scope:** `README.md`, `docs/ARCHITECTURE.md`, `.env.example`.
 - **Depends on:** all above.
 - **Acceptance:**
-  1. `README.md` explains what Podium is, how to run the server and UI, how to install the mod (`claude --plugin-dir mod/podium-reporter` for a session; the `claude plugin` marketplace route is deferred), how to run the simulator, the env vars (`PORT`, `HOST`, `PODIUM_DB`, `PODIUM_TOKEN`, `STALE_AFTER_MS`, `DROP_AFTER_MS`, `LINGER_MS`) and what is sent off the session (section 6.4).
+  1. `README.md` explains what Podium is, how to run the server and UI, how to install the mod (from `eengelking-marketplace`, or `claude --plugin-dir mod/podium-reporter` for a session), how to run the server with `podiumctl` (4.4), how to run the simulator, the env vars (`PORT`, `HOST`, `PODIUM_DB`, `PODIUM_TOKEN`, `STALE_AFTER_MS`, `DROP_AFTER_MS`, `LINGER_MS`) and what is sent off the session (section 6.4).
   2. `docs/ARCHITECTURE.md` documents the final architecture, the mod API findings, deviations from this spec with reasons, known issues, and the verification evidence.
   3. `.env.example` lists the new env vars with defaults.
   4. No `TODO` is left in code without a matching entry under "Known issues".
@@ -948,7 +986,6 @@ Allowed: at most **three** `claude -p` smoke runs total, each with `--model haik
 - Remote or multi-machine fleets: the `Report` already carries a session id and `reporter` info; a future `hostId` field fits without breaking v1.
 - Alerts and notifications (a blowout at level 2 pushes a desktop notification): `session.blowouts.level` and `$.ui.notify` are the hooks for it.
 - Budgets and forecasts, comparisons between runs, cost per plan step.
-- Installing the mod through a marketplace (`/plugin install`): needs a `.claude-plugin/marketplace.json`; add when the repo is public.
 - A scheduled-agent view (`CronCreate` tasks, `session_crons` on the Stop hook).
 - Authentication beyond the shared token.
 

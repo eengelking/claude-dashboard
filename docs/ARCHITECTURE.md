@@ -164,17 +164,17 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     `costUsdEst`, the one estimate the report carries. Explanations are requested from the flush timer,
     never from a hook, at most once per failure; a call that errors is not retried.
 
-39. **The mod is installable from a marketplace (section 11 defers it).** Section 11 lists "installing the
-    mod through a marketplace" as deferred until the repo is public, with a `marketplace.json` in this repo.
-    It is done a different way: `eengelking/skills` already publishes `eengelking-marketplace`, and its
+39. **The mod is installable from a marketplace (section 11 deferred it).** The first spec listed "installing
+    the mod through a marketplace" as deferred until the repo is public, with a `marketplace.json` in this
+    repo. It is done a different way: `eengelking/skills` already publishes `eengelking-marketplace`, and its
     `.claude-plugin/marketplace.json` lists `podium-reporter` with a `git-subdir` source pointing at
     `mod/podium-reporter` in this repo (full `https://` URL, because the `owner/repo` shorthand clones over
     SSH). Install with `/plugin install podium-reporter@eengelking-marketplace`. This repo has no
-    marketplace file of its own. SPEC.md still says deferred; it has not been changed.
-40. **Inside the container the server binds `0.0.0.0`.** Section 3 says the server binds `127.0.0.1` by
-    default. In the image it has to listen on all interfaces for the published port to reach it, so
+    marketplace file of its own. SPEC.md was amended to match (4.4, and the deferred item removed).
+40. **Inside the container the server binds `0.0.0.0`.** The first spec said the server binds `127.0.0.1`
+    by default. In the image it has to listen on all interfaces for the published port to reach it, so
     `podiumctl` publishes it only on the host's `127.0.0.1` (or the `--bind` address). The server's own
-    default outside the container is unchanged. SPEC.md has not been changed.
+    default outside the container is unchanged. SPEC.md was amended to match (3, 4.2, 4.4, 7.7).
 
 ## Deviations from the spec
 
@@ -188,7 +188,7 @@ a reader of the spec would expect:
 - Escaped control characters in reported strings are stripped and the report accepted; raw control
   characters make the JSON invalid and get a 400 (T4.3.1 reading, Phase 4 below).
 - The mod is installed through a marketplace (39) and the container listens on all interfaces behind a
-  host-side `127.0.0.1` publish (40). SPEC.md section 3 and section 11 still say otherwise.
+  host-side `127.0.0.1` publish (40). Both were written back into SPEC.md (4.4) after the first build.
 - Extra fields, all additive: `SessionView.cwd` and `waitReason`, `/state.config`, `liveSessions` in the
   report ack, `HistoryRow` for `/history`, and a `showStatus` mod option (20, 31, 33).
 - Extra files: `server/src/fleet/fleet.ts`, `testing.ts`, `server/vitest.config.ts`, `frontend/src/fleet/`
