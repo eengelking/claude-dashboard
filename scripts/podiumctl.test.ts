@@ -58,6 +58,11 @@ describe("podiumctl command construction", () => {
     expect(env).toMatchObject({ HOST: "0.0.0.0", PORT: "4317", PODIUM_DB: "/data/podium.sqlite", STALE_AFTER_MS: "9000" });
   });
 
+  it("passes an empty token through so auth stays off", () => {
+    expect(serverEnv(resolveConfig({ PODIUM_TOKEN: "" }), false).PODIUM_TOKEN).toBe("");
+    expect("PODIUM_TOKEN" in serverEnv(resolveConfig({}), false)).toBe(false);
+  });
+
   it("gives a standalone server the host port and bind", () => {
     expect(serverEnv(cfg, false)).toMatchObject({ HOST: "127.0.0.1", PORT: "4400", PODIUM_TOKEN: "s3cret" });
   });

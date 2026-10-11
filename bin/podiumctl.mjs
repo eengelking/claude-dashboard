@@ -117,7 +117,8 @@ export function resolveConfig(file, flags = {}, hasPodman = true) {
 /** Environment the server process gets (the token and other settings live here, never on a command line). */
 export function serverEnv(cfg, inContainer) {
   const env = { ...cfg.extra };
-  if (cfg.token) env.PODIUM_TOKEN = cfg.token;
+  // An empty token is deliberate (auth off): pass it through so a stray PODIUM_TOKEN in the shell or .env cannot win.
+  if (cfg.token !== undefined) env.PODIUM_TOKEN = cfg.token;
   if (inContainer) Object.assign(env, { HOST: '0.0.0.0', PORT: String(INNER_PORT), PODIUM_DB: '/data/podium.sqlite' });
   else Object.assign(env, { HOST: cfg.bind, PORT: String(cfg.port), PODIUM_DB: cfg.db ?? '' });
   return env;
@@ -259,7 +260,9 @@ function readPid() {
   try {
     const pid = Number(fs.readFileSync(pidPath(), 'utf8'));
     process.kill(pid, 0);
-    return pid;
+    // A stale pid file can name a reused pid; only trust a process that is ours.
+    const cmd = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' }).stdout;
+    return /podiumctl|server\/dist\/index\.js/.test(cmd) ? pid : null;
   } catch { return null; }
 }
 const serverEntry = () => path.join(REPO_ROOT, 'server', 'dist', 'index.js');
@@ -462,7 +465,9 @@ async function cmdRun(cfg) {
   cfg = ensureToken(cfg);
   requireBuilt();
   const child = spawn(process.execPath, [serverEntry()], { cwd: REPO_ROOT, env: standaloneEnv(cfg), stdio: 'inherit' });
-  fs.writeFileSync(pidPath(), String(child.pid));
+  // Record this wrapper's pid, not the server's: `stop` must reach the SIGTERM handler below so the
+  // wrapper exits 0 and the boot service (KeepAlive/Restart=on-failure) does not restart the server.
+  fs.writeFileSync(pidPath(), String(process.pid));
   let stopping = false;
   for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { stopping = true; child.kill(sig); });
   child.on('exit', (code, signal) => {
