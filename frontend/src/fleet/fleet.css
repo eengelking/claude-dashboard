@@ -221,10 +221,11 @@ body.podium-resizing * { cursor: col-resize !important; }
 
 /* agent tree */
 .podium .tw { overflow-x: auto; position: relative; }
-.podium .trow { display: grid; grid-template-columns: minmax(210px, 1fr) 92px 78px 138px 56px 56px 50px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: 840px; }
+.podium .trow { display: grid; grid-template-columns: minmax(210px, 1fr) 92px 78px 138px 56px 56px 64px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: 892px; }
 .podium .trow.hd { min-height: 28px; color: var(--muted); font-size: 11.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .podium button.trow:hover { background: var(--hover); }
 .podium button.trow[aria-current="true"] { background: var(--sel); }
+.podium .trow .num { white-space: nowrap; }
 .podium .trow .cell { display: flex; align-items: center; min-width: 0; }
 .podium .trow .nm { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .podium .trow .nm .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -350,7 +351,7 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .trow.hd button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
 
 @media (max-width: 1280px) {
-  .podium .trow { grid-template-columns: minmax(200px, 1fr) 92px 78px 138px 56px 50px 104px; }
+  .podium .trow { grid-template-columns: minmax(200px, 1fr) 92px 78px 138px 56px 64px 104px; }
   .podium .trow .c-tok { display: none; }
   .podium .cols { --rail-w: 224px; --side-w: 310px; }
 }

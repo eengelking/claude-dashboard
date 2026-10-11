@@ -24,6 +24,9 @@ be ahead, because a mod fix is bumped in its own PR.
 - On a session card, the cost, token count and duration line no longer breaks in the middle of a value.
   When the three do not fit beside the sparkline, whole values move to the next line, so `15h 54m` stays
   together. (#18)
+- In the Agents table, the Time column is wide enough for the longest duration the dashboard shows
+  (`23h 59m`, or `999d 23h` for a very long session) and no longer wraps `16h 21m` onto two lines. A test
+  fails if the duration format ever gets longer than the column. (#23)
 
 ## [0.1.0] - 2026-10-11
 

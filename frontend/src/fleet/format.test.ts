@@ -38,6 +38,17 @@ describe("fmtDur", () => {
     expect(fmtDur(1_500_000)).toBe("17d 08h");
     expect(fmtDur(-3)).toBe("0:00");
   });
+
+  // The Time column in fleet.css (`.podium .trow`) is sized for eight characters of monospace
+  // text. If this fails, the format got longer: widen that column in both grid definitions.
+  it("never returns more than eight characters for a duration up to 999 days", () => {
+    expect(fmtDur(86_399)).toBe("23h 59m");
+    expect(fmtDur(999 * 86_400 + 23 * 3600 + 59 * 60 + 59)).toBe("999d 23h");
+    // One sample per unit boundary and per branch of the format, instead of a million-step sweep.
+    for (const s of [0, 59, 3599, 3600, 86_399, 86_400, 999 * 86_400 + 86_399]) {
+      expect(fmtDur(s).length).toBeLessThanOrEqual(8);
+    }
+  });
 });
 
 describe("fmtClock", () => {
