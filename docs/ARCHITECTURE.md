@@ -9,6 +9,42 @@ This repo holds two apps that share one Express server and one Vite frontend:
 `docs/SPEC.md` is the build spec for Podium. This file records how it was actually built, where it differs
 from the spec and why, what was verified, and what is still open.
 
+## How Podium fits together
+
+```
+ Claude Code session ──(reporter mod: hooks -> state.ts reducers -> report.ts)──┐
+ Claude Code session ──(  flush timer: POST /api/fleet/report every 1 s when   )──┼──> server (Express, 127.0.0.1:4317)
+ simulator (podium-sim) ─(  something changed, 5 s heartbeat, backoff offline )──┘      routes.ts: validate (protocol.ts)
+                                                                                        fleet.ts:  ingest.ts -> SQLite (db.ts)
+ browser (React, frontend/src/fleet) <── GET /api/fleet/state (first paint) ──────────   derive.ts: SessionView, KPIs, series
+                                     <── GET /api/fleet/stream (SSE) ─────────────────   sse.ts + sweeper.ts (stale, drop, linger,
+                                                                                         samples, retention, 2 s tick)
+```
+
+**The mod** (`mod/podium-reporter/`) runs in each Claude Code process. Hooks only update an in-memory
+model through pure reducers (`state.ts`, `plan.ts`, `failures.ts`) and never wait on the network; a
+`$.clock.every` timer reads `$.session.id()`, `$.session.usage()` and `$.agent.list()`, and posts a full
+snapshot plus unacknowledged events (`transport.ts`). Git is polled every 10 s (`git.ts`). `session.end`
+sends the final report inside a 1 s deadline. A changed session id (after `/clear` or a resume) closes
+the old id with a `done` report and starts over under the new one.
+
+**The server** (`server/src/fleet/`) validates every report by hand (`protocol.ts`), stores it in one
+transaction (`ingest.ts`: upsert session and agents, insert events and blowout rows idempotently, one
+sample per second), and broadcasts the changed `SessionView` (at most one per session per 500 ms) and
+each new event over SSE. `fleet.ts` owns the live set and time: the sweeper (`sweeper.ts`) runs every
+second (stale at 15 s, dropped 60 s later, ended sessions linger 8 s, carry-forward samples), ticks KPIs
+every 2 s and prunes hourly. `derive.ts` turns rows into views and is pure.
+
+**The UI** (`frontend/src/fleet/`) is the mockup in React. `useFleet` loads `/state`, applies stream
+messages with a pure reducer (`store.ts`), treats 6 s of silence as disconnected and reopens the stream
+(whose first message is a full snapshot). Sorting, filtering, the agent tree and chart points are pure
+functions in `logic.ts` and `chart.ts`. Styles are `fleet.css`, the mockup's tokens scoped under
+`.podium`. The UI computes nothing it could not recompute from one `SessionView`.
+
+**Shared contract.** The Report types live in `server/src/fleet/protocol.ts` and, byte for byte between
+markers, in `mod/podium-reporter/hooks/protocol.ts`; a test compares them. The UI imports the view types
+from the server's file. `docs/fixtures/report.sample.json` is the shared fixture.
+
 ## Spec questions
 
 Places where the spec was silent, ambiguous or wrong, the reading chosen, and why.
@@ -112,6 +148,85 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     whose main loop is idle is `running` while any agent still runs, `waiting` otherwise.
 35. **Plan tool registration.** The `plan` tool is registered deferred (behind ToolSearch, the default),
     so it costs a session nothing unless the model looks for it.
+
+## Deviations from the spec
+
+The numbered Spec questions above are the full list, each with its reason. The ones that change behavior
+a reader of the spec would expect:
+
+- The failure class order ranks an exhausted context window above a generic API error (26).
+- `session.end` waits at most 1 s, not 2 s, because the engine bounds the whole event to ~1.5 s (30).
+- Haiku's window is 1M (Haiku 5.5); 200K is used only for Haiku 4.5 and older ids (Mod API findings).
+- The plan tool never sets `source: 'podium_plan'`; it only names the plan (27).
+- Escaped control characters in reported strings are stripped and the report accepted; raw control
+  characters make the JSON invalid and get a 400 (T4.3.1 reading, Phase 4 below).
+- Extra fields, all additive: `SessionView.cwd` and `waitReason`, `/state.config`, `liveSessions` in the
+  report ack, `HistoryRow` for `/history`, and a `showStatus` mod option (20, 31, 33).
+- Extra files: `server/src/fleet/fleet.ts`, `testing.ts`, `server/vitest.config.ts`, `frontend/src/fleet/`
+  helpers (`logic.ts`, `chart.ts`, `storage.ts`, `useNow.ts`, `fixtures.ts`, `testState.ts`),
+  `mod/podium-reporter/hooks/scripted.ts`, `mod/podium-reporter/tsconfig.json`, and the scripts
+  `podium-mod-typecheck.sh`, `podium-soak.sh`, `mod-report.test.ts` (7).
+
+## Known issues
+
+1. **`explainFailures` is declared but does nothing.** It is the Phase 5 option (T5.2), which was not
+   built. The README says so.
+2. **No agent-scoped tool calls in the mod's end-to-end test.** The test kit mints `tool.call`'s
+   `agentId`, so a Skill or failing Bash inside an agent is covered by the pure `state.ts` tests and the
+   real runs, not by `register.test.ts`.
+3. **Not seen for real:** a subagent's own `session.compact`, a teammate, `classic.Notification`, `/clear`
+   in an interactive session, and the status line (all real runs were headless `-p`). Each is covered by
+   tests against the types.
+4. **Plan owner matching is literal.** A step "Count .ts files under server" and an agent "Count .ts
+   files in server" do not match (6.3's normalized contains rule); run 3 showed it. Steps then show no
+   owner.
+5. **Elapsed times and the stale countdown pause in a background tab.** Browsers throttle timers in
+   hidden tabs; the numbers catch up when the tab is visible.
+6. **Memory grows slowly under load.** The 5-minute soak (10 sessions x 20 extra agents, 3 SSE clients)
+   went from 121.6 MB to 131.7 MB RSS, with growth slowing (+7.7 MB in the first 2 minutes, +2.4 MB in
+   the last 2.5). Likely V8 warm-up and the SQLite page cache; a longer soak would tell.
+7. **Cost estimates undershoot the ledger a little.** Run 1: main loop plus agent estimates $0.01237
+   against a ledger of $0.01445. The orchestrator's figure is the ledger; agent figures are estimates and
+   labeled so.
+8. **A session that starts at the prompt shows as waiting.** An idle interactive session is honestly
+   "waiting on you"; with many idle sessions the wall fills with waiting callouts.
+9. **The production build also compiles the server's test files into `server/dist`** (as the existing
+   app already did). Harmless; not changed.
+
+## Browser checklist (T4.2)
+
+Run in Chrome (Claude in Chrome) against the dev server, Vite, and either `podium-sim --chaos` or real
+`claude -p` sessions. Checked: yes unless noted.
+
+| Item (SPEC 8.1) | 1440 dark | 1440 light | 400 dark | 400 light |
+|---|---|---|---|---|
+| Top bar: logo, connection pill, clock, theme toggle, link to usage | yes | yes | yes | yes |
+| Connection pill shows "disconnected, retrying" with the server stopped, recovers by itself | yes (at once; back 2.3 s after restart) | | | |
+| Three columns, drag handles (real drag 340 -> 510 px, saved), double-click reset, focus ring | yes | yes | hidden, stacked | hidden, stacked |
+| Rail: status dot, name, blowout badge, model chip, plan bar, agents; red edge at level 2 | yes | yes | yes | yes |
+| Rows enter and leave with animation | yes (burst of 11) | | | |
+| KPI tiles with sparklines | yes | yes | yes (2 columns) | yes |
+| Toolbar: segments, Sort (Model: Fable, Opus, Sonnet in rail and wall), text filter, counts | yes | yes | | |
+| Cards: git line, model, effort, context, badge, risk callout, plan, agent strip, cost, sparkline | yes | yes | yes | yes |
+| Waiting and stale callouts | yes | yes | | |
+| Empty states with an instruction | yes | | | |
+| Orchestrator page: header, three charts with crosshair and readout, blowout marker and caption | yes | yes | yes | |
+| Facts bar with Copy resume command last ("Copied", then back) | yes | yes | yes | |
+| Blowout callout with agent links | yes | | | |
+| Plan checklist, agent tree, sort columns and "Show as tree", row flash | yes | yes | yes (tree scrolls inside) | |
+| Activity: 12 rows, Show 12 more, Show fewer, counts, 150-event note | yes | yes | yes | |
+| Activity row selects session and agent, scrolls and flashes; failure row shows root cause | yes | yes | yes | |
+| Rows of ended sessions greyed, "Session ended", inert | yes | | | |
+| Agent detail: failure box, blowout timeline, inherited model and effort on a fork | yes | yes | | |
+| No horizontal page scroll | yes | yes | yes (381 px in 396) | yes |
+| Kill and restart the server: UI reconnects with no reload | yes | | | |
+| 20 reports in 200 ms (10 new sessions + 10 for one): 11 rows, no duplicates | yes (23 ms) | | | |
+| A session that never ends: stale at 15 s, gone at 75 s | yes | | | |
+| A real `claude -p` session appears, with agents and plan, then leaves | yes (run 3) | | | |
+
+Blank cells were not separately checked at that width or theme; the layout is the same CSS and the
+400 px and light passes covered the views listed. 400 px ran in a 400 px same-origin iframe because Chrome
+would not resize the window that narrow. Touch input and screen reader output were not checked.
 
 ## Mod API findings
 
@@ -282,4 +397,30 @@ cross-check that a scripted mod Report passes the server's validator unchanged. 
 
 Not verified for real: a subagent's own compaction, a teammate, `classic.Notification`, a `/clear` (the
 id switch is covered by tests), and the status line (both runs were headless).
+
+### Phase 4: integration and hardening
+
+Built: `scripts/podium-smoke.sh` (T4.1), `scripts/podium-soak.sh`, robustness tests
+(`server/src/fleet/robustness.test.ts`, a two-minute outage test in the mod), README, `.env.example`.
+
+Verified:
+
+- `npm run podium:smoke`: every check passed in 28 s (4 live sessions with 18 agents, 60-point series,
+  snapshot first, session, activity, tick and removed events, sessions gone after the linger time, the
+  Vite proxy delivering 6 ticks over 10 s), nothing left running, temp files removed. A copy with a 30 s
+  linger exited 1 with the two expected failures.
+- T4.3.1: malformed JSON, raw control characters, a 1 MB body, 5,000 agents, deep nesting and wrong
+  content types all get a 4xx; invalid UTF-8 does not crash it; the server serves normally afterwards.
+  Reading chosen: "strings with control characters" are rejected only when raw (invalid JSON); escaped
+  ones are valid JSON, so they are stripped and the report accepted (7.7 says to clamp strings, and
+  terminal output carries ANSI escapes).
+- T4.3.2: `podium-soak.sh --restart` killed the server with SIGKILL 40 s in and restarted it on the same
+  database: right after, all 5 sessions were `stale`; 8 s later all were `running`.
+- T4.3.3: in the kit, two minutes of server outage with events every 5 s lost none, and the reporter's
+  own time per hook stayed at about 0.01 ms (0.03 ms worst) with the server down.
+- T4.3.4: 10 sessions x 20 extra agents for 300 s with 3 SSE clients: every client kept receiving (150
+  ticks each, 467 messages in the last 30 s); RSS 121.6 MB at 30 s, 131.7 MB at 300 s (see Known issues).
+- T4.2: the checklist above, including the burst, the never-ending session and a real session watched
+  live in the browser (run 3: two parallel Explore agents and a two-step plan; cost equal to the CLI's).
+- `npm run build` then `npm run start -w server` serves the built UI and API from one port.
 
