@@ -91,7 +91,9 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       )}
       <div className="foot">
         <div className="mono">
-          {fmtUsd(s.costUsd)} · {fmtTok(s.tokensTotal)} tok · {fmtDur(sessionElapsedSec(s, now))}
+          <span className="v">{fmtUsd(s.costUsd)} ·</span>{" "}
+          <span className="v">{fmtTok(s.tokensTotal)} tok ·</span>{" "}
+          <span className="v">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>
         <Sparkline values={s.series.tokensPerSec} w={100} h={22} />
       </div>

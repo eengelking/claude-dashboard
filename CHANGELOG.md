@@ -21,6 +21,9 @@ be ahead, because a mod fix is bumped in its own PR.
 - In the Agents table, the Status text and icon no longer sit about a pixel lower than the Tokens, Cost and
   Time values on the same row. The Model and Effort cells had the same small offset and are centred with it.
   (#31)
+- On a session card, the cost, token count and duration line no longer breaks in the middle of a value.
+  When the three do not fit beside the sparkline, whole values move to the next line, so `15h 54m` stays
+  together. (#18)
 
 ## [0.1.0] - 2026-10-11
 

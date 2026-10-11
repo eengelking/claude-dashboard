@@ -167,6 +167,8 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .crew .cnt { margin-left: 6px; color: var(--ink2); font-size: 12px; }
 @keyframes podium-blink { 50% { opacity: .55; } }
 .podium .card .foot { display: flex; justify-content: space-between; align-items: end; margin-top: 10px; color: var(--ink2); font-size: 12px; gap: 8px; }
+.podium .card .foot > .mono { display: flex; flex-wrap: wrap; column-gap: 0.5ch; min-width: 0; }
+.podium .card .foot .v { white-space: nowrap; }
 .podium .card .foot svg.sp { width: 92px; height: 22px; flex: none; }
 .podium .card .noplan { margin-top: 10px; color: var(--muted); font-size: 12px; }
 .podium .alert { margin-top: 10px; padding: 5px 8px; border-radius: 5px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); display: flex; gap: 6px; align-items: flex-start; }
