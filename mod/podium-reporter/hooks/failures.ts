@@ -111,16 +111,20 @@ export interface ClassifyInput {
 }
 
 /**
- * The failure class for a loop that ended with `error`, `refusal` or `aborted`, in SPEC 6.4's order;
- * null for `answer` (a loop that answered is done, and its candidate is discarded).
+ * The failure class for a loop that ended with `error`, `refusal` or `aborted` (SPEC 6.4); null for
+ * `answer` (a loop that answered is done, and its candidate is discarded).
+ *
+ * Order: a denial, a refusal, an exhausted context window, an API error with no failing call, an
+ * abort, then a tool error or Unknown. The window check comes before the API error because the
+ * engine's `error` reason includes running out of context (see ARCHITECTURE.md, Spec questions).
  */
 export function classify(i: ClassifyInput): FailureClass | null {
   if (i.reason === 'answer') return null;
   const fresh = i.candidate && i.now - i.candidate.at <= LIMITS.candidateMaxAgeMs ? i.candidate : null;
   if (fresh?.denied) return 'Blocked by permission';
-  if (i.reason === 'error' && !fresh) return 'Model API error';
   if (i.reason === 'refusal') return 'Refusal';
   if (i.stopReason === 'model_context_window_exceeded' || i.blowouts >= 3) return 'Context window exhausted';
+  if (i.reason === 'error' && !fresh) return 'Model API error';
   if (i.reason === 'aborted') return 'Aborted';
   return fresh ? 'Tool error' : 'Unknown';
 }

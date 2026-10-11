@@ -370,8 +370,11 @@ export interface CompleteInput {
 /** A loop's turn ended. Main loop: idle. Agent: done, aborted or failed with a failure record. */
 export function turnComplete(s: SessionState, i: CompleteInput, now: number): SessionState {
   if (!i.agentId) {
-    let next: SessionState = { ...s, mainIdle: true, waitReason: s.waitReason === 'permission' ? null : s.waitReason };
-    if (i.reason === 'error') next = addEvent(next, 'fail', null, 'orchestrator turn ended with an API error', now, { reason: 'error' });
+    let next: SessionState = { ...s, mainIdle: true, waitReason: s.waitReason === 'permission' ? null : s.waitReason, main: { ...s.main, candidate: i.reason === 'answer' ? null : s.main.candidate } };
+    const cand = s.main.candidate && now - s.main.candidate.at <= 60_000 ? s.main.candidate : null;
+    if (i.reason === 'error' && cand) {
+      next = addEvent(next, 'fail', null, `orchestrator turn ended with an error after a failing call: ${cand.call}`, now, { reason: 'error', tool: cand.tool, call: cand.call, exitCode: cand.exitCode });
+    } else if (i.reason === 'error') next = addEvent(next, 'fail', null, 'orchestrator turn ended with an API error', now, { reason: 'error' });
     else if (i.reason === 'refusal') next = addEvent(next, 'fail', null, 'orchestrator turn ended with a refusal', now, { reason: 'refusal' });
     return withStatus(next);
   }

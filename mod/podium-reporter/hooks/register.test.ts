@@ -1,0 +1,297 @@
+import { describe, test, expect, mock, type Engine } from 'claude-code/testing'
+import type { AgentSpawnInput, CommandRunInput, On } from 'claude-code'
+import type { Report } from './protocol.ts'
+
+const SID = 'sess-e2e-0001'
+/** A compaction leaves at least one message: its summary. */
+const SUMMARY = [{ role: 'user' as const, text: 'Summary of the work so far.', toolUses: [] }]
+const CWD = '/Users/dev/app/.claude/worktrees/feat-x'
+
+interface World {
+  posts: Report[]
+  headers: Record<string, string>[]
+  clock: ReturnType<typeof mock.clock>
+  lastToolUseId: () => string
+  sessionId: { value: string }
+  fetchMode: { mode: 'ok' | 'down' | 'hang' }
+}
+
+const GIT: Record<string, string> = {
+  'rev-parse --abbrev-ref HEAD': 'feat/x',
+  'rev-parse --git-dir': '/Users/dev/app/.git/worktrees/feat-x',
+  'rev-parse --git-common-dir': '/Users/dev/app/.git',
+  'rev-parse --show-toplevel': CWD,
+  'status --porcelain=v1 -b': '## feat/x...origin/feat/x [ahead 2]\n M src/a.ts\n',
+}
+
+/** Everything beneath the plugin: the engine's answers, from memory. */
+function world(on: On): World {
+  const posts: Report[] = []
+  const headers: Record<string, string>[] = []
+  const sessionId = { value: SID }
+  const fetchMode: World['fetchMode'] = { mode: 'ok' }
+  let toolUseId = ''
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  mock.store(on)
+  on('session.id', () => ({ value: sessionId.value }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.root', () => ({ value: CWD }))
+  on('session.repo', () => ({ value: { root: '/Users/dev/app', remote: 'git@github.com:acme/app.git', internal: false, name: null } }))
+  on('session.version', () => ({ value: { version: '2.1.296' } }))
+  on('session.usage', () => ({ value: { startedAt: 1_800_000_000_000, context: { tokens: 120_000, window: 1_000_000, percent: 12 }, rateLimits: [], cost: { usd: 1.25 } } }))
+  on('agent.list', () => ({ value: [] }))
+  on('command.register', () => ({ value: { command: 'podium' } }))
+  on('tool.register', () => ({ value: { tool: 'mcp__podium-reporter__plan' } }))
+  on('ui.status', () => ({ value: undefined }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.log', () => ({ value: undefined }))
+  on('process.run', (_$, e) => ({ value: { exitCode: e.argv[1] === 'rev-parse' || e.argv[1] === 'status' ? 0 : 1, stdout: GIT[e.argv.slice(1).join(' ')] ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', (_$, e) => {
+    if (fetchMode.mode === 'down') throw new Error('ECONNREFUSED')
+    const body = JSON.parse(e.init?.body ?? '{}') as Report
+    if (fetchMode.mode === 'hang') return new Promise(() => {})
+    posts.push(body)
+    headers.push(e.init?.headers ?? {})
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ ok: true, ackedEvents: body.events.length, liveSessions: 3 }) } }
+  })
+  on('session.start', () => ({ cwd: CWD }))
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.measure', (_$, e) => ({ changed: e.changed }))
+  on('session.compact', () => ({ messages: SUMMARY, tokensBefore: 1_000_000, tokensAfter: 300_000 }))
+  on('agent.spawn', (_$, e) => ({ model: e.fork ? e.parentModel : e.model === 'haiku' ? 'claude-haiku-5-5' : 'claude-sonnet-5-5', agentId: e.fork ? 'a-fork' : e.description === 'Backfill dry run' ? 'a-fail' : 'a-sub' }))
+  on('tool.call', (_$, e) => {
+    toolUseId = e.tool_use_id
+    if (e.tool === 'TaskCreate') return { result: { task: { id: '1', subject: e.subject } } }
+    if (e.tool === 'TaskUpdate') return { result: { success: true, taskId: e.taskId, updatedFields: ['status'] } }
+    if (e.tool === 'Bash' && e.command.startsWith('npm test')) return { isError: true, result: 'Exit code 1\nFAIL src/a.test.ts', text: 'Exit code 1\nFAIL src/a.test.ts' }
+    return { result: { ok: true }, text: 'ok' }
+  })
+  on('turn.step', async function* (_$, e) {
+    const big = e.agentId === 'a-fail'
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      answer: '',
+      toolUses: [],
+      stopReason: big ? 'model_context_window_exceeded' : 'end_turn',
+      usage: { input_tokens: big ? 990_000 : 2000, output_tokens: 300, cache_read_input_tokens: 40_000, cache_creation_input_tokens: 1000, model: e.model },
+    }
+  })
+  on('classic.PermissionRequest', () => ({}))
+  on('classic.Notification', () => ({}))
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode }
+}
+
+type StepArgs = Parameters<Engine['turn']['step']>[0]
+
+/** Raises one model request and reads its stream to the end, as the engine's loop does. */
+async function stepOnce($: Engine, input: StepArgs) {
+  // `for await` drops a generator's return value, which is the step's result: read it by hand.
+  const s = $.turn.step(input)
+  let r = await s.next()
+  while (!r.done) r = await s.next()
+  return r.value
+}
+
+const spawnInput = (over: Partial<AgentSpawnInput> & { tool_use_id: string }): AgentSpawnInput => ({
+  prompt: 'Do the task.',
+  description: 'Map call sites',
+  subagentType: 'Explore',
+  provider: { plugin: 'engine', tier: 'core' },
+  parentModel: 'claude-opus-5-5',
+  background: false,
+  fork: false,
+  ...over,
+})
+
+/** `/podium <args>` typed at the prompt. */
+const podium = (args: string): CommandRunInput => ({ command: 'podium', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
+
+describe('podium-reporter end to end', () => {
+  test('raises every hooked event and posts agents, plan, failure, blowouts and skills', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    expect(w.posts.length).toBe(1)
+    expect(w.posts[0]!.session).toMatchObject({ id: SID, name: 'x', repoName: 'acme/app', costUsd: 1.25 })
+    expect(w.posts[0]!.events.map((e) => e.kind)).toContain('start')
+
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    await stepOnce($, { turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 })
+    await $.tool.call({ tool: 'TaskCreate', subject: 'Map call sites', description: 'find them', metadata: { planTitle: 'Migrate invoices' } })
+    await $.tool.call({ tool: 'TaskUpdate', taskId: '1', status: 'in_progress' })
+    await $.tool.call({ tool: 'Skill', skill: 'repo-map' })
+
+    // a subagent: the Agent call asks for effort low; its own steps then show medium
+    await $.tool.call({ tool: 'Agent', description: 'Map call sites', prompt: 'Do the task.', subagent_type: 'Explore', model: 'haiku', effort: 'low' })
+    await $.agent.spawn(spawnInput({ tool_use_id: w.lastToolUseId(), model: 'haiku' }))
+    await stepOnce($, { turnId: 'ta', index: 0, model: 'claude-haiku-5-5', effort: 'medium', messageCount: 2, agentId: 'a-sub' })
+    await $.turn.complete({ answer: 'Found 3 call sites.', durationMs: 900, isAborted: false, turnId: 'ta', agentId: 'a-sub', reason: 'answer' })
+
+    // a fork: inherits model and effort
+    await $.tool.call({ tool: 'Agent', description: 'Draft schema', prompt: 'Draft it.', subagent_type: 'fork', effort: 'max' })
+    await $.agent.spawn(spawnInput({ tool_use_id: w.lastToolUseId(), description: 'Draft schema', subagentType: 'fork', fork: true }))
+
+    // a subagent that exceeds its window, auto-compacts, and dies on an API error
+    await $.agent.spawn(spawnInput({ tool_use_id: 'tu-fail', description: 'Backfill dry run', subagentType: 'general-purpose', model: 'sonnet' }))
+    await stepOnce($, { turnId: 'tf', index: 0, model: 'claude-sonnet-5-5', messageCount: 9, agentId: 'a-fail' })
+    await $.session.compact({ trigger: 'auto', agentId: 'a-fail', messages: SUMMARY })
+    await $.turn.complete({ answer: '', durationMs: 900, isAborted: false, turnId: 'tf', agentId: 'a-fail', reason: 'error' })
+
+    // the orchestrator: a failing Bash, a permission prompt, an automatic compaction
+    await $.tool.call({ tool: 'Bash', command: 'npm test -- a.test.ts' })
+    await $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'rm -rf dist' } })
+    await w.clock.advance(1000)
+    const waiting = w.posts.at(-1)!.session
+    expect(waiting).toMatchObject({ status: 'waiting', waitReason: 'permission', waitNote: 'Bash(rm -rf dist)' })
+    await $.tool.call({ tool: 'Bash', command: 'ls' })
+    await $.session.compact({ trigger: 'auto', messages: SUMMARY })
+    await $.turn.complete({ answer: 'done', durationMs: 5000, isAborted: false, turnId: 't1', reason: 'answer' })
+    await w.clock.advance(1000)
+
+    const r = w.posts.at(-1)!
+    const agent = (id: string) => r.agents.find((a) => a.id === id)!
+    expect(agent('a-sub')).toMatchObject({ kind: 'subagent', type: 'Explore', status: 'done', model: 'claude-haiku-5-5', effort: 'medium', effortSource: 'observed', answerExcerpt: 'Found 3 call sites.' })
+    expect(agent('a-fork')).toMatchObject({ kind: 'fork', type: 'fork', status: 'running', model: 'claude-opus-5-5', effort: 'high', effortSource: 'inherited' })
+    expect(agent('a-fail')).toMatchObject({ status: 'failed', blowouts: 1 })
+    expect(agent('a-fail').failure!.class).toBe('Context window exhausted')
+    expect(agent('a-fail').failure!.evidence[0]).toContain('exceeded the context window 1 time')
+    expect(r.session.plan).toMatchObject({ title: 'Migrate invoices', source: 'TaskCreate' })
+    expect(r.session.plan!.steps[0]).toMatchObject({ id: '1', state: 'active', ownerAgentId: 'a-sub', ownerLabel: 'Explore · Haiku medium' })
+    expect(r.session.blowouts).toBe(1)
+    expect(r.session.git).toEqual({ branch: 'feat/x', detached: false, isWorktree: true, worktreePath: CWD, ahead: 2, behind: 0, dirty: 1 })
+    expect(r.session.status).toBe('running') // the fork still runs
+    expect(r.session.waitReason).toBeNull()
+    const all = w.posts.flatMap((p) => p.events)
+    expect(all.some((e) => e.kind === 'skill' && e.text === 'repo-map loaded into orchestrator')).toBe(true)
+    expect(all.filter((e) => e.kind === 'blow').map((e) => e.data?.kind)).toEqual(['window-exceeded', 'auto-compact'])
+    expect(all.some((e) => e.kind === 'fail' && e.agentId === 'a-fail')).toBe(true)
+    expect(all.some((e) => e.kind === 'wait')).toBe(true)
+    expect(new Set(all.map((e) => e.id)).size).toBe(all.length)
+
+    // session.end flushes the final report before the hook returns
+    const before = w.posts.length
+    await $.session.end({ reason: 'prompt_input_exit', sessionId: SID, resume: { id: SID } })
+    expect(w.posts.length).toBe(before + 1)
+    expect(w.posts.at(-1)!.session).toMatchObject({ status: 'done', endReason: 'prompt_input_exit', resumeId: SID })
+    expect(agent('a-fork').status).toBe('running')
+    expect(w.posts.at(-1)!.agents.find((a) => a.id === 'a-fork')!.status).toBe('aborted')
+    // timers stop with the process
+    await w.clock.advance(10_000)
+    expect(w.posts.length).toBe(before + 1)
+  })
+
+  test('the token header is sent only when configured', { options: { token: 's3cret' } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.headers[0]!['X-Podium-Token']).toBe('s3cret')
+  })
+
+  test('every hook passes the engine result through unchanged', async ($, on) => {
+    world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    expect(await $.tool.call({ tool: 'Bash', command: 'npm test' })).toMatchObject({ isError: true, text: 'Exit code 1\nFAIL src/a.test.ts' })
+    expect(await $.tool.call({ tool: 'Read', file_path: '/x' })).toMatchObject({ result: { ok: true }, text: 'ok' })
+    expect(await $.turn.start({ text: 'x', turnId: 'q' })).toEqual({ turnId: 'q' })
+    const st = await stepOnce($, { turnId: 'q', index: 0, model: 'opus', messageCount: 1 })
+    expect(st.stopReason).toBe('end_turn')
+    expect(await $.session.compact({ trigger: 'manual', messages: SUMMARY })).toMatchObject({ tokensAfter: 300_000 })
+    expect(await $.agent.spawn(spawnInput({ tool_use_id: 'z' }))).toEqual({ model: 'claude-sonnet-5-5', agentId: 'a-sub' })
+  })
+
+  test('the tool path never waits for the network', async ($, on) => {
+    const w = world(on)
+    w.fetchMode.mode = 'hang'
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000) // a flush is now stuck in fetch
+    const t0 = Date.now()
+    const res = await $.tool.call({ tool: 'Bash', command: 'ls' })
+    expect(res).toMatchObject({ text: 'ok' })
+    await $.turn.start({ text: 'x', turnId: 'q' })
+    await stepOnce($, { turnId: 'q', index: 0, model: 'opus', messageCount: 1 })
+    expect(Date.now() - t0).toBeLessThan(1000)
+  })
+
+  test('with the server down, events wait in the queue and arrive once it is back', async ($, on) => {
+    const w = world(on)
+    w.fetchMode.mode = 'down'
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    for (let i = 0; i < 5; i++) await $.tool.call({ tool: 'Skill', skill: `skill-${i}` })
+    await w.clock.advance(30_000)
+    expect(w.posts.length).toBe(0)
+    w.fetchMode.mode = 'ok'
+    await w.clock.advance(11_000)
+    const kinds = w.posts.flatMap((p) => p.events).map((e) => e.text)
+    for (let i = 0; i < 5; i++) expect(kinds).toContain(`skill-${i} loaded into orchestrator`)
+    const help = await $.command.run(podium(''))
+    expect(help.text).toContain('Connection: online')
+    expect(help.text).toMatch(/failed: [1-9]/)
+  })
+
+  test('a throw inside the reporter leaves the session unaffected', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    // a malformed classic payload makes the reporter's own reducer throw
+    const res = await $.classic.Notification({ notification_type: 'idle_prompt', message: undefined as unknown as string })
+    expect(res).toEqual({})
+    // the session goes on, and the reporter keeps reporting
+    expect(await $.tool.call({ tool: 'Read', file_path: '/x' })).toMatchObject({ text: 'ok' })
+    await w.clock.advance(1000)
+    expect(w.posts.length).toBe(1)
+  })
+
+  test('/podium shows the dashboard URL and state; /podium name sets and keeps the name', { options: { serverUrl: 'http://127.0.0.1:5999' } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    const info = await $.command.run(podium(''))
+    expect(info.text).toContain('Podium fleet console: http://127.0.0.1:5999/#/')
+    expect(info.text).toContain('Connection: online (3 live sessions)')
+    expect(info.text).toContain('Reports sent: 1, failed: 0')
+    expect(info.text).toContain('Last error: none')
+    const named = await $.command.run(podium('name invoice work'))
+    expect(named.text).toContain('"invoice work"')
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.name).toBe('invoice work')
+    // the name is kept in $.store: a reload (session.start again) still has it
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.name).toBe('invoice work')
+  })
+
+  test('a /clear: the old id gets a final done report and reporting continues under the new id', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } })
+    expect(w.posts.at(-1)!.session).toMatchObject({ id: SID, status: 'done', endReason: 'clear' })
+    w.sessionId.value = 'sess-after-clear'
+    await w.clock.advance(1000)
+    const next = w.posts.at(-1)!
+    expect(next.session.id).toBe('sess-after-clear')
+    expect(next.session.status).not.toBe('done')
+    expect(next.events.map((e) => e.kind)).toContain('start')
+    expect(next.events.every((e) => e.id.startsWith('sess-after-clear:'))).toBe(true)
+  })
+
+  test('a session id change without session.end still closes the old id', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    w.sessionId.value = 'sess-resumed'
+    await w.clock.advance(1000)
+    const ids = w.posts.map((p) => [p.session.id, p.session.status])
+    expect(ids).toContainEqual([SID, 'done'])
+    expect(w.posts.at(-1)!.session.id).toBe('sess-resumed')
+  })
+
+  test('the sessionName option names the session', { options: { sessionName: 'from-option' } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.session.name).toBe('from-option')
+  })
+})

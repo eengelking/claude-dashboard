@@ -15,6 +15,9 @@ describe('classify', () => {
     ['refusal', { reason: 'refusal' }, 'Refusal'],
     ['refusal with a candidate', { reason: 'refusal', candidate: cand() }, 'Refusal'],
     ['window exceeded stop', { reason: 'error', stopReason: 'model_context_window_exceeded', candidate: cand() }, 'Context window exhausted'],
+    // the engine's `error` reason includes the context limit: a window-exceeded stop explains it
+    ['error after a window-exceeded stop, no candidate', { reason: 'error', stopReason: 'model_context_window_exceeded' }, 'Context window exhausted'],
+    ['refusal after three blowouts', { reason: 'refusal', blowouts: 3 }, 'Refusal'],
     ['three blowouts', { reason: 'error', blowouts: 3, candidate: cand() }, 'Context window exhausted'],
     ['two blowouts is not exhausted', { reason: 'error', blowouts: 2, candidate: cand() }, 'Tool error'],
     ['aborted', { reason: 'aborted' }, 'Aborted'],

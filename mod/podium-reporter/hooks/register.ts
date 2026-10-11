@@ -254,7 +254,8 @@ async function flush($: Engine): Promise<void> {
   if (!r || r.flushing) return;
   r.flushing = true;
   try {
-    const now = nowMs();
+    // Scheduling (heartbeat, backoff) runs on the engine's clock; hooks stamp events with Date.now().
+    const now = await engineNow($);
     let id: string | null = null;
     try {
       id = await $.session.id();
@@ -270,6 +271,15 @@ async function flush($: Engine): Promise<void> {
     record($, 'flush', err);
   } finally {
     r.flushing = false;
+  }
+}
+
+/** The engine's time; Date.now() where the host has no clock noun. */
+async function engineNow($: Engine): Promise<number> {
+  try {
+    return await $.clock.now();
+  } catch {
+    return nowMs();
   }
 }
 
@@ -340,7 +350,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
 async function end($: Engine, e: { reason: string; sessionId: string; resume?: { id: string } }, signal: AbortSignal | undefined): Promise<void> {
   const r = rt;
   if (!r) return;
-  const now = nowMs();
+  const now = await engineNow($);
   if (e.sessionId === r.state.id || !e.sessionId) {
     r.state = sessionEnd(r.state, e.reason, e.resume?.id ?? e.sessionId ?? r.state.id, now);
     // The hooks sandbox has no setTimeout: the deadline is the engine's clock. A sleep the dispatch
