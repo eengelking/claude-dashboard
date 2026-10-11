@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium People View</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: the fleet console with one new axis. The wall groups orchestrators into a ruled band per person; each band header carries that person's live count, waiting-on-you count, spend and a bar showing their share of the day's spend. The left rail groups the same way. The one loud element is the spend-share bar in each band header; everything else stays in Podium's own quiet tokens (mockup/podium.html). People are never given a hue: color already means model and status here, so a person is a monogram and a name. Dark first, as Podium is. Example data only; the names are made up. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --fable: #d95926;
+  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --crit-text: #ee6a6a;
+  --share: #c3c2b7;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834;
+    --good-text: #006300; --crit-text: #b52a2a; --share: #52514e;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834;
+  --good-text: #006300; --crit-text: #b52a2a; --share: #52514e;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+svg { display: block; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* shell */
+.app { height: 100%; display: grid; grid-template-rows: auto auto auto 1fr; }
+.top { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); font-size: 12px; font-weight: 500; }
+.btn:hover { background: var(--sel); }
+.banner { padding: 5px 16px; font-size: 12px; color: var(--ink2); background: var(--raised); border-bottom: 1px solid var(--border); }
+.banner b { color: var(--ink); font-weight: 600; }
+.mock { padding: 5px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.cols { display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px; min-height: 0; }
+.rail, .main, .side { min-height: 0; overflow: auto; }
+.rail { border-right: 1px solid var(--border); background: var(--surface); }
+.side { border-left: 1px solid var(--border); background: var(--surface); }
+.main { padding: 14px 16px 24px; }
+@media (max-width: 1100px) { .cols { grid-template-columns: 230px minmax(0, 1fr); } .side { display: none; } }
+@media (max-width: 760px) { .app { height: auto; } .cols { display: block; } .rail { border-right: 0; border-bottom: 1px solid var(--border); } .side { display: block; border-left: 0; border-top: 1px solid var(--border); } }
+
+/* status */
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; display: inline-block; }
+.dot.running { background: var(--good); animation: pulse 1.8s ease-out infinite; }
+.dot.waiting { background: transparent; border: 2px solid var(--warn); }
+.dot.stale { background: var(--serious); }
+.dot.done { background: var(--axis); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(12,163,12,.55); } 70% { box-shadow: 0 0 0 6px rgba(12,163,12,0); } 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0); } }
+@media (prefers-reduced-motion: reduce) { .dot.running { animation: none; } }
+.st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+.st.running { color: var(--good-text); } .st.done { color: var(--muted); } .st.waiting { color: var(--warn); } .st.stale { color: var(--serious); }
+
+/* person: monogram and name. Neutral on purpose. */
+.mono-g { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--axis); background: var(--raised); color: var(--ink2); font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; flex: none; }
+.mono-g.lg { width: 30px; height: 30px; font-size: 12px; }
+.mono-g.sm { width: 18px; height: 18px; font-size: 9px; }
+.you { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+
+/* chips, meters */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); white-space: nowrap; color: var(--ink2); }
+.chip i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); }
+.bar { height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; background: var(--sonnet); }
+.bar.hot > i { background: var(--warn); }
+
+/* kpis */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+.kpi { background: var(--surface); padding: 10px 12px; min-width: 0; }
+.kpi .k { color: var(--muted); font-size: 12px; }
+.kpi .v { font-size: 22px; font-weight: 600; margin-top: 2px; letter-spacing: -0.02em; display: flex; align-items: baseline; gap: 6px; }
+.kpi .v small { font-size: 12px; color: var(--ink2); font-weight: 500; letter-spacing: 0; }
+
+/* toolbar */
+.tools { display: flex; align-items: center; gap: 10px 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.tg { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--ink2); border-right: 1px solid var(--border); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
+.chipbtn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
+.chipbtn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); color: var(--ink); }
+
+/* rail */
+.rail h2, .side h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+.rail-head { padding: 12px 14px 6px; display: flex; justify-content: space-between; align-items: baseline; }
+.rgroup { border-bottom: 1px solid var(--grid); }
+.rgh { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 14px 7px; }
+.rgh:hover { background: var(--hover); }
+.rgh[aria-pressed="true"] { background: var(--sel); box-shadow: inset 3px 0 0 var(--ink); }
+.rgh .nm { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rgh .cnt { color: var(--muted); font-size: 12px; }
+.attn { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--warn); white-space: nowrap; }
+.ritem { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 14px 5px 44px; color: var(--ink2); font-size: 12.5px; }
+.ritem:hover { background: var(--hover); }
+.ritem .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ritem .c { color: var(--muted); font-size: 11.5px; }
+.rgroup > .pad { height: 6px; }
+
+/* people bands */
+.band { margin-bottom: 18px; }
+.bh { display: grid; grid-template-columns: auto minmax(160px, 1.1fr) auto minmax(200px, 1.4fr); gap: 8px 16px; align-items: center; width: 100%; padding: 8px 4px 8px 2px; border-bottom: 1px solid var(--axis); }
+.bh:hover { background: var(--hover); }
+.bh .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bh .who b { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+.bh .who span.h { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bh .chev { width: 14px; height: 14px; color: var(--muted); transition: transform .15s; }
+.bh[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.bh .counts { display: flex; gap: 14px; align-items: center; color: var(--ink2); font-size: 12px; white-space: nowrap; }
+.bh .counts .attn { font-weight: 600; }
+.bh .spend { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; min-width: 0; }
+.bh .spend .v { font-weight: 600; font-size: 13px; }
+.bh .share { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.bh .share i { display: block; height: 100%; background: var(--share); border-radius: 3px; }
+.bh .spend .lab { color: var(--muted); font-size: 11.5px; }
+.bh .sum { display: none; color: var(--muted); font-size: 12px; }
+.bh[aria-expanded="false"] .sum { display: inline; }
+@media (max-width: 900px) { .bh { grid-template-columns: auto 1fr; } .bh .counts, .bh .spend { grid-column: 2; } }
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; padding-top: 12px; }
+.band[data-open="false"] .bgrid { display: none; }
+
+/* cards (a compact version of the fleet card) */
+.card { display: block; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; min-width: 0; }
+.card:hover { border-color: var(--axis); background: var(--raised); }
+.card .h { display: flex; align-items: center; gap: 8px; }
+.card .nm { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .path { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .meta { display: flex; gap: 8px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
+.card .ctx { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 11.5px; color: var(--ink2); }
+.card .ctx .bar { flex: 1; }
+.card .foot { display: flex; justify-content: space-between; margin-top: 9px; color: var(--ink2); font-size: 12px; gap: 8px; }
+.card .alert { margin-top: 9px; padding: 4px 8px; border-radius: 5px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+.card .alert.stale { background: color-mix(in srgb, var(--serious) 14%, transparent); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
+.card .owner { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12px; margin-top: 9px; }
+.flat { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+
+/* side: spend by person */
+.sec { padding: 12px 14px 14px; border-bottom: 1px solid var(--border); }
+.sec .sh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+.hb { display: grid; grid-template-columns: minmax(70px, 96px) minmax(0, 1fr) 54px; gap: 6px 10px; align-items: center; }
+.hb .lbl { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink2); }
+.hb .lbl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb .trk { height: 12px; display: flex; align-items: center; }
+.hb .trk i { display: block; height: 10px; min-width: 3px; background: var(--share); border-radius: 0 4px 4px 0; }
+.hb .val { text-align: right; font-size: 12px; color: var(--ink); }
+.hb .trk:hover i { filter: brightness(1.2); }
+.note { color: var(--muted); font-size: 11.5px; margin-top: 10px; }
+table.tv { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.tv th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+table.tv td { padding: 5px 0; border-bottom: 1px solid var(--grid); }
+table.tv .n { text-align: right; }
+.ev { list-style: none; margin: 0; padding: 0; }
+.ev li { display: grid; grid-template-columns: 44px 18px 1fr; gap: 8px; padding: 6px 14px; align-items: baseline; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+.ev .t { color: var(--muted); font-size: 11.5px; }
+.ev .by { color: var(--muted); }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 240px; }
+.tip[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="11" width="16" height="6" rx="1.5" fill="currentColor" opacity=".35"/><rect x="5" y="6" width="10" height="5" rx="1.5" fill="currentColor" opacity=".6"/><rect x="7.5" y="2" width="5" height="4" rx="1.5" fill="currentColor"/></svg>
+      Podium
+    </div>
+    <span class="pill"><span class="dot running"></span>4 people, 8 orchestrators live</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="themeBtn" aria-label="Toggle light and dark theme">Theme</button>
+  </header>
+  <div class="banner"><b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.</div>
+  <div class="mock">Mockup for the people view. Example data; the names are made up. Try the Group by control, a band header, a person in the left list, and the chart and table toggle on the right.</div>
+
+  <div class="cols">
+    <nav class="rail" aria-label="Orchestrators by person">
+      <div class="rail-head"><h2>Orchestrators</h2><span class="mono" style="color:var(--muted);font-size:12px" id="railCount"></span></div>
+      <div id="rail"></div>
+    </nav>
+
+    <main class="main" id="main">
+      <div class="kpis" id="kpis"></div>
+      <div class="tools">
+        <span class="tg">Group by
+          <span class="seg" role="group" aria-label="Group by">
+            <button type="button" id="gPeople" aria-pressed="true">People</button>
+            <button type="button" id="gNone" aria-pressed="false">None</button>
+          </span>
+        </span>
+        <span class="tg" id="sortWrap">Order people by
+          <span class="seg" role="group" aria-label="Order people by">
+            <button type="button" data-sort="attn" aria-pressed="true">Needs attention</button>
+            <button type="button" data-sort="cost" aria-pressed="false">Spend</button>
+            <button type="button" data-sort="name" aria-pressed="false">Name</button>
+          </span>
+        </span>
+        <button type="button" class="chipbtn" id="onlyMe" aria-pressed="false">Only me</button>
+        <button type="button" class="chipbtn" id="clearF" hidden></button>
+      </div>
+      <div id="wall"></div>
+    </main>
+
+    <aside class="side" aria-label="Spend and activity">
+      <section class="sec">
+        <div class="sh">
+          <h2>Spend today, by person</h2>
+          <span class="seg" role="group" aria-label="View">
+            <button type="button" id="vChart" aria-pressed="true">Chart</button>
+            <button type="button" id="vTable" aria-pressed="false">Table</button>
+          </span>
+        </div>
+        <div id="spend"></div>
+        <div class="note">Each bar is one person, ordered by spend. Estimated from tokens.</div>
+      </section>
+      <div class="rail-head"><h2>Activity, all people</h2></div>
+      <ul class="ev" id="events"></ul>
+    </aside>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script>
+/* Example data. Costs are today's estimates in USD. */
+const MODELS = { opus: ["Opus 5.5", "var(--opus)"], sonnet: ["Sonnet 5.5", "var(--sonnet)"], haiku: ["Haiku 5.5", "var(--haiku)"], fable: ["Fable 5.1", "var(--fable)"] };
+const PEOPLE = [
+  { id: "ed",     name: "Ed E.",      host: "eds-mbp",    me: true },
+  { id: "priya",  name: "Priya N.",   host: "priya-mbp" },
+  { id: "marcus", name: "Marcus T.",  host: "build-01" },
+  { id: "none",   name: "Unassigned", host: "older reporter", unassigned: true, hint: "These sessions come from a reporter older than the version that sends a name, or from a machine with no name set." }
+];
+const S = [
+  { n: "podium",         p: "~/dev/podium",         b: "feat/themes",   u: "ed",     m: "opus",   st: "running", ctx: 62, c: 8.42,  ag: "3 agents running" },
+  { n: "skills",         p: "~/dev/skills",         b: "main",          u: "ed",     m: "sonnet", st: "waiting", ctx: 10, c: 0.97,  ag: "no agents", alert: "Waiting on you. Paused until you answer in its terminal." },
+  { n: "claude-dashboard", p: "~/dev/claude-dashboard", b: "main",      u: "ed",     m: "sonnet", st: "running", ctx: 8,  c: 0.45,  ag: "no agents" },
+  { n: "billing-api",    p: "~/work/billing-api",   b: "fix/rounding",  u: "priya",  m: "opus",   st: "running", ctx: 41, c: 6.10,  ag: "2 agents running" },
+  { n: "infra-tf",       p: "~/work/infra-tf",      b: "main",          u: "priya",  m: "sonnet", st: "stale",   ctx: 77, c: 2.31,  ag: "no agents", alert: "Heartbeat lost 41s ago. The session may have ended." },
+  { n: "ci-runner",      p: "/srv/ci/runner",       b: "release/3.2",   u: "marcus", m: "haiku",  st: "running", ctx: 23, c: 0.64,  ag: "5 agents running" },
+  { n: "docs-site",      p: "/srv/docs",            b: "main",          u: "marcus", m: "sonnet", st: "done",    ctx: 31, c: 1.12,  ag: "finished 12m ago" },
+  { n: "data-pipeline",  p: "/srv/etl",             b: "chore/backfill",u: "marcus", m: "fable",  st: "waiting", ctx: 88, c: 11.80, ag: "no agents", alert: "Waiting on you. Context is 88% full.", hot: true },
+  { n: "legacy-job",     p: "/opt/jobs/legacy",     b: "main",          u: "none",   m: "sonnet", st: "running", ctx: 15, c: 0.30,  ag: "no agents" }
+];
+const EVENTS = [
+  ["15:31", "ed", "podium", "launched an agent, theme-tokens"],
+  ["15:30", "marcus", "data-pipeline", "waiting on you"],
+  ["15:28", "priya", "infra-tf", "heartbeat lost"],
+  ["15:27", "marcus", "ci-runner", "launched 2 agents, lint and unit"],
+  ["15:24", "priya", "billing-api", "agent rounding-tests finished"],
+  ["15:21", "ed", "skills", "waiting on you"],
+  ["15:12", "marcus", "docs-site", "done"]
+];
+const usd = (n) => "$" + n.toFixed(2);
+const by = (id) => PEOPLE.find((x) => x.id === id);
+const initials = (p) => p.unassigned ? "?" : p.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
+const mg = (p, cls = "") => `<span class="mono-g ${cls}" aria-hidden="true">${initials(p)}</span>`;
+const dotCls = (st) => (st === "waiting" ? "waiting" : st);
+const stText = { running: "running", waiting: "waiting on you", stale: "heartbeat lost", done: "done" };
+
+const state = { group: "people", sort: "attn", only: null, collapsed: new Set(), view: "chart" };
+const q = (s) => document.querySelector(s);
+const total = S.reduce((a, s) => a + s.c, 0);
+
+function stats(id) {
+  const rows = S.filter((s) => s.u === id);
+  return { rows, cost: rows.reduce((a, s) => a + s.c, 0), waiting: rows.filter((s) => s.st === "waiting").length, stale: rows.filter((s) => s.st === "stale").length, live: rows.filter((s) => s.st !== "done").length };
+}
+function ordered() {
+  const list = PEOPLE.filter((p) => stats(p.id).rows.length);
+  const k = (p) => stats(p.id);
+  const sorters = {
+    attn: (a, b) => (b.me ? 1 : 0) - (a.me ? 1 : 0) || (k(b).waiting + k(b).stale) - (k(a).waiting + k(a).stale) || k(b).cost - k(a).cost,
+    cost: (a, b) => k(b).cost - k(a).cost,
+    name: (a, b) => (a.unassigned ? 1 : 0) - (b.unassigned ? 1 : 0) || a.name.localeCompare(b.name)
+  };
+  return list.sort((a, b) => (a.unassigned ? 1 : 0) - (b.unassigned ? 1 : 0) || sorters[state.sort](a, b));
+}
+
+function card(s, showOwner) {
+  const [mn, mc] = MODELS[s.m];
+  const o = by(s.u);
+  return `<button type="button" class="card" aria-label="${s.n}, ${stText[s.st]}, ${o.name}">
+    <div class="h"><span class="dot ${dotCls(s.st)}"></span><span class="nm">${s.n}</span><span class="st ${s.st}">${stText[s.st]}</span></div>
+    <div class="path mono">${s.p} &nbsp;${s.b}</div>
+    <div class="meta"><span class="chip" style="--c:${mc}"><i></i>${mn}</span><span style="color:var(--muted);font-size:12px">${s.ag}</span></div>
+    <div class="ctx"><span>Context</span><div class="bar ${s.hot ? "hot" : ""}"><i style="width:${s.ctx}%"></i></div><span class="mono">${s.ctx}%</span></div>
+    ${s.alert ? `<div class="alert ${s.st === "stale" ? "stale" : ""}">${s.alert}</div>` : ""}
+    <div class="foot"><span class="mono">${usd(s.c)}</span>${showOwner ? `<span class="owner">${mg(o, "sm")}${o.name}</span>` : ""}</div>
+  </button>`;
+}
+
+function renderKpis() {
+  const live = S.filter((s) => s.st !== "done");
+  const wait = S.filter((s) => s.st === "waiting").length;
+  q("#kpis").innerHTML = [
+    ["People live", PEOPLE.filter((p) => stats(p.id).live).length - 0, "of 4 reporting"],
+    ["Orchestrators live", live.length, ""],
+    ["Waiting on someone", wait, "across 2 people"],
+    ["Est. cost today", usd(total), ""]
+  ].map(([k, v, s]) => `<div class="kpi"><div class="k">${k}</div><div class="v mono">${v}${s ? `<small>${s}</small>` : ""}</div></div>`).join("");
+}
+
+function renderRail() {
+  q("#railCount").textContent = S.length + " shown";
+  q("#rail").innerHTML = ordered().map((p) => {
+    const t = stats(p.id);
+    const items = t.rows.map((s) => `<button type="button" class="ritem" data-go="${s.n}"><span class="dot ${dotCls(s.st)}"></span><span class="nm">${s.n}</span><span class="c mono">${usd(s.c)}</span></button>`).join("");
+    const attn = t.waiting + t.stale;
+    return `<div class="rgroup"><button type="button" class="rgh" data-person="${p.id}" aria-pressed="${state.only === p.id}" aria-label="Show only ${p.name}">
+      ${mg(p)}<span class="nm">${p.name}${p.me ? ' <span class="you">you</span>' : ""}</span>
+      ${attn ? `<span class="attn"><span class="dot waiting"></span>${attn}</span>` : ""}<span class="cnt mono">${t.rows.length}</span></button>${items}<div class="pad"></div></div>`;
+  }).join("");
+}
+
+function renderWall() {
+  const people = ordered().filter((p) => !state.only || p.id === state.only);
+  q("#sortWrap").hidden = state.group !== "people";
+  if (state.group === "none") {
+    const rows = S.filter((s) => !state.only || s.u === state.only).sort((a, b) => (b.st === "waiting") - (a.st === "waiting") || b.c - a.c);
+    q("#wall").innerHTML = `<div class="flat">${rows.map((s) => card(s, true)).join("")}</div>`;
+    return;
+  }
+  q("#wall").innerHTML = people.map((p) => {
+    const t = stats(p.id);
+    const open = !state.collapsed.has(p.id);
+    const share = Math.round((t.cost / total) * 100);
+    const attn = t.waiting + t.stale;
+    return `<section class="band" data-open="${open}">
+      <button type="button" class="bh" data-band="${p.id}" aria-expanded="${open}">
+        <svg class="i chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+        <span class="who">${mg(p, "lg")}<b>${p.name}</b>${p.me ? '<span class="you">you</span>' : ""}<span class="h" ${p.hint ? `data-hint="${p.hint}"` : ""}>${p.host}</span></span>
+        <span class="counts"><span>${t.live} live</span>${attn ? `<span class="attn"><span class="dot ${t.waiting ? "waiting" : "stale"}"></span>${t.waiting ? t.waiting + " waiting on you" : ""}${t.waiting && t.stale ? ", " : ""}${t.stale ? t.stale + " stale" : ""}</span>` : ""}<span class="sum">${t.rows.length} hidden</span></span>
+        <span class="spend" data-hint="${p.name} is ${share}% of today's estimated spend (${usd(t.cost)} of ${usd(total)})"><span class="lab">Share of today's spend</span><span class="v mono">${usd(t.cost)} <span style="color:var(--muted);font-weight:500">${share}%</span></span><span class="share"><i style="width:${share}%"></i></span></span>
+      </button>
+      <div class="bgrid">${t.rows.map((s) => card(s, false)).join("")}</div>
+    </section>`;
+  }).join("");
+}
+
+function renderSpend() {
+  const rows = PEOPLE.map((p) => ({ p, c: stats(p.id).cost })).filter((r) => r.c > 0).sort((a, b) => b.c - a.c);
+  const max = rows[0].c;
+  if (state.view === "table") {
+    q("#spend").innerHTML = `<table class="tv"><thead><tr><th>Person</th><th class="n">Orchestrators</th><th class="n">Spend</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${r.p.name}</td><td class="n mono">${stats(r.p.id).rows.length}</td><td class="n mono">${usd(r.c)}</td></tr>`).join("")}<tr><td><b>Total</b></td><td class="n mono">${S.length}</td><td class="n mono"><b>${usd(total)}</b></td></tr></tbody></table>`;
+    return;
+  }
+  q("#spend").innerHTML = `<div class="hb" role="list">${rows.map((r) => `<div class="lbl" role="listitem">${mg(r.p, "sm")}<span>${r.p.name}</span></div><div class="trk" data-hint="${r.p.name}: ${usd(r.c)}, ${Math.round(r.c / total * 100)}% of ${usd(total)}"><i style="width:${(r.c / max) * 100}%"></i></div><div class="val mono">${usd(r.c)}</div>`).join("")}</div>`;
+}
+
+function renderEvents() {
+  q("#events").innerHTML = EVENTS.map(([t, u, n, txt]) => `<li><span class="t mono">${t}</span>${mg(by(u), "sm")}<span><b>${n}</b> <span class="by">${txt}</span></span></li>`).join("");
+}
+
+function renderFilter() {
+  const b = q("#clearF");
+  b.hidden = !state.only;
+  if (state.only) b.textContent = "Showing " + by(state.only).name + ". Show everyone";
+  q("#onlyMe").setAttribute("aria-pressed", String(state.only === "ed"));
+}
+function renderAll() { renderKpis(); renderRail(); renderWall(); renderSpend(); renderEvents(); renderFilter(); q("#gPeople").setAttribute("aria-pressed", state.group === "people"); q("#gNone").setAttribute("aria-pressed", state.group === "none"); }
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "gPeople") { state.group = "people"; renderAll(); }
+  else if (t.id === "gNone") { state.group = "none"; renderAll(); }
+  else if (t.dataset.sort) { state.sort = t.dataset.sort; document.querySelectorAll("[data-sort]").forEach((b) => b.setAttribute("aria-pressed", String(b === t))); renderAll(); }
+  else if (t.id === "onlyMe") { state.only = state.only === "ed" ? null : "ed"; renderAll(); }
+  else if (t.id === "clearF") { state.only = null; renderAll(); }
+  else if (t.dataset.person) { state.only = state.only === t.dataset.person ? null : t.dataset.person; renderAll(); }
+  else if (t.dataset.band) { const id = t.dataset.band; state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); renderWall(); q(`[data-band="${id}"]`).focus(); }
+  else if (t.id === "vChart") { state.view = "chart"; q("#vChart").setAttribute("aria-pressed", "true"); q("#vTable").setAttribute("aria-pressed", "false"); renderSpend(); }
+  else if (t.id === "vTable") { state.view = "table"; q("#vChart").setAttribute("aria-pressed", "false"); q("#vTable").setAttribute("aria-pressed", "true"); renderSpend(); }
+  else if (t.id === "themeBtn") { const r = document.documentElement; const dark = (r.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")) === "dark"; r.dataset.theme = dark ? "light" : "dark"; }
+});
+
+/* hover hints for the spend share and the chart bars */
+const tip = q("#tip");
+document.addEventListener("pointermove", (e) => {
+  const h = e.target.closest("[data-hint]");
+  if (!h) { tip.hidden = true; return; }
+  tip.textContent = h.dataset.hint; tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - 250) + "px"; tip.style.top = e.clientY + 14 + "px";
+});
+document.addEventListener("pointerleave", () => { tip.hidden = true; });
+renderAll();
+</script>
+</body>
+</html>
