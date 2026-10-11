@@ -20,7 +20,8 @@ jobs:
       - name: Determine whether this PR changes the mod
         id: changed
         run: |
-          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > /tmp/changed_files.txt
+          # Three dots: only this PR's own changes, not whatever landed on main since the branch point.
+          git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" > /tmp/changed_files.txt
           if grep -E '^mod/podium-reporter/' /tmp/changed_files.txt | grep -Evq '\.test\.ts$'; then
             echo "mod_changed=true" >> "$GITHUB_OUTPUT"
           else
@@ -31,7 +32,8 @@ jobs:
         if: steps.changed.outputs.mod_changed == 'true'
         run: |
           path=mod/podium-reporter/.claude-plugin/plugin.json
-          base_version=$(git show "${{ github.event.pull_request.base.sha }}:$path" | jq -r '.version')
+          base=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          base_version=$(git show "$base:$path" | jq -r '.version')
           head_version=$(git show "${{ github.event.pull_request.head.sha }}:$path" | jq -r '.version')
           echo "base version: $base_version"
           echo "head version: $head_version"
