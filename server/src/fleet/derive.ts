@@ -162,6 +162,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     modelFamily: family(row.model),
     effort: row.effort,
     status: sessionStatus(row, input.heard, now, cfg.staleAfterMs),
+    waitReason: row.wait_reason === 'permission' || row.wait_reason === 'input' ? row.wait_reason : null,
     waitNote: row.wait_note,
     endReason: row.end_reason,
     startedAt: row.started_at,

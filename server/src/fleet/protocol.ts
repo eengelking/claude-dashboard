@@ -177,6 +177,7 @@ export interface SessionView {
   modelFamily: ModelFamily;
   effort: string | null;
   status: SessionStatusView;
+  waitReason: 'permission' | 'input' | null;
   waitNote: string | null;
   endReason: string | null;
   startedAt: number;
@@ -231,8 +232,16 @@ export interface Kpis {
   tokensPerSec: number[];
 }
 
+/** The server's lifecycle timings, so the UI can say when a stale session will be dropped. */
+export interface LifecycleConfig {
+  staleAfterMs: number;
+  dropAfterMs: number;
+  lingerMs: number;
+}
+
 export interface StateBody {
   serverTime: number;
+  config: LifecycleConfig;
   sessions: SessionView[];
   kpis: Kpis;
   clearedToday: number;

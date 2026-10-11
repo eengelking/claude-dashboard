@@ -562,7 +562,7 @@ export class Simulator {
         name: s.name,
         status: s.status,
         waitReason: s.status === 'waiting' ? 'permission' : null,
-        waitNote: s.status === 'waiting' ? `Permission prompt: ${s.waitNote}` : null,
+        waitNote: s.status === 'waiting' ? s.waitNote : null,
         endReason: s.status === 'done' ? 'prompt_input_exit' : null,
         resumeId: s.status === 'done' ? s.id : null,
         startedAt: s.startedAt,

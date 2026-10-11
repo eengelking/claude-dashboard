@@ -221,6 +221,7 @@ export class Fleet {
     const sessions = this.liveViews();
     return {
       serverTime: this.now(),
+      config: { staleAfterMs: this.cfg.staleAfterMs, dropAfterMs: this.cfg.dropAfterMs, lingerMs: this.cfg.lingerMs },
       sessions,
       kpis: this.kpis(sessions),
       clearedToday: this.clearedToday(),
