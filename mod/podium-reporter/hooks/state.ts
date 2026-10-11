@@ -664,3 +664,15 @@ export function resolveOwners(s: SessionState): SessionState {
   );
   return plan === s.plan ? s : { ...s, plan };
 }
+
+/** Stores a failure explanation (T5.2); its own tokens count in the agent's estimated cost. */
+export function setExplanation(s: SessionState, agentId: string, text: string, usage: Usage | null, model: string): SessionState {
+  const a = s.agents[agentId];
+  if (!a || !a.failure) return s;
+  const explanation = excerpt(text, 400);
+  if (!explanation) return s;
+  const cost = usage
+    ? costOf({ input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheWrite: usage.cache_creation_input_tokens || 0 }, model)
+    : 0;
+  return { ...s, agents: { ...s.agents, [agentId]: { ...a, failure: { ...a.failure, explanation }, cost: a.cost + cost } }, dirty: true };
+}

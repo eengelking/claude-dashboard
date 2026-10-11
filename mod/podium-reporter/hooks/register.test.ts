@@ -2,6 +2,9 @@ import { describe, test, expect, mock, type Engine } from 'claude-code/testing'
 import type { AgentSpawnInput, CommandRunInput, On } from 'claude-code'
 import type { Report } from './protocol.ts'
 
+// The test runner has a console; the hooks sandbox's declarations do not.
+declare const console: { log: (...args: unknown[]) => void }
+
 const SID = 'sess-e2e-0001'
 /** A compaction leaves at least one message: its summary. */
 const SUMMARY = [{ role: 'user' as const, text: 'Summary of the work so far.', toolUses: [] }]
@@ -264,6 +267,56 @@ describe('podium-reporter end to end', () => {
     const texts = new Set(w.posts.flatMap((p) => p.events).map((e) => e.text))
     for (let i = 0; i < 24; i++) expect(texts.has(`outage-${i} loaded into orchestrator`)).toBe(true)
     expect(texts.has('session.start · Opus')).toBe(true)
+  })
+
+  test('explainFailures off (default): no model call', async ($, on) => {
+    const w = world(on)
+    let calls = 0
+    on('model.complete', () => {
+      calls++
+      return { value: { isAnswered: true, text: 'x', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+    })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await $.agent.spawn(spawnInput({ tool_use_id: 'f1', description: 'Backfill dry run', subagentType: 'general-purpose' }))
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a-fail', reason: 'error' })
+    await w.clock.advance(3000)
+    expect(calls).toBe(0)
+    expect(w.posts.at(-1)!.agents[0]!.failure!.explanation).toBeNull()
+  })
+
+  test('explainFailures on: one haiku call per failure, from the redacted record, never retried', { options: { explainFailures: true } }, async ($, on) => {
+    const w = world(on)
+    const prompts: string[] = []
+    let fail = true
+    on('model.complete', (_$, e) => {
+      prompts.push(String(e.prompt))
+      expect(e.model).toBe('haiku')
+      expect(e.effort).toBe('low')
+      if (fail) {
+        fail = false
+        return { value: { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+      }
+      return { value: { isAnswered: true, text: 'The staging database was not reachable.   Start it first.', usage: { input_tokens: 300, output_tokens: 40, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+    })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    // first failure: the call errors, and is not retried
+    await $.agent.spawn(spawnInput({ tool_use_id: 'f1', description: 'Backfill dry run', subagentType: 'general-purpose', prompt: 'password=hunter2 run it' }))
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a-fail', reason: 'error' })
+    await w.clock.advance(1000)
+    await w.clock.advance(5000)
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain('Class: Model API error')
+    expect(prompts[0]).not.toContain('hunter2')
+    expect(w.posts.at(-1)!.agents.find((a) => a.id === 'a-fail')!.failure!.explanation).toBeNull()
+    // second failure (another agent): explained once
+    await $.agent.spawn(spawnInput({ tool_use_id: 'f2', description: 'Second', subagentType: 'general-purpose' }))
+    await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'y', agentId: 'a-sub', reason: 'error' })
+    await w.clock.advance(1000)
+    await w.clock.advance(2000)
+    expect(prompts).toHaveLength(2)
+    const a = w.posts.at(-1)!.agents.find((x) => x.id === 'a-sub')!
+    expect(a.failure!.explanation).toBe('The staging database was not reachable. Start it first.')
+    expect(a.costUsdEst).toBeGreaterThan(0)
   })
 
   test('a throw inside the reporter leaves the session unaffected', async ($, on) => {

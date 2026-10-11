@@ -63,7 +63,7 @@ from the config menu:
 | `heartbeatMs` | `5000` | Report at least this often |
 | `sessionName` | empty | Display name override |
 | `showStatus` | `true` | Show the status line entry |
-| `explainFailures` | `false` | Reserved; not implemented |
+| `explainFailures` | `false` | Ask a small model (Haiku, low effort) for a two-sentence explanation of each failed agent, from the redacted failure record only. Costs a little; off by default |
 
 ### What leaves the session
 

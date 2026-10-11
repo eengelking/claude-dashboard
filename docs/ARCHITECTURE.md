@@ -158,6 +158,12 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     `last_assistant_message` or prompts, so hooks send no excerpts at all. Unknown hook events are
     heartbeats.
 
+38. **Where an explanation's cost counts (T5.2).** "Usage cost counted in the session estimate": the
+    session's own figure is the engine's ledger (which already includes `$.model.complete` calls made on
+    the session's client), so the explanation's estimated cost is added to the failed agent's
+    `costUsdEst`, the one estimate the report carries. Explanations are requested from the flush timer,
+    never from a hook, at most once per failure; a call that errors is not retried.
+
 ## Deviations from the spec
 
 The numbered Spec questions above are the full list, each with its reason. The ones that change behavior
@@ -178,8 +184,8 @@ a reader of the spec would expect:
 
 ## Known issues
 
-1. **`explainFailures` is declared but does nothing.** It is the Phase 5 option (T5.2), which was not
-   built. The README says so.
+1. **`explainFailures` was not tried against the real model.** It is tested in the kit with a stand-in
+   for `$.model.complete`; all three allowed `claude -p` runs were spent before it was built.
 2. **No agent-scoped tool calls in the mod's end-to-end test.** The test kit mints `tool.call`'s
    `agentId`, so a Skill or failing Bash inside an agent is covered by the pure `state.ts` tests and the
    real runs, not by `register.test.ts`.
@@ -432,4 +438,23 @@ Verified:
 - T4.2: the checklist above, including the burst, the never-ending session and a real session watched
   live in the browser (run 3: two parallel Explore agents and a two-step plan; cost equal to the CLI's).
 - `npm run build` then `npm run start -w server` serves the built UI and API from one port.
+
+### Phase 5: optional extensions
+
+Done after Phases 0 to 4 passed.
+
+- **T5.1 classic hook ingest.** `server/src/fleet/hookIngest.ts` and `POST /api/fleet/hook`. Payloads
+  shaped from the engine's `ClassicHookInputs` (SessionStart, UserPromptSubmit, SubagentStart, PostToolUse,
+  SubagentStop, Notification, Stop, SessionEnd) build a reduced session marked `reporter: 'hooks'`; the UI
+  labels it "settings hooks" and says context, cost and the plan are unavailable. Tested through the
+  route, and the README's curl command was run against the dev server (it exits 0 with the server down).
+- **T5.2 failure explanations.** `explainFailures` (default off) asks `haiku` at `low` effort for at most
+  two sentences per failed agent, from the redacted failure record only; one call per failure, never
+  retried; its estimated cost is added to the agent's. Tested in the kit (off: no call; on: an erroring
+  call is not retried, a later failure is explained once, secrets stay out of the prompt). Not run
+  against the real model.
+- **T5.3 history page.** `#/history` lists the sessions that ended or were dropped on a chosen day and
+  opens a read-only orchestrator page with agent detail from stored rows. Tested with a mocked server and
+  checked in Chrome by DOM (86 sessions listed for the day, one opened, no horizontal overflow); the
+  window was hidden by then, so no screenshot.
 

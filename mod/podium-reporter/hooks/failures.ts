@@ -173,3 +173,20 @@ export function buildFailure(cls: FailureClass, candidate: FailureCandidate | nu
     retriedAs: null,
   };
 }
+
+/**
+ * The prompt for an optional one-paragraph explanation (SPEC T5.2). Built only from the failure
+ * record, which is already redacted and cut to its limits: never from the transcript.
+ */
+export function explainPrompt(f: Failure): string {
+  const lines = [
+    'A Claude Code agent failed. From this record alone, say in at most two short sentences what most likely went wrong and what would fix it. Plain text, no preamble, no markdown.',
+    `Class: ${f.class}`,
+    f.tool ? `Tool: ${f.tool}` : '',
+    f.call ? `Call: ${f.call}` : '',
+    f.exitCode !== null ? `Exit code: ${f.exitCode}` : '',
+    f.outputTail.length ? `Last output lines:\n${f.outputTail.join('\n')}` : '',
+    f.evidence.length ? `Observed:\n${f.evidence.map((e) => `- ${e}`).join('\n')}` : '',
+  ];
+  return redact(lines.filter(Boolean).join('\n'));
+}

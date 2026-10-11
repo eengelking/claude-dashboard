@@ -25,6 +25,7 @@ import {
   resetForNewId,
   sessionEnd,
   setGit,
+  setExplanation,
   setIdentity,
   skillLoaded,
   step,
@@ -36,6 +37,7 @@ import {
   type SessionState,
 } from './state.ts';
 import { Transport, type FetchLike } from './transport.ts';
+import { explainPrompt } from './failures.ts';
 
 export const VERSION = '0.1.0';
 const GIT_POLL_MS = 10_000;
@@ -52,6 +54,7 @@ interface Options {
   heartbeatMs: number;
   sessionName: string;
   showStatus: boolean;
+  explainFailures: boolean;
 }
 
 interface HookStat {
@@ -85,6 +88,7 @@ export function readOptions(o: Record<string, unknown>): Options {
     heartbeatMs: n(o.heartbeatMs, 5000, 1000),
     sessionName: s(o.sessionName, ''),
     showStatus: typeof o.showStatus === 'boolean' ? o.showStatus : true,
+    explainFailures: o.explainFailures === true,
   };
 }
 
@@ -94,6 +98,9 @@ let opts: Options = readOptions({});
 let rt: Runtime | null = null;
 let errors: { at: number; where: string; message: string }[] = [];
 let stats: Record<string, HookStat> = {};
+/** Agents whose failure was sent for an explanation: at most one call per failure, never retried. */
+let explained = new Set<string>();
+const EXPLAIN_MODEL = 'haiku';
 
 const perf = typeof performance !== 'undefined' && typeof performance.now === 'function' ? () => performance.now() : () => Date.now();
 const nowMs = () => Date.now();
@@ -266,6 +273,7 @@ async function flush($: Engine): Promise<void> {
     if (r.state.ended) return;
     await readUsage($, r);
     await readAgents($, r, now);
+    if (opts.explainFailures) requestExplanations($, r);
     await flushOnce($, r, now, false);
   } catch (err) {
     record($, 'flush', err);
@@ -280,6 +288,26 @@ async function engineNow($: Engine): Promise<number> {
     return await $.clock.now();
   } catch {
     return nowMs();
+  }
+}
+
+/** T5.2, off by default: one small-model explanation per new failure, from the redacted record only. */
+function requestExplanations($: Engine, r: Runtime): void {
+  for (const id of r.state.order) {
+    const a = r.state.agents[id];
+    if (!a?.failure || a.failure.explanation || explained.has(`${r.state.id}:${id}`)) continue;
+    explained.add(`${r.state.id}:${id}`);
+    void explain($, r.state.id, id, explainPrompt(a.failure));
+  }
+}
+
+async function explain($: Engine, sessionId: string, agentId: string, prompt: string): Promise<void> {
+  try {
+    const res = await $.model.complete({ model: EXPLAIN_MODEL, effort: 'low', prompt, maxTokens: 200, timeoutMs: 30_000 });
+    if (!res.isAnswered || !rt || rt.state.id !== sessionId) return;
+    rt.state = setExplanation(rt.state, agentId, res.text, res.usage, EXPLAIN_MODEL);
+  } catch (err) {
+    record($, 'model.complete', err);
   }
 }
 
@@ -412,6 +440,7 @@ export const register: Register = (on, rawOptions) => {
   rt = null;
   errors = [];
   stats = {};
+  explained = new Set();
 
   on('session.start', async ($, e, next) => {
     const res = await next(e);
