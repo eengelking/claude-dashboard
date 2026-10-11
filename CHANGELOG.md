@@ -18,6 +18,9 @@ be ahead, because a mod fix is bumped in its own PR.
   the port. It fails before spawning, names the port and suggests `podiumctl status` or `--port`. If the
   server it spawned exits during startup, `start` now fails, shows the end of `podium.log` and leaves no
   pid file behind.
+- In the Agents table, the Status text and icon no longer sit about a pixel lower than the Tokens, Cost and
+  Time values on the same row. The Model and Effort cells had the same small offset and are centred with it.
+  (#31)
 
 ## [0.1.0] - 2026-10-11
 

@@ -73,10 +73,10 @@ export function AgentTree(props: {
               <em>orchestrator</em>
             </span>
           </div>
-          <div>
+          <div className="cell">
             <ModelChip family={s.modelFamily} model={s.model} />
           </div>
-          <div>
+          <div className="cell">
             <EffortMeter effort={s.effort} />
           </div>
           <div className="ctxc">
@@ -87,7 +87,7 @@ export function AgentTree(props: {
           <div className="num c-tok">{fmtTok(s.tokensTotal)}</div>
           <div className="num">{fmtUsd(s.costUsd)}</div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
-          <div>
+          <div className="cell">
             <StatusChip status={s.status} />
           </div>
         </div>

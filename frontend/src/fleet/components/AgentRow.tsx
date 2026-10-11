@@ -45,10 +45,10 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
           {a.failure && <em className="rowerr">{a.failure.class}</em>}
         </span>
       </div>
-      <div>
+      <div className="cell">
         <ModelChip family={a.modelFamily} model={a.model} />
       </div>
-      <div>
+      <div className="cell">
         <EffortMeter effort={a.effort} />
       </div>
       <div className="ctxc">
@@ -59,7 +59,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
       <div className="num c-tok">{fmtTok(agentTokens(a))}</div>
       <div className="num">{fmtUsd(a.costUsdEst)}</div>
       <div className="num">{fmtDur(agentElapsedSec(a, now))}</div>
-      <div>
+      <div className="cell">
         <StatusChip status={a.status} />
       </div>
     </button>

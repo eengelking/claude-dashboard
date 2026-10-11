@@ -223,6 +223,7 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .trow.hd { min-height: 28px; color: var(--muted); font-size: 11.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .podium button.trow:hover { background: var(--hover); }
 .podium button.trow[aria-current="true"] { background: var(--sel); }
+.podium .trow .cell { display: flex; align-items: center; min-width: 0; }
 .podium .trow .nm { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .podium .trow .nm .tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .podium .trow .nm .tx b { font-weight: 600; }

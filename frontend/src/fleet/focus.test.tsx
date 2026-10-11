@@ -80,6 +80,19 @@ describe("orchestrator page", () => {
     expect(rows()).toEqual(["r1", "k1", "f1"]);
   });
 
+  it("centres the model, effort and status cells in every table row (#31)", () => {
+    // jsdom has no layout, so this pins the class that does the centring (.trow .cell in fleet.css)
+    // rather than the pixels. The pixel check is manual: see the PR for #31.
+    const { container } = openFocus();
+    const rows = [...container.querySelectorAll(".trow:not(.hd)")];
+    expect(rows).toHaveLength(agents.length + 1); // orchestrator row + one per agent
+    for (const row of rows) {
+      for (const sel of [".chip", ".eff", ".st"]) {
+        expect(row.querySelector(sel)!.parentElement, sel).toHaveClass("cell");
+      }
+    }
+  });
+
   it("selecting a row opens the agent panel and flashes the row", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "requestAnimationFrame", "cancelAnimationFrame"] });
     const { container } = openFocus();
