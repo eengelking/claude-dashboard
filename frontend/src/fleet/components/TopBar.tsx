@@ -32,6 +32,9 @@ export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: 
         {fmtClock(now)}
       </span>
       <span className="spacer" />
+      <a className="btn" href="#/history">
+        History
+      </a>
       <a className="btn" href="#/usage">
         Usage dashboard
       </a>

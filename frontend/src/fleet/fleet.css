@@ -369,3 +369,13 @@ body.podium-resizing * { cursor: col-resize !important; }
   .podium *, .podium *::before, .podium *::after { animation: none !important; transition: none !important; }
 }
 .podium .det .grid2 dd .ddt { flex: 1; min-width: 0; }
+
+/* history (#/history) */
+.podium .history { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
+.podium .history > .side { width: 340px; }
+.podium .htable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.podium .htable th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.podium .htable td { padding: 7px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.podium .htable th.num, .podium .htable td.num { text-align: right; }
+.podium .htable .lk { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 1040px) { .podium .history { display: block; } .podium .history > .side { width: auto; } }

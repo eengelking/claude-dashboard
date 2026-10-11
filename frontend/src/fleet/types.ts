@@ -6,6 +6,7 @@ export type {
   Effort,
   Failure,
   GitInfo,
+  HistoryRow,
   Kpis,
   LifecycleConfig,
   ModelFamily,

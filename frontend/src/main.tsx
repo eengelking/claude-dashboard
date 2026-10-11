@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { FleetApp } from "./fleet/FleetApp";
+import { HistoryView } from "./fleet/HistoryView";
 import "./theme.css";
 import "./components.css";
 
@@ -32,6 +33,7 @@ function Root() {
       </>
     );
   }
+  if (hash === "#/history" || hash.startsWith("#/history?")) return <HistoryView />;
   return <FleetApp />;
 }
 
