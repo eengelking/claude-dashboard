@@ -34,12 +34,16 @@ URL for that reason. If you add your own entry for a public repo, do the same.
 
 ## Running the server
 
-### `podiumctl start --mode standalone` says it is up, but another Podium is already on the port
+### `podiumctl start` fails with "port N ... is already in use"
 
-`start` waits until `http://<bind>:<port>/api/fleet/state` answers. If another Podium (a leftover
-`podiumctl run`, `npm run dev`) already answers there, the new process fails to bind and the check still
-passes. Run `podiumctl status` and look at the pid, or stop the other one first. Container mode should
-fail instead, since `podman run` cannot publish a port that is taken (not tested).
+Something else already listens on the bind address and port: often a leftover `podiumctl run` or
+`npm run dev`, or a Podium started another way. In standalone mode `start` checks before it spawns
+anything, so nothing is left running and no pid file is written. Run `podiumctl status` to see whether it
+is Podium (and stop it if it is), or choose another port with `--port`. Container mode needs no check:
+`podman run` fails with `address already in use` and `start` exits non-zero (tested with Podman 6.1.2).
+
+If the server exits right after `start` spawns it (a bind error, a bad setting), `start` says so, prints
+the tail of `~/.podium/podium.log` and removes the pid file, instead of reporting success.
 
 ### I changed a setting and nothing happened
 

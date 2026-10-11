@@ -12,6 +12,13 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Fixed
+
+- `podiumctl start --mode standalone` no longer reports "Podium is up" when another process already holds
+  the port. It fails before spawning, names the port and suggests `podiumctl status` or `--port`. If the
+  server it spawned exits during startup, `start` now fails, shows the end of `podium.log` and leaves no
+  pid file behind.
+
 ## [0.1.0] - 2026-10-11
 
 First release. The repo started as a usage dashboard and became Podium, a live

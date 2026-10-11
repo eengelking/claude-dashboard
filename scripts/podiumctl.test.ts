@@ -1,5 +1,6 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -79,6 +80,39 @@ describe("podiumctl command construction", () => {
     const co = systemdUnit({ args: ["/n", "/s p", "start"], stopArgs: ["/n", "/s p", "stop"], standalone: false, env: {} });
     expect(co).toContain('ExecStart=/n "/s p" start');
     expect(co).toContain('ExecStop=/n "/s p" stop');
+  });
+});
+
+describe("podiumctl start (standalone) with the port taken", () => {
+  // Async spawn: the stand-in server lives in this process, so a blocking spawnSync would starve it.
+  function ctlAsync(home: string, ...args: string[]) {
+    return new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+      // An empty PATH hides podman, so a real "podium" container on the host cannot trip the other-mode guard.
+      const p = spawn(process.execPath, [BIN, ...args], { env: { ...process.env, PODIUMCTL_HOME: home, PATH: home } });
+      let stdout = "";
+      let stderr = "";
+      p.stdout.on("data", (d) => (stdout += d));
+      p.stderr.on("data", (d) => (stderr += d));
+      p.on("close", (status) => resolve({ status, stdout, stderr }));
+    });
+  }
+
+  it("fails naming the port and leaves no pid file", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    const other = http.createServer((_req, res) => res.end("{}"));
+    await new Promise<void>((r) => other.listen(0, "127.0.0.1", r));
+    const port = (other.address() as { port: number }).port;
+    try {
+      const r = await ctlAsync(home, "start", "--mode", "standalone", "--port", String(port));
+      expect(r.status).not.toBe(0);
+      expect(r.stdout).not.toContain("Podium is up");
+      expect(r.stderr).toContain(String(port));
+      expect(r.stderr).toContain("already in use");
+      expect(fs.existsSync(path.join(home, "podium.pid"))).toBe(false);
+    } finally {
+      await new Promise((r) => other.close(r));
+      fs.rmSync(home, { recursive: true });
+    }
   });
 });
 

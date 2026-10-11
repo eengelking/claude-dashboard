@@ -4,6 +4,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -227,12 +228,30 @@ async function healthy(cfg, timeoutMs = 2000) {
     return r.ok;
   } catch { return false; }
 }
-async function waitHealthy(cfg, seconds = 30) {
+/** Waits for the server to answer. `abort` lets a caller stop early, e.g. when the process it spawned has exited. */
+async function waitHealthy(cfg, seconds = 30, abort = () => false) {
   for (let i = 0; i < seconds * 2; i++) {
-    if (await healthy(cfg, 1000)) return true;
+    if (abort()) return false;
+    if (await healthy(cfg, 1000)) return !abort();
     await new Promise((r) => setTimeout(r, 500));
   }
   return false;
+}
+
+/** True if something accepts TCP connections on the configured bind address and port. */
+function portInUse(cfg, timeoutMs = 1000) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ host: cfg.bind === '0.0.0.0' ? '127.0.0.1' : cfg.bind, port: cfg.port });
+    const done = (used) => { sock.destroy(); resolve(used); };
+    sock.setTimeout(timeoutMs, () => done(false));
+    sock.once('connect', () => done(true));
+    sock.once('error', () => done(false));
+  });
+}
+
+/** The last lines of the standalone server log, for a failed start. */
+function logTail(from = 0, lines = 15) {
+  try { return fs.readFileSync(logPath()).subarray(from).toString('utf8').trimEnd().split('\n').slice(-lines).join('\n'); } catch { return ''; }
 }
 
 // ---------- podman ----------
@@ -305,6 +324,8 @@ async function cmdStart(cfg) {
   const other = otherModeRunning(cfg);
   if (other) fail(`Podium is already running in ${other} mode. Stop it first (podiumctl stop --mode ${other}).`);
   cfg = ensureToken(cfg);
+  let exited = false; // set when the standalone server we spawned exits
+  let logFrom = 0;    // size of podium.log before this start, so a failure shows only this run's output
   if (cfg.mode === 'container') {
     ensurePodman();
     if ((containerState() ?? '').startsWith('running')) { say(`Already running at ${dashUrl(cfg)} (use restart to apply config changes)`); return; }
@@ -314,15 +335,27 @@ async function cmdStart(cfg) {
     const r = pm(containerRunArgs(cfg, Object.keys(env)), { env: { ...process.env, ...env }, stdio: ['ignore', 'ignore', 'inherit'] });
     if (r.status !== 0) fail('podman run failed');
   } else {
-    requireBuilt();
     if (readPid()) { say(`Already running at ${dashUrl(cfg)}`); return; }
+    if (await portInUse(cfg)) {
+      fail(`port ${cfg.port} on ${cfg.bind} is already in use by another process, so a new Podium could not start. Run \`podiumctl status\` to see whether it is Podium, or choose another port with --port.`);
+    }
+    requireBuilt();
     fs.mkdirSync(homeDir(), { recursive: true });
     const out = fs.openSync(logPath(), 'a');
+    logFrom = fs.fstatSync(out).size;
     const child = spawn(process.execPath, [serverEntry()], { cwd: REPO_ROOT, env: standaloneEnv(cfg), detached: true, stdio: ['ignore', out, out] });
     child.unref();
+    child.once('exit', () => { exited = true; });
     fs.writeFileSync(pidPath(), String(child.pid));
   }
-  if (!(await waitHealthy(cfg))) fail(`started, but the server did not answer at ${dashUrl(cfg)}. See: podiumctl logs`);
+  // Only report success for the process we spawned: if it exits while we wait, whatever answers is not ours.
+  const up = await waitHealthy(cfg, 30, () => exited);
+  if (exited) {
+    fs.rmSync(pidPath(), { force: true });
+    const tail = logTail(logFrom);
+    fail(`the server exited right after starting.${tail ? `\nLast lines of ${logPath()}:\n${tail}` : ''}`);
+  }
+  if (!up) fail(`started, but the server did not answer at ${dashUrl(cfg)}. See: podiumctl logs`);
   say(`Podium is up at ${dashUrl(cfg)}  (${cfg.mode} mode)`);
 }
 

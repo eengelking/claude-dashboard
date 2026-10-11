@@ -523,7 +523,10 @@ server in one of two modes, chosen with `--mode` and saved in `~/.podium/config.
 - **standalone**: a detached `node server/dist/index.js` with a pid file and `~/.podium/podium.log`. The
   pid file is only trusted if that pid's command line is `podiumctl` or the server entry, so a reused pid
   is never signalled. Under the boot service, `podiumctl run` writes its own pid (not the server child's),
-  so `stop` reaches its SIGTERM handler and the service does not restart the server.
+  so `stop` reaches its SIGTERM handler and the service does not restart the server. `start` refuses to
+  spawn when something already accepts connections on the bind address and port, and only reports success
+  for the process it spawned: if that process exits while `start` waits, it removes the pid file and
+  shows the tail of the log. (Container mode relies on `podman run` failing when the port is taken.)
 
 Secrets reach the server through the process environment (`podman run -e NAME` with no value), never
 the command line. The token is generated on first start; an empty `PODIUM_TOKEN` is the deliberate
