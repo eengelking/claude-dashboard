@@ -46,6 +46,8 @@ host, and has no dependencies of its own. Install it on your PATH from the repo 
 `node bin/podiumctl.mjs` / `npm run podiumctl --`.
 
 ```sh
+git clone https://github.com/eengelking/podium.git && cd podium && npm link
+```sh
 podiumctl start                     # builds the image on first use, then runs it on http://127.0.0.1:4317
 podiumctl status                    # mode, state, health, URL, boot setting (exit 3 when stopped)
 podiumctl logs -f                   # follow the log
@@ -77,13 +79,25 @@ generated and unit-tested but has not been run on a Linux host.)
 
 ## Report a real session
 
-The reporter is a Claude Code mod in `mod/podium-reporter/`. Load it for a session with:
+The reporter is a Claude Code mod in `mod/podium-reporter/`. Install it from the eengelking
+marketplace, in Claude Code:
+
+```
+/plugin marketplace add eengelking/skills
+/plugin install podium-reporter@eengelking-marketplace
+```
+
+If the server uses a token (`podiumctl start` generates one), get it with `podiumctl token` and enter it
+with `/plugin configure podium-reporter@eengelking-marketplace`. The token option is secret, so it has no
+row in the `/config` menu. Without it the reporter gets HTTP 401 and `/podium` says so.
+
+To work on the mod itself, load it from a checkout for one session instead:
 
 ```sh
 claude --plugin-dir /path/to/podium/mod/podium-reporter
 ```
 
-(Installing it through a plugin marketplace is not set up yet.) The session appears in Podium at once.
+The session appears in Podium at once.
 In the session, `/podium` prints the dashboard link, the connection state and report counts, and
 `/podium name <text>` gives the session a display name. The status line under the prompt reads
 `podium ● N live`, or `podium ○ offline` while the server is unreachable (reports queue up and go out
