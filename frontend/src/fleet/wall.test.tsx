@@ -148,8 +148,12 @@ describe("session card", () => {
 
   it("waiting and stale callouts", () => {
     const w = renderCard(makeSession({ status: "waiting", waitReason: "permission", waitNote: "Bash(npm run e2e)" }));
-    expect(w.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
+    expect(w.container.querySelector(".alert")!.textContent).toBe("Waiting for your approval.");
     expect(w.container.textContent).not.toContain("Bash(npm run e2e)");
+    cleanup();
+    // A question arrives as a permission wait too; it reads as input everywhere (#68).
+    const ask = renderCard(makeSession({ status: "waiting", waitReason: "permission", waitNote: 'AskUserQuestion([{"question":"Which?"}])' }));
+    expect(ask.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
     cleanup();
     const q = renderCard(makeSession({ status: "waiting", waitReason: "input", waitNote: "Which branch should I use?" }));
     expect(q.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
@@ -219,6 +223,12 @@ describe("a waiting session", () => {
     expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
     expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: ExitPlanMode");
     expect(callout.textContent).not.toContain("# Plan");
+  });
+
+  it("reads a question tool as input, the same as the card and the feed (#68)", () => {
+    const { callout } = pageFor({ waitReason: "permission", waitNote: 'AskUserQuestion([{"question":"What card width?"}])' });
+    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your input. Answer in its terminal.");
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: AskUserQuestion");
   });
 
   it("names the tool of a Bash permission prompt without its command", () => {

@@ -2,6 +2,7 @@ import { fmtCountdown, fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
 import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
+import { toolOfNote, waitLead } from "../waiting";
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
 
@@ -12,19 +13,15 @@ const WAIT_NOTE_LIMIT = 160;
 
 /** The orchestrator page's callout: a plain lead, plus the tool or question as a secondary line when there is one. */
 export function waitSummary(s: Pick<SessionView, "waitReason" | "waitNote">): { lead: string; detail: string | null } {
-  const lead = s.waitReason === "permission" ? "Waiting for your approval." : s.waitReason === "input" ? "Waiting for your input." : "Waiting on you.";
   const note = s.waitNote?.trim() ?? "";
+  const tool = toolOfNote(note, s.waitReason);
+  const lead = waitLead(s.waitReason, tool);
   if (!note) return { lead, detail: null };
-  // "Tool(input...)" from the mod, or a bare tool name from a settings hook's PermissionRequest.
-  const tool = /^([A-Za-z][\w.:-]*)\(/.exec(note) ?? (s.waitReason === "permission" ? /^([A-Za-z][\w.:-]*)$/.exec(note) : null);
-  if (tool) return { lead, detail: `Tool: ${tool[1]}` };
+  if (tool) return { lead, detail: `Tool: ${tool}` };
   // Anything else is shown only if it arrived whole; a clipped note would read as the full prompt.
   // Measure the raw note: the clip happens before the trim above.
   return { lead, detail: (s.waitNote?.length ?? 0) >= WAIT_NOTE_LIMIT ? null : note };
 }
-
-// The card stays short; the orchestrator page has the tool name or question (waitSummary).
-const CARD_WAIT_TEXT = "Waiting for your input.";
 
 export function riskText(s: SessionView): string {
   const b = s.blowouts;
@@ -99,7 +96,8 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           {c.running} running · {c.done} done{c.failed ? ` · ${c.failed} failed` : ""}
         </span>
       </div>
-      {s.status === "waiting" && <div className="alert">{CARD_WAIT_TEXT}</div>}
+      {/* The card stays short: the sentence only. The orchestrator page adds the tool name or question (waitSummary). */}
+      {s.status === "waiting" && <div className="alert">{waitSummary(s).lead}</div>}
       {s.status === "stale" && (
         <div className="alert stale">
           Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in{" "}

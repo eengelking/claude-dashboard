@@ -3,6 +3,7 @@ import { EVENT_CAP } from "../store";
 import type { ActivityView, SessionView } from "../types";
 import { cssVar, FAMILY_COLOR } from "./Chips";
 import { IconJump } from "./Icons";
+import { parseWaitEvent, waitLead } from "../waiting";
 
 export const PAGE = 12;
 
@@ -27,6 +28,9 @@ export function ActivityList(props: {
 }) {
   const list = props.selected ? props.events.filter((e) => e.sessionId === props.selected!.id) : props.events;
   const shown = list.slice(0, props.shown);
+  // Newest event time per session, built once so each wait row is an O(1) lookup instead of a scan of every event.
+  const latest: Record<string, number> = {};
+  for (const o of props.events) if (!(o.t <= (latest[o.sessionId] ?? -Infinity))) latest[o.sessionId] = o.t;
   return (
     <>
       <div className="sh">
@@ -37,7 +41,10 @@ export function ActivityList(props: {
         {shown.length ? (
           shown.map((e) => {
             const live = props.gone[e.sessionId] ? undefined : props.sessions[e.sessionId];
-            const cls = [props.isNew(e.id) && "new", e.kind === "fail" && "bad", e.kind === "blow" && "blowev", !live && "gone", props.selectedAgent && e.agentId === props.selectedAgent && "cur"]
+            const wait = e.kind === "wait" ? parseWaitEvent(e.text) : null;
+            // A wait stays yellow only while it is the session's latest news and the session is still waiting.
+            const open = !!wait && live?.status === "waiting" && !(latest[e.sessionId] > e.t);
+            const cls = [props.isNew(e.id) && "new", wait && (open ? "w" : "ans"), e.kind === "fail" && "bad", e.kind === "blow" && "blowev", !live && "gone", props.selectedAgent && e.agentId === props.selectedAgent && "cur"]
               .filter(Boolean)
               .join(" ");
             const hint = hintFor(e, live);
@@ -47,7 +54,14 @@ export function ActivityList(props: {
                 <i className="ed" style={cssVar(FAMILY_COLOR[e.modelFamily])} aria-hidden="true" />
                 <div className="tt">
                   {!props.selected && <b>{e.sessionName} </b>}
-                  {e.text}
+                  {wait ? (
+                    <>
+                      <span className="lead">{waitLead(wait.reason, wait.tool, !open)}</span>
+                      {wait.tool && <span className="tool">{wait.tool}</span>}
+                    </>
+                  ) : (
+                    e.text
+                  )}
                   <span className="go">
                     {live && <IconJump />}
                     {hint}

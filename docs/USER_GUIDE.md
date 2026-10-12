@@ -83,7 +83,8 @@ counts and how many files changed), its model, effort and context fill, its plan
 a strip with one square per agent, and its cost, tokens and running time. A path or branch that is too long
 for the card is shortened (the path from the front, the branch at the end); hover it to see the full value.
 A red callout means the session has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
-means the session wants you: a permission prompt, or the end of its turn. A **stale** card means it has
+means the session wants you: a permission prompt, a question, or the end of its turn. It says whether it needs
+your approval or your input. A **stale** card means it has
 stopped reporting. It says how long until it goes away by itself, and has a **Remove** button (also on its
 rail row, and **Remove now** on its page) to clear it at once. The session stays in History, and the card
 comes back if the session reports again.
@@ -155,7 +156,10 @@ timeline of each overflow.
 ### Activity
 
 The right panel lists what just happened, newest first, 12 at a time. Click a row to jump to the session and
-agent it is about. Rows for sessions that have ended are greyed out.
+agent it is about. Rows for sessions that have ended are greyed out. A session that is waiting on you gets a
+yellow row that says "Waiting for your approval." or "Waiting for your input." (a question), with the tool
+name, such as `Bash` or `AskUserQuestion`, in a chip under it. Once the session moves on, the row turns plain
+and reads "Waited for your approval."
 
 ### History
 
