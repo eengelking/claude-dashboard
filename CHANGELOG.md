@@ -27,6 +27,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- Two sessions no longer show the same running time because the engine reported them one shared start. The
+  server keeps a session's reported start only when it is within 2 minutes of the first report; otherwise
+  the session counts from when the server first heard of it, and the start never changes after that. A
+  resumed session therefore counts from its first report. (#43)
 - With the server in a container, project and working-directory paths under your home now show as `~/...`
   on the wall, in the focused view and on the history page, as they do in standalone mode. `podiumctl`
   passes the host's home to the container as `PODIUM_HOST_HOME`; an unset or non-absolute value is

@@ -596,7 +596,7 @@ Retention (run by the sweeper hourly): samples older than 24 h deleted; events o
 
 On a valid report, in one transaction:
 
-1. Upsert the session (`last_seen_at = serverTime`, never the reporter's clock; store clock skew `sentAt − serverTime` for debugging). A report with `status: 'done'` sets `ended_at`.
+1. Upsert the session (`last_seen_at = serverTime`, never the reporter's clock; store clock skew `sentAt − serverTime` for debugging). A report with `status: 'done'` sets `ended_at`. `started_at` is set once, on the first report: the reporter's `startedAt` if it is within 2 minutes of `serverTime`, otherwise `serverTime`. Later reports never change it. Under Claude Code's background daemon the engine's `usage().startedAt` can be one shared host-level value, so sessions that began minutes apart reported the same start (#43).
 2. Upsert every agent. An agent absent from a later report is **not** deleted (a reload may lose it); it stays as last reported, and if it was `running` and the session is `done`, mark it `aborted`.
 3. Insert events with `INSERT OR IGNORE` on `id`. Insert a `blowouts` row for each `blow` event carrying `data.kind`.
 4. Sample: compute `tokens_total` (main loop tokens + Σ agent tokens), `tokens_delta` against the previous sample (≥ 0), `peak_context = max(session context %, max over running agents' context %) / 100`, `running_agents`. At most one sample per session per second.

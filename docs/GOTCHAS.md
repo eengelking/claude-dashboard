@@ -95,6 +95,14 @@ is literal. "Count .ts files under server" and "Count .ts files in server" do no
 
 Browsers throttle timers in hidden tabs. The numbers catch up when you look at the tab again.
 
+### A resumed session's running time starts when Podium first saw it
+
+Podium keeps the start time a session reports only if it is within 2 minutes of the moment the server first
+heard of it. If the mod reports an earlier start (a session you resumed, or one that was already running when
+you installed the mod), the card counts from the first report instead. The engine's start time is not always
+the session's own: under Claude Code's background daemon, sessions that began minutes apart reported the same
+one. Once stored, a session's start never changes.
+
 ### A session sitting at the prompt shows as waiting
 
 That is correct, since it is waiting on you. With many idle sessions the wall fills with waiting callouts.

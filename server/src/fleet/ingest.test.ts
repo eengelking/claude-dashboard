@@ -44,6 +44,44 @@ describe('ingestReport', () => {
     expect(f.countBlowouts()).toBe(1);
   });
 
+  describe('start time (#43)', () => {
+    const at = (r: Report, startedAt: number): Report => ({ ...r, session: { ...r.session, startedAt } });
+
+    it('keeps the reported start when it is near the first sighting', () => {
+      const r = at(fixtureReport(), T0 - 30_000);
+      ingestReport(f, r, T0);
+      expect(f.getSession(r.session.id)!.started_at).toBe(T0 - 30_000);
+    });
+
+    it('uses its own first-seen time when the report claims a start long before it was first seen', () => {
+      const r = at(fixtureReport(), T0 - 20 * 60_000);
+      ingestReport(f, r, T0);
+      expect(f.getSession(r.session.id)!.started_at).toBe(T0);
+    });
+
+    it('does not let two sessions that report the same start share it', () => {
+      const a = at(fixtureReport(), T0 - 3_600_000);
+      const b = { ...a, session: { ...a.session, id: 'other-session' } };
+      ingestReport(f, a, T0);
+      ingestReport(f, b, T0 + 5 * 60_000);
+      expect(f.getSession(a.session.id)!.started_at).toBe(T0);
+      expect(f.getSession('other-session')!.started_at).toBe(T0 + 5 * 60_000);
+    });
+
+    it('uses its own first-seen time when the report claims a start in the future', () => {
+      const r = at(fixtureReport(), T0 + 20 * 60_000);
+      ingestReport(f, r, T0);
+      expect(f.getSession(r.session.id)!.started_at).toBe(T0);
+    });
+
+    it('keeps the stored start when later reports change their claim', () => {
+      const r = at(fixtureReport(), T0 - 10_000);
+      ingestReport(f, r, T0);
+      ingestReport(f, at(r, T0 + 1_000), T0 + 3_000);
+      expect(f.getSession(r.session.id)!.started_at).toBe(T0 - 10_000);
+    });
+  });
+
   it('keeps an agent a later report omits, and aborts running agents when the session ends', () => {
     const r = fixtureReport();
     ingestReport(f, r, T0);

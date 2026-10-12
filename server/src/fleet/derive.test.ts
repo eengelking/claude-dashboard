@@ -152,6 +152,8 @@ describe('computeKpis', () => {
       events: [],
       session: { ...base.session, id: 'c', startedAt: startOfDay(now) - 3600_000, plan: null, costUsd: 9, blowouts: 0 },
     };
+    // first heard of yesterday, when it started; the server keeps that start (#43)
+    ingestReport(f, c, c.session.startedAt + 1000);
     ingestReport(f, c, now - 1000);
 
     const views = ['5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11', 'b', 'c'].map((id) =>

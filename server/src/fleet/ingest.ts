@@ -27,6 +27,19 @@ function json(v: unknown): string | null {
   return v === null || v === undefined ? null : JSON.stringify(v);
 }
 
+/** How far a reported start may sit from the moment the server first heard of the session before it is not believed. */
+export const START_TOLERANCE_MS = 2 * 60_000;
+
+/**
+ * A session's start time. Once stored it never changes. On the first report the reporter's claim is kept when it is
+ * close to the first sighting; otherwise (#43: the engine can hand every session under its background daemon one
+ * shared host-level value) the session started when the server first heard of it.
+ */
+function startedAt(claimed: number, prev: SessionRow | undefined, serverTime: number): number {
+  if (prev) return prev.started_at;
+  return Math.abs(claimed - serverTime) <= START_TOLERANCE_MS ? claimed : serverTime;
+}
+
 function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number): SessionRow {
   const s = r.session;
   const done = s.status === 'done';
@@ -38,7 +51,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     wait_note: s.waitNote,
     end_reason: s.endReason,
     resume_id: s.resumeId,
-    started_at: s.startedAt,
+    started_at: startedAt(s.startedAt, prev, serverTime),
     last_seen_at: serverTime,
     ended_at: done ? (prev?.status === 'done' && prev.ended_at !== null ? prev.ended_at : serverTime) : null,
     dropped_at: null,
