@@ -21,6 +21,7 @@ export function makeAgent(over: Partial<AgentView> = {}): AgentView {
     skills: [],
     lastTool: "Read",
     toolCalls: 3,
+    toolCounts: null,
     blowouts: 0,
     steps: { done: 2, total: null },
     promptExcerpt: "Find every call site.",

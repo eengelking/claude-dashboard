@@ -103,6 +103,7 @@ function agentRow(sessionId: string, a: AgentReport): AgentRow {
     skills_json: JSON.stringify(a.skills),
     last_tool: a.lastTool,
     tool_calls: a.toolCalls,
+    tool_counts_json: a.toolCounts ? JSON.stringify(a.toolCounts) : null,
     blowouts: a.blowouts,
     steps_done: a.steps ? a.steps.done : null,
     steps_total: a.steps ? a.steps.total : null,

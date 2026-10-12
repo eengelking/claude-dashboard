@@ -464,6 +464,7 @@ interface AgentReport {
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
+  toolCounts: Record<string, number> | null;   // finished calls per tool name, summing to toolCalls; null from a reporter older than 0.2.0
   blowouts: number;                     // this loop's cumulative blowouts
   steps: { done: number; total: number | null } | null;   // model steps taken so far; total only when known, else null
   promptExcerpt: string;                // first 400 chars of the task prompt
@@ -571,7 +572,7 @@ CREATE TABLE agents (
   started_at INTEGER NOT NULL, ended_at INTEGER,
   context_tokens INTEGER, context_window INTEGER, context_percent REAL,
   tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER, cost_usd_est REAL,
-  skills_json TEXT, last_tool TEXT, tool_calls INTEGER, blowouts INTEGER NOT NULL DEFAULT 0,
+  skills_json TEXT, last_tool TEXT, tool_calls INTEGER, tool_counts_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
   steps_done INTEGER, steps_total INTEGER, prompt_excerpt TEXT, answer_excerpt TEXT, failure_json TEXT,
   PRIMARY KEY (session_id, id)
 );
@@ -663,7 +664,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 ### 7.7 Hardening
 
 - Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
-- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). Reject, never crash, on junk.
+- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
 - CORS: none needed (same origin). Do not enable `*`.
@@ -688,7 +689,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 
 **Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: plan checklist (done, active, blocked, pending, with owner label) and the agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel and flashes the row.
 
-**Right panel.** *Activity*: newest first, **12 rows**, "Show 12 more" and "Show fewer", count text "Showing N of M", footnote "Only the latest 150 events are kept in memory." Each row is a button that selects the session and agent it is about, scrolls the agent row into view and flashes it; failure rows say "Show root cause", blowout rows "Show context history"; rows of sessions that have left the live set are greyed and say "Session ended" and do nothing. Filtered to the selected orchestrator when one is selected. *Agent detail*: status, **failure box** (class, failing call, output tail, evidence list, explanation if present, what happened next), **blowout box** (timeline of each overflow with time and token counts, explanation), kind, type, model and effort (marked "inherited" for a fork), context, tokens, cost, time, steps, last tool, skills as chips, prompt excerpt, child agents as buttons, back button.
+**Right panel.** *Activity*: newest first, **12 rows**, "Show 12 more" and "Show fewer", count text "Showing N of M", footnote "Only the latest 150 events are kept in memory." Each row is a button that selects the session and agent it is about, scrolls the agent row into view and flashes it; failure rows say "Show root cause", blowout rows "Show context history"; rows of sessions that have left the live set are greyed and say "Session ended" and do nothing. Filtered to the selected orchestrator when one is selected. *Agent detail*: status, **failure box** (class, failing call, output tail, evidence list, explanation if present, what happened next), **blowout box** (timeline of each overflow with time and token counts, explanation), kind, type, model and effort (marked "inherited" for a fork), context, tokens, cost, time, steps, **tools used** as chips (below), skills as chips, prompt excerpt, child agents as buttons, back button. *Tools used*: one chip per tool with its call count, most used first and ties by name, in the Skills chip style, under the label "Tools used (N calls)". The five most used show; with more, a "Show all N" button (`aria-expanded`) shows every tool and then reads "Show fewer". A green dot on a chip marks the tool used last (with a visually hidden "last used"); when that tool is not among the five shown, a line "Last used: name" says so. An agent with no calls shows "None seen". When the reporter sent no `toolCounts` (older than 0.2.0), the panel shows the "Last tool  name (N calls)" line instead and no chips.
 
 **Data flow.** `useFleet` loads `/api/fleet/state`, opens the SSE stream, applies `session`/`activity`/`removed`/`tick` with a pure reducer, and on reconnect refetches state. Elapsed times tick locally every second from `startedAt` so numbers move between server messages. Memory: keep at most 150 events; keep `series` as sent.
 

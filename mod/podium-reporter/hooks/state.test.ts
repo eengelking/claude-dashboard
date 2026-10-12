@@ -1,11 +1,12 @@
 import { describe, test, expect } from 'claude-code/testing'
+import { agentReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
 import { agentRequested, agentSpawned, blowout, compaction, newSession, reconcile, resetForNewId, sessionEnd, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
 const SESSION_KEYS = ['blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'git', 'id', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
-const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'type']
+const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type']
 const FAILURE_KEYS = ['at', 'call', 'class', 'evidence', 'exitCode', 'explanation', 'outputTail', 'retriedAs', 'tool']
 const STEP_KEYS = ['activeText', 'id', 'ownerAgentId', 'ownerLabel', 'state', 'text']
 const keys = (o: object) => Object.keys(o).sort()
@@ -153,5 +154,48 @@ describe('reducers', () => {
     toolResult(s, { tool: 'TaskUpdate', input: { taskId: '2', status: 'completed' }, result: {} }, T0)
     sessionEnd(s, 'other', null, T0)
     expect(JSON.stringify(s)).toBe(frozen)
+  })
+})
+
+describe('per-tool counts', () => {
+  const base = () => newSession({ id: 's', cwd: '/x', startedAt: T0, model: 'claude-opus-5-5' })
+  const spawn = () => agentSpawned(base(), { toolUseId: 't', agentId: 'a', model: 'opus', subagentType: 'x', description: 'd', prompt: 'p', fork: false }, T0)
+  const call = (s: ReturnType<typeof base>, tool: string, agentId?: string) => toolResult(s, { agentId, tool, input: {}, result: {} }, T0 + 1)
+
+  test('each finished call is counted under its tool, and the counts add up to the total', () => {
+    let s = spawn()
+    for (const t of ['Bash', 'Read', 'Bash', 'Grep', 'Bash']) s = call(s, t, 'a')
+    expect(s.agents.a!.toolCounts).toEqual({ Bash: 3, Read: 1, Grep: 1 })
+    expect(Object.values(s.agents.a!.toolCounts).reduce((n, c) => n + c, 0)).toBe(s.agents.a!.toolCalls)
+  })
+
+  test('the main loop is counted too, apart from the agents', () => {
+    let s = spawn()
+    s = call(s, 'Edit')
+    s = call(s, 'Bash', 'a')
+    expect(s.main.toolCounts).toEqual({ Edit: 1 })
+    expect(s.agents.a!.toolCounts).toEqual({ Bash: 1 })
+  })
+
+  test('a long tool name is clipped to 120 characters', () => {
+    const s = call(spawn(), 'm'.repeat(300), 'a')
+    expect(Object.keys(s.agents.a!.toolCounts)).toEqual(['m'.repeat(120)])
+  })
+
+  test('past 100 distinct tools, new names are left out but known ones and the total still count', () => {
+    let s = spawn()
+    for (let i = 0; i < 100; i++) s = call(s, `tool-${i}`, 'a')
+    s = call(s, 'one-too-many', 'a')
+    s = call(s, 'tool-0', 'a')
+    const counts = s.agents.a!.toolCounts
+    expect(Object.keys(counts)).toHaveLength(100)
+    expect(counts['one-too-many']).toBeUndefined()
+    expect(counts['tool-0']).toBe(2)
+    expect(s.agents.a!.toolCalls).toBe(102)
+  })
+
+  test('the report carries the counts', () => {
+    const s = call(call(spawn(), 'Bash', 'a'), 'Bash', 'a')
+    expect(agentReport(s.agents.a!).toolCounts).toEqual({ Bash: 2 })
   })
 })

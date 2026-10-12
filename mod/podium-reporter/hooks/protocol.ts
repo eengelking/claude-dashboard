@@ -94,6 +94,8 @@ export interface AgentReport {
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
+  /** Finished calls per tool name. null when the reporter is too old to send it. */
+  toolCounts: Record<string, number> | null;
   blowouts: number;
   steps: { done: number; total: number | null } | null;
   promptExcerpt: string;

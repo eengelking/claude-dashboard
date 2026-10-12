@@ -35,6 +35,9 @@ export interface Usage {
   model?: string;
 }
 
+/** The most distinct tool names kept per loop; later new names count in toolCalls only. */
+export const MAX_TOOL_NAMES = 100;
+
 export interface LoopStats {
   model: string | null;
   effort: Effort | null;
@@ -45,6 +48,8 @@ export interface LoopStats {
   /** Model requests seen. */
   steps: number;
   toolCalls: number;
+  /** Finished calls per tool name; at most MAX_TOOL_NAMES distinct names. */
+  toolCounts: Record<string, number>;
   lastTool: string | null;
   skills: string[];
   blowouts: number;
@@ -122,6 +127,7 @@ export function emptyLoop(model: string | null = null): LoopStats {
     cost: 0,
     steps: 0,
     toolCalls: 0,
+    toolCounts: {},
     lastTool: null,
     skills: [],
     blowouts: 0,
@@ -548,7 +554,11 @@ export function toolResult(s0: SessionState, i: ToolResultInput, now: number): S
   let s = s0;
   const loop = loopOf(s, i.agentId);
   if (loop) {
-    const next: LoopStats = { ...loop, toolCalls: loop.toolCalls + 1, lastTool: clip(i.tool, 120) };
+    const tool = clip(i.tool, 120);
+    const next: LoopStats = { ...loop, toolCalls: loop.toolCalls + 1, lastTool: tool };
+    if (tool in loop.toolCounts || Object.keys(loop.toolCounts).length < MAX_TOOL_NAMES) {
+      next.toolCounts = { ...loop.toolCounts, [tool]: (loop.toolCounts[tool] ?? 0) + 1 };
+    }
     if (i.tool === 'Read' && typeof i.input.file_path === 'string') {
       const f = clip(i.input.file_path, 200);
       next.reads = { ...loop.reads, [f]: (loop.reads[f] ?? 0) + 1 };

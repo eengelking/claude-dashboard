@@ -134,4 +134,49 @@ describe('protocol', () => {
     f.session.startedAt = 'yesterday';
     expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.startedAt' });
   });
+
+  describe('toolCounts', () => {
+    const first = (f: unknown) => (f as { agents: Record<string, unknown>[] }).agents[0]!;
+    const counts = (r: ReturnType<typeof validateReport>) => (r.ok ? r.report.agents[0]!.toolCounts : 'rejected');
+
+    it('keeps the counts the fixture carries', () => {
+      expect(counts(validateReport(loadFixture()))).toEqual({ Grep: 14, Read: 11, Glob: 6 });
+    });
+
+    it('treats a missing field, from an older reporter, as null', () => {
+      const f = loadFixture();
+      delete first(f).toolCounts;
+      expect(counts(validateReport(f))).toBeNull();
+    });
+
+    it('rejects a non-object and a negative or non-numeric count, with a path', () => {
+      for (const bad of ['Bash', [1], { Bash: -1 }, { Bash: 'many' }]) {
+        const f = loadFixture();
+        first(f).toolCounts = bad;
+        expect(validateReport(f)).toMatchObject({ ok: false });
+      }
+      const f = loadFixture();
+      first(f).toolCounts = { Bash: -1 };
+      expect(validateReport(f)).toMatchObject({ path: '$.agents[0].toolCounts.Bash' });
+    });
+
+    it('clips long names, strips control characters and rounds counts', () => {
+      const f = loadFixture();
+      first(f).toolCounts = { ['x'.repeat(300)]: 2, 'a\u0001b': 3.4 };
+      expect(counts(validateReport(f))).toEqual({ ['x'.repeat(LIMITS.short)]: 2, 'a b': 3 });
+    });
+
+    it('keeps the most used names when there are more than the cap, ties by name', () => {
+      const f = loadFixture();
+      const many: Record<string, number> = {};
+      for (let i = 0; i < LIMITS.toolNames + 5; i++) many[`t${String(i).padStart(3, '0')}`] = 1;
+      many.big = 50;
+      first(f).toolCounts = many;
+      const out = counts(validateReport(f)) as Record<string, number>;
+      expect(Object.keys(out)).toHaveLength(LIMITS.toolNames);
+      expect(out.big).toBe(50);
+      expect(out.t000).toBe(1);
+      expect(out[`t${String(LIMITS.toolNames + 4).padStart(3, '0')}`]).toBeUndefined();
+    });
+  });
 });

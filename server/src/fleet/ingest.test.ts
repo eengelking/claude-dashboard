@@ -29,6 +29,16 @@ describe('ingestReport', () => {
     expect(blows[0]).toMatchObject({ agent_id: 'a4', kind: 'auto-compact', tokens_before: 1004000, tokens_after: 300000 });
   });
 
+  it('stores the per-tool counts, and null for a reporter that sends none', () => {
+    const r = fixtureReport();
+    delete (r.agents[1] as { toolCounts?: unknown }).toolCounts;
+    ingestReport(f, r, T0);
+    const rows = f.getAgents(r.session.id);
+    const json = (id: string) => rows.find((a) => a.id === id)!.tool_counts_json;
+    expect(JSON.parse(json('a1')!)).toEqual({ Grep: 14, Read: 11, Glob: 6 });
+    expect(json(r.agents[1]!.id)).toBeNull();
+  });
+
   it('is idempotent: a repeat changes only last_seen_at', () => {
     const r = fixtureReport();
     ingestReport(f, r, T0);

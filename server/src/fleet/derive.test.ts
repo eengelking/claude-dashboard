@@ -111,6 +111,7 @@ describe('sessionView', () => {
     expect(v.blowouts.log).toHaveLength(1);
     expect(v.agents.find((a) => a.id === 'a3')?.failure?.class).toBe('Tool error');
     expect(v.agents.find((a) => a.id === 'a1')?.skills).toEqual(['repo-map']);
+    expect(v.agents.find((a) => a.id === 'a1')?.toolCounts).toEqual({ Grep: 14, Read: 11, Glob: 6 });
     expect(v.series.tokensPerSec).toHaveLength(60);
     expect(v.resumeCommand).toBe('cd /Users/dev/billing-service/.claude/worktrees/invoice-v2 && claude --resume 5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11');
     expect(v.secondsSinceSeen).toBe(1);

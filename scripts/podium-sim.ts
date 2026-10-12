@@ -361,6 +361,7 @@ export class Simulator {
       skills: [...spec.skills],
       lastTool: rng.pick(TOOLS),
       toolCalls: 0,
+      toolCounts: {},
       blowouts: 0,
       steps: { done: 0, total: null },
       promptExcerpt: `${spec.d}. Report findings as a short list and do not edit files outside the working branch.`,
@@ -374,6 +375,11 @@ export class Simulator {
       report.costUsdEst = costOf(tok, model);
       report.steps = { done: total, total: null };
       report.toolCalls = total * 3;
+      report.toolCounts = {};
+      for (let i = 0; i < report.toolCalls; i++) {
+        const tool = rng.pick(TOOLS);
+        report.toolCounts[tool] = (report.toolCounts[tool] ?? 0) + 1;
+      }
       a.ctx = rng.range(0.2, 0.7);
       report.answerExcerpt = `Done: ${spec.d.toLowerCase()}.`;
       this.syncCtx(a);
@@ -488,8 +494,12 @@ export class Simulator {
       const tok = splitTokens(rng, n);
       add(a.report.tokens, tok);
       a.report.costUsdEst += costOf(tok, a.report.model);
-      a.report.toolCalls += rng.chance(0.6) ? 1 : 0;
-      a.report.lastTool = rng.pick(TOOLS);
+      const tool = rng.pick(TOOLS);
+      if (rng.chance(0.6)) {
+        a.report.toolCalls += 1;
+        a.report.toolCounts = { ...a.report.toolCounts, [tool]: (a.report.toolCounts?.[tool] ?? 0) + 1 };
+      }
+      a.report.lastTool = tool;
       a.ctx += (n / (a.report.context.window ?? 1e6)) * (this.opts.chaos ? 0.12 : 0.06);
       this.syncCtx(a);
       if (a.ctx >= 0.97) this.blowout(s, a);

@@ -97,6 +97,8 @@ export interface AgentReport {
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
+  /** Finished calls per tool name. null when the reporter is too old to send it. */
+  toolCounts: Record<string, number> | null;
   blowouts: number;
   steps: { done: number; total: number | null } | null;
   promptExcerpt: string;
@@ -292,6 +294,7 @@ export const LIMITS = {
   events: 100,
   planSteps: 100,
   skills: 50,
+  toolNames: 100,
   rateLimits: 10,
   blowoutLog: 50,
 } as const;
@@ -366,6 +369,18 @@ function oneOf<T extends string>(v: unknown, path: string, allowed: readonly T[]
 function oneOfOrNull<T extends string>(v: unknown, path: string, allowed: readonly T[]): T | null {
   if (v === null || v === undefined) return null;
   return oneOf(v, path, allowed);
+}
+
+/** Calls per tool name: names clipped, counts non-negative integers, the most used `max` names kept. */
+function countsOrNull(v: unknown, path: string, max: number): Record<string, number> | null {
+  if (v === null || v === undefined) return null;
+  const merged = new Map<string, number>();
+  for (const [k, n] of Object.entries(obj(v, path))) {
+    const name = clampStr(k, LIMITS.short);
+    merged.set(name, (merged.get(name) ?? 0) + int(n, `${path}.${k}`));
+  }
+  const top = [...merged].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, max);
+  return Object.fromEntries(top);
 }
 
 function arr(v: unknown, path: string, max: number): unknown[] {
@@ -494,6 +509,7 @@ function agent(v: unknown, path: string): AgentReport {
     skills: arr(o.skills, `${path}.skills`, LIMITS.skills).map((s, i) => str(s, `${path}.skills[${i}]`, LIMITS.short)),
     lastTool: strOrNull(o.lastTool, `${path}.lastTool`, LIMITS.short),
     toolCalls: int(o.toolCalls, `${path}.toolCalls`),
+    toolCounts: countsOrNull(o.toolCounts, `${path}.toolCounts`, LIMITS.toolNames),
     blowouts: int(o.blowouts, `${path}.blowouts`),
     steps,
     promptExcerpt: str(o.promptExcerpt, `${path}.promptExcerpt`, LIMITS.excerpt),

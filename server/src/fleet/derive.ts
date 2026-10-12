@@ -86,6 +86,7 @@ export function agentView(a: AgentRow): AgentView {
     skills: parse<string[]>(a.skills_json, []),
     lastTool: a.last_tool,
     toolCalls: a.tool_calls,
+    toolCounts: parse<Record<string, number> | null>(a.tool_counts_json, null),
     blowouts: a.blowouts,
     steps: a.steps_done === null ? null : { done: a.steps_done, total: a.steps_total },
     promptExcerpt: a.prompt_excerpt ?? '',

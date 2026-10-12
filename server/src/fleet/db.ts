@@ -53,6 +53,11 @@ CREATE TABLE samples (
 );
 `,
   },
+  {
+    version: 2,
+    // Calls per tool name as JSON; NULL for rows and reporters from before it existed.
+    sql: 'ALTER TABLE agents ADD COLUMN tool_counts_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -113,6 +118,7 @@ export interface AgentRow {
   skills_json: string | null;
   last_tool: string | null;
   tool_calls: number;
+  tool_counts_json: string | null;
   blowouts: number;
   steps_done: number | null;
   steps_total: number | null;

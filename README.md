@@ -129,8 +129,8 @@ Only to the server URL above, and only this:
 - the session's id, working directory, repository name, git branch and counts (ahead, behind, modified),
   model, effort, context fill, cost, token counts and rate-limit percentages;
 - the plan's step titles (from TaskCreate, TaskUpdate or TodoWrite);
-- per agent: type, description, model, effort, status, token counts, skills it loaded, last tool name,
-  the first 400 characters of its task prompt and of its final answer;
+- per agent: type, description, model, effort, status, token counts, skills it loaded, the name of every
+  tool it used with how many times, the first 400 characters of its task prompt and of its final answer;
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file
   path), its exit code and the last 12 lines of its output;
 - short activity lines ("spawned Explore (Haiku low): Map call sites").

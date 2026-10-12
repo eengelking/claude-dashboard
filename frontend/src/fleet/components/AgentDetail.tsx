@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
 import { agentElapsedSec, agentTokens } from "../logic";
 import type { AgentView, SessionView } from "../types";
@@ -5,6 +6,42 @@ import { BlowoutBox } from "./BlowoutBox";
 import { BlowBadge, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
 import { FailureBox } from "./FailureBox";
 import { IconBack, IconFork, IconSub } from "./Icons";
+
+const TOOL_CHIPS_SHOWN = 5;
+
+/** Tools the agent used, most used first (ties by name); the five most used unless expanded. */
+function ToolChips(props: { counts: Record<string, number>; calls: number; lastTool: string | null }) {
+  const [all, setAll] = useState(false);
+  const sorted = Object.entries(props.counts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+  const shown = all ? sorted : sorted.slice(0, TOOL_CHIPS_SHOWN);
+  const lastHidden = props.lastTool !== null && sorted.some(([k]) => k === props.lastTool) && !shown.some(([k]) => k === props.lastTool);
+  return (
+    <>
+      <span className="lab">
+        Tools used <span className="mono">({props.calls} calls)</span>
+      </span>
+      <div className="chips">
+        {sorted.length ? (
+          shown.map(([name, n]) => (
+            <span key={name} className={`chip skill tool${name === props.lastTool ? " latest" : ""}`}>
+              {name}{" "}
+              <span className="n">{n}</span>
+              {name === props.lastTool && <span className="sr-only"> (last used)</span>}
+            </span>
+          ))
+        ) : (
+          <span style={{ color: "var(--muted)" }}>None seen</span>
+        )}
+        {sorted.length > TOOL_CHIPS_SHOWN && (
+          <button type="button" className="more" aria-expanded={all} onClick={() => setAll(!all)}>
+            {all ? "Show fewer" : `Show all ${sorted.length}`}
+          </button>
+        )}
+      </div>
+      {lastHidden && <div className="tools-latest">Last used: {props.lastTool}</div>}
+    </>
+  );
+}
 
 export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; onBack: () => void; onAgent: (id: string) => void }) {
   const { s, a, now } = props;
@@ -74,12 +111,17 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
           <dd className="mono">{fmtDur(agentElapsedSec(a, now))}</dd>
           <dt>Steps</dt>
           <dd className="mono">{a.steps ? `${a.steps.done}${a.steps.total !== null ? `/${a.steps.total}` : ""} model requests` : "–"}</dd>
-          <dt>Last tool</dt>
-          <dd className="mono">
-            {a.lastTool ?? "–"}
-            {a.toolCalls ? <span style={{ color: "var(--muted)" }}>({a.toolCalls} calls)</span> : null}
-          </dd>
+          {a.toolCounts === null && (
+            <>
+              <dt>Last tool</dt>
+              <dd className="mono">
+                {a.lastTool ?? "–"}
+                {a.toolCalls ? <span style={{ color: "var(--muted)" }}>({a.toolCalls} calls)</span> : null}
+              </dd>
+            </>
+          )}
         </dl>
+        {a.toolCounts !== null && <ToolChips counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
         <span className="lab">Skills loaded</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {a.skills.length ? (

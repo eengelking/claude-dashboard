@@ -79,6 +79,7 @@ export function agentReport(a: AgentState): AgentReport {
     skills: a.skills.slice(0, 50).map((k) => clip(k, 120)),
     lastTool: a.lastTool,
     toolCalls: a.toolCalls,
+    toolCounts: Object.fromEntries(Object.entries(a.toolCounts).map(([k, n]) => [clip(k, 120), n])),
     blowouts: a.blowouts,
     steps: { done: a.steps, total: null },
     promptExcerpt: excerpt(a.promptExcerpt),

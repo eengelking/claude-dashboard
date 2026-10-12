@@ -149,6 +149,14 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); white-space: nowrap; color: var(--ink2); }
 .podium .chip i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); }
 .podium .chip.skill { font-family: var(--font-mono); font-size: 11px; }
+.podium .det .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.podium .chip.tool .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.podium .chip.tool.latest { border-color: var(--ink2); color: var(--ink); }
+.podium .chip.tool.latest::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); flex: none; }
+.podium .det .more { font: inherit; font-size: 11.5px; color: var(--ink2); padding: 1px 4px; border-radius: 4px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--axis); }
+.podium .det .more:hover { color: var(--ink); }
+.podium .det .tools-latest { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+.podium .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .podium .eff { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 .podium .eff b { width: 4px; height: 10px; border-radius: 1px; background: var(--axis); }
 .podium .eff b.on { background: var(--c); }

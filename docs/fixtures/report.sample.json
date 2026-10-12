@@ -40,7 +40,7 @@
       "status": "done", "startedAt": 1791645300000, "endedAt": 1791645480000,
       "context": { "tokens": 61000, "window": 1000000, "percent": 6.1 },
       "tokens": { "input": 9000, "output": 4100, "cacheRead": 140000, "cacheWrite": 22000 },
-      "costUsdEst": 0.08, "skills": ["repo-map"], "lastTool": "Grep", "toolCalls": 31, "blowouts": 0,
+      "costUsdEst": 0.08, "skills": ["repo-map"], "lastTool": "Grep", "toolCalls": 31, "toolCounts": {"Grep": 14, "Read": 11, "Glob": 6}, "blowouts": 0,
       "steps": { "done": 14, "total": null },
       "promptExcerpt": "Find every call site of the invoice v1 serializer and list them by module.",
       "answerExcerpt": "Found 42 call sites across 9 modules.", "failure": null
@@ -51,7 +51,7 @@
       "status": "running", "startedAt": 1791647400000, "endedAt": null,
       "context": { "tokens": 380000, "window": 1000000, "percent": 38 },
       "tokens": { "input": 21000, "output": 9000, "cacheRead": 900000, "cacheWrite": 120000 },
-      "costUsdEst": 2.11, "skills": ["code-review"], "lastTool": "Edit", "toolCalls": 18, "blowouts": 0,
+      "costUsdEst": 2.11, "skills": ["code-review"], "lastTool": "Edit", "toolCalls": 18, "toolCounts": {"Edit": 9, "Read": 7, "Bash": 2}, "blowouts": 0,
       "steps": { "done": 9, "total": null },
       "promptExcerpt": "Port the invoice endpoints to the v2 schema.", "answerExcerpt": null, "failure": null
     },
@@ -61,7 +61,7 @@
       "status": "failed", "startedAt": 1791647640000, "endedAt": 1791647700000,
       "context": { "tokens": 88000, "window": 1000000, "percent": 8.8 },
       "tokens": { "input": 8000, "output": 2000, "cacheRead": 70000, "cacheWrite": 8000 },
-      "costUsdEst": 0.53, "skills": [], "lastTool": "Bash", "toolCalls": 6, "blowouts": 0,
+      "costUsdEst": 0.53, "skills": [], "lastTool": "Bash", "toolCalls": 6, "toolCounts": {"Bash": 6}, "blowouts": 0,
       "steps": { "done": 4, "total": null },
       "promptExcerpt": "Run the invoice backfill in dry-run mode against staging.", "answerExcerpt": null,
       "failure": {
@@ -76,7 +76,7 @@
       "status": "running", "startedAt": 1791647500000, "endedAt": null,
       "context": { "tokens": 930000, "window": 1000000, "percent": 93 },
       "tokens": { "input": 30000, "output": 14000, "cacheRead": 2600000, "cacheWrite": 400000 },
-      "costUsdEst": 5.42, "skills": ["frontend-design"], "lastTool": "Read", "toolCalls": 52, "blowouts": 2,
+      "costUsdEst": 5.42, "skills": ["frontend-design"], "lastTool": "Read", "toolCalls": 52, "toolCounts": {"Read": 30, "Edit": 14, "Bash": 8}, "blowouts": 2,
       "steps": { "done": 40, "total": null },
       "promptExcerpt": "Rewrite the PDF renderer to read v2 invoices.", "answerExcerpt": null, "failure": null
     }

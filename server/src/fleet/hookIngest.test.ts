@@ -46,7 +46,7 @@ describe('POST /api/fleet/hook', () => {
     await send(P.tool);
     v = fleet.view('hk-1')!;
     expect(v.agents).toHaveLength(1);
-    expect(v.agents[0]).toMatchObject({ id: 'ag-1', type: 'Explore', status: 'running', effort: 'low', lastTool: 'Grep', toolCalls: 1 });
+    expect(v.agents[0]).toMatchObject({ id: 'ag-1', type: 'Explore', status: 'running', effort: 'low', lastTool: 'Grep', toolCalls: 1, toolCounts: { Grep: 1 } });
     await send(P.subStop);
     v = fleet.view('hk-1')!;
     expect(v.agents[0]!.status).toBe('done');
