@@ -121,7 +121,7 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
             </>
           )}
         </dl>
-        {a.toolCounts !== null && <ToolChips counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
+        {a.toolCounts !== null && <ToolChips key={a.id} counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
         <span className="lab">Skills loaded</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {a.skills.length ? (

@@ -556,8 +556,8 @@ export function toolResult(s0: SessionState, i: ToolResultInput, now: number): S
   if (loop) {
     const tool = clip(i.tool, 120);
     const next: LoopStats = { ...loop, toolCalls: loop.toolCalls + 1, lastTool: tool };
-    if (tool in loop.toolCounts || Object.keys(loop.toolCounts).length < MAX_TOOL_NAMES) {
-      next.toolCounts = { ...loop.toolCounts, [tool]: (loop.toolCounts[tool] ?? 0) + 1 };
+    if (Object.hasOwn(loop.toolCounts, tool) || Object.keys(loop.toolCounts).length < MAX_TOOL_NAMES) {
+      next.toolCounts = { ...loop.toolCounts, [tool]: (Object.hasOwn(loop.toolCounts, tool) ? loop.toolCounts[tool]! : 0) + 1 };
     }
     if (i.tool === 'Read' && typeof i.input.file_path === 'string') {
       const f = clip(i.input.file_path, 200);

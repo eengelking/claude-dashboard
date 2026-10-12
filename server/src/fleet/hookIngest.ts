@@ -147,7 +147,7 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
         skills: [],
         lastTool: null,
         toolCalls: prev?.toolCalls ?? 0,
-        toolCounts: prev?.toolCounts ?? {},
+        toolCounts: prev ? prev.toolCounts : {},
         blowouts: 0,
         steps: null,
         promptExcerpt: '',
@@ -200,7 +200,7 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
       if (agentId) {
         const a = agents.get(agentId) ?? storedAgentLike(agentId, agentType, now);
         const finished = event !== 'PreToolUse';
-        const toolCounts = finished && tool && a.toolCounts ? { ...a.toolCounts, [tool]: (a.toolCounts[tool] ?? 0) + 1 } : a.toolCounts;
+        const toolCounts = finished && tool && a.toolCounts ? { ...a.toolCounts, [tool]: (Object.hasOwn(a.toolCounts, tool) ? a.toolCounts[tool]! : 0) + 1 } : a.toolCounts;
         agents.set(agentId, { ...a, lastTool: tool ?? a.lastTool, toolCalls: a.toolCalls + (finished ? 1 : 0), toolCounts });
       } else if (session.waitReason === 'permission') {
         session.waitReason = null;

@@ -89,4 +89,16 @@ describe("tool chips in the agent panel", () => {
     expect(container.querySelector(".chip.tool img")).toBeNull();
     expect(container.querySelector(".chip.tool")!.textContent).toContain("<img");
   });
+
+  it("starts collapsed again for another agent", () => {
+    const a1 = makeAgent({ id: "one", toolCounts: counts, toolCalls: 55 });
+    const a2 = makeAgent({ id: "two", toolCounts: counts, toolCalls: 55 });
+    const s = makeSession({ agents: [a1, a2] });
+    const props = { s, now: 2_000_000, onBack: () => {}, onAgent: () => {} };
+    const { container, rerender } = render(<AgentDetail {...props} a={a1} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 7" }));
+    expect(container.querySelectorAll(".chip.tool")).toHaveLength(7);
+    rerender(<AgentDetail {...props} a={a2} />);
+    expect(container.querySelectorAll(".chip.tool")).toHaveLength(5);
+  });
 });

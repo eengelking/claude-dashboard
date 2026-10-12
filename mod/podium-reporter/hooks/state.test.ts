@@ -194,6 +194,11 @@ describe('per-tool counts', () => {
     expect(s.agents.a!.toolCalls).toBe(102)
   })
 
+  test('a tool named like an Object property is counted as its own name', () => {
+    const s = call(call(spawn(), 'constructor', 'a'), 'constructor', 'a')
+    expect(s.agents.a!.toolCounts).toEqual({ constructor: 2 })
+  })
+
   test('the report carries the counts', () => {
     const s = call(call(spawn(), 'Bash', 'a'), 'Bash', 'a')
     expect(agentReport(s.agents.a!).toolCounts).toEqual({ Bash: 2 })
