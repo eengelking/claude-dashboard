@@ -1,3 +1,4 @@
+@import "./themes.css";
 /* Podium fleet console. Ported from mockup/podium.html. Rules are scoped under .podium, except the
    document base (html, body, #root) further down. Dark is the base; light comes
    from prefers-color-scheme or [data-theme="light"] on <html>. */
@@ -24,6 +25,7 @@
   --serious: #ec835a;
   --crit: #d03b3b;
   --crit-text: #ee6a6a;
+  --on-good: #fff;
   --eff-low: #f58b57; --eff-medium: #91c882; --eff-high: #5aa9f5; --eff-xhigh: #af87ff;
   --eff-r1: #eb5f57; --eff-r2: #f58b57; --eff-r3: #fac35f; --eff-r4: #91c882; --eff-r5: #82aadc;
   --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -122,7 +124,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .dot.done { background: var(--axis); }
 .podium .dot.failed { background: var(--crit); }
 .podium .dot.bad { background: var(--crit); }
-@keyframes podium-pulse { 0% { box-shadow: 0 0 0 0 rgba(12,163,12,.55); } 70% { box-shadow: 0 0 0 6px rgba(12,163,12,0); } 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0); } }
+@keyframes podium-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } 70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent); } }
 .podium .st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .podium .st.running { color: var(--good-text); } .podium .st.done { color: var(--muted); } .podium .st.failed, .podium .st.aborted { color: var(--crit-text); }
 .podium .st.aborted { color: var(--muted); }
@@ -248,7 +250,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .step { display: flex; gap: 9px; padding: 6px 12px; align-items: flex-start; }
 .podium .step .ic { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--axis); flex: none; margin-top: 1px; display: grid; place-items: center; }
 .podium .step .ic svg { width: 11px; height: 11px; }
-.podium .step.done .ic { background: var(--good); border-color: var(--good); color: #fff; }
+.podium .step.done .ic { background: var(--good); border-color: var(--good); color: var(--on-good); }
 .podium .step.done .tx { color: var(--muted); }
 .podium .step.active .ic { border-color: var(--good); }
 .podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); animation: podium-blink 1.4s ease-in-out infinite; }
@@ -453,3 +455,14 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .ritem-slot .rx:hover, .podium .ritem-slot .rx:focus-visible { background: var(--sel); color: var(--ink); }
 .podium .ritem-slot.has-remove .ritem .l1 { padding-right: 30px; }
 .podium .remove-inline { margin-left: 10px; }
+
+/* theme picker (top bar) */
+.podium .themepick { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.podium .themepick .field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.podium .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.podium .seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--raised); border: 0; padding: 5px 9px; cursor: pointer; }
+.podium .seg button + button { border-left: 1px solid var(--border); }
+.podium .seg button:hover { background: var(--sel); }
+.podium .seg button[aria-checked="true"] { background: var(--sel); color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.podium .seg button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: -2px; }
+.podium .themepick .credits { font-size: 12px; color: var(--muted); }

@@ -10,7 +10,7 @@ import { stateFrom } from "./testState";
 
 beforeEach(() => {
   localStorage.clear();
-  delete document.documentElement.dataset.theme;
+  for (const k of ["theme", "themeName", "mode"]) delete document.documentElement.dataset[k];
 });
 afterEach(() => {
   cleanup();
@@ -149,23 +149,95 @@ describe("accessibility", () => {
     for (const i of imgs) expect(i).toHaveAccessibleName(/last 60 seconds/);
     const clickables = [...container.querySelectorAll("[onclick], [role=button]")];
     expect(clickables).toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Toggle light and dark theme" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Theme" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Mode" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "History" })).toHaveAttribute("href", "#/history");
     expect(screen.queryByRole("link", { name: "Usage dashboard" })).not.toBeInTheDocument();
   });
 });
 
+function osPrefers(dark: boolean) {
+  const listeners: Array<() => void> = [];
+  const mql = {
+    matches: dark,
+    media: "(prefers-color-scheme: dark)",
+    addEventListener: (_: string, f: () => void) => listeners.push(f),
+    removeEventListener: (_: string, f: () => void) => listeners.splice(listeners.indexOf(f), 1),
+  };
+  vi.stubGlobal("matchMedia", () => mql);
+  return {
+    flip(next: boolean) {
+      mql.matches = next;
+      listeners.slice().forEach((f) => f());
+    },
+  };
+}
+
 describe("theme", () => {
-  it("toggles data-theme and remembers the choice", () => {
-    const { result, unmount } = renderHook(() => useTheme());
-    expect(result.current.choice).toBeNull();
-    act(() => result.current.toggle());
-    const first = document.documentElement.dataset.theme;
-    expect(first === "light" || first === "dark").toBe(true);
-    expect(JSON.parse(localStorage.getItem("podium.theme")!)).toBe(first);
-    unmount();
+  const root = () => document.documentElement.dataset;
+
+  it("defaults to Podium in system mode and follows the OS", () => {
+    const os = osPrefers(true);
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.theme).toBe("podium");
+    expect(result.current.mode).toBe("system");
+    expect(result.current.resolved).toBe("dark");
+    expect(root()).toMatchObject({ themeName: "podium", theme: "dark", mode: "system" });
+    act(() => os.flip(false));
+    expect(result.current.resolved).toBe("light");
+    expect(root().theme).toBe("light");
+  });
+
+  it("picks a theme and a mode, applies them to <html> and remembers them across a remount", () => {
+    osPrefers(false);
+    const first = renderHook(() => useTheme());
+    act(() => first.result.current.setTheme("nord"));
+    act(() => first.result.current.setMode("dark"));
+    expect(root()).toMatchObject({ themeName: "nord", theme: "dark", mode: "dark" });
+    expect(JSON.parse(localStorage.getItem("podium.theme")!)).toEqual({ theme: "nord", mode: "dark" });
+    first.unmount();
     const again = renderHook(() => useTheme());
-    expect(again.result.current.choice).toBe(first);
+    expect(again.result.current.theme).toBe("nord");
+    expect(again.result.current.mode).toBe("dark");
+  });
+
+  it("keeps an old light or dark choice as Podium in that mode", () => {
+    osPrefers(true);
+    localStorage.setItem("podium.theme", JSON.stringify("light"));
+    const { result } = renderHook(() => useTheme());
+    expect(result.current).toMatchObject({ theme: "podium", mode: "light", resolved: "light" });
+    expect(root()).toMatchObject({ themeName: "podium", theme: "light" });
+  });
+
+  it("survives blocked storage", () => {
+    osPrefers(true);
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setTheme("gruvbox"));
+    expect(result.current.theme).toBe("gruvbox");
+    vi.restoreAllMocks();
+  });
+});
+
+describe("theme picker", () => {
+  it("lists every theme, shows the current one, and changes theme and mode from the top bar", () => {
+    osPrefers(true);
+    render(<FleetView state={stateFrom()} />);
+    const select = screen.getByRole("combobox", { name: "Theme" }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["podium", "solarized", "nord", "gruvbox", "catppuccin", "github"]);
+    expect(select.value).toBe("podium");
+    expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+    fireEvent.change(select, { target: { value: "gruvbox" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+    expect(select.value).toBe("gruvbox");
+    expect(screen.getByRole("radio", { name: "Light" })).toBeChecked();
+    expect(document.documentElement.dataset).toMatchObject({ themeName: "gruvbox", theme: "light" });
+    expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("THIRD_PARTY_NOTICES"));
   });
 });
 

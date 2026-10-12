@@ -1,0 +1,164 @@
+<title>Podium color themes (mockup for #32)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: the top bar with the new theme control, shown live at desktop width and inside a phone-width frame, above a swatch grid of every shipped theme in both modes and a sample of the wall (cards, chips, status, failure box) that restyles with the picked theme. The page itself is neutral so the sample is what changes. */
+:root { --font-ui: "Schibsted Grotesk", system-ui, sans-serif; --font-mono: "JetBrains Mono", ui-monospace, monospace; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/1.4 var(--font-ui); background: #e8e8e6; color: #1b1b1a; -webkit-font-smoothing: antialiased; }
+@media (prefers-color-scheme: dark) { body { background: #111; color: #e8e8e6; } }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 28px; }
+h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; }
+p.note { margin: 0; max-width: 70ch; opacity: .75; }
+
+/* the themed stage */
+.stage { --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+  --border: rgba(255,255,255,.10); --hover: rgba(255,255,255,.045); --sel: rgba(255,255,255,.08);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --fable: #d95926;
+  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --crit-text: #ee6a6a;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.top { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+.logo { font-weight: 700; font-size: 15px; }
+.spacer { flex: 1; }
+.btn, .sel { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
+.sel { padding: 5px 26px 5px 9px; }
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--raised); border: 0; padding: 5px 9px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-checked="true"] { background: var(--sel); color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; }
+.wall { padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nm { font-weight: 600; flex: 1; }
+.st { font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.st.running { color: var(--good-text); } .st.waiting { color: var(--warn); } .st.failed { color: var(--crit-text); }
+.st.waiting .dot { background: transparent; border: 2px solid var(--warn); } .st.failed .dot { background: var(--crit); }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; border: 1px solid var(--border); color: var(--ink2); }
+.chip i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); }
+.bar { height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--sonnet); }
+.mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.fail { border: 1px solid color-mix(in srgb, var(--crit) 55%, transparent); background: color-mix(in srgb, var(--crit) 12%, transparent); border-radius: 6px; padding: 7px 9px; color: var(--ink); font-size: 12px; }
+.fail b { color: var(--crit-text); }
+
+.phone { width: 360px; max-width: 100%; }
+.cols { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+/* swatch grid (static; shows what each theme ships) */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.sw { border-radius: 8px; border: 1px solid rgba(128,128,128,.35); padding: 10px; display: grid; gap: 8px; }
+.sw .t { font-weight: 600; font-size: 12px; }
+.sw .strip { display: flex; height: 22px; border-radius: 4px; overflow: hidden; }
+.sw .strip i { flex: 1; }
+.sw .cr { font-size: 11px; opacity: .8; }
+</style>
+
+<main>
+  <header>
+    <h1>Color themes: top-bar control and what ships</h1>
+    <p class="note">Mockup for #32. The control replaces the single "Theme" button: a Theme dropdown (native select, keyboard and phone friendly) and a Light / Dark / System radio group. Pick below and the live sample restyles. Podium stays the default and follows the OS until the user picks otherwise.</p>
+  </header>
+
+  <section>
+    <h2>Live sample, desktop width</h2>
+    <div class="stage" id="desk"></div>
+  </section>
+
+  <section class="cols">
+    <div>
+      <h2>Every theme, both modes (swatches: bg, surface, ink, Opus, Sonnet, Haiku, Fable, good, warn, crit)</h2>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div class="phone">
+      <h2>Same control at phone width (wraps onto a second row)</h2>
+      <div class="stage" id="ph"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Behavior notes</h2>
+    <p class="note">System mode follows the OS and updates live when it changes. A theme without a palette for the chosen mode falls back to Podium's palette for that mode, and the dropdown marks it ("Dracula, dark only"). Status stays green, amber, orange and red with an icon and a word, never color alone. Credits (name, author, source, license) live in THIRD_PARTY_NOTICES.md and are linked from the dropdown's help line.</p>
+  </section>
+</main>
+
+<script>
+// Palette data copied from each project's published values: Solarized (Ethan Schoonover), Nord (Arctic Ice Studio), Gruvbox (Pavel Pertsev), Catppuccin (Catppuccin Org), GitHub Primer (GitHub). All MIT.
+const T = {
+  podium: { label: "Podium (default)",
+    dark:  { bg:"#0d0d0d", surface:"#1a1a19", raised:"#222220", ink:"#f0efec", ink2:"#c3c2b7", muted:"#898781", grid:"#2c2c2a", axis:"#383835", border:"rgba(255,255,255,.10)", hover:"rgba(255,255,255,.045)", sel:"rgba(255,255,255,.08)", opus:"#9085e9", sonnet:"#3987e5", haiku:"#199e70", fable:"#d95926", good:"#0ca30c", goodText:"#3dbb3d", warn:"#fab219", serious:"#ec835a", crit:"#d03b3b", critText:"#ee6a6a" },
+    light: { bg:"#f9f9f7", surface:"#fcfcfb", raised:"#f1f0ec", ink:"#0b0b0b", ink2:"#52514e", muted:"#6b6a64", grid:"#e1e0d9", axis:"#c3c2b7", border:"rgba(11,11,11,.10)", hover:"rgba(11,11,11,.04)", sel:"rgba(11,11,11,.07)", opus:"#6250d6", sonnet:"#2a78d6", haiku:"#1baf7a", fable:"#eb6834", good:"#0ca30c", goodText:"#006300", warn:"#fab219", serious:"#ec835a", crit:"#d03b3b", critText:"#b52a2a" } },
+  solarized: { label: "Solarized", credit: "Ethan Schoonover, MIT",
+    dark:  { bg:"#002b36", surface:"#073642", raised:"#0b3d4a", ink:"#eee8d5", ink2:"#93a1a1", muted:"#839496", grid:"#0e4452", axis:"#586e75", border:"rgba(238,232,213,.14)", hover:"rgba(238,232,213,.05)", sel:"rgba(238,232,213,.09)", opus:"#6c71c4", sonnet:"#268bd2", haiku:"#2aa198", fable:"#cb4b16", good:"#859900", goodText:"#9bb300", warn:"#b58900", serious:"#cb4b16", crit:"#dc322f", critText:"#f0605d" },
+    light: { bg:"#fdf6e3", surface:"#fffbed", raised:"#eee8d5", ink:"#073642", ink2:"#586e75", muted:"#657b83", grid:"#e6dfc8", axis:"#93a1a1", border:"rgba(7,54,66,.14)", hover:"rgba(7,54,66,.05)", sel:"rgba(7,54,66,.08)", opus:"#6c71c4", sonnet:"#268bd2", haiku:"#2aa198", fable:"#cb4b16", good:"#859900", goodText:"#5f6e00", warn:"#b58900", serious:"#cb4b16", crit:"#dc322f", critText:"#b5201d" } },
+  nord: { label: "Nord", credit: "Arctic Ice Studio, MIT",
+    dark:  { bg:"#2e3440", surface:"#3b4252", raised:"#434c5e", ink:"#eceff4", ink2:"#d8dee9", muted:"#a3adc0", grid:"#434c5e", axis:"#4c566a", border:"rgba(236,239,244,.14)", hover:"rgba(236,239,244,.05)", sel:"rgba(236,239,244,.09)", opus:"#b48ead", sonnet:"#81a1c1", haiku:"#8fbcbb", fable:"#d08770", good:"#a3be8c", goodText:"#a3be8c", warn:"#ebcb8b", serious:"#d08770", crit:"#bf616a", critText:"#e08790" },
+    light: { bg:"#eceff4", surface:"#f5f7fa", raised:"#e5e9f0", ink:"#2e3440", ink2:"#434c5e", muted:"#5c6679", grid:"#d8dee9", axis:"#b9c2d3", border:"rgba(46,52,64,.14)", hover:"rgba(46,52,64,.05)", sel:"rgba(46,52,64,.08)", opus:"#8c5f93", sonnet:"#5e81ac", haiku:"#4f8f8e", fable:"#c0603f", good:"#a3be8c", goodText:"#3f7a2c", warn:"#ebcb8b", serious:"#d08770", crit:"#bf616a", critText:"#a03a45" } },
+  gruvbox: { label: "Gruvbox", credit: "Pavel Pertsev, MIT",
+    dark:  { bg:"#282828", surface:"#32302f", raised:"#3c3836", ink:"#ebdbb2", ink2:"#d5c4a1", muted:"#a89984", grid:"#3c3836", axis:"#504945", border:"rgba(235,219,178,.14)", hover:"rgba(235,219,178,.05)", sel:"rgba(235,219,178,.09)", opus:"#d3869b", sonnet:"#83a598", haiku:"#8ec07c", fable:"#fe8019", good:"#b8bb26", goodText:"#b8bb26", warn:"#fabd2f", serious:"#fe8019", crit:"#fb4934", critText:"#fb6a56" },
+    light: { bg:"#fbf1c7", surface:"#fdf6d6", raised:"#ebdbb2", ink:"#3c3836", ink2:"#504945", muted:"#665c54", grid:"#e3d4a8", axis:"#bdae93", border:"rgba(60,56,54,.16)", hover:"rgba(60,56,54,.05)", sel:"rgba(60,56,54,.09)", opus:"#8f3f71", sonnet:"#076678", haiku:"#427b58", fable:"#af3a03", good:"#79740e", goodText:"#5f5b0b", warn:"#b57614", serious:"#af3a03", crit:"#9d0006", critText:"#9d0006" } },
+  catppuccin: { label: "Catppuccin (Latte, Mocha)", credit: "Catppuccin Org, MIT",
+    dark:  { bg:"#1e1e2e", surface:"#252537", raised:"#313244", ink:"#cdd6f4", ink2:"#bac2de", muted:"#9399b2", grid:"#313244", axis:"#45475a", border:"rgba(205,214,244,.12)", hover:"rgba(205,214,244,.05)", sel:"rgba(205,214,244,.09)", opus:"#cba6f7", sonnet:"#89b4fa", haiku:"#94e2d5", fable:"#fab387", good:"#a6e3a1", goodText:"#a6e3a1", warn:"#f9e2af", serious:"#fab387", crit:"#f38ba8", critText:"#f38ba8" },
+    light: { bg:"#eff1f5", surface:"#f6f7fa", raised:"#e6e9ef", ink:"#4c4f69", ink2:"#5c5f77", muted:"#6c6f85", grid:"#dce0e8", axis:"#bcc0cc", border:"rgba(76,79,105,.14)", hover:"rgba(76,79,105,.05)", sel:"rgba(76,79,105,.08)", opus:"#8839ef", sonnet:"#1e66f5", haiku:"#179299", fable:"#fe640b", good:"#40a02b", goodText:"#2f7a1f", warn:"#df8e1d", serious:"#fe640b", crit:"#d20f39", critText:"#d20f39" } },
+  github: { label: "GitHub", credit: "GitHub Primer, MIT",
+    dark:  { bg:"#0d1117", surface:"#161b22", raised:"#21262d", ink:"#e6edf3", ink2:"#c9d1d9", muted:"#8b949e", grid:"#21262d", axis:"#30363d", border:"rgba(240,246,252,.12)", hover:"rgba(240,246,252,.05)", sel:"rgba(240,246,252,.09)", opus:"#bc8cff", sonnet:"#58a6ff", haiku:"#39c5cf", fable:"#db6d28", good:"#3fb950", goodText:"#56d364", warn:"#d29922", serious:"#db6d28", crit:"#f85149", critText:"#ff7b72" },
+    light: { bg:"#ffffff", surface:"#f6f8fa", raised:"#eaeef2", ink:"#1f2328", ink2:"#424a53", muted:"#59636e", grid:"#eaeef2", axis:"#d0d7de", border:"rgba(31,35,40,.15)", hover:"rgba(31,35,40,.04)", sel:"rgba(31,35,40,.07)", opus:"#8250df", sonnet:"#0969da", haiku:"#1b7c83", fable:"#bc4c00", good:"#1a7f37", goodText:"#116329", warn:"#9a6700", serious:"#bc4c00", crit:"#cf222e", critText:"#a40e26" } },
+};
+const KEYS = Object.keys(T);
+const kebab = k => k.replace(/[A-Z]/g, c => "-" + c.toLowerCase());
+const sysDark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+let state = { theme: "podium", mode: "system" };
+const resolved = () => state.mode === "system" ? (sysDark() ? "dark" : "light") : state.mode;
+function paint(el, pal) { for (const [k, v] of Object.entries(pal)) el.style.setProperty("--" + kebab(k), v); el.style.colorScheme = ""; }
+
+function stageHTML(id) {
+  return `
+  <div class="top">
+    <span class="logo">Podium</span><span class="mono">3 live</span><span class="spacer"></span>
+    <label class="field">Theme
+      <select class="sel" data-role="theme" aria-label="Theme">${KEYS.map(k => `<option value="${k}">${T[k].label}</option>`).join("")}</select></label>
+    <div class="seg" role="radiogroup" aria-label="Mode">
+      ${["light","dark","system"].map(m => `<button role="radio" data-mode="${m}" aria-checked="false">${m[0].toUpperCase() + m.slice(1)}</button>`).join("")}
+    </div>
+  </div>
+  <div class="wall">
+    <div class="card"><div class="row"><span class="nm">api-refactor</span><span class="st running"><i class="dot"></i>running</span></div>
+      <div class="row"><span class="chip"><i style="--c:var(--opus)"></i>Opus</span><span class="chip"><i style="--c:var(--sonnet)"></i>Sonnet</span><span class="chip"><i style="--c:var(--haiku)"></i>Haiku</span><span class="chip"><i style="--c:var(--fable)"></i>Fable</span></div>
+      <div class="bar"><i style="width:62%"></i></div><span class="mono">62% context · $4.18 · main</span></div>
+    <div class="card"><div class="row"><span class="nm">docs-sweep</span><span class="st waiting"><i class="dot"></i>waiting</span></div>
+      <div class="row"><span class="chip"><i style="--c:var(--sonnet)"></i>Sonnet</span></div>
+      <div class="bar"><i style="width:28%"></i></div><span class="mono">28% context · $0.92 · docs/readme</span></div>
+    <div class="card"><div class="row"><span class="nm">migrate-db</span><span class="st failed"><i class="dot"></i>failed</span></div>
+      <div class="fail"><b>Exit 1.</b> Migration 0042 could not add the index.</div>
+      <span class="mono">91% context · $11.40 · issue/42</span></div>
+  </div>`;
+}
+function mount(id) {
+  const el = document.getElementById(id); el.innerHTML = stageHTML(id);
+  el.querySelector("[data-role=theme]").onchange = e => { state.theme = e.target.value; render(); };
+  el.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => { state.mode = b.dataset.mode; render(); });
+}
+function render() {
+  const pal = T[state.theme][resolved()];
+  for (const id of ["desk", "ph"]) {
+    const el = document.getElementById(id); paint(el, pal);
+    el.querySelector("[data-role=theme]").value = state.theme;
+    el.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-checked", String(b.dataset.mode === state.mode)));
+  }
+}
+function swatches() {
+  const g = document.getElementById("grid");
+  g.innerHTML = KEYS.flatMap(k => ["dark", "light"].map(m => {
+    const p = T[k][m]; const cols = [p.bg, p.surface, p.ink, p.opus, p.sonnet, p.haiku, p.fable, p.good, p.warn, p.crit];
+    return `<div class="sw" style="background:${p.bg};color:${p.ink}"><span class="t">${T[k].label.split(" (")[0]}, ${m}</span>
+      <div class="strip">${cols.map(c => `<i style="background:${c}"></i>`).join("")}</div>
+      <span class="cr" style="color:${p.ink2}">${T[k].credit || "Original Podium palette"}</span></div>`;
+  })).join("");
+}
+mount("desk"); mount("ph"); swatches(); render();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+</script>

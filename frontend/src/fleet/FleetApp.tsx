@@ -227,8 +227,7 @@ export function FleetView({ state }: { state: FleetState }) {
           reporters={reporters}
           lastMessageAt={state.lastMessageAt}
           now={now}
-          onTheme={theme.toggle}
-          theme={theme.theme}
+          theme={theme}
           collapsed={panes.collapsed.top}
           onCollapse={() => toggle("top")}
           wall={wallButton}

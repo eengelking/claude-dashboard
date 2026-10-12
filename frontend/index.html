@@ -7,6 +7,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      // Sets the theme attributes before first paint so a stored choice never flashes the default. Mirrors
+      // parseChoice and resolveMode in src/fleet/themes.ts; the palette fallback is handled by useTheme once React loads.
+      (function () {
+        try {
+          var raw = JSON.parse(localStorage.getItem("podium.theme"));
+          var theme = "podium", mode = "system";
+          if (raw === "light" || raw === "dark") mode = raw;
+          else if (raw && typeof raw === "object") {
+            if (/^(solarized|nord|gruvbox|catppuccin|github)$/.test(raw.theme)) theme = raw.theme;
+            if (/^(light|dark|system)$/.test(raw.mode)) mode = raw.mode;
+          }
+          var dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          var d = document.documentElement.dataset;
+          d.themeName = theme; d.theme = dark ? "dark" : "light"; d.mode = mode;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

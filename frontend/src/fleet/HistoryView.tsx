@@ -10,6 +10,7 @@ import type { AgentSort } from "./components/AgentTree";
 import { ModelChip } from "./components/Chips";
 import { FocusView } from "./components/FocusView";
 import { Logo } from "./components/Icons";
+import { ThemePicker } from "./components/ThemePicker";
 import { useTheme } from "./useTheme";
 import { APP_NAME, type HistoryRow, type SessionView } from "./types";
 
@@ -88,9 +89,7 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
           <a className="btn" href="#/">
             Live fleet
           </a>
-          <button type="button" className="btn" onClick={theme.toggle} aria-label="Toggle light and dark theme">
-            Theme
-          </button>
+          <ThemePicker theme={theme} />
         </header>
         <div className="banner">
           <b>Past sessions.</b> Read-only: built from what the server stored. Cost is an estimate, not a bill.

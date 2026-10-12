@@ -3,8 +3,10 @@ import { fmtClock } from "../format";
 import type { Phase } from "../store";
 import { APP_NAME } from "../types";
 import { Logo } from "./Icons";
+import { ThemePicker } from "./ThemePicker";
+import type { useTheme } from "../useTheme";
 
-export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: number; now: number; onTheme: () => void; theme: string; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
+export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: number; now: number; theme: ReturnType<typeof useTheme>; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters, lastMessageAt, now } = props;
   const synced = lastMessageAt ? Math.max(0, (now - lastMessageAt) / 1000) : null;
   return (
@@ -36,9 +38,7 @@ export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: 
       <a className="btn" href="#/history">
         History
       </a>
-      <button type="button" className="btn" onClick={props.onTheme} aria-label="Toggle light and dark theme" title={`Theme: ${props.theme}`}>
-        Theme
-      </button>
+      <ThemePicker theme={props.theme} />
       {props.onCollapse && (
         <button type="button" className="btn" onClick={props.onCollapse} aria-expanded={!props.collapsed} aria-controls="podium-top" title={"Hide the top bar (\\)"}>
           Hide top bar
