@@ -102,8 +102,8 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     so blowouts happen often, as 1.6.2 asks; the current Haiku 5.5 has a 1M window.
 
 20. **View fields the UI needed.** `SessionView` gained `cwd` (home-shortened working directory, for the
-    page header), `waitReason` (to word the waiting callout: "Permission prompt: ..." vs "Waiting for
-    your input"), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
+    page header), `waitReason` (to word the orchestrator page's waiting callout: "Permission prompt: ..." vs "Waiting for
+    your input: ...". The session card always says "Waiting for your input.", see #50), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
     "dropped from the fleet at 1:15" without hard-coding server settings). All additive.
 21. **CSS scoping.** Every Podium rule is scoped under `.podium` and the tokens are defined on `.podium`, not
     `:root`, apart from a small document base (`html`, `body`, `#root` height and margin) in `fleet.css`.

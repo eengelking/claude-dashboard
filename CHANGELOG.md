@@ -21,6 +21,9 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- A session card for a session waiting on you now says only `Waiting for your input.`, for a permission
+  prompt and a question alike, instead of a block of the prompt's text that filled most of the card. The
+  orchestrator page still shows the full note. (#50)
 - In the agent detail panel, the Kind row is now an icon and one word (`Subagent`, `Fork` or `Teammate`) on
   one line, aligned with its label. The icon takes the agent's model color, as the squares in the session
   card's agent strip do. The explanation moved into a tooltip, on hover or keyboard focus, and is the

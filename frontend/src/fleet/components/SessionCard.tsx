@@ -9,9 +9,12 @@ export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the repor
 
 export function waitText(s: Pick<SessionView, "waitReason" | "waitNote">): string {
   if (s.waitReason === "permission") return `Permission prompt: ${s.waitNote ?? "a tool call needs your approval"}`;
-  if (s.waitReason === "input") return s.waitNote ? `Waiting for your input: ${s.waitNote}` : "Waiting for your input.";
+  if (s.waitReason === "input") return s.waitNote ? `Waiting for your input: ${s.waitNote}` : CARD_WAIT_TEXT;
   return s.waitNote ?? "Waiting on you.";
 }
+
+// The card stays short; the full note is on the orchestrator page (waitText).
+const CARD_WAIT_TEXT = "Waiting for your input.";
 
 export function riskText(s: SessionView): string {
   const b = s.blowouts;
@@ -82,7 +85,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           {c.running} running · {c.done} done{c.failed ? ` · ${c.failed} failed` : ""}
         </span>
       </div>
-      {s.status === "waiting" && <div className="alert">{waitText(s)}</div>}
+      {s.status === "waiting" && <div className="alert">{CARD_WAIT_TEXT}</div>}
       {s.status === "stale" && (
         <div className="alert stale">
           Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Dropped from the fleet at{" "}

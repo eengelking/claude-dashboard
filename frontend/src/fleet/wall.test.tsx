@@ -131,7 +131,12 @@ describe("session card", () => {
 
   it("waiting and stale callouts", () => {
     const w = renderCard(makeSession({ status: "waiting", waitReason: "permission", waitNote: "Bash(npm run e2e)" }));
-    expect(w.container.textContent).toContain("Permission prompt: Bash(npm run e2e)");
+    expect(w.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
+    expect(w.container.textContent).not.toContain("Bash(npm run e2e)");
+    cleanup();
+    const q = renderCard(makeSession({ status: "waiting", waitReason: "input", waitNote: "Which branch should I use?" }));
+    expect(q.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
+    expect(q.container.textContent).not.toContain("Which branch should I use?");
     cleanup();
     const s = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000 }));
     expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Dropped from the fleet at 1:15.");
@@ -153,6 +158,16 @@ describe("session card", () => {
     const p = renderCard();
     expect(p.container.textContent).toContain("Migrate invoices to v2 schema · Port invoice endpoints");
     expect(p.container.textContent).toContain("1/4");
+  });
+});
+
+describe("a waiting session", () => {
+  it("keeps the card short and the orchestrator page shows the full note (#50)", () => {
+    const note = "Bash(npm run e2e -- --grep long-running-suite)";
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ status: "waiting", waitReason: "permission", waitNote: note })] })} />);
+    expect(container.querySelector(".wall .card")!.textContent).not.toContain(note);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    expect(container.textContent).toContain(`Permission prompt: ${note}`);
   });
 });
 
