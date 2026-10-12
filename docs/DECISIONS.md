@@ -164,3 +164,14 @@ display detail, and guessing `/Users/<name>` or `/home/<name>` can show a wrong 
 secret and needs no change on the wire.
 **Cost.** One more variable for `podiumctl` to set. A server started in a container by hand, without
 `podiumctl`, must set it itself or paths stay long.
+
+## 17. Fleet cards keep a fixed width
+
+**Choice.** The wall grid is `repeat(auto-fill, min(320px, 100%))`, left-aligned. A card is 320 px wide
+(narrower only when the area is) and extra room adds columns.
+**Why.** With `minmax(300px, 1fr)` a new column made every card narrower, so collapsing a pane, which widens
+the main area, shrank the cards (#65). Collapsing the 340 px right pane did it most. A steady size is what an
+always-on wall display (#33) wants, and one rule covers both panes, the top bar and Wall mode, since they only
+change the main area's width.
+**Cost.** A last row that is not full leaves empty space on its right, and the cards no longer stretch to fill
+a wide row.
