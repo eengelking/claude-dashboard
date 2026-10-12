@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import "./fleet.css";
 import { fmtClock, fmtDur, fmtUsd } from "./format";
 import type { AgentSortKey } from "./logic";
-import { defaultAgentDir } from "./logic";
+import { defaultAgentDir, ORCHESTRATOR_ROW } from "./logic";
 import { AgentDetail } from "./components/AgentDetail";
+import { OrchestratorDetail } from "./components/OrchestratorDetail";
 import type { AgentSort } from "./components/AgentTree";
 import { ModelChip } from "./components/Chips";
 import { FocusView } from "./components/FocusView";
@@ -168,9 +169,13 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
               </>
             )}
           </main>
-          {s && selected && (
+          {s && (selected || agent === ORCHESTRATOR_ROW) && (
             <aside className="side" aria-label="Agent detail">
-              <AgentDetail s={s} a={selected} now={s.lastSeenAt} onBack={() => setAgent(null)} onAgent={setAgent} />
+              {agent === ORCHESTRATOR_ROW ? (
+                <OrchestratorDetail s={s} now={s.lastSeenAt} onBack={() => setAgent(null)} />
+              ) : (
+                selected && <AgentDetail s={s} a={selected} now={s.lastSeenAt} onBack={() => setAgent(null)} onAgent={setAgent} />
+              )}
             </aside>
           )}
         </div>

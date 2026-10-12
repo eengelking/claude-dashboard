@@ -65,8 +65,8 @@ describe("orchestrator page", () => {
 
   it("builds the tree from parentId; header sort flattens and reverses; Show as tree restores", () => {
     const { container } = openFocus();
-    const rows = () => [...container.querySelectorAll("button.trow")].map((r) => r.getAttribute("data-agent"));
-    const guides = () => [...container.querySelectorAll("button.trow")].map((r) => r.querySelectorAll(".indent s").length);
+    const rows = () => [...container.querySelectorAll("button.trow:not(.root)")].map((r) => r.getAttribute("data-agent"));
+    const guides = () => [...container.querySelectorAll("button.trow:not(.root)")].map((r) => r.querySelectorAll(".indent s").length);
     expect(rows()).toEqual(["r1", "k1", "f1"]);
     expect(guides()).toEqual([1, 2, 1]);
     fireEvent.click(screen.getByRole("button", { name: "Cost" }));
@@ -91,6 +91,58 @@ describe("orchestrator page", () => {
         expect(row.querySelector(sel)!.parentElement, sel).toHaveClass("cell");
       }
     }
+  });
+
+  it("the orchestrator row is a button that opens the orchestrator panel, and Back returns to the activity list (#63)", () => {
+    const { container } = openFocus();
+    const row = container.querySelector("button.trow.root")!;
+    expect(row).toBeInTheDocument();
+    expect(row).toHaveAttribute("aria-current", "false");
+    fireEvent.click(row);
+    expect(row).toHaveAttribute("aria-current", "true");
+    const side = container.querySelector(".side") as HTMLElement;
+    expect(side.querySelector("h3")).toHaveTextContent("api-refactor");
+    expect(side.textContent).toContain("Opus");
+    expect(side.textContent).toContain("$12.84");
+    expect(side.querySelector(".det")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to activity" }));
+    expect(row).toHaveAttribute("aria-current", "false");
+    expect(screen.getByText(/Activity · api-refactor/)).toBeInTheDocument();
+  });
+
+  it("switches the panel and the highlighted row between the orchestrator and an agent, both ways (#63)", () => {
+    const { container } = openFocus();
+    const orch = () => container.querySelector("button.trow.root")!;
+    const agent = () => container.querySelector('button.trow[data-agent="f1"]')!;
+    fireEvent.click(agent());
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Fork one");
+    fireEvent.click(orch());
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("api-refactor");
+    expect(orch()).toHaveAttribute("aria-current", "true");
+    expect(agent()).toHaveAttribute("aria-current", "false");
+    fireEvent.click(agent());
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Fork one");
+    expect(orch()).toHaveAttribute("aria-current", "false");
+    expect(agent()).toHaveAttribute("aria-current", "true");
+  });
+
+  it("the orchestrator row is reachable and activated from the keyboard (#63)", () => {
+    const { container } = openFocus();
+    const row = container.querySelector("button.trow.root") as HTMLButtonElement;
+    row.focus();
+    expect(row).toHaveFocus();
+    // A button turns Enter into a click; jsdom does not, so assert it is a real, enabled button.
+    expect(row.tagName).toBe("BUTTON");
+    expect(row).not.toBeDisabled();
+    expect(row).toHaveAttribute("type", "button");
+  });
+
+  it("opens the orchestrator panel for a session reported by settings hooks, with the fields that exist (#63)", () => {
+    const { container } = openFocus({ reporter: "hooks", effort: null, costUsd: null, tokensTotal: 0, git: null, plan: null });
+    fireEvent.click(container.querySelector("button.trow.root")!);
+    const side = container.querySelector(".side") as HTMLElement;
+    expect(side.querySelector("h3")).toHaveTextContent("api-refactor");
+    expect(side.textContent).toContain("settings hooks");
   });
 
   it("selecting a row opens the agent panel and flashes the row", () => {

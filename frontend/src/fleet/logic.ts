@@ -3,6 +3,9 @@ import type { AgentView, Effort, ModelFamily, Plan, SessionView } from "./types"
 
 export const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
+/** The selection value for the orchestrator's own row. Agent ids never start with "@", so it cannot collide. */
+export const ORCHESTRATOR_ROW = "@orchestrator";
+
 export type SortKey = "status" | "model" | "blow" | "ctx" | "cost" | "newest";
 export const SORTS: Record<SortKey, string> = {
   status: "Status",

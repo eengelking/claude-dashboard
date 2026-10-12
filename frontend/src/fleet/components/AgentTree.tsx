@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
-import { buildTree, sessionElapsedSec, sortAgents, type AgentSortKey } from "../logic";
+import { buildTree, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { BlowBadge, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
@@ -65,7 +65,13 @@ export function AgentTree(props: {
             );
           })}
         </div>
-        <div className="trow root">
+        <button
+          type="button"
+          className="trow root"
+          aria-current={props.selectedAgent === ORCHESTRATOR_ROW}
+          onClick={() => props.onSelect(ORCHESTRATOR_ROW)}
+          data-agent={ORCHESTRATOR_ROW}
+        >
           <div className="nm">
             <IconOrch />
             <span className="tx">
@@ -90,7 +96,7 @@ export function AgentTree(props: {
           <div className="cell">
             <StatusChip status={s.status} />
           </div>
-        </div>
+        </button>
         {rows.length ? (
           rows.map((r) => (
             <AgentRow

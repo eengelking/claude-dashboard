@@ -1,6 +1,8 @@
 import type { ActivityView, SessionView } from "../types";
+import { ORCHESTRATOR_ROW } from "../logic";
 import { ActivityList } from "./ActivityList";
 import { AgentDetail } from "./AgentDetail";
+import { OrchestratorDetail } from "./OrchestratorDetail";
 import { PaneTab } from "./PaneTab";
 
 export function SidePanel(props: {
@@ -24,7 +26,9 @@ export function SidePanel(props: {
     <aside className={`side${props.collapsed ? " collapsed" : ""}`} aria-label="Activity and agent detail">
       {props.onToggle && <PaneTab side="right" collapsed={!!props.collapsed} controls="podium-side-body" onToggle={props.onToggle} shortcut="]" />}
       <div id="podium-side-body" hidden={props.collapsed}>
-      {agent && props.selected ? (
+      {props.selected && props.selectedAgent === ORCHESTRATOR_ROW ? (
+        <OrchestratorDetail s={props.selected} now={props.now} onBack={props.onBack} />
+      ) : agent && props.selected ? (
         <AgentDetail s={props.selected} a={agent} now={props.now} onBack={props.onBack} onAgent={props.onAgent} />
       ) : (
         <ActivityList
