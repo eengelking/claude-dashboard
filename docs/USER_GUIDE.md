@@ -70,8 +70,8 @@ context blowouts, plan steps done, estimated cost today and tokens in the last m
 A card shows the session's name and status, its project and git branch (or worktree, with ahead and behind
 counts and how many files changed), its model, effort and context fill, its plan with the current step,
 a strip with one square per agent, and its cost, tokens and running time. A path or branch that is too long
-for the card is shortened (the path from the front, the branch at the end); hover it to see the full value. A red callout means the session
-has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
+for the card is shortened (the path from the front, the branch at the end); hover it to see the full value.
+A red callout means the session has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
 means the session wants you: a permission prompt, or the end of its turn. A **stale** card means it has
 stopped reporting.
 
