@@ -637,6 +637,8 @@ interface SessionView {
 
 A stale session that reports again immediately returns to its stored status. A dropped session that reports again is revived (clear `dropped_at`, `ended_at`). On server start the sweeper treats every stored non-done session as stale until it reports. SSE broadcasts `removed` when a session leaves the live set.
 
+A session that has done nothing yet is not part of the wall. That means its status is not `running` and it has no tokens, cost, context, blowouts, agents or plan. It stays out of `/state`, the SSE `session` and `activity` messages, the KPIs, `/history`, `clearedToday`, the activity feed, and the `liveSessions` number in the report ack and `/health`. It appears as soon as any of those change. Sessions reported only through settings hooks are exempt, because hooks carry no usage and would never leave that state. Claude Code's background daemon runs such sessions (a parked twin of an interactive window, and a pool of pre-warmed spares), and each one loads the reporter.
+
 ### 7.6 SSE stream
 
 `GET /api/fleet/stream` sends `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, and flushes headers at once. Messages (`event:` name, `data:` one JSON line):

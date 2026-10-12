@@ -175,6 +175,19 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     by default. In the image it has to listen on all interfaces for the published port to reach it, so
     `podiumctl` publishes it only on the host's `127.0.0.1` (or the `--bind` address). The server's own
     default outside the container is unchanged. SPEC.md was amended to match (3, 4.2, 4.4, 7.7).
+41. **A session that has done nothing is not on the wall (#42).** Claude Code's background daemon runs a
+    parked twin for each interactive window and keeps a pool of pre-warmed spares. They are real
+    processes, they load the mod, and they report as sessions that have no tokens, cost, agents or plan, so
+    one window could show three identical cards. The mod cannot tell, because the engine exposes neither
+    the session kind nor the parked job. `isUnused` in `derive.ts` decides it from the stored row, and
+    `Fleet` applies it in one place per output: the live list, the SSE messages, the activity feed,
+    `/history`, `clearedToday` and the `liveSessions` count (`visibleCount`). The session shows the moment it
+    is running or has any usage. Settings-hook sessions are exempt. The mod needed no change: its status
+    line shows the server's `liveSessions`. A hidden session's own status line reads `0 live` until it is
+    prompted. SPEC.md 7.5 was amended to match. Known limits: a session whose first prompt is aborted
+    before any token is counted goes from running back to idle, and an open browser keeps its card until
+    the next reload. `/events` filters hidden sessions after the page limit is applied, so a page can come
+    back short. `visibleCount` reads each live session once per report.
 
 ## Deviations from the spec
 

@@ -14,6 +14,13 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- Sessions nobody asked for no longer show up as cards. Claude Code's background daemon runs a parked
+  twin of an interactive window and a pool of pre-warmed spares, and each one loads the reporter and
+  reported as a session of its own. Opening one window in a project could put three identical "waiting on
+  you" cards on the wall. A session now appears once it has done something (tokens, cost, context, an agent,
+  a plan or a blowout, or it is running), and stays off the wall, the activity feed, the history and the
+  cleared-today count until then. Sessions known only from settings hooks are not filtered, since hooks
+  carry no usage. (#42)
 - `podiumctl start --mode standalone` no longer reports "Podium is up" when another process already holds
   the port. It fails before spawning, names the port and suggests `podiumctl status` or `--port`. If the
   server it spawned exits during startup, `start` now fails, shows the end of `podium.log` and leaves no

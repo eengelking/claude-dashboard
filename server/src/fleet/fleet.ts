@@ -2,7 +2,7 @@
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
 import type { FleetDb, RetentionPolicy, SessionRow } from './db.js';
-import { activityView, computeKpis, family, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
+import { activityView, computeKpis, family, isUnused, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
 import { ingestReport, type IngestResult } from './ingest.js';
 import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
@@ -99,6 +99,18 @@ export class Fleet {
     return [...this.live.keys()];
   }
 
+  /** How many live sessions are on the wall: what the reporter's status line and /health report. */
+  visibleCount(): number {
+    let n = 0;
+    for (const id of this.live.keys()) if (!this.unused(this.db.getSession(id))) n++;
+    return n;
+  }
+
+  /** A session that has done nothing yet is kept off the wall and out of every feed (see `isUnused`). */
+  private unused(row: SessionRow | undefined): boolean {
+    return !!row && isUnused(row, this.db.getAgents(row.id).length);
+  }
+
   // ---- ingest ---------------------------------------------------------------------------------
 
   ingest(report: Report): IngestResult {
@@ -113,8 +125,10 @@ export class Fleet {
       this.live.set(res.sessionId, { heard: true, status: null });
     }
     const row = this.db.getSession(res.sessionId);
-    for (const e of res.newEvents.slice().sort((a, b) => a.t - b.t)) {
-      this.hub.broadcast('activity', activityView(e, row));
+    if (!this.unused(row)) {
+      for (const e of res.newEvents.slice().sort((a, b) => a.t - b.t)) {
+        this.hub.broadcast('activity', activityView(e, row));
+      }
     }
     if (this.live.has(res.sessionId)) this.scheduleSession(res.sessionId);
     return res;
@@ -139,7 +153,7 @@ export class Fleet {
     const timer = setTimeout(() => {
       this.pending.delete(id);
       const view = this.view(id);
-      if (view && this.live.has(id)) {
+      if (view && this.live.has(id) && !this.unused(this.db.getSession(id))) {
         const entry = this.live.get(id);
         if (entry) entry.status = view.status;
         this.hub.broadcast('session', view);
@@ -178,7 +192,7 @@ export class Fleet {
     const out: SessionView[] = [];
     for (const id of this.live.keys()) {
       const row = this.db.getSession(id);
-      if (row) out.push(this.viewOf(row));
+      if (row && !this.unused(row)) out.push(this.viewOf(row));
     }
     return out;
   }
@@ -202,21 +216,23 @@ export class Fleet {
 
   clearedToday(): number {
     const now = this.now();
-    return this.db.endedBetween(startOfDay(now), now + 1).filter((s) => !this.live.has(s.id)).length;
+    return this.db.endedBetween(startOfDay(now), now + 1).filter((s) => !this.live.has(s.id) && !this.unused(s)).length;
   }
 
   events(opts: { sessionId?: string | null; before?: number | null; limit: number }): ActivityView[] {
     const rows = this.db.listEvents(opts);
     const sessions = new Map<string, SessionRow | undefined>();
-    return rows.map((e) => {
-      if (!sessions.has(e.session_id)) sessions.set(e.session_id, this.db.getSession(e.session_id));
-      return activityView(e, sessions.get(e.session_id));
-    });
+    return rows
+      .filter((e) => {
+        if (!sessions.has(e.session_id)) sessions.set(e.session_id, this.db.getSession(e.session_id));
+        return !this.unused(sessions.get(e.session_id));
+      })
+      .map((e) => activityView(e, sessions.get(e.session_id)));
   }
 
   /** Sessions that ended or were dropped in [from, to), as summary rows. */
   history(from: number, to: number): HistoryRow[] {
-    return this.db.endedBetween(from, to).map((row) => {
+    return this.db.endedBetween(from, to).filter((row) => !this.unused(row)).map((row) => {
       const agents = this.db.getAgents(row.id);
       const end = row.dropped_at ?? row.ended_at ?? row.last_seen_at;
       return {
@@ -259,7 +275,7 @@ export class Fleet {
     return {
       ok: true,
       dbPath: this.cfg.dbPath,
-      liveSessions: this.live.size,
+      liveSessions: this.visibleCount(),
       uptimeSec: Math.floor((this.now() - this.startedAt) / 1000),
       reporterVersionsSeen: this.db.distinctReporterVersions(),
       sseClients: this.hub.size,
@@ -298,7 +314,10 @@ export class Fleet {
       text,
       data_json: JSON.stringify({ reason }),
     };
-    if (this.db.insertEvent(ev)) this.hub.broadcast('activity', activityView(ev, row));
+    const inserted = this.db.insertEvent(ev);
+    // A session that never reached the wall gets no activity line on its way out. 'removed' is always sent:
+    // a card shown while the session was running must still go when it ends with no usage.
+    if (inserted && !this.unused(row)) this.hub.broadcast('activity', activityView(ev, row));
     this.hub.broadcast('removed', { sessionId: row.id, reason });
   }
 
@@ -337,7 +356,7 @@ export class Fleet {
       }
       if (entry.status !== null && entry.status !== status) {
         entry.status = status;
-        this.hub.broadcast('session', this.viewOf(row));
+        if (!this.unused(row)) this.hub.broadcast('session', this.viewOf(row));
       } else if (entry.status === null) {
         entry.status = status;
       }

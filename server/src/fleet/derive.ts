@@ -133,6 +133,25 @@ export interface DeriveConfig {
   home: string;
 }
 
+/**
+ * A session that has done nothing yet: not running, and no tokens, cost, context, blowouts, agents or
+ * plan. Claude Code's daemon runs such sessions nobody asked for (a parked twin of an interactive window,
+ * a pre-warmed spare), and each reports through the mod. They stay off the wall until they do something.
+ * Hook-only sessions are never unused: hooks carry no usage, so they could never leave this state.
+ */
+export function isUnused(row: SessionRow, agentCount: number): boolean {
+  return (
+    row.reporter_version !== 'hooks' &&
+    row.status !== 'running' &&
+    !row.cost_usd &&
+    tokenSum(row) === 0 &&
+    !row.context_tokens &&
+    row.blowouts === 0 &&
+    row.plan_json === null &&
+    agentCount === 0
+  );
+}
+
 /** How long a session may stay silent before it shows as stale: hook-only sessions have no heartbeat. */
 export function staleAfterFor(row: SessionRow, cfg: DeriveConfig): number {
   return row.reporter_version === 'hooks' ? (cfg.hookStaleAfterMs ?? cfg.staleAfterMs) : cfg.staleAfterMs;

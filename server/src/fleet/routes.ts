@@ -46,7 +46,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     }
     try {
       const out = fleet.ingest(result.report);
-      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.liveIds().length });
+      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount() });
     } catch (err) {
       log(`podium: ingest failed for a report: ${(err as Error).message}`);
       res.status(500).json({ ok: false, error: 'ingest failed', path: '$' });
