@@ -160,6 +160,8 @@ agent it is about. Rows for sessions that have ended are greyed out. A session t
 yellow row that says "Waiting for your approval." or "Waiting for your input." (a question), with the tool
 name, such as `Bash` or `AskUserQuestion`, in a chip under it. Once the session moves on, the row turns plain
 and reads "Waited for your approval."
+A turn that ended after a failing call, a session ending or starting, and an agent seen only by settings hooks
+also read as plain sentences, such as "Session ended (cleared)."
 
 ### History
 

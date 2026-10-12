@@ -3,6 +3,7 @@ import { EVENT_CAP } from "../store";
 import type { ActivityView, SessionView } from "../types";
 import { cssVar, FAMILY_COLOR } from "./Chips";
 import { IconJump } from "./Icons";
+import { readableEvent } from "../eventText";
 import { parseWaitEvent, waitLead } from "../waiting";
 
 export const PAGE = 12;
@@ -43,6 +44,7 @@ export function ActivityList(props: {
             const live = props.gone[e.sessionId] ? undefined : props.sessions[e.sessionId];
             const wait = e.kind === "wait" ? parseWaitEvent(e.text) : null;
             // A wait stays yellow only while it is the session's latest news and the session is still waiting.
+            const plain = wait ? null : readableEvent(e);
             const open = !!wait && live?.status === "waiting" && !(latest[e.sessionId] > e.t);
             const cls = [props.isNew(e.id) && "new", wait && (open ? "w" : "ans"), e.kind === "fail" && "bad", e.kind === "blow" && "blowev", !live && "gone", props.selectedAgent && e.agentId === props.selectedAgent && "cur"]
               .filter(Boolean)
@@ -58,6 +60,11 @@ export function ActivityList(props: {
                     <>
                       <span className="lead">{waitLead(wait.reason, wait.tool, !open)}</span>
                       {wait.tool && <span className="tool">{wait.tool}</span>}
+                    </>
+                  ) : plain ? (
+                    <>
+                      {plain.text}
+                      {plain.tool && <span className="tool">{plain.tool}</span>}
                     </>
                   ) : (
                     e.text
