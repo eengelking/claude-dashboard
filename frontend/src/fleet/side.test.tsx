@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, within, act } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
 import { FailureBox } from "./components/FailureBox";
 import { fleetReducer } from "./store";
@@ -49,6 +49,24 @@ describe("activity list", () => {
     expect(container.querySelector(".side .failbox")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to activity" }));
     expect(screen.getByText(/Activity · api-refactor/)).toBeInTheDocument();
+  });
+
+  it("opening an agent from an activity row flashes the whole row, then stops (#70)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "requestAnimationFrame", "cancelAnimationFrame"] });
+    const s = makeSession({ agents: [makeAgent({ id: "a9", description: "Backfill dry run" })] });
+    const st = stateFrom({ sessions: [s], events: [makeEvent({ id: "o", agentId: "a9", text: "started: Backfill dry run" })] });
+    const { container } = render(<FleetView state={st} />);
+    fireEvent.click(screen.getByRole("button", { name: /started: Backfill dry run/ }));
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    const row = () => container.querySelector('button.trow[data-agent="a9"]')!;
+    expect(row().className).toContain("flash");
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(row().className).not.toContain("flash");
+    vi.useRealTimers();
   });
 
   it("a blowout row opens a detail with the blowout timeline", () => {

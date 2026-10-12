@@ -2,7 +2,7 @@
 // the activity / agent panel. Data comes from useFleet; everything here is presentation state.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./fleet.css";
-import { filterSessions, defaultAgentDir, ORCHESTRATOR_ROW, sortSessions, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
+import { filterSessions, defaultAgentDir, sortSessions, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
 import { PAGE } from "./components/ActivityList";
 import type { AgentSort } from "./components/AgentTree";
 import { FocusView } from "./components/FocusView";
@@ -132,7 +132,7 @@ export function FleetView({ state }: { state: FleetState }) {
   };
   const selectAgent = (id: string) => {
     setSelAgent(id);
-    if (id !== ORCHESTRATOR_ROW) flashRow(id);
+    flashRow(null);
   };
   const openEvent = (e: ActivityView) => {
     const s = state.sessions[e.sessionId];

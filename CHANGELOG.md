@@ -37,6 +37,9 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- Clicking an agent row no longer flashes orange patches behind its cells. A clicked row now shows only the
+  selected background. Opening an agent from an activity entry still flashes its row, now as one band across
+  the whole row. (#70)
 - Cards on the fleet wall keep a steady 360 px width (narrower only when the area itself is). Collapsing or
   expanding the left pane, the right pane or the top bar, or entering Wall mode, now adds or removes columns
   instead of shrinking every card, and a short last row stays left-aligned. (#65)

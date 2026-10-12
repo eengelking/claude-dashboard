@@ -145,19 +145,17 @@ describe("orchestrator page", () => {
     expect(side.textContent).toContain("settings hooks");
   });
 
-  it("selecting a row opens the agent panel and flashes the row", () => {
+  it("selecting a row opens the agent panel and does not flash it; the selected background marks it (#70)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "requestAnimationFrame", "cancelAnimationFrame"] });
     const { container } = openFocus();
     fireEvent.click(container.querySelector('button.trow[data-agent="f1"]')!);
     act(() => {
       vi.advanceTimersByTime(20);
     });
-    expect(container.querySelector('button.trow[data-agent="f1"]')!.className).toContain("flash");
+    const row = container.querySelector('button.trow[data-agent="f1"]')!;
+    expect(row.className).not.toContain("flash");
+    expect(row).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Fork one");
-    act(() => {
-      vi.advanceTimersByTime(2000);
-    });
-    expect(container.querySelector('button.trow[data-agent="f1"]')!.className).not.toContain("flash");
   });
 
   it("shows the blowout callout with links at level 2", () => {

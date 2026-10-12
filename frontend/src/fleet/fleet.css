@@ -381,8 +381,8 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .ev li.bad .evb { box-shadow: inset 3px 0 0 var(--crit); }
 .podium .more { display: flex; gap: 8px; padding: 10px 14px; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
 .podium .more .btn { padding: 3px 9px; }
-.podium .flash > * { animation: podium-flash 1.6s ease-out; }
-@keyframes podium-flash { 0% { background: color-mix(in srgb, var(--warn) 35%, transparent); } 100% { background: transparent; } }
+.podium .trow.flash { animation: podium-flash 1.6s ease-out; }
+@keyframes podium-flash { from { background: color-mix(in srgb, var(--warn) 35%, transparent); } }
 
 /* orchestrator charts */
 .podium .hcs { display: flex; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-width: 100%; }
