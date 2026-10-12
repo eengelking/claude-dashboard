@@ -43,6 +43,13 @@ function ToolChips(props: { counts: Record<string, number>; calls: number; lastT
   );
 }
 
+/** True for a mod older than 0.2.0, the first to send per-tool counts. A hooks session has no mod to update. */
+function reporterLacksToolCounts(s: Pick<SessionView, "reporter" | "reporterVersion">): boolean {
+  if (s.reporter !== "mod" || !s.reporterVersion) return false;
+  const [major = 0, minor = 0] = s.reporterVersion.split(".").map((n) => parseInt(n, 10));
+  return major === 0 && minor < 2;
+}
+
 export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; onBack: () => void; onAgent: (id: string) => void }) {
   const { s, a, now } = props;
   const kids = s.agents.filter((x) => x.parentId === a.id);
@@ -121,6 +128,11 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
             </>
           )}
         </dl>
+        {a.toolCounts === null && reporterLacksToolCounts(s) && (
+          <div className="note">
+            Tool counts need podium-reporter 0.2.0 or later. This session reports {s.reporterVersion}. Run claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins in that session.
+          </div>
+        )}
         {a.toolCounts !== null && <ToolChips key={a.id} counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
         <span className="lab">Skills loaded</span>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

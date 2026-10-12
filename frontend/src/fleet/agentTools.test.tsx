@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { AgentDetail } from "./components/AgentDetail";
 import { makeAgent, makeSession } from "./fixtures";
-import type { AgentView } from "./types";
+import type { AgentView, SessionView } from "./types";
 
 afterEach(cleanup);
 
@@ -100,5 +100,45 @@ describe("tool chips in the agent panel", () => {
     expect(container.querySelectorAll(".chip.tool")).toHaveLength(7);
     rerender(<AgentDetail {...props} a={a2} />);
     expect(container.querySelectorAll(".chip.tool")).toHaveLength(5);
+  });
+});
+
+describe("why the panel shows Last tool", () => {
+  const NOTE = /tool counts need podium-reporter 0\.2\.0 or later/i;
+  function panel(session: Partial<SessionView>, agent: Partial<AgentView>) {
+    const a = makeAgent({ id: "t", ...agent });
+    const s = makeSession({ agents: [a], ...session });
+    return render(<AgentDetail s={s} a={a} now={2_000_000} onBack={() => {}} onAgent={() => {}} />);
+  }
+
+  it("explains the fallback and how to update when the mod is older than 0.2.0", () => {
+    const { container } = panel({ reporter: "mod", reporterVersion: "0.1.0", compat: "outdated" }, { toolCounts: null, toolCalls: 11, lastTool: "Bash" });
+    expect(container.textContent).toMatch(NOTE);
+    expect(container.textContent).toContain("claude plugin update podium-reporter@eengelking-marketplace");
+    expect(container.textContent).toContain("/reload-plugins");
+    expect(container.textContent).toContain("Bash");
+    expect(container.textContent).not.toContain("—");
+  });
+
+  it("still explains it when the server does not mark the old mod outdated", () => {
+    const { container } = panel({ reporter: "mod", reporterVersion: "0.1.9", compat: "ok" }, { toolCounts: null });
+    expect(container.textContent).toMatch(NOTE);
+  });
+
+  it("says nothing on a hooks-only session, which has no mod to update", () => {
+    const { container } = panel({ reporter: "hooks", reporterVersion: null, compat: "ok" }, { toolCounts: null });
+    expect(container.textContent).not.toMatch(NOTE);
+    expect(container.textContent).toContain("Last tool");
+  });
+
+  it("says nothing when a current mod sent the counts", () => {
+    const { container } = panel({ reporter: "mod", reporterVersion: "0.3.0" }, { toolCounts: { Bash: 2 }, toolCalls: 2 });
+    expect(container.textContent).not.toMatch(NOTE);
+    expect(container.querySelector(".chip.tool")).not.toBeNull();
+  });
+
+  it("says nothing on a current mod that has sent no counts yet", () => {
+    const { container } = panel({ reporter: "mod", reporterVersion: "0.3.0" }, { toolCounts: null });
+    expect(container.textContent).not.toMatch(NOTE);
   });
 });
