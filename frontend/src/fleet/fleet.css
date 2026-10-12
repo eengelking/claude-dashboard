@@ -150,7 +150,7 @@ body.podium-resizing * { cursor: col-resize !important; }
 
 /* cards */
 .podium .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
-.podium .card { display: block; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+.podium .card { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
 .podium button.card:hover { border-color: var(--axis); background: var(--raised); }
 .podium .card .h { display: flex; align-items: center; gap: 8px; }
 .podium .card .nm { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -21,6 +21,9 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- A session card whose content is shorter than the card beside it now starts at the top, with the extra
+  space at the bottom, instead of centering its content vertically. The cards in a row still stretch to the
+  same height. (#17)
 - A session card for a session waiting on you now says only `Waiting for your input.`, for a permission
   prompt and a question alike, instead of a block of the prompt's text that filled most of the card. The
   orchestrator page still shows the full note. (#50)
