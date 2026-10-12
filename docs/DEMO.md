@@ -9,7 +9,7 @@ and fix the wording of the prompt if Claude takes a different route than the scr
 
 ## What the demo shows
 
-1. A session shows up in the browser within about two seconds of starting, with no refresh.
+1. A session shows up in the browser within about two seconds of its first prompt, with no refresh.
 2. The plan Claude writes appears as steps, and the steps tick off as the work finishes.
 3. Agents Claude launches appear as rows with their model, effort, status, tokens and cost.
 4. A failed call is captured with the command, the exit code and the last lines of output.
@@ -52,8 +52,8 @@ viewer sees both at once.
    claude --plugin-dir /path/to/podium/mod/podium-reporter
    ```
 
-   The session should appear on the wall at once. The status line under the prompt reads
-   `podium ● 1 live`.
+   The session appears on the wall once you send it a prompt, not before. Until then the status line under
+   the prompt reads `podium ● 0 live`. After the first prompt it reads `podium ● 1 live`.
 
 5. Type `/podium` to show the link, connection state and report counts. Then give the session a
    readable name, because the wall shows it on the card:

@@ -101,6 +101,25 @@ Browsers throttle timers in hidden tabs. The numbers catch up when you look at t
 
 That is correct, since it is waiting on you. With many idle sessions the wall fills with waiting callouts.
 
+### A new session is not on the wall until I send a prompt
+
+Podium keeps a session off the wall until it has done something (it is running, or has tokens, cost,
+context use, a blowout, an agent or a plan). Claude Code's background daemon runs a parked twin of each
+interactive window and a pool of spares, and each of them reports as a session. Without this rule one
+window showed three identical cards. See "Sessions that have not done anything yet" in the user guide and
+SPEC.md 7.5. A session known only from settings hooks is never hidden.
+
+### The status line says `podium ● 0 live`
+
+That session is one of the hidden ones: it has not done anything yet. The number is the cards on the wall,
+not the Claude Code processes. It becomes `1` or more after the session's first prompt.
+
+### A session I closed is still on the wall
+
+Closing the window can move the conversation to the background instead of ending it. It is a real session,
+so its card stays. `claude agents` lists background sessions, `claude attach <name>` opens one and
+`claude stop <name>` ends it, after which the card leaves.
+
 ### A session started without the mod stays "live" for ten minutes after it goes quiet
 
 Settings hooks send no heartbeat, so a hook-only session gets `HOOK_STALE_AFTER_MS` (10 minutes) before it

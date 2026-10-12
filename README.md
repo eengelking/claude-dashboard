@@ -3,7 +3,7 @@
 Two dashboards for Claude Code on one machine, served by one local server:
 
 - **Podium** (`#/`, the default): a live fleet console. Every Claude Code session running with the
-  Podium reporter mod shows up in one browser tab within about two seconds, with its model and effort,
+  Podium reporter mod shows up in one browser tab within about two seconds of its first prompt, with its model and effort,
   its plan, the agents it launched (subagents and forks), what each costs, how full each context window
   is, how often a window blew out, why anything failed, and which git branch or worktree it works in.
   Sessions appear when they start and leave when they end, with no refresh. Podium only observes: it
@@ -99,10 +99,12 @@ To work on the mod itself, load it from a checkout for one session instead:
 claude --plugin-dir /path/to/podium/mod/podium-reporter
 ```
 
-The session appears in Podium at once.
+The session appears in Podium once you send its first prompt. A session that has done nothing yet is kept
+off the wall, because Claude Code's background daemon also runs idle twins and spares that report too (see
+"Sessions that have not done anything yet" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)).
 In the session, `/podium` prints the dashboard link, the connection state and report counts, and
 `/podium name <text>` gives the session a display name. The status line under the prompt reads
-`podium ● N live`, or `podium ○ offline` while the server is unreachable (reports queue up and go out
+`podium ● N live` (N is the cards on the wall, so a session that has not run yet reads 0), or `podium ○ offline` while the server is unreachable (reports queue up and go out
 when it is back). Effort is read from each model request, so a change made with `/effort` shows after
 the session's next prompt, not when you pick it.
 

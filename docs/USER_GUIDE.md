@@ -44,9 +44,11 @@ Then give it the token. Print it with `podiumctl token`, and enter it with
 
 ### 3. Check that it works
 
-In a session, run `/podium`. You should see `Connection: online`, and the session appears in the browser
-within a couple of seconds. The status line under the prompt reads `podium ● 1 live`. If it says
-`podium ○ offline`, see "Something is wrong" below.
+In a session, run `/podium`. You should see `Connection: online`. Then send the session a prompt. A session
+appears in the browser within a couple of seconds of doing its first bit of work, not before, so a brand new
+session is not on the wall yet and its status line reads `podium ● 0 live`. Once it has run, the status line
+reads `podium ● 1 live`. If it says `podium ○ offline`, see "Something is wrong" below, and for the other
+case see "Sessions that have not done anything yet".
 
 Give a session a name that shows on its card with `/podium name <text>`.
 
@@ -71,6 +73,33 @@ a strip with one square per agent, and its cost, tokens and running time. A red 
 has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
 means the session wants you: a permission prompt, or the end of its turn. A **stale** card means it has
 stopped reporting.
+
+### Sessions that have not done anything yet
+
+A session is put on the wall once it has done something: it is running, or it has tokens, cost, context
+use, a blowout, an agent or a plan. Until you send it a prompt it is not shown, and the status line in a
+fresh session reads `podium ● 0 live`. This is on purpose.
+
+Claude Code's background daemon runs sessions you did not start by hand. On Claude Code 2.1.296 we saw a
+parked background twin of each interactive window and a pool of pre-warmed spare processes. Every one of
+them loads the reporter and reports itself as a session, so a single window could put three identical
+"waiting on you" cards on the wall. Podium keeps the ones that have done nothing off the wall, out of the
+activity feed and out of the history, and shows them the moment they start work.
+
+What that means in practice:
+
+- Open Claude Code in a project: no card yet. Send a prompt and one card appears.
+- The `N` in `podium ● N live` is the number of cards on the wall, not the number of Claude Code processes
+  on your machine.
+- After `/clear` the old card ends and the new session gets a card once you send its first prompt.
+- A card can stay on the wall after you close the window. Closing Claude Code can leave the conversation
+  running in the background (the window says "Your conversation moved to the background"). That is a real
+  session and it stays until it ends. `claude agents` lists background sessions, `claude attach <name>`
+  opens one, `claude stop <name>` ends it, and `claude rm <id>` deletes it. When it ends, its card leaves.
+- Sessions you started without the mod, reported through settings hooks, are never hidden this way, because
+  hooks carry no token or cost figures to judge them by.
+
+The rule is in SPEC.md, section 7.5.
 
 ### One session
 
@@ -137,7 +166,9 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 |---|---|
 | `/podium` says offline, `HTTP 401` | The token is missing or wrong. `podiumctl token`, then `/plugin configure` |
 | `/podium` says offline, no 401 | The server is not running. `podiumctl status`, then `podiumctl start` |
-| The wall is empty | No session has the mod loaded yet, or its token is wrong |
+| The wall is empty | No session has the mod loaded yet, its token is wrong, or none has been sent a prompt |
+| A new session is not on the wall, or its status line says `podium ● 0 live` | It has not done anything yet. Send a prompt |
+| A session I closed is still on the wall | It moved to the background. `claude agents` lists it and `claude stop <name>` ends it |
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection) |
 | The usage page shows nothing for Claude Code | The server is in the container and cannot see your `~/.claude/projects`. Use standalone mode |
 | I changed the config and nothing happened | Run `podiumctl restart` |
