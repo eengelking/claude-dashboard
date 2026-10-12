@@ -237,6 +237,10 @@ describe("theme picker", () => {
     expect(select.value).toBe("gruvbox");
     expect(screen.getByRole("radio", { name: "Light" })).toBeChecked();
     expect(document.documentElement.dataset).toMatchObject({ themeName: "gruvbox", theme: "light" });
+    fireEvent.keyDown(screen.getByRole("radio", { name: "Light" }), { key: "ArrowRight" });
+    expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("radio", { name: "Light" })).toHaveAttribute("tabindex", "-1");
     expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("THIRD_PARTY_NOTICES"));
   });
 });

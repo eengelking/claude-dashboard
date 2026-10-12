@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import { DEFAULT_CHOICE, THEMES, effectiveTheme, parseChoice, resolveMode } from "./themes";
 
@@ -39,8 +40,8 @@ describe("themes", () => {
   });
 
   it("keeps index.html's pre-paint script and themes.css in step with the list", () => {
-    const html = readFileSync("index.html", "utf8");
-    const css = readFileSync("src/fleet/themes.css", "utf8");
+    const html = readFileSync(resolve(__dirname, "../../index.html"), "utf8");
+    const css = readFileSync(resolve(__dirname, "themes.css"), "utf8");
     const others = THEMES.filter((t) => t.id !== "podium");
     expect(html).toContain(`/^(${others.map((t) => t.id).join("|")})$/`);
     for (const t of others) for (const m of t.modes) expect(css).toContain(`:root[data-theme-name="${t.id}"][data-theme="${m}"] .podium {`);

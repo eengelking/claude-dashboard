@@ -1,7 +1,7 @@
 // Color theme and light/dark/system mode. The choice is kept in localStorage and applied as
 // data-theme-name (palette), data-theme (resolved light or dark) and data-mode (the choice) on <html>,
 // which themes.css and fleet.css read. index.html sets the same attributes before first paint.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readJson, writeJson } from "./storage";
 import { effectiveTheme, parseChoice, resolveMode, type Mode, type ModeChoice, type ThemeChoice } from "./themes";
 
@@ -31,6 +31,7 @@ export function useTheme(): {
   setMode: (mode: ModeChoice) => void;
 } {
   const [choice, setChoice] = useState<ThemeChoice>(() => parseChoice(readJson<unknown>(KEY, null)));
+  const latest = useRef(choice);
   const [osDark, setOsDark] = useState(() => osQuery()?.matches ?? true);
   const resolved = resolveMode(choice.mode, osDark);
 
@@ -44,11 +45,10 @@ export function useTheme(): {
   useEffect(() => apply(choice, resolved), [choice, resolved]);
 
   const update = useCallback((patch: Partial<ThemeChoice>) => {
-    setChoice((c) => {
-      const next = { ...c, ...patch };
-      writeJson(KEY, next);
-      return next;
-    });
+    const next = { ...latest.current, ...patch };
+    latest.current = next;
+    setChoice(next);
+    writeJson(KEY, next);
   }, []);
   const setTheme = useCallback((theme: string) => update({ theme }), [update]);
   const setMode = useCallback((mode: ModeChoice) => update({ mode }), [update]);
