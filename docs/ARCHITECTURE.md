@@ -389,7 +389,7 @@ Fixed test-first (see Spec question 10).
 ### Phase 2: frontend
 
 Built: `frontend/src/fleet/` (`FleetApp`, `useFleet`, `store.ts` reducer, `logic.ts`, `chart.ts`,
-`format.ts`, `useTheme`, `useResizable`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
+`format.ts`, `useTheme`, `useResizable`, `usePanes`, `useHotkeys`, `useIdle`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
 hash routing in `main.tsx` (`#/` fleet, `#/history`; the old `#/usage` app was removed in #30).
 
 Verified by tests (frontend suite 89 tests, plus the old app's 15 that existed then): reducer actions and the 150 cap;

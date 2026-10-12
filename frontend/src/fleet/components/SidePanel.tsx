@@ -1,6 +1,7 @@
 import type { ActivityView, SessionView } from "../types";
 import { ActivityList } from "./ActivityList";
 import { AgentDetail } from "./AgentDetail";
+import { PaneTab } from "./PaneTab";
 
 export function SidePanel(props: {
   events: ActivityView[];
@@ -15,10 +16,14 @@ export function SidePanel(props: {
   onAgent: (id: string) => void;
   onBack: () => void;
   now: number;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   const agent = props.selected && props.selectedAgent ? props.selected.agents.find((a) => a.id === props.selectedAgent) : undefined;
   return (
-    <aside className="side" aria-label="Activity and agent detail">
+    <aside className={`side${props.collapsed ? " collapsed" : ""}`} aria-label="Activity and agent detail">
+      {props.onToggle && <PaneTab side="right" collapsed={!!props.collapsed} controls="podium-side-body" onToggle={props.onToggle} shortcut="]" />}
+      <div id="podium-side-body" hidden={props.collapsed}>
       {agent && props.selected ? (
         <AgentDetail s={props.selected} a={agent} now={props.now} onBack={props.onBack} onAgent={props.onAgent} />
       ) : (
@@ -34,6 +39,7 @@ export function SidePanel(props: {
           onOpen={props.onOpenEvent}
         />
       )}
+      </div>
     </aside>
   );
 }

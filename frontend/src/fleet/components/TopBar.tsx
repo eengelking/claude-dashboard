@@ -1,13 +1,14 @@
+import type { ReactNode } from "react";
 import { fmtClock } from "../format";
 import type { Phase } from "../store";
 import { APP_NAME } from "../types";
 import { Logo } from "./Icons";
 
-export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: number; now: number; onTheme: () => void; theme: string }) {
+export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: number; now: number; onTheme: () => void; theme: string; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters, lastMessageAt, now } = props;
   const synced = lastMessageAt ? Math.max(0, (now - lastMessageAt) / 1000) : null;
   return (
-    <header className="top">
+    <header className="top" id="podium-top" hidden={props.collapsed}>
       <div className="logo">
         <Logo />
         {APP_NAME}
@@ -38,6 +39,12 @@ export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: 
       <button type="button" className="btn" onClick={props.onTheme} aria-label="Toggle light and dark theme" title={`Theme: ${props.theme}`}>
         Theme
       </button>
+      {props.onCollapse && (
+        <button type="button" className="btn" onClick={props.onCollapse} aria-expanded={!props.collapsed} aria-controls="podium-top" title={"Hide the top bar (\\)"}>
+          Hide top bar
+        </button>
+      )}
+      {props.wall}
     </header>
   );
 }

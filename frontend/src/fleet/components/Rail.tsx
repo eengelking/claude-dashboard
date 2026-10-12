@@ -1,6 +1,7 @@
 import { agentCounts, planProgress } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, ModelChip, PlanBar } from "./Chips";
+import { PaneTab } from "./PaneTab";
 
 export interface Split {
   running: number;
@@ -21,9 +22,13 @@ export function Rail(props: {
   leaving: Record<string, number>;
   liveCount: number;
   onRemove?: (id: string) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   return (
-    <nav className="rail" aria-label="Orchestrators">
+    <nav className={`rail${props.collapsed ? " collapsed" : ""}`} aria-label="Orchestrators">
+      {props.onToggle && <PaneTab side="left" collapsed={!!props.collapsed} controls="podium-rail-body" onToggle={props.onToggle} shortcut="[" />}
+      <div id="podium-rail-body" hidden={props.collapsed}>
       <div className="rail-head">
         <h2>Orchestrators</h2>
         <span className="mono" style={{ color: "var(--muted)" }}>
@@ -80,6 +85,7 @@ export function Rail(props: {
           </div>
         );
       })}
+      </div>
     </nav>
   );
 }

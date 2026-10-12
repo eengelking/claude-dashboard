@@ -67,7 +67,9 @@ body { margin: 0; }
 .podium .vh { position: absolute; left: 0; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
 /* shell */
-.podium .app { height: 100%; display: grid; grid-template-rows: auto auto 1fr; }
+.podium .app { height: 100%; display: flex; flex-direction: column; }
+.podium .app > .cols { flex: 1; }
+.podium [hidden] { display: none !important; }
 .podium .top { display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
 .podium .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .podium .logo svg { width: 20px; height: 20px; }
@@ -89,6 +91,25 @@ body { margin: 0; }
 body.podium-resizing { cursor: col-resize; user-select: none; }
 body.podium-resizing * { cursor: col-resize !important; }
 .podium .rail, .podium .main, .podium .side { min-height: 0; overflow: auto; position: relative; }
+.podium .cols { transition: grid-template-columns .18s ease; }
+body.podium-resizing .podium .cols { transition: none; }
+
+/* collapsible panes and wall mode (#33) */
+.podium { position: relative; }
+.podium .pane-tab { position: absolute; top: 6px; z-index: 6; width: 24px; height: 26px; display: grid; place-items: center; color: var(--ink2); border-radius: 4px; text-align: center; }
+.podium .pane-tab:hover { background: var(--hover); color: var(--ink); }
+.podium .pane-tab-left { right: 0; }
+.podium .pane-tab-right { left: 0; }
+.podium .rail:not(.collapsed) .rail-head { padding-right: 34px; }
+.podium .side:not(.collapsed) #podium-side-body { padding-top: 32px; }
+.podium .rail.collapsed, .podium .side.collapsed { overflow: hidden; }
+.podium .strip { height: 4px; background: var(--axis); position: relative; z-index: 6; }
+.podium .strip.bad { background: var(--crit); }
+.podium .strip button { position: absolute; top: 0; left: 50%; transform: translateX(-50%); height: 18px; padding: 0 12px; font-size: 11px; line-height: 16px; background: var(--axis); color: var(--ink); border-radius: 0 0 6px 6px; opacity: 0; }
+.podium .strip:hover button, .podium .strip button:focus-visible { opacity: 1; }
+.podium .wall-ctl { position: absolute; top: 6px; right: 10px; z-index: 20; display: flex; gap: 6px; transition: opacity .25s; }
+.podium.idle .wall-ctl { opacity: 0; pointer-events: none; }
+.podium.idle, .podium.idle * { cursor: none !important; }
 .podium .rail { border-right: 1px solid var(--border); background: var(--surface); }
 .podium .side { border-left: 1px solid var(--border); background: var(--surface); }
 .podium .main { padding: 14px 16px 24px; min-width: 0; }
@@ -386,6 +407,11 @@ body.podium-resizing * { cursor: col-resize !important; }
   .podium .app { display: block; }
   .podium .cols { display: block; }
   .podium .rz { display: none; }
+  .podium .wall-enter { display: none; }
+  .podium .pane-tab { position: static; width: 100%; height: 28px; display: flex; align-items: center; justify-content: flex-start; padding-left: 14px; }
+  .podium .rail.collapsed, .podium .side.collapsed { overflow: visible; }
+  .podium .rail:not(.collapsed) .rail-head { padding-right: 14px; }
+  .podium .side:not(.collapsed) #podium-side-body { padding-top: 0; }
   .podium .rail, .podium .side { border: 0; border-top: 1px solid var(--border); max-height: none; overflow: visible; }
   .podium .rail { border-bottom: 1px solid var(--border); }
   .podium .main { overflow: visible; }

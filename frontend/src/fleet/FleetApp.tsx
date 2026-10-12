@@ -15,6 +15,9 @@ import { removeSession, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
 import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
+import { useHotkeys } from "./useHotkeys";
+import { useIdle } from "./useIdle";
+import { usePanes } from "./usePanes";
 import { APP_NAME, type ActivityView } from "./types";
 import type { FleetState } from "./store";
 
@@ -69,6 +72,9 @@ export function FleetView({ state }: { state: FleetState }) {
   const cols = useRef<HTMLDivElement>(null);
   const container = useCallback(() => cols.current, []);
   const resize = useResizable(container);
+  const panes = usePanes();
+  const idle = useIdle(panes.wall);
+  const fullscreen = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const all = useMemo(() => Object.values(state.sessions), [state.sessions]);
@@ -142,15 +148,98 @@ export function FleetView({ state }: { state: FleetState }) {
     setASort((cur) => (key === null ? { key: null, dir: 1 } : cur.key === key ? { key, dir: cur.dir === 1 ? -1 : 1 } : { key, dir: defaultAgentDir(key) }));
   };
 
+  // A collapsed pane keeps a slim 24 px tab; its saved width comes back when it opens again.
   const colStyle = {
-    ...(resize.widths.rail !== undefined ? { ["--rail-w" as string]: `${resize.widths.rail}px` } : {}),
-    ...(resize.widths.side !== undefined ? { ["--side-w" as string]: `${resize.widths.side}px` } : {}),
+    ...(panes.collapsed.left
+      ? { ["--rail-w" as string]: "24px" }
+      : resize.widths.rail !== undefined ? { ["--rail-w" as string]: `${resize.widths.rail}px` } : {}),
+    ...(panes.collapsed.right
+      ? { ["--side-w" as string]: "24px" }
+      : resize.widths.side !== undefined ? { ["--side-w" as string]: `${resize.widths.side}px` } : {}),
   };
 
+  const { enterWall, exitWall } = panes;
+  // Fullscreen is only ever asked for from the click on the wall mode button, and a refusal changes nothing.
+  const startWall = (fromClick: boolean) => {
+    enterWall();
+    if (!fromClick) return;
+    try {
+      const asked = document.documentElement.requestFullscreen?.();
+      if (asked) {
+        fullscreen.current = true;
+        asked.catch(() => {
+          fullscreen.current = false;
+        });
+      }
+    } catch {
+      fullscreen.current = false;
+    }
+  };
+  const stopWall = exitWall;
+  // Wall mode ends by any route (button, Esc, opening a pane from its tab), so fullscreen is released here.
+  useEffect(() => {
+    if (!panes.wall && fullscreen.current) {
+      fullscreen.current = false;
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
+    }
+  }, [panes.wall]);
+  // Leaving fullscreen with the browser's own Esc also leaves wall mode.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && fullscreen.current) {
+        fullscreen.current = false;
+        exitWall();
+      }
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, [exitWall]);
+
+  const { toggle } = panes;
+  // In the top bar's own row while it is open, floating in the corner once it is collapsed.
+  const wallButton = panes.wall ? (
+    <button type="button" className="btn wall-exit" data-wall-control onClick={stopWall} aria-label="Exit wall mode" title="Exit wall mode (Esc)">
+      Exit wall mode
+    </button>
+  ) : (
+    <button type="button" className="btn wall-enter" data-wall-control onClick={() => startWall(true)} aria-label="Enter wall mode" title="Collapse everything for a wall display (w)">
+      Wall mode
+    </button>
+  );
+  useHotkeys((e) => {
+    if (e.key === "[") toggle("left");
+    else if (e.key === "]") toggle("right");
+    else if (e.key === "\\") toggle("top");
+    else if (e.key === "w" || e.key === "W") (panes.wall ? stopWall : () => startWall(false))();
+    else if (e.key === "Escape" && panes.wall) stopWall();
+  });
+
   return (
-    <div className="podium">
+    <div className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}`}>
+      {panes.collapsed.top && (
+        <div className="wall-ctl" data-wall-control>
+          {wallButton}
+        </div>
+      )}
       <div className="app">
-        <TopBar phase={state.phase} reporters={reporters} lastMessageAt={state.lastMessageAt} now={now} onTheme={theme.toggle} theme={theme.theme} />
+        <TopBar
+          phase={state.phase}
+          reporters={reporters}
+          lastMessageAt={state.lastMessageAt}
+          now={now}
+          onTheme={theme.toggle}
+          theme={theme.theme}
+          collapsed={panes.collapsed.top}
+          onCollapse={() => toggle("top")}
+          wall={wallButton}
+        />
+        {panes.collapsed.top && (
+          <div className={`strip${state.phase === "disconnected" ? " bad" : ""}`}>
+            <button type="button" aria-expanded="false" aria-controls="podium-top" title={"Show the top bar (\\)"} onClick={() => toggle("top")}>
+              Show top bar
+            </button>
+          </div>
+        )}
         {state.phase === "disconnected" ? (
           <div className="banner bad" role="alert">
             <b>Lost the connection to the Podium server.</b> Retrying every 2 seconds. Numbers below are frozen until it reconnects.
@@ -159,7 +248,7 @@ export function FleetView({ state }: { state: FleetState }) {
           <div className="banner bad" role="alert">
             <b>Cannot reach the Podium server.</b> Start it with <code>npm run dev</code> (or <code>npm run dev -w server</code>); this page connects by itself.
           </div>
-        ) : (
+        ) : panes.collapsed.top ? null : (
           <div className="banner">
             <b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.
           </div>
@@ -174,6 +263,8 @@ export function FleetView({ state }: { state: FleetState }) {
             leaving={state.leaving}
             liveCount={live.length}
             onRemove={onRemove}
+            collapsed={panes.collapsed.left}
+            onToggle={() => toggle("left")}
           />
           <main className="main" id="podium-main">
             {notice && (
@@ -228,9 +319,11 @@ export function FleetView({ state }: { state: FleetState }) {
             onAgent={selectAgent}
             onBack={() => setSelAgent(null)}
             now={now}
+            collapsed={panes.collapsed.right}
+            onToggle={() => toggle("right")}
           />
-          <ResizeHandle panel="rail" r={resize} container={container} label="Resize orchestrator list" />
-          <ResizeHandle panel="side" r={resize} container={container} label="Resize activity panel" />
+          {!panes.collapsed.left && <ResizeHandle panel="rail" r={resize} container={container} label="Resize orchestrator list" />}
+          {!panes.collapsed.right && <ResizeHandle panel="side" r={resize} container={container} label="Resize activity panel" />}
         </div>
       </div>
     </div>

@@ -58,6 +58,15 @@ The top bar shows the connection (`N reporters live, synced Xs ago`, or a red "d
 clock and a light or dark theme toggle. The left rail lists your sessions. The right panel shows activity.
 Drag the handles between the columns to resize them.
 
+For a wall display, collapse what you do not need. Each of the left pane, the right pane and the top bar
+collapses from its own button and from a key: `[` for the left pane, `]` for the right pane and `\` for
+the top bar. A collapsed pane leaves a slim tab to open it again, and the pane returns to the width you had.
+Your choice is remembered. **Wall mode** (the button in the top right, or `w`) collapses all three at once and
+asks the browser for fullscreen. Leave it with `Esc` or the Exit wall mode button, and everything goes back
+to how it was. After a few seconds without movement the cursor and the buttons hide; move the mouse or press
+a key to bring them back. If the connection to the server is lost, a red alert stays on screen even with
+everything collapsed. Below 1040 px wide the panes stack, and the buttons fold a stacked section instead.
+
 ### The wall
 
 The default view (`#/`) is a card per session. At the top are six tiles: sessions live, agents running,

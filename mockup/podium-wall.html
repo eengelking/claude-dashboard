@@ -1,0 +1,186 @@
+<title>Podium Wall Mode</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: the podium.html shell with collapsible panes (issue #33). Collapsed panes leave a 24px edge tab; a collapsed top bar leaves a 4px strip; a lost connection is always a red strip; wall mode collapses all three and hides its controls when idle. Tokens match podium.html. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --sonnet: #3987e5; --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --crit: #d03b3b; --crit-text: #ee6a6a;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.page { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+.demo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; background: var(--raised); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
+.demo b { color: var(--ink); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 500; }
+.btn:hover { background: var(--sel); }
+
+/* the console under test */
+.podium { position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.podium.idle, .podium.idle * { cursor: none !important; }
+.top { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.top[hidden], .strip[hidden], .banner[hidden] { display: none; }
+.logo { font-weight: 700; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.spacer { flex: 1; }
+.banner { padding: 5px 16px; font-size: 12px; color: var(--ink2); background: var(--raised); border-bottom: 1px solid var(--border); }
+.strip { display: flex; align-items: center; justify-content: center; height: 4px; background: var(--axis); position: relative; }
+.strip button { position: absolute; top: 0; padding: 0 10px; height: 14px; line-height: 12px; font-size: 10px; background: var(--axis); color: var(--ink2); border-radius: 0 0 6px 6px; opacity: .0; }
+.strip:hover button, .strip button:focus-visible { opacity: 1; }
+/* lost connection: always on, same wording as the live banner */
+.lost { display: none; padding: 6px 16px; font-size: 12.5px; font-weight: 600; background: var(--crit); color: #fff; }
+.podium.lost-on .lost { display: block; }
+.podium.lost-on .strip { background: var(--crit); }
+
+.cols { --rail-w: 252px; --side-w: 340px; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); transition: grid-template-columns .18s ease; }
+.cols.l-off { --rail-w: 24px; } .cols.r-off { --side-w: 24px; }
+.rail, .side { background: var(--surface); position: relative; overflow: hidden; }
+.rail { border-right: 1px solid var(--border); } .side { border-left: 1px solid var(--border); }
+.pane-body { padding: 12px 14px; min-width: 200px; }
+.pane-body h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.row { padding: 8px 0; border-bottom: 1px solid var(--grid); color: var(--ink2); }
+.row b { color: var(--ink); }
+.tab { position: absolute; top: 8px; width: 24px; height: 28px; display: grid; place-items: center; color: var(--ink2); border-radius: 4px; }
+.tab:hover { background: var(--hover); }
+.rail .tab { right: 0; } .side .tab { left: 0; }
+.l-off .rail .pane-body, .r-off .side .pane-body { visibility: hidden; }
+.main { padding: 14px 16px; overflow: auto; min-width: 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.card .nm { font-weight: 600; } .card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.bar { height: 5px; border-radius: 3px; background: var(--grid); margin-top: 8px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--sonnet); }
+
+/* wall mode controls: upper right corner, hidden when idle */
+.wall { position: absolute; top: 8px; right: 10px; z-index: 10; display: flex; gap: 6px; transition: opacity .25s; }
+.wall .btn { background: var(--raised); }
+.podium.idle .wall { opacity: 0; pointer-events: none; }
+.exit { display: none; }
+.podium.wall-on .exit { display: inline-flex; }
+.podium.wall-on .enter { display: none; }
+kbd { font: 11px var(--font-mono); padding: 0 5px; border: 1px solid var(--axis); border-radius: 3px; color: var(--ink2); }
+@media (prefers-reduced-motion: reduce) { .cols, .wall { transition: none; } }
+@media (max-width: 1040px) {
+  .cols { display: block; overflow: auto; }
+  .rail, .side { border: 0; border-bottom: 1px solid var(--border); }
+  .cols.l-off .rail .pane-body, .cols.r-off .side .pane-body { display: none; }
+  .cols.l-off .rail, .cols.r-off .side { height: 28px; }
+  .tab { position: static; width: 100%; justify-content: start; padding-left: 14px; }
+  .wall .enter { display: none; }
+}
+</style>
+
+<div class="page">
+  <div class="demo">
+    <b>Mockup for #33.</b>
+    <button class="btn" data-act="l">Left pane <kbd>[</kbd></button>
+    <button class="btn" data-act="r">Right pane <kbd>]</kbd></button>
+    <button class="btn" data-act="t">Top bar <kbd>\</kbd></button>
+    <button class="btn" data-act="w">Wall mode <kbd>w</kbd></button>
+    <button class="btn" data-act="x">Simulate lost connection</button>
+    <span>In wall mode: <kbd>Esc</kbd> or Exit. Controls hide after 4 s without movement.</span>
+  </div>
+
+  <div class="podium" id="p" aria-label="Console">
+    <div class="wall" id="wall">
+      <button class="btn enter" data-act="w" aria-label="Enter wall mode">Wall mode</button>
+      <button class="btn exit" data-act="w" aria-label="Exit wall mode">Exit wall mode (Esc)</button>
+    </div>
+    <header class="top" id="top">
+      <span class="logo">Podium</span>
+      <span class="pill"><i class="dot"></i>3 reporters live, synced 0.4s ago</span>
+      <span class="spacer"></span>
+      <span class="pill mono">14:02:11</span>
+      <button class="btn" data-act="t" aria-expanded="true" aria-controls="top">Hide top bar</button>
+      <span style="width:150px" aria-hidden="true"></span>
+    </header>
+    <div class="strip" id="strip" hidden><button data-act="t" aria-expanded="false" aria-controls="top">Show top bar</button></div>
+    <div class="banner" id="banner">Live fleet. Cost is an estimate from reported token counts.</div>
+    <div class="lost" role="alert">Lost the connection to the Podium server. Numbers are frozen until it comes back.</div>
+
+    <div class="cols" id="cols">
+      <nav class="rail" aria-label="Orchestrators">
+        <button class="tab" data-act="l" aria-expanded="true" aria-controls="rail-body" aria-label="Collapse left pane">&#8249;</button>
+        <div class="pane-body" id="rail-body">
+          <h2>Orchestrators</h2>
+          <div class="row"><b>podium</b><br>Opus 5.5, high</div>
+          <div class="row"><b>docs-sweep</b><br>Sonnet 5.5, medium</div>
+          <div class="row"><b>release-prep</b><br>Haiku 5.5, low</div>
+        </div>
+      </nav>
+      <main class="main">
+        <div class="cards">
+          <div class="card"><div class="nm">podium</div><div class="sub">main, 6 agents, $4.12</div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="card"><div class="nm">docs-sweep</div><div class="sub">docs/sweep, 2 agents, $0.88</div><div class="bar"><i style="width:31%"></i></div></div>
+          <div class="card"><div class="nm">release-prep</div><div class="sub">v0.9.0, 1 agent, $0.12</div><div class="bar"><i style="width:12%"></i></div></div>
+        </div>
+      </main>
+      <aside class="side" aria-label="Activity and agent detail">
+        <button class="tab" data-act="r" aria-expanded="true" aria-controls="side-body" aria-label="Collapse right pane">&#8250;</button>
+        <div class="pane-body" id="side-body">
+          <h2>Activity</h2>
+          <div class="row mono">14:02 podium started Agent</div>
+          <div class="row mono">14:01 docs-sweep finished Bash</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+const p = document.getElementById("p"), cols = document.getElementById("cols");
+const s = { l: false, r: false, t: false, w: false, lost: false }; let before = null, timer = null;
+function paint() {
+  cols.classList.toggle("l-off", s.l); cols.classList.toggle("r-off", s.r);
+  document.getElementById("top").hidden = s.t; document.getElementById("strip").hidden = !s.t && !s.lost;
+  document.getElementById("banner").hidden = s.t;
+  p.classList.toggle("wall-on", s.w); p.classList.toggle("lost-on", s.lost);
+  for (const [k, id] of [["l", "rail-body"], ["r", "side-body"]]) {
+    const tab = document.querySelector('[aria-controls="' + id + '"]');
+    tab.setAttribute("aria-expanded", String(!s[k]));
+    tab.textContent = (k === "l") === s[k] ? "›" : "‹";
+    document.getElementById(id).toggleAttribute("inert", s[k]);
+  }
+}
+function wall() {
+  if (!s.w) { before = { l: s.l, r: s.r, t: s.t }; s.l = s.r = s.t = true; s.w = true; arm(); }
+  else { Object.assign(s, before); s.w = false; p.classList.remove("idle"); clearTimeout(timer); }
+}
+function arm() { clearTimeout(timer); p.classList.remove("idle"); if (s.w) timer = setTimeout(() => p.classList.add("idle"), 4000); }
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  const k = a.dataset.act; if (k === "w") wall(); else if (k === "x") s.lost = !s.lost; else s[k] = !s[k]; paint();
+});
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const m = { "[": "l", "]": "r", "\\": "t" }[e.key];
+  if (m) s[m] = !s[m]; else if (e.key === "w") wall(); else if (e.key === "Escape" && s.w) wall(); else { arm(); return; }
+  paint(); arm();
+});
+for (const ev of ["pointermove", "touchstart"]) document.addEventListener(ev, arm);
+paint();
+</script>
