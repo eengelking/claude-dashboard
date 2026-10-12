@@ -1,5 +1,7 @@
 # podium
 
+![Podium showing nine simulated Claude Code sessions: running, stale and failing orchestrators, context blowouts, and the activity feed](docs/images/podium-chaos.png)
+
 Two dashboards for Claude Code on one machine, served by one local server:
 
 - **Podium** (`#/`, the default): a live fleet console. Every Claude Code session running with the
