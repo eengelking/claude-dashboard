@@ -117,8 +117,10 @@ not the Claude Code processes. It becomes `1` or more after the session's first 
 ### A session I closed is still on the wall
 
 Closing the window can move the conversation to the background instead of ending it. It is a real session,
-so its card stays. `claude agents` lists background sessions, `claude attach <name>` opens one and
-`claude stop <name>` ends it, after which the card leaves.
+so its card stays. `claude agents` lists background sessions, `claude attach <id|name>` opens one and
+`claude stop <id>` ends it, after which the card leaves. The id to use is the one `claude agents` shows, not
+the id on the card, which differs after `/clear`. `claude rm <id>` also deletes the session's worktree. See
+"Closing a background session" in the user guide.
 
 ### A session started without the mod stays "live" for ten minutes after it goes quiet
 
