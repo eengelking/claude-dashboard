@@ -540,7 +540,7 @@ Only `major.minor` is compared, so a mod-only patch fix never warns. `checkRepor
 | Result | Meaning | What to do |
 |---|---|---|
 | `ok` | Inside the range. | Nothing. |
-| `outdated` | Below `min`. | Update the mod from `eengelking-marketplace`. |
+| `outdated` | Below `min`. | Update the mod: `claude plugin update podium-reporter@eengelking-marketplace`, then `/reload-plugins`. |
 | `newer` | Above `max`. | Upgrade the server. |
 | `unknown` | The version is not `X.Y.Z` (the simulator's `0.1.0-sim`, for one). | Nothing. No warning is shown. |
 

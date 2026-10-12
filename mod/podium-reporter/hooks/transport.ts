@@ -167,7 +167,7 @@ export class Transport {
   /** What to tell the user when the server says this reporter and it do not match; null when they do (or it cannot tell). */
   versionNotice(): string | null {
     const server = this.serverVersion ? ` (server ${this.serverVersion})` : '';
-    if (this.compat === 'outdated') return `This reporter is older than the Podium server supports${server}: update the podium-reporter mod from eengelking-marketplace.`;
+    if (this.compat === 'outdated') return `This reporter is older than the Podium server supports${server}: update the podium-reporter mod (claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins).`;
     if (this.compat === 'newer') return `This reporter is newer than the Podium server supports${server}: upgrade the Podium server.`;
     return null;
   }

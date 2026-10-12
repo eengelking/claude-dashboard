@@ -199,6 +199,30 @@ You do not have to restart them to see them. Claude Code's settings hooks can re
 session, its directory and model, and its agents, marked "settings hooks". See "Sessions without the mod"
 in the README for the snippet to add to `~/.claude/settings.json`.
 
+## Updating the mod
+
+The mod and the server are released separately, so you update them separately. A card marked `reporter 0.1.0 · update`
+means the mod in that session is older than the server supports. To update it:
+
+1. In a shell, run `claude plugin update podium-reporter@eengelking-marketplace`. It prints
+   `Checking for updates...` and then the new version, or says it is already at the latest version. Inside a
+   session you can use `/plugin`, open the Installed tab, pick `podium-reporter` and choose Update now.
+2. Apply it. A running session keeps the version it loaded, so run `/reload-plugins` in it, or start a new
+   session. Sessions you do not reload keep reporting the old version and stay marked.
+3. Run `/podium`. The `Versions:` line shows the mod's version, and the `· update mod` ending on the status
+   line goes away after the next report.
+
+If the command says it is already at the latest version but the card is still marked, the marketplace has
+not published a newer mod yet. Refresh its listing with `claude plugin marketplace update eengelking-marketplace`
+and run the update again. Refreshing the listing alone does not update the installed plugin.
+
+Marketplaces other than Anthropic's do not update plugins by themselves. To have Claude Code do it, open `/plugin`,
+choose the Marketplaces tab, pick `eengelking-marketplace` and turn on auto-update. It updates the plugin
+on disk some minutes after you send a first message, and the new version loads in your next session.
+
+A card marked `· upgrade server` is the other direction: the mod is newer than the server. Upgrade the server
+with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull, `npm run build`, restart).
+
 ## Something is wrong
 
 | You see | Likely cause |
@@ -210,8 +234,8 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 | A session I closed is still on the wall | It moved to the background. `claude agents` lists it and `claude stop <id>` ends it. See "Closing a background session" |
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
-| A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. Update `podium-reporter` from `eengelking-marketplace` and restart the session. It keeps reporting meanwhile |
-| A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (`podiumctl build`, then `podiumctl restart`) |
+| A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. See "Updating the mod" below. It keeps reporting meanwhile |
+| A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (see "Updating the mod" below) |
 
 More in [GOTCHAS.md](GOTCHAS.md).
 

@@ -17,6 +17,9 @@ correctly (SPEC 6.8). `update mod` means the mod in this session is older than t
 means it is newer. Reports still arrive either way. Only `major.minor` is compared, so a patch release never
 triggers it, and a version the server cannot read (the simulator's `0.1.0-sim`) shows nothing. `/podium`
 prints both versions. A mod older than 0.3.0 cannot show this itself, but the dashboard still marks its card.
+To fix `update mod`, run `claude plugin update podium-reporter@eengelking-marketplace`, then `/reload-plugins` in the
+session. A running session keeps the version it loaded until you do. If the update says it is already at the latest
+version, refresh the listing first with `claude plugin marketplace update eengelking-marketplace`.
 
 ### The token option has no row in the `/config` menu
 

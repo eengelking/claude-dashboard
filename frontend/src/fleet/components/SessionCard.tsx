@@ -11,7 +11,7 @@ export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the repor
 /** What to tell the user when the server places this session's reporter outside the range it supports; null when it does not. */
 export function versionNote(s: Pick<SessionView, "compat" | "reporterVersion">): { chip: string; text: string } | null {
   const v = s.reporterVersion ?? "unknown";
-  if (s.compat === "outdated") return { chip: `reporter ${v} · update`, text: `This session's reporter (${v}) is older than the server supports. Update the podium-reporter mod from eengelking-marketplace. Reports are still accepted, but newer fields may be missing.` };
+  if (s.compat === "outdated") return { chip: `reporter ${v} · update`, text: `This session's reporter (${v}) is older than the server supports. Update the podium-reporter mod: run claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins in that session. Reports are still accepted, but newer fields may be missing.` };
   if (s.compat === "newer") return { chip: `reporter ${v} · upgrade server`, text: `This session's reporter (${v}) is newer than the server supports. Upgrade the Podium server. Reports are still accepted, but some fields may be ignored.` };
   return null;
 }
