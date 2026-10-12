@@ -158,6 +158,8 @@ compacted or stopped.
 
 The effort shown is read from each model request, so after `/effort` it updates at your next prompt.
 
+Effort is drawn as five bars with no text: more lit bars mean more effort, and the color changes with the level (low orange, medium green, high blue, xhigh purple, max rainbow). Hover the bars to read the level. Dimmed bars mean the level was not reported.
+
 ## Everyday commands
 
 | Command | What it does |

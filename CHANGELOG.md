@@ -21,6 +21,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- Effort shows as five colored bars with no text, and the level is in a tooltip and the meter's accessible name. Each level has its own color (low orange, medium green, high blue, xhigh purple, max rainbow). The Agents table's Effort column shrank to fit and its freed width went to the Context, Tokens, Cost and Time columns. (#24)
 - The README, `docs/GOTCHAS.md` and `docs/SPEC.md` now explain the `⚠` in front of Podium's status line:
   Claude Code adds it, with the mod's name, to every mod's status line, and it is not a Podium warning or a
   trust state. (#29)

@@ -25,16 +25,15 @@ export function ModelChip({ family, model }: { family: ModelFamily; model?: stri
   );
 }
 
+/** Five bars filled one to five, colored by level; the level is the tooltip and the accessible name, not text. */
 export function EffortMeter({ effort }: { effort: string | null }) {
   const n = effort ? EFFORTS.indexOf(effort as (typeof EFFORTS)[number]) + 1 : 0;
+  const label = n ? `Effort: ${effort}` : "Effort not reported";
   return (
-    <span className="eff" title={effort ? `Effort: ${effort}` : "Effort not reported"}>
-      <span className="m" aria-hidden="true">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <b key={i} className={i <= n ? "on" : ""} />
-        ))}
-      </span>
-      {effort ?? "–"}
+    <span className={`eff eff-${n ? effort : "none"}`} role="img" aria-label={label} title={label}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <b key={i} className={i <= n ? "on" : ""} />
+      ))}
     </span>
   );
 }
