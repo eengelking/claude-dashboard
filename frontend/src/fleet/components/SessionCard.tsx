@@ -15,10 +15,12 @@ export function waitSummary(s: Pick<SessionView, "waitReason" | "waitNote">): { 
   const lead = s.waitReason === "permission" ? "Waiting for your approval." : s.waitReason === "input" ? "Waiting for your input." : "Waiting on you.";
   const note = s.waitNote?.trim() ?? "";
   if (!note) return { lead, detail: null };
-  const tool = /^([A-Za-z][\w.:-]*)\(/.exec(note);
+  // "Tool(input...)" from the mod, or a bare tool name from a settings hook's PermissionRequest.
+  const tool = /^([A-Za-z][\w.:-]*)\(/.exec(note) ?? (s.waitReason === "permission" ? /^([A-Za-z][\w.:-]*)$/.exec(note) : null);
   if (tool) return { lead, detail: `Tool: ${tool[1]}` };
   // Anything else is shown only if it arrived whole; a clipped note would read as the full prompt.
-  return { lead, detail: note.length >= WAIT_NOTE_LIMIT ? null : note };
+  // Measure the raw note: the clip happens before the trim above.
+  return { lead, detail: (s.waitNote?.length ?? 0) >= WAIT_NOTE_LIMIT ? null : note };
 }
 
 // The card stays short; the orchestrator page has the tool name or question (waitSummary).

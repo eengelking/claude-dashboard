@@ -238,6 +238,11 @@ describe("a waiting session", () => {
     expect(callout.querySelector(".wait-detail")).toBeNull();
   });
 
+  it("names the tool when a settings hook reports only the bare tool name", () => {
+    const { callout } = pageFor({ reporter: "hooks", waitReason: "permission", waitNote: "Bash" });
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: Bash");
+  });
+
   it("works with no note, and with a notification message from settings hooks", () => {
     const none = pageFor({ waitReason: "permission", waitNote: null });
     expect(none.callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");

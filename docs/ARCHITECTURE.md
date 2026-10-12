@@ -105,7 +105,7 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 
 20. **View fields the UI needed.** `SessionView` gained `cwd` (home-shortened working directory, for the
     page header; in a container the home is the host's, passed in as `PODIUM_HOST_HOME`, see DECISIONS 16), `waitReason` (to word the orchestrator page's waiting callout: "Waiting for your approval." vs "Waiting for
-    your input.", with the tool name or a short question under it, see #64). The session card always says "Waiting for your input.", see #50), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
+    your input.", with the tool name or a short question under it, see #64; the session card always says "Waiting for your input.", see #50), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
     "dropped from the fleet at 1:15" without hard-coding server settings; since #41 the card counts down to the
     per-session `dropAt` instead, which stays right after a restart and for hook-only sessions). All additive.
 21. **CSS scoping.** Every Podium rule is scoped under `.podium` and the tokens are defined on `.podium`, not
