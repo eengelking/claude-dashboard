@@ -36,7 +36,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
-- Cards on the fleet wall keep a steady 320 px width (narrower only when the area itself is). Collapsing or
+- Cards on the fleet wall keep a steady 360 px width (narrower only when the area itself is). Collapsing or
   expanding the left pane, the right pane or the top bar, or entering Wall mode, now adds or removes columns
   instead of shrinking every card, and a short last row stays left-aligned. (#65)
 - Two sessions no longer show the same running time because the engine reported them one shared start. The

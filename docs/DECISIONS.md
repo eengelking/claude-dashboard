@@ -167,7 +167,7 @@ secret and needs no change on the wire.
 
 ## 17. Fleet cards keep a fixed width
 
-**Choice.** The wall grid is `repeat(auto-fill, min(320px, 100%))`, left-aligned. A card is 320 px wide
+**Choice.** The wall grid is `repeat(auto-fill, min(360px, 100%))`, left-aligned. A card is 360 px wide
 (narrower only when the area is) and extra room adds columns.
 **Why.** With `minmax(300px, 1fr)` a new column made every card narrower, so collapsing a pane, which widens
 the main area, shrank the cards (#65). Collapsing the 340 px right pane did it most. A steady size is what an

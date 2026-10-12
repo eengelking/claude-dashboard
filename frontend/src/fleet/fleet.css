@@ -197,7 +197,7 @@ body.podium-resizing .podium .cols { transition: none; }
 
 /* cards */
 /* fixed card width (#65): extra room adds columns, it never resizes cards; a short last row stays left-aligned */
-.podium .wall { display: grid; grid-template-columns: repeat(auto-fill, min(320px, 100%)); justify-content: start; gap: 12px; }
+.podium .wall { display: grid; grid-template-columns: repeat(auto-fill, min(360px, 100%)); justify-content: start; gap: 12px; }
 .podium .card { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
 .podium button.card:hover { border-color: var(--axis); background: var(--raised); }
 .podium .card .h { display: flex; align-items: center; gap: 8px; }
