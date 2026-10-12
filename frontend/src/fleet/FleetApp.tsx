@@ -11,7 +11,7 @@ import { ResizeHandle } from "./components/ResizeHandle";
 import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
 import { Wall } from "./components/Wall";
-import { useFleet, type UseFleetOptions } from "./useFleet";
+import { removeSession, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
 import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
@@ -120,6 +120,9 @@ export function FleetView({ state }: { state: FleetState }) {
     setSelAgent(null);
     setNotice(null);
   };
+  const onRemove = (id: string) => {
+    removeSession(id).catch((err: Error) => setNotice(`Could not remove the session: ${err.message}. Try again.`));
+  };
   const selectAgent = (id: string) => {
     setSelAgent(id);
     flashRow(id);
@@ -170,6 +173,7 @@ export function FleetView({ state }: { state: FleetState }) {
             entering={enteringSession}
             leaving={state.leaving}
             liveCount={live.length}
+            onRemove={onRemove}
           />
           <main className="main" id="podium-main">
             {notice && (
@@ -189,6 +193,7 @@ export function FleetView({ state }: { state: FleetState }) {
                 selectedAgent={selAgent}
                 flashAgent={flash}
                 onAgent={selectAgent}
+                onRemove={onRemove}
               />
             ) : (
               <Wall
@@ -206,6 +211,7 @@ export function FleetView({ state }: { state: FleetState }) {
                 entering={enteringSession}
                 leaving={state.leaving}
                 onOpen={selectSession}
+                onRemove={onRemove}
               />
             )}
           </main>

@@ -91,7 +91,9 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     message. Activity messages are not throttled.
 15. **Stale and drop after a restart.** Stored, not-done sessions are stale until they report. A session
     never heard since the restart is dropped `DROP_AFTER_MS` after `max(last_seen + STALE_AFTER_MS,
-    server start)`, so reporters get a full minute to come back after the server was down.
+    server start)`, so reporters get a full minute to come back after the server was down. `Fleet.dropAtFor`
+    holds that rule once: `sweep` and the `SessionView.dropAt` field both use it, so the card's countdown
+    matches the drop. `Fleet.dropSession` (Remove, `POST /sessions/:id/drop`) runs the same exit early (#41).
 16. **A repeated final report.** A `done` report for a session that already ended and left the live set
     is stored but does not bring the session back for another linger.
 17. **Retention env names.** 7.2 says the three thresholds are env-configurable but names none:
@@ -104,7 +106,8 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 20. **View fields the UI needed.** `SessionView` gained `cwd` (home-shortened working directory, for the
     page header; in a container the home is the host's, passed in as `PODIUM_HOST_HOME`, see DECISIONS 16), `waitReason` (to word the orchestrator page's waiting callout: "Permission prompt: ..." vs "Waiting for
     your input: ...". The session card always says "Waiting for your input.", see #50), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
-    "dropped from the fleet at 1:15" without hard-coding server settings). All additive.
+    "dropped from the fleet at 1:15" without hard-coding server settings; since #41 the card counts down to the
+    per-session `dropAt` instead, which stays right after a restart and for hook-only sessions). All additive.
 21. **CSS scoping.** Every Podium rule is scoped under `.podium` and the tokens are defined on `.podium`, not
     `:root`, apart from a small document base (`html`, `body`, `#root` height and margin) in `fleet.css`.
     The theme attribute lives on `<html>` (`data-theme`), as in the mockup.

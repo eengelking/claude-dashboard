@@ -120,6 +120,21 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     res.json({ ok: true });
   });
 
+  // Remove on a heartbeat-lost card. It only hides a card the server was about to drop anyway, so it takes
+  // no token, like the other reads the dashboard makes. SPEC 7.1, 7.5.
+  router.post('/sessions/:id/drop', (req, res) => {
+    const out = fleet.dropSession(req.params.id);
+    if (out === 'unknown') {
+      res.status(404).json({ ok: false, error: 'unknown session', path: '$.id' });
+      return;
+    }
+    if (out === 'not-stale') {
+      res.status(409).json({ ok: false, error: 'session is not heartbeat lost', path: '$.id' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
   router.get('/events', (req, res) => {
     const before = intParam(req.query.before);
     const limit = intParam(req.query.limit);

@@ -120,3 +120,10 @@ export function useFleet(opts: UseFleetOptions = {}): FleetState {
 
   return state;
 }
+
+/** Remove on a heartbeat-lost card: the server drops it from the live set and tells every open tab. */
+export async function removeSession(id: string, base = "/api/fleet"): Promise<void> {
+  const res = await fetch(`${base}/sessions/${encodeURIComponent(id)}/drop`, { method: "POST" });
+  // 404 and 409 mean it already left or is reporting again: the stream shows the truth, nothing to report.
+  if (!res.ok && res.status !== 404 && res.status !== 409) throw new Error(`HTTP ${res.status}`);
+}

@@ -185,3 +185,8 @@ export function familyName(f: ModelFamily, model: string | null): string {
   if (f === "other") return model ?? "unknown";
   return f[0]!.toUpperCase() + f.slice(1);
 }
+
+/** When a heartbeat-lost session goes away by itself: the server's `dropAt`, else counted from the last heartbeat. */
+export function dropAtOf(s: Pick<SessionView, "dropAt" | "lastSeenAt">, config: { staleAfterMs: number; dropAfterMs: number }): number {
+  return s.dropAt ?? s.lastSeenAt + config.staleAfterMs + config.dropAfterMs;
+}

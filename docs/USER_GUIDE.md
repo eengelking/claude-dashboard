@@ -73,7 +73,9 @@ a strip with one square per agent, and its cost, tokens and running time. A path
 for the card is shortened (the path from the front, the branch at the end); hover it to see the full value.
 A red callout means the session has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
 means the session wants you: a permission prompt, or the end of its turn. A **stale** card means it has
-stopped reporting.
+stopped reporting. It says how long until it goes away by itself, and has a **Remove** button (also on its
+rail row, and **Remove now** on its page) to clear it at once. The session stays in History, and the card
+comes back if the session reports again.
 
 ### Sessions that have not done anything yet
 
@@ -189,7 +191,7 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 | The wall is empty | No session has the mod loaded yet, its token is wrong, or none has been sent a prompt |
 | A new session is not on the wall, or its status line says `podium ● 0 live` | It has not done anything yet. Send a prompt |
 | A session I closed is still on the wall | It moved to the background. `claude agents` lists it and `claude stop <id>` ends it. See "Closing a background session" |
-| A card turned stale | The session stopped reporting (closed, crashed or lost the connection) |
+| A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
 
 More in [GOTCHAS.md](GOTCHAS.md).

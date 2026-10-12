@@ -164,6 +164,8 @@ export interface SessionInput {
   samples: readonly SampleRow[];
   /** False until the session reports after a server start: such a session shows as stale. */
   heard: boolean;
+  /** From the fleet, which knows the drop window and when the server started. Null when not stale. */
+  dropAt?: number | null;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -196,6 +198,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     startedAt: row.started_at,
     lastSeenAt: row.last_seen_at,
     secondsSinceSeen: Math.max(0, Math.floor((now - row.last_seen_at) / 1000)),
+    dropAt: input.dropAt ?? null,
     context: { tokens: row.context_tokens, window: row.context_window, percent: row.context_percent },
     costUsd: row.cost_usd,
     tokensTotal: tokenSum(row) + input.agents.reduce((n, a) => n + tokenSum(a), 0),

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, within, fireEvent, cleanup } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
 import { GitLine } from "./components/Chips";
@@ -155,8 +155,34 @@ describe("session card", () => {
     expect(q.container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
     expect(q.container.textContent).not.toContain("Which branch should I use?");
     cleanup();
-    const s = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000 }));
-    expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Dropped from the fleet at 1:15.");
+    const s = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: 2_000_000 + 37_000 }));
+    expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Goes away in 37 s.");
+  });
+
+  it("a heartbeat-lost card counts down to the server's drop time, which can be later than the last heartbeat plus 75 s (#41)", () => {
+    // The last heartbeat was 3:49 ago, but the server restarted since: the drop clock started then.
+    const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 229_000, dropAt: 2_000_000 + 72_000 }));
+    expect(container.textContent).toContain("Last heartbeat 3:49 ago. Goes away in 1:12.");
+  });
+
+  it("falls back to the lifecycle windows when the server sent no drop time", () => {
+    const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: null }));
+    expect(container.textContent).toContain("Goes away in 37 s.");
+  });
+
+  it("Remove is on a heartbeat-lost card only, and does not open the card (#41)", () => {
+    const removed: string[] = [];
+    const opened: string[] = [];
+    const draw = (s = makeSession()) =>
+      render(<SessionCard s={s} now={2_000_000} config={CFG} entering={false} leaving={false} onOpen={() => opened.push(s.id)} onRemove={() => removed.push(s.id)} />);
+    draw(makeSession({ status: "running" }));
+    expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
+    cleanup();
+    const { container } = draw(makeSession({ id: "lost", name: "billing", status: "stale", dropAt: 2_037_000 }));
+    expect(container.textContent).toContain("Goes away in 37 s.");
+    fireEvent.click(screen.getByRole("button", { name: "Remove billing from the fleet" }));
+    expect(removed).toEqual(["lost"]);
+    expect(opened).toEqual([]);
   });
 
   it("footer keeps the cost, tokens and duration each in one unbreakable value (#18)", () => {
@@ -194,5 +220,42 @@ describe("sessions reported by settings hooks", () => {
     expect(container.querySelector(".wall .card")!.textContent).toContain("settings hooks");
     fireEvent.click(container.querySelector(".wall .card")!);
     expect(screen.getByRole("note").textContent).toContain("context, cost, tokens and the plan are unavailable");
+  });
+});
+
+describe("Remove a heartbeat-lost session (#41)", () => {
+  it("the card and the rail row each post to the drop route, with no token", () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const st = stateFrom({ sessions: [makeSession({ id: "run", name: "alive" }), makeSession({ id: "lost", name: "billing", status: "stale", dropAt: Date.now() + 40_000 })] });
+      const { container } = render(<FleetView state={st} />);
+      const railX = container.querySelectorAll(".rail .rx");
+      expect(railX).toHaveLength(1);
+      fireEvent.click(railX[0]!);
+      fireEvent.click(container.querySelector(".wall .card-slot .remove")!);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      for (const call of fetchMock.mock.calls) {
+        expect(call[0]).toBe("/api/fleet/sessions/lost/drop");
+        expect(call[1]).toEqual({ method: "POST" });
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("the orchestrator page offers Remove now for a heartbeat-lost session", () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const st = stateFrom({ sessions: [makeSession({ id: "lost", name: "billing", status: "stale", dropAt: Date.now() + 40_000 })] });
+      const { container } = render(<FleetView state={st} />);
+      fireEvent.click(container.querySelector(".wall .card")!);
+      expect(container.textContent).toContain("It goes away in");
+      fireEvent.click(screen.getByRole("button", { name: "Remove now" }));
+      expect(fetchMock).toHaveBeenCalledWith("/api/fleet/sessions/lost/drop", { method: "POST" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

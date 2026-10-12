@@ -67,7 +67,7 @@ In container mode the container keeps running. Check with `podiumctl status`.
 ### A restart shows every session as stale
 
 Sessions come back from SQLite as stale and recover when their reporters next send, within about five
-seconds. A session whose reporter never comes back is dropped about a minute after the server's own start.
+seconds. A session whose reporter never comes back is dropped about a minute after the server's own start. Its card counts down to that time. Remove clears it sooner.
 
 ### `podman inspect podium` shows the token
 

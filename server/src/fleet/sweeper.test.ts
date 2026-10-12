@@ -139,6 +139,82 @@ describe('lifecycle', () => {
   });
 });
 
+describe('dropSession (Remove on a heartbeat-lost card)', () => {
+  it('takes a stale session off the wall like the automatic drop, and keeps it in History', () => {
+    const fleet = makeFleet();
+    const msgs = collect(fleet);
+    const r = fixtureReport();
+    fleet.ingest(r);
+    advance(fleet, 20_000);
+    expect(fleet.view(r.session.id)?.status).toBe('stale');
+    expect(fleet.dropSession(r.session.id)).toBe('dropped');
+    expect(fleet.isLive(r.session.id)).toBe(false);
+    expect(msgs.filter((m) => m.event === 'removed')).toEqual([{ event: 'removed', data: { sessionId: r.session.id, reason: 'dropped' } }]);
+    expect(db.getSession(r.session.id)?.dropped_at).toBe(clock);
+    expect(fleet.history(T0 - 1, clock + 1).map((h) => h.id)).toContain(r.session.id);
+  });
+
+  it('refuses a session that is not stale, and one that is not live', () => {
+    const fleet = makeFleet();
+    const r = fixtureReport();
+    fleet.ingest(r);
+    expect(fleet.dropSession(r.session.id)).toBe('not-stale');
+    expect(fleet.isLive(r.session.id)).toBe(true);
+    expect(fleet.dropSession('nope')).toBe('unknown');
+  });
+
+  it('a removed session that reports again comes back live', () => {
+    const fleet = makeFleet();
+    const r = fixtureReport();
+    fleet.ingest(r);
+    advance(fleet, 20_000);
+    fleet.dropSession(r.session.id);
+    fleet.ingest({ ...r, events: [] });
+    expect(fleet.isLive(r.session.id)).toBe(true);
+    expect(fleet.view(r.session.id)?.status).toBe('running');
+    expect(db.getSession(r.session.id)?.dropped_at).toBeNull();
+  });
+});
+
+describe('dropAt (when a heartbeat-lost card goes away on its own)', () => {
+  it('is null while the session is not stale', () => {
+    const fleet = makeFleet();
+    const r = fixtureReport();
+    fleet.ingest(r);
+    expect(fleet.view(r.session.id)?.dropAt).toBeNull();
+  });
+
+  it('is the last heartbeat plus the stale and drop windows for a session heard since start', () => {
+    const fleet = makeFleet();
+    const r = fixtureReport();
+    fleet.ingest(r);
+    advance(fleet, 20_000);
+    expect(fleet.view(r.session.id)?.dropAt).toBe(T0 + 15_000 + 60_000);
+  });
+
+  it('after a restart, an unheard session drops one window after the restart, matching the sweep', () => {
+    const first = makeFleet();
+    const r = fixtureReport();
+    first.ingest(r);
+    clock += 10 * 60_000;
+    const restartedAt = clock;
+    const second = makeFleet();
+    expect(second.view(r.session.id)?.dropAt).toBe(restartedAt + 60_000);
+    advance(second, 59_000);
+    expect(second.isLive(r.session.id)).toBe(true);
+    advance(second, 1000);
+    expect(second.isLive(r.session.id)).toBe(false);
+  });
+
+  it('uses the hook allowance for a session known only from settings hooks', () => {
+    const fleet = makeFleet();
+    fleet.ingestHook({ hook_event_name: 'SessionStart', session_id: 'hook-only', cwd: '/Users/dev/x', source: 'startup' });
+    advance(fleet, CFG.hookStaleAfterMs + 1000);
+    expect(fleet.view('hook-only')?.status).toBe('stale');
+    expect(fleet.view('hook-only')?.dropAt).toBe(T0 + CFG.hookStaleAfterMs + CFG.dropAfterMs);
+  });
+});
+
 describe('retention', () => {
   it('deletes samples older than 24 h, events older than 30 d and sessions ended 30 d ago', () => {
     const fleet = makeFleet();

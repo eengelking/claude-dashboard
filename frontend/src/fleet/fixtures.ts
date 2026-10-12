@@ -51,6 +51,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     startedAt: 1_000_000,
     lastSeenAt: 2_000_000,
     secondsSinceSeen: 0,
+    dropAt: null,
     context: { tokens: 410_000, window: 1_000_000, percent: 41 },
     costUsd: 12.84,
     tokensTotal: 2_500_000,

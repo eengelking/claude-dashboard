@@ -1,5 +1,5 @@
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
-import { agentCounts, currentStep, planProgress, sessionElapsedSec } from "../logic";
+import { fmtCountdown, fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { IconWarn } from "./Icons";
@@ -21,7 +21,7 @@ export function riskText(s: SessionView): string {
   return `Context exceeded ${b.total}× (${b.loopsHit} of ${b.loopsTotal} loops). Likely losing context; check for invented details.`;
 }
 
-export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void }) {
+export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void; onRemove?: () => void }) {
   const { s, now, config } = props;
   const p = planProgress(s.plan);
   const c = agentCounts(s.agents);
@@ -29,7 +29,9 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const risk = s.blowouts.level === 2;
   const cls = `card${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}`;
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
+  // The card is one big button, so Remove sits beside it in a slot rather than inside it.
   return (
+    <div className={`card-slot${s.status === "stale" && props.onRemove ? " has-remove" : ""}`}>
     <button type="button" className={cls} onClick={props.onOpen} disabled={props.leaving} data-session={s.id}>
       <div className="h">
         <i className={`dot ${s.status}`} aria-hidden="true" />
@@ -90,8 +92,8 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       {s.status === "waiting" && <div className="alert">{CARD_WAIT_TEXT}</div>}
       {s.status === "stale" && (
         <div className="alert stale">
-          Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Dropped from the fleet at{" "}
-          {fmtDur((config.staleAfterMs + config.dropAfterMs) / 1000)}.
+          Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in{" "}
+          <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>.
         </div>
       )}
       <div className="foot">
@@ -103,5 +105,13 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         <Sparkline values={s.series.tokensPerSec} w={100} h={22} />
       </div>
     </button>
+    {s.status === "stale" && props.onRemove && (
+      <div className="remove-bar">
+      <button type="button" className="btn remove" onClick={props.onRemove} disabled={props.leaving} aria-label={`Remove ${s.name} from the fleet`}>
+        Remove
+      </button>
+      </div>
+    )}
+    </div>
   );
 }

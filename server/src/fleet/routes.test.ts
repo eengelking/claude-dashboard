@@ -147,6 +147,24 @@ describe('DELETE /sessions/:id', () => {
   });
 });
 
+describe('POST /sessions/:id/drop', () => {
+  it('removes a stale session without a token; 409 while it is not stale; 404 when unknown', async () => {
+    const { app, fleet } = setup('t');
+    const r = fixtureReport();
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', 't').send(r);
+    expect((await request(app).post(`/api/fleet/sessions/${r.session.id}/drop`)).status).toBe(409);
+    expect((await request(app).post('/api/fleet/sessions/nope/drop')).status).toBe(404);
+    // A restarted server treats stored sessions as stale until they report again.
+    const restarted = new Fleet(fleet.db, { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' });
+    closers.push(() => restarted.close());
+    const app2 = express();
+    app2.use('/api/fleet', createFleetRouter(restarted, { token: 't', log: () => {} }));
+    expect((await request(app2).post(`/api/fleet/sessions/${r.session.id}/drop`)).status).toBe(200);
+    expect((await request(app2).get('/api/fleet/state')).body.sessions).toHaveLength(0);
+    expect((await request(app2).get(`/api/fleet/sessions/${r.session.id}`)).status).toBe(200);
+  });
+});
+
 describe('GET /stream', () => {
   it('streams a snapshot, then session and activity messages, with SSE headers', async () => {
     const { app, fleet } = setup();

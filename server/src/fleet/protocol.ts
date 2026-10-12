@@ -187,6 +187,8 @@ export interface SessionView {
   startedAt: number;
   lastSeenAt: number;
   secondsSinceSeen: number;
+  /** When a heartbeat-lost session leaves the wall on its own (epoch ms); null while it is not stale. */
+  dropAt: number | null;
   context: ContextFill;
   costUsd: number | null;
   tokensTotal: number;

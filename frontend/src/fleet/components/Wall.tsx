@@ -139,6 +139,7 @@ export function Wall(props: {
   entering: (id: string) => boolean;
   leaving: Record<string, number>;
   onOpen: (id: string) => void;
+  onRemove?: (id: string) => void;
 }) {
   return (
     <>
@@ -155,6 +156,7 @@ export function Wall(props: {
               entering={props.entering(s.id)}
               leaving={!!props.leaving[s.id]}
               onOpen={() => props.onOpen(s.id)}
+              onRemove={props.onRemove ? () => props.onRemove?.(s.id) : undefined}
             />
           ))}
         </div>

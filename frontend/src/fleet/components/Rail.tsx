@@ -20,6 +20,7 @@ export function Rail(props: {
   entering: (id: string) => boolean;
   leaving: Record<string, number>;
   liveCount: number;
+  onRemove?: (id: string) => void;
 }) {
   return (
     <nav className="rail" aria-label="Orchestrators">
@@ -41,8 +42,10 @@ export function Rail(props: {
         const p = planProgress(s.plan);
         const c = agentCounts(s.agents);
         const cls = `ritem${props.entering(s.id) ? " enter" : ""}${props.leaving[s.id] ? " leave" : ""}${s.blowouts.level === 2 ? " risk" : ""}`;
+        const removable = s.status === "stale" && !!props.onRemove;
         return (
-          <button type="button" key={s.id} className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
+          <div key={s.id} className={`ritem-slot${removable ? " has-remove" : ""}`}>
+          <button type="button" className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
             <div className="l1">
               <i className={`dot ${s.status}`} aria-hidden="true" />
               <span className="nm">{s.name}</span>
@@ -69,6 +72,12 @@ export function Rail(props: {
               </span>
             </div>
           </button>
+          {removable && (
+            <button type="button" className="rx" onClick={() => props.onRemove?.(s.id)} disabled={!!props.leaving[s.id]} title="Remove from the fleet now" aria-label={`Remove ${s.name} from the fleet`}>
+              &times;
+            </button>
+          )}
+          </div>
         );
       })}
     </nav>

@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Added
+
+- A heartbeat-lost card, its rail row and its page have a Remove control that takes the session off the wall at once in every open tab. The session stays in History and returns if it reports again. (#41)
+
 ### Removed
 
 - **Breaking:** the usage dashboard is gone: the "Usage dashboard" link in the top bar, the `#/usage` page
@@ -21,6 +25,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- A heartbeat-lost card now counts down to when it goes away ("Goes away in 37 s") instead of showing a fixed "Dropped from the fleet at 1:15". The server sends the time as `dropAt`, so it is right after a server restart and for hook-only sessions. (#41)
 - Effort shows as five colored bars with no text, and the level is in a tooltip and the meter's accessible name. Each level has its own color (low orange, medium green, high blue, xhigh purple, max rainbow). The Agents table's Effort column shrank to fit and its freed width went to the Context, Tokens, Cost and Time columns. (#24)
 - The README, `docs/GOTCHAS.md` and `docs/SPEC.md` now explain the `⚠` in front of Podium's status line:
   Claude Code adds it, with the mod's name, to every mod's status line, and it is not a Podium warning or a

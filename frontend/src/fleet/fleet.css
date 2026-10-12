@@ -414,3 +414,16 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .htable th.num, .podium .htable td.num { text-align: right; }
 .podium .htable .lk { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 @media (max-width: 1040px) { .podium .history { display: block; } .podium .history > .side { width: auto; } }
+
+/* Remove on a heartbeat-lost card or rail row (#41). The card and the row are buttons, so the control sits beside them:
+   under the card in its own strip, and at the end of the row's first line. */
+.podium .card-slot { display: flex; flex-direction: column; min-width: 0; }
+.podium .card-slot > .card { flex: 1; }
+.podium .card-slot.has-remove > .card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+.podium .remove-bar { display: flex; justify-content: flex-end; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; }
+.podium .card-slot .remove { padding: 2px 10px; }
+.podium .ritem-slot { position: relative; min-width: 0; }
+.podium .ritem-slot .rx { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--raised); color: var(--ink2); font-size: 14px; line-height: 1; }
+.podium .ritem-slot .rx:hover, .podium .ritem-slot .rx:focus-visible { background: var(--sel); color: var(--ink); }
+.podium .ritem-slot.has-remove .ritem .l1 { padding-right: 30px; }
+.podium .remove-inline { margin-left: 10px; }

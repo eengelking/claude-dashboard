@@ -28,6 +28,12 @@ export function fmtDur(seconds: number): string {
   return `${m}:${String(x).padStart(2, "0")}`;
 }
 
+/** Seconds left on a countdown: "37 s" under a minute, "1:12" after. */
+export function fmtCountdown(seconds: number): string {
+  const s = Math.max(0, Math.ceil(Number.isFinite(seconds) ? seconds : 0));
+  return s < 60 ? `${s} s` : fmtDur(s);
+}
+
 /** Epoch milliseconds as local "HH:MM:SS". */
 export function fmtClock(t: number): string {
   const d = new Date(t);

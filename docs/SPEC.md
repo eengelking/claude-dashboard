@@ -50,7 +50,8 @@ Podium is added next to it. Do not remove or break it.
 ### Non-goals (do NOT build these)
 
 - No control surface. Podium observes. It never sends prompts, stops agents, approves permissions or edits
-  a session. (The dashboard may copy a resume command to the clipboard; that is all.)
+  a session. (The dashboard may copy a resume command to the clipboard, and it may remove a heartbeat-lost
+  card from the live view early, 7.5; that is all. Neither sends anything to a session.)
 - No multi-machine or multi-user support. One machine, one user, localhost only. The server binds to
   `127.0.0.1` by default. In the container image it listens on all interfaces inside the container, and
   the port is published only on the host's `127.0.0.1` (4.4).
@@ -541,6 +542,7 @@ In priority order: a name set with `/podium name <text>` (kept in `$.store` by s
 | `GET /api/fleet/sessions/:id` | One `SessionView`, live or historical. 404 if unknown. |
 | `GET /api/fleet/events?sessionId=&before=&limit=` | Page through stored events newest first (`limit` ≤ 200, default 50, `before` = event time). |
 | `GET /api/fleet/history?day=YYYY-MM-DD` | Ended or dropped sessions that day, summary rows only (name, project, model, duration, cost, blowouts, end reason). Phase 4. |
+| `POST /api/fleet/sessions/:id/drop` | Remove a heartbeat-lost session from the live view now: the same exit as the automatic drop (7.5). No token. 404 if the session is not live, 409 if it is not `stale`. |
 | `DELETE /api/fleet/sessions/:id` | Remove a session and its rows (for stuck test data). Requires the token if one is configured. |
 | `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen }`. |
 | `POST /api/fleet/hook` | Phase 5: classic settings-hook payloads. |
@@ -615,6 +617,7 @@ interface SessionView {
   model: string | null; modelFamily: 'opus'|'sonnet'|'haiku'|'fable'|'other'; effort: string | null;
   status: 'running' | 'waiting' | 'stale' | 'done'; waitNote: string | null; endReason: string | null;
   startedAt: number; lastSeenAt: number; secondsSinceSeen: number;
+  dropAt: number | null; // epoch ms when a stale session leaves the wall by itself; null unless stale (7.5)
   context: { tokens: number | null; window: number | null; percent: number | null };
   costUsd: number | null; tokensTotal: number;
   blowouts: { orchestrator: number; agents: number; total: number; level: 0 | 1 | 2; loopsHit: number; loopsTotal: number;
@@ -637,6 +640,10 @@ interface SessionView {
 
 A stale session that reports again immediately returns to its stored status. A dropped session that reports again is revived (clear `dropped_at`, `ended_at`). On server start the sweeper treats every stored non-done session as stale until it reports. SSE broadcasts `removed` when a session leaves the live set.
 
+`SessionView.dropAt` is when a stale session leaves the live set by itself: `max(last_seen + staleAfter, server start if not heard since) + DROP_AFTER_MS` (`staleAfter` is `STALE_AFTER_MS`, or `HOOK_STALE_AFTER_MS` for a hook-only session). The sweep and the view use the same calculation, so a heartbeat-lost card shows a countdown that matches what happens, including after a restart.
+
+**Remove.** A heartbeat-lost card and its rail row have a Remove control, and the orchestrator page has "Remove now". It calls `POST /api/fleet/sessions/:id/drop`, which runs the same exit as the automatic drop (`dropped_at` set, event `end` "heartbeat lost", `removed` with reason `dropped`), so every open tab updates. The session stays in History, so Remove asks for no confirmation. The server refuses a session that is not `stale`. Removing hides the card and nothing more: a removed session that reports again comes back on the wall, exactly as a dropped one does. Remove needs no token, like the other requests the dashboard makes, and sends nothing to the session.
+
 A session that has done nothing yet is not part of the wall. That means its status is not `running` and it has no tokens, cost, context, blowouts, agents or plan. It stays out of `/state`, the SSE `session` and `activity` messages, the KPIs, `/history`, `clearedToday`, the activity feed, and the `liveSessions` number in the report ack and `/health`. It appears as soon as any of those change. Sessions reported only through settings hooks are exempt, because hooks carry no usage and would never leave that state. Claude Code's background daemon runs such sessions (a parked twin of an interactive window, and a pool of pre-warmed spares), and each one loads the reporter.
 
 ### 7.6 SSE stream
@@ -655,7 +662,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 
 ### 7.7 Hardening
 
-- Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads stay open on localhost.
+- Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
 - Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).

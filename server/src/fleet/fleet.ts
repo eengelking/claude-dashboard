@@ -186,10 +186,23 @@ export class Fleet {
         blowouts: this.db.getBlowouts(row.id),
         samples: this.db.samplesSince(row.id, Math.floor(now / 1000) - 61),
         heard: entry ? entry.heard : true,
+        dropAt: entry ? this.dropAtFor(row, entry.heard, now) : null,
       },
       now,
       this.derive,
     );
+  }
+
+  /**
+   * When a stale live session leaves the wall by itself, or null if it is not stale. The drop clock starts
+   * when the session went stale, but for one not heard since this server started it starts no earlier than
+   * the server's start (SPEC 7.5). `sweep` and the view both use this, so the card says what will happen.
+   */
+  private dropAtFor(row: SessionRow, heard: boolean, now: number = this.now()): number | null {
+    const staleAfterMs = staleAfterFor(row, this.derive);
+    if (sessionStatus(row, heard, now, staleAfterMs) !== 'stale') return null;
+    const base = row.last_seen_at + staleAfterMs;
+    return (heard ? base : Math.max(base, this.startedAt)) + this.cfg.dropAfterMs;
   }
 
   liveViews(): SessionView[] {
@@ -300,6 +313,19 @@ export class Fleet {
     return existed;
   }
 
+  /**
+   * The Remove button on a heartbeat-lost card: the same exit as the automatic drop, run now. The session
+   * stays in History, and comes back live if it reports again.
+   */
+  dropSession(id: string): 'dropped' | 'unknown' | 'not-stale' {
+    const entry = this.live.get(id);
+    const row = entry ? this.db.getSession(id) : undefined;
+    if (!entry || !row) return 'unknown';
+    if (sessionStatus(row, entry.heard, this.now(), staleAfterFor(row, this.derive)) !== 'stale') return 'not-stale';
+    this.leave(row, 'dropped', 'heartbeat lost');
+    return 'dropped';
+  }
+
   private leave(row: SessionRow, reason: 'done' | 'dropped', text: string): void {
     const now = this.now();
     this.live.delete(row.id);
@@ -341,12 +367,9 @@ export class Fleet {
         if (now - (row.ended_at ?? now) >= this.cfg.lingerMs) this.leave(row, 'done', 'session ended');
         continue;
       }
-      const staleAfterMs = staleAfterFor(row, this.derive);
-      const status = sessionStatus(row, entry.heard, now, staleAfterMs);
+      const status = sessionStatus(row, entry.heard, now, staleAfterFor(row, this.derive));
       if (status === 'stale') {
-        const base = row.last_seen_at + staleAfterMs;
-        const staleSince = entry.heard ? base : Math.max(base, this.startedAt);
-        if (now - staleSince >= this.cfg.dropAfterMs) {
+        if (now >= (this.dropAtFor(row, entry.heard, now) ?? Infinity)) {
           this.leave(row, 'dropped', 'heartbeat lost');
           continue;
         }
