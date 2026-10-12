@@ -82,11 +82,14 @@ too.
 
 ## What the dashboard shows
 
-### The usage page (`#/usage`) is empty for Claude Code in container mode
+### The usage page (`#/usage`) says it can't see any Claude Code logs in container mode
 
 It reads the logs under `~/.claude/projects` in the server's home directory, and a container has its own
-home with no logs in it. The Podium fleet console is not affected. Use `podiumctl start --mode standalone`
-if you want that page. (Mounting your logs into the container read-only would fix it; it is not done.)
+home with no logs in it, so the page shows a notice instead of charts. The Podium fleet console is not
+affected. Use `podiumctl start --mode standalone`, or `podiumctl config set PODIUMCTL_MOUNT_LOGS=1` and
+`restart` to mount your logs into the container read-only. The mount lets the server read your
+transcripts, so it is off by default. On macOS, Podman shares `/Users` with its VM, so the default path
+works; a home directory elsewhere may not be shared.
 
 ### A plan step has no owner
 

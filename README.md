@@ -178,6 +178,7 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 |---|---|---|
 | `PORT` | `4317` | Server port (the Vite proxy follows it) |
 | `HOST` | `127.0.0.1` | Bind address. Podium is for one machine; leave it on localhost |
+| `PODIUMCTL_MOUNT_LOGS` | off | `podiumctl` only, container mode. `1` mounts your `~/.claude/projects` into the container read-only so `#/usage` can read Claude Code's logs. The server can then read your transcripts, so it is off by default |
 | `PODIUM_DB` | `data/podium.sqlite` | SQLite database file (`podiumctl` uses `/data/podium.sqlite` in the container and `~/.podium/data/podium.sqlite` standalone) |
 | `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` |
 | `STALE_AFTER_MS` | `15000` | A session not heard from this long shows as stale |
@@ -187,6 +188,11 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 | `RETAIN_SAMPLES_MS` | 24 hours | Per-second chart samples kept |
 | `RETAIN_EVENTS_MS` | 30 days | Activity events kept |
 | `RETAIN_SESSIONS_MS` | 30 days | Ended sessions kept |
+
+`#/usage` reads Claude Code's logs from `~/.claude/projects` on the machine the server runs on. In the
+container it cannot see them and says so; `podiumctl config set PODIUMCTL_MOUNT_LOGS=1` and `restart` mounts
+them read-only. The mount gives the server read access to your full transcripts. Podium only reads token
+counts, models and project names from them, but the access is real, so it stays off until you ask.
 
 Sessions, agents and events are stored in SQLite (Node's built-in `node:sqlite`), so a server restart
 loses nothing that was reported: sessions come back as stale and recover when their reporters send again.

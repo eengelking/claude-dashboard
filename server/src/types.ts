@@ -26,7 +26,15 @@ export interface UsageRollup {
   totalTokens: number;
 }
 
+/** Whether the server can see Claude Code's log folder, and if not, why. */
+export interface LogsStatus {
+  available: boolean;
+  dir: string;
+  reason?: string;
+}
+
 export interface ClaudeCodeUsage {
+  logs: LogsStatus;
   daily: DailyUsage[];
   byModel: ModelUsage[];
   byProject: ProjectUsage[];

@@ -148,8 +148,10 @@ agent it is about. Rows for sessions that have ended are greyed out.
 - `#/history` lists the sessions that ended on a day you pick, with their agent detail from stored data. It
   survives a server restart.
 - `#/usage` is the earlier dashboard that charts Claude Code and Anthropic Admin API usage. The Claude Code
-  half reads the logs under `~/.claude/projects` on the machine the server runs on, so it is empty when
-  the server runs in the container; use standalone mode for it. For the API half, add an
+  half reads the logs under `~/.claude/projects` on the machine the server runs on. In the container the page
+  says it cannot see any logs. Either use standalone mode, or run
+  `podiumctl config set PODIUMCTL_MOUNT_LOGS=1` and `podiumctl restart` to mount your logs into the
+  container read-only (this lets the server read your transcripts, so it is off by default). For the API half, add an
   `ANTHROPIC_ADMIN_API_KEY` (see `.env.example`).
 
 ### What the numbers mean
@@ -191,7 +193,7 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 | A new session is not on the wall, or its status line says `podium ● 0 live` | It has not done anything yet. Send a prompt |
 | A session I closed is still on the wall | It moved to the background. `claude agents` lists it and `claude stop <id>` ends it. See "Closing a background session" |
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection) |
-| The usage page shows nothing for Claude Code | The server is in the container and cannot see your `~/.claude/projects`. Use standalone mode |
+| The usage page says Podium can't see any Claude Code logs | The server is in the container and cannot see your `~/.claude/projects`. Use standalone mode, or `podiumctl config set PODIUMCTL_MOUNT_LOGS=1` then `podiumctl restart` |
 | I changed the config and nothing happened | Run `podiumctl restart` |
 
 More in [GOTCHAS.md](GOTCHAS.md).

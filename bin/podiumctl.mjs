@@ -15,14 +15,16 @@ export const CONTAINER = 'podium';
 export const VOLUME = 'podium-data';
 export const SERVICE_LABEL = 'dev.podium.server';
 const INNER_PORT = 4317;
+/** Where the server in the container looks for Claude Code's logs (the `node` user's home). */
+const CONTAINER_LOGS_DIR = '/home/node/.claude/projects';
 
 /** Server settings podiumctl passes through to the server unchanged when they are set in the config. */
 export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS',
   'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS', 'ANTHROPIC_ADMIN_API_KEY',
 ];
-/** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. */
-export const OWN_KEYS = ['PODIUMCTL_MODE', 'PODIUMCTL_PORT', 'PODIUMCTL_BIND', 'PODIUM_TOKEN', 'PODIUM_DB'];
+/** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. Container-only: PODIUMCTL_MOUNT_LOGS. */
+export const OWN_KEYS = ['PODIUMCTL_MODE', 'PODIUMCTL_PORT', 'PODIUMCTL_BIND', 'PODIUM_TOKEN', 'PODIUM_DB', 'PODIUMCTL_MOUNT_LOGS'];
 const ALL_KEYS = [...OWN_KEYS, ...PASSTHROUGH];
 
 const HELP = `podiumctl: manage the Podium server
@@ -112,7 +114,11 @@ export function resolveConfig(file, flags = {}, hasPodman = true) {
   const port = Number(flags.port ?? file.PODIUMCTL_PORT ?? INNER_PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`invalid port "${flags.port ?? file.PODIUMCTL_PORT}"`);
   const bind = flags.bind ?? file.PODIUMCTL_BIND ?? '127.0.0.1';
-  return { mode, port, bind, token: file.PODIUM_TOKEN, db: file.PODIUM_DB, extra: Object.fromEntries(PASSTHROUGH.filter((k) => file[k] !== undefined).map((k) => [k, file[k]])) };
+  const mountRaw = String(file.PODIUMCTL_MOUNT_LOGS ?? '').toLowerCase();
+  if (!['', '0', 'false', 'no', 'off', '1', 'true', 'yes', 'on'].includes(mountRaw)) throw new Error(`PODIUMCTL_MOUNT_LOGS must be 1 or 0, not "${file.PODIUMCTL_MOUNT_LOGS}"`);
+  const mountLogs = ['1', 'true', 'yes', 'on'].includes(mountRaw);
+  const logsDir = path.join(os.homedir(), '.claude', 'projects');
+  return { mode, port, bind, mountLogs, logsDir, token: file.PODIUM_TOKEN, db: file.PODIUM_DB, extra: Object.fromEntries(PASSTHROUGH.filter((k) => file[k] !== undefined).map((k) => [k, file[k]])) };
 }
 
 /** Environment the server process gets (the token and other settings live here, never on a command line). */
@@ -130,6 +136,7 @@ export function containerRunArgs(cfg, envNames) {
     'run', '-d', '--name', CONTAINER, '--restart', 'unless-stopped',
     '-p', `${cfg.bind}:${cfg.port}:${INNER_PORT}`,
     '-v', `${VOLUME}:/data`,
+    ...(cfg.mountLogs ? ['-v', `${cfg.logsDir}:${CONTAINER_LOGS_DIR}:ro`] : []),
     '--health-cmd', `node -e "fetch('http://127.0.0.1:${INNER_PORT}/api/fleet/state').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`,
     '--health-interval', '30s',
     ...envNames.flatMap((n) => ['-e', n]),
@@ -329,6 +336,10 @@ async function cmdStart(cfg) {
   if (cfg.mode === 'container') {
     ensurePodman();
     if ((containerState() ?? '').startsWith('running')) { say(`Already running at ${dashUrl(cfg)} (use restart to apply config changes)`); return; }
+    if (cfg.mountLogs) {
+      if (!fs.existsSync(cfg.logsDir)) fail(`PODIUMCTL_MOUNT_LOGS is on, but ${cfg.logsDir} does not exist. Run Claude Code once, or turn it off with \`podiumctl config unset PODIUMCTL_MOUNT_LOGS\`.`);
+      say(`Mounting ${cfg.logsDir} into the container read-only. The server can read your Claude Code transcripts (prompts and replies) there.`);
+    }
     if (pm(['image', 'exists', IMAGE]).status !== 0) { say('No image yet; building it...'); await cmdBuild(cfg); }
     pm(['rm', '-f', CONTAINER], { stdio: 'ignore' });
     const env = serverEnv(cfg, true);

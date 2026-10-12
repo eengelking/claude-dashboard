@@ -5,6 +5,7 @@ import { createRouter } from "./routes.js";
 
 vi.mock("./claudeCode.js", () => ({
   scanClaudeCodeUsage: vi.fn().mockResolvedValue({
+    logs: { available: true, dir: "/x" },
     daily: [],
     byModel: [],
     byProject: [],

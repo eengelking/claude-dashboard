@@ -137,3 +137,16 @@ dashboard stays in the same repo at `#/usage`.
 **Why.** The repo is published, and the name should say what the product is. "Podium" was already the
 working name in the spec (open question 10, kept in one constant).
 **Cost.** Old links to `claude-dashboard` rely on GitHub's redirect.
+
+## 15. The usage page says when it cannot see logs; mounting them is opt-in
+
+**Choice.** `/api/claude-code` reports whether the log folder is readable and why not, and the page shows a
+notice instead of empty charts. `podiumctl` can also mount the host's `~/.claude/projects` into the
+container read-only, only when `PODIUMCTL_MOUNT_LOGS=1`. It says what it exposes when it starts.
+**Why.** An empty chart with no explanation looks like no usage (issue #16). Doing only the notice would
+leave container mode without the page; doing only the mount would leave the page silent whenever it is off
+or the folder is missing. The mount gives the server read access to full transcripts, so a default-on mount
+was ruled out.
+**Cost.** One more config key and a security note. The mount is verified on macOS with Podman, which shares
+`/Users` with its VM; a home directory outside the shared paths is not covered. #30 proposes removing the
+usage page altogether, which would make this moot.

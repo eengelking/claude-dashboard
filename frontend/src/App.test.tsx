@@ -9,6 +9,7 @@ afterEach(() => {
 
 function claudeCodeFixture(): ClaudeCodeUsage {
   return {
+    logs: { available: true, dir: "/home/node/.claude/projects" },
     daily: [{ date: "2026-07-21", inputTokens: 1000, outputTokens: 500, cacheCreationTokens: 0, cacheReadTokens: 0 }],
     byModel: [{ model: "claude-opus-4-8", inputTokens: 1000, outputTokens: 500, cacheCreationTokens: 0, cacheReadTokens: 0 }],
     byProject: [{ project: "app-a", inputTokens: 1000, outputTokens: 500, cacheCreationTokens: 0, cacheReadTokens: 0 }],
@@ -81,5 +82,39 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Admin API key not configured")).toBeInTheDocument());
+  });
+
+  it("says the logs are not visible, and why, instead of showing zeros", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        const href = url.toString();
+        if (href.includes("/api/claude-code")) {
+          return new Response(
+            JSON.stringify({
+              ...claudeCodeFixture(),
+              logs: { available: false, dir: "/home/node/.claude/projects", reason: "Folder not found." },
+              daily: [],
+              byModel: [],
+              byProject: [],
+              today: { totalTokens: 0 },
+              week: { totalTokens: 0 },
+              month: { totalTokens: 0 },
+            }),
+            { status: 200 },
+          );
+        }
+        if (href.includes("/api/api-usage")) {
+          return new Response(JSON.stringify(apiUsageFixture()), { status: 200 });
+        }
+        throw new Error(`Unexpected fetch: ${href}`);
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/can't see any Claude Code logs/i)).toBeInTheDocument());
+    expect(screen.getByText(/Folder not found\./)).toBeInTheDocument();
+    expect(screen.getByText(/PODIUMCTL_MOUNT_LOGS/)).toBeInTheDocument();
   });
 });

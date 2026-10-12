@@ -243,10 +243,12 @@ a reader of the spec would expect:
     `$.ui.status`, which takes no severity, so the sign looks like the host's own styling of a plugin's
     entry (inferred, not confirmed). `podium ● N live` is the normal state.
 12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
-13. **The usage page is empty for Claude Code in container mode.** The scanner reads
-    `os.homedir()/.claude/projects` (`server/src/claudeCode.ts`), and the container's home holds no logs, so
-    `/api/claude-code` answers with empty lists. Standalone mode reads them. A read-only bind mount of the
-    host's logs would fix it and has not been built.
+13. **The usage page cannot see Claude Code's logs in container mode unless they are mounted.** The scanner
+    reads `os.homedir()/.claude/projects` (`server/src/claudeCode.ts`), and the container's home holds no
+    logs. `/api/claude-code` now carries a `logs` status (`available`, `dir`, `reason`) and the page shows a
+    notice when it is false, instead of zeros. `PODIUMCTL_MOUNT_LOGS=1` makes `podiumctl` add a read-only
+    bind mount of the host's `~/.claude/projects` at `/home/node/.claude/projects`. Off by default
+    (DECISIONS 15).
 
 ## Browser checklist (T4.2)
 

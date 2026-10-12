@@ -50,6 +50,20 @@ describe("podiumctl config", () => {
 describe("podiumctl command construction", () => {
   const cfg = resolveConfig({ PODIUM_TOKEN: "s3cret", STALE_AFTER_MS: "9000" }, { port: "4400" });
 
+  it("mounts the host's Claude Code logs read-only only when PODIUMCTL_MOUNT_LOGS is on", () => {
+    const off = containerRunArgs(cfg, []);
+    expect(off.join(" ")).not.toContain(".claude");
+    for (const value of ["1", "true", "yes", "on"]) {
+      const on = resolveConfig({ PODIUMCTL_MOUNT_LOGS: value });
+      expect(on.mountLogs).toBe(true);
+      const args = containerRunArgs(on, []);
+      expect(args).toContain(`${path.join(os.homedir(), ".claude", "projects")}:/home/node/.claude/projects:ro`);
+    }
+    expect(resolveConfig({ PODIUMCTL_MOUNT_LOGS: "0" }).mountLogs).toBe(false);
+    expect(resolveConfig({ PODIUMCTL_MOUNT_LOGS: "" }).mountLogs).toBe(false);
+    expect(() => resolveConfig({ PODIUMCTL_MOUNT_LOGS: "maybe" })).toThrow(/PODIUMCTL_MOUNT_LOGS/);
+  });
+
   it("never puts the token on the podman command line", () => {
     const env = serverEnv(cfg, true);
     const args = containerRunArgs(cfg, Object.keys(env));

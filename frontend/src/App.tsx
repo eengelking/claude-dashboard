@@ -49,6 +49,19 @@ export default function App() {
         <h1>Claude Usage Dashboard</h1>
       </header>
 
+      {claudeCode.data && !claudeCode.data.logs.available && (
+        <div className="logs-notice" role="status">
+          <p>
+            Podium can&apos;t see any Claude Code logs, so the Claude Code figures below are missing, not zero.{" "}
+            {claudeCode.data.logs.reason} It looked in <code>{claudeCode.data.logs.dir}</code>.
+          </p>
+          <p>
+            In container mode, mount your logs read-only: run <code>podiumctl config set PODIUMCTL_MOUNT_LOGS=1</code>, then{" "}
+            <code>podiumctl restart</code>. Standalone mode reads them directly.
+          </p>
+        </div>
+      )}
+
       <section className="stat-row">
         <StatTile label="Today — Claude Code" primaryValue={formatTokens(claudeCode.data?.today.totalTokens ?? 0)} secondaryValue="tokens" />
         <StatTile

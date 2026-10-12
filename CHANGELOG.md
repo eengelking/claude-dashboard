@@ -12,7 +12,17 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Added
+
+- `PODIUMCTL_MOUNT_LOGS=1` mounts your `~/.claude/projects` into the container read-only, so `#/usage` can
+  show Claude Code usage in container mode. It is off by default because it lets the server read your
+  transcripts; `podiumctl` says so when it starts. (#16)
+
 ### Fixed
+
+- The usage page (`#/usage`) no longer shows empty charts and zeros when the server cannot see Claude Code's
+  logs (the container has none of its own). It says that no logs are visible, why, and how to enable the
+  mount. (#16)
 
 - Sessions nobody asked for no longer show up as cards. Claude Code's background daemon runs a parked
   twin of an interactive window and a pool of pre-warmed spares, and each one loads the reporter and

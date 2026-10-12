@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import type { ClaudeCodeUsage, DailyUsage, ModelUsage, ProjectUsage } from "./types.js";
+import type { ClaudeCodeUsage, DailyUsage, LogsStatus, ModelUsage, ProjectUsage } from "./types.js";
 
 export const DEFAULT_PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 
@@ -104,10 +104,30 @@ function total(row: { inputTokens: number; outputTokens: number; cacheCreationTo
   return row.inputTokens + row.outputTokens + row.cacheCreationTokens + row.cacheReadTokens;
 }
 
+/** Check that the log folder can be listed, and say why if it cannot. */
+async function checkLogs(dir: string): Promise<LogsStatus> {
+  try {
+    await readdir(dir);
+    return { available: true, dir };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    const reason =
+      code === "ENOENT"
+        ? "Folder not found."
+        : code === "ENOTDIR"
+          ? "Not a folder."
+          : code === "EACCES" || code === "EPERM"
+            ? "Permission denied."
+            : `Cannot be read (${code ?? "unknown error"}).`;
+    return { available: false, dir, reason };
+  }
+}
+
 export async function scanClaudeCodeUsage(
   projectsDir: string = DEFAULT_PROJECTS_DIR,
   now: Date = new Date(),
 ): Promise<ClaudeCodeUsage> {
+  const logs = await checkLogs(projectsDir);
   const files = await findJsonlFiles(projectsDir);
   const allEvents: RawUsageEvent[] = [];
   for (const file of files) {
@@ -149,6 +169,7 @@ export async function scanClaudeCodeUsage(
     total(b) - total(a);
 
   return {
+    logs,
     daily: [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date)),
     byModel: [...modelMap.values()].sort(byTotalDesc),
     byProject: [...projectMap.values()].sort(byTotalDesc),

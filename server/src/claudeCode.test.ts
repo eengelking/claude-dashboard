@@ -94,4 +94,27 @@ describe("scanClaudeCodeUsage", () => {
     expect(result.byProject).toEqual([]);
     expect(result.today).toEqual({ totalTokens: 0 });
   });
+
+  it("says why when the log folder does not exist, instead of reporting silent zeros", async () => {
+    const dir = "/nonexistent/path/for/test";
+    const result = await scanClaudeCodeUsage(dir, new Date());
+    expect(result.logs.available).toBe(false);
+    expect(result.logs.dir).toBe(dir);
+    expect(result.logs.reason).toMatch(/not found|does not exist/i);
+  });
+
+  it("says why when the log path is not a readable folder", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "podium-test-"));
+    const file = path.join(tmpDir, "a-file");
+    await writeFile(file, "x", "utf-8");
+    const result = await scanClaudeCodeUsage(file, new Date());
+    expect(result.logs.available).toBe(false);
+    expect(result.logs.reason).toBeTruthy();
+  });
+
+  it("reports the logs as available when the folder exists, even with no usage in it", async () => {
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), "podium-test-"));
+    const result = await scanClaudeCodeUsage(tmpDir, new Date());
+    expect(result.logs).toEqual({ available: true, dir: tmpDir });
+  });
 });

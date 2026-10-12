@@ -23,6 +23,11 @@ problems that matter here are:
 - **The mod acting on a session.** Podium only observes. A way for the mod or the server to send a prompt
   to, stop, or change a session is a security bug.
 
+One opt-in setting widens what the server can read. `PODIUMCTL_MOUNT_LOGS=1` mounts your
+`~/.claude/projects` into the container read-only, so the server (and anything that gets code execution in
+it) can read your full Claude Code transcripts. It is off by default and `podiumctl` says so when it starts.
+A way to get that mount without turning it on, or to write through it, is in scope.
+
 A few things are by design, so they are not vulnerabilities on their own. Reads (`GET /api/fleet/*`) are
 open on localhost; only reports, hooks and deletes need the token. Anyone with access to your user
 account or to `~/.podium` can read the token and the data, and `podman inspect podium` shows the token
