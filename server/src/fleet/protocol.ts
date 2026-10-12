@@ -78,6 +78,18 @@ export interface Failure {
   retriedAs: string | null;
 }
 
+/**
+ * What the orchestrator's main loop reports about its own work, in the shapes an AgentReport uses for
+ * the fields of the same name. Calls made by agents it launched are not counted here.
+ */
+export interface LoopReport {
+  skills: string[];
+  lastTool: string | null;
+  toolCalls: number;
+  toolCounts: Record<string, number>;
+  steps: { done: number; total: null };
+}
+
 export interface AgentReport {
   id: string;
   parentId: string | null;
@@ -136,6 +148,8 @@ export interface SessionReport {
   rateLimits: RateLimit[];
   blowouts: number;
   plan: Plan | null;
+  /** The main loop's steps, tools and skills. null when the reporter is too old to send it. */
+  loop: LoopReport | null;
 }
 
 export interface Report {
@@ -217,6 +231,8 @@ export interface SessionView {
     log: BlowoutLogEntry[];
   };
   plan: Plan | null;
+  /** The main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a hooks-only session. */
+  loop: LoopReport | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -550,6 +566,19 @@ function event(v: unknown, path: string): ActivityEvent {
   };
 }
 
+function loop(v: unknown, path: string): LoopReport | null {
+  if (v === null || v === undefined) return null;
+  const o = obj(v, path);
+  const steps = obj(o.steps, `${path}.steps`);
+  return {
+    skills: arr(o.skills, `${path}.skills`, LIMITS.skills).map((s, i) => str(s, `${path}.skills[${i}]`, LIMITS.short)),
+    lastTool: strOrNull(o.lastTool, `${path}.lastTool`, LIMITS.short),
+    toolCalls: int(o.toolCalls, `${path}.toolCalls`),
+    toolCounts: countsOrNull(o.toolCounts, `${path}.toolCounts`, LIMITS.toolNames) ?? {},
+    steps: { done: int(steps.done, `${path}.steps.done`), total: null },
+  };
+}
+
 function session(v: unknown, path: string): SessionReport {
   const o = obj(v, path);
   const id = str(o.id, `${path}.id`, LIMITS.id);
@@ -586,6 +615,7 @@ function session(v: unknown, path: string): SessionReport {
     }),
     blowouts: int(o.blowouts, `${path}.blowouts`),
     plan: plan(o.plan, `${path}.plan`),
+    loop: loop(o.loop, `${path}.loop`),
   };
 }
 

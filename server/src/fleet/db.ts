@@ -58,6 +58,11 @@ CREATE TABLE samples (
     // Calls per tool name as JSON; NULL for rows and reporters from before it existed.
     sql: 'ALTER TABLE agents ADD COLUMN tool_counts_json TEXT;',
   },
+  {
+    version: 3,
+    // The main loop's steps, tools and skills as JSON; NULL for rows and reporters from before it existed.
+    sql: 'ALTER TABLE sessions ADD COLUMN loop_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -91,6 +96,7 @@ export interface SessionRow {
   plan_json: string | null;
   reporter_version: string | null;
   engine_version: string | null;
+  loop_json: string | null;
 }
 
 export interface AgentRow {

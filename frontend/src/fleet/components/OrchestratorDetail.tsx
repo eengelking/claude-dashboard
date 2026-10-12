@@ -1,11 +1,12 @@
 import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
 import { sessionElapsedSec } from "../logic";
 import type { SessionView } from "../types";
+import { reporterBelow, SkillChips, ToolChips } from "./AgentDetail";
 import { BlowBadge, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
 import { IconBack } from "./Icons";
 import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
-/** The side panel for the orchestrator's own row. The report carries the main loop only as session-level fields. */
+/** The side panel for the orchestrator's own row. Steps, tools and skills come from the report's main loop block, when the reporter sends one. */
 export function OrchestratorDetail(props: { s: SessionView; now: number; onBack: () => void }) {
   const { s, now } = props;
   return (
@@ -44,10 +45,24 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
           <dd className="mono">{fmtUsd(s.costUsd)}</dd>
           <dt>Time</dt>
           <dd className="mono">{fmtDur(sessionElapsedSec(s, now))}</dd>
+          {s.loop && (
+            <>
+              <dt>Steps</dt>
+              <dd className="mono">{s.loop.steps.done} model requests</dd>
+            </>
+          )}
         </dl>
+        {!s.loop && s.status !== "done" && reporterBelow(s, 4) && (
+          <div className="note">
+            Steps, tools and skills need podium-reporter 0.4.0 or later. This session reports {s.reporterVersion}. Run claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins in that session.
+          </div>
+        )}
+        {s.loop && <ToolChips key={s.id} counts={s.loop.toolCounts} calls={s.loop.toolCalls} lastTool={s.loop.lastTool} />}
+        {s.loop && <SkillChips skills={s.loop.skills} />}
         <GitLine git={s.git} />
         <div className="note">
-          Tokens and cost cover the whole session, subagents included. Tools and skills are not reported for the main loop yet.
+          Tokens and cost cover the whole session, subagents included.
+          {s.loop && " Steps, tools and skills are the orchestrator’s own, not its agents’."}
         </div>
       </div>
     </>

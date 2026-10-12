@@ -75,6 +75,18 @@ export interface Failure {
   retriedAs: string | null;
 }
 
+/**
+ * What the orchestrator's main loop reports about its own work, in the shapes an AgentReport uses for
+ * the fields of the same name. Calls made by agents it launched are not counted here.
+ */
+export interface LoopReport {
+  skills: string[];
+  lastTool: string | null;
+  toolCalls: number;
+  toolCounts: Record<string, number>;
+  steps: { done: number; total: null };
+}
+
 export interface AgentReport {
   id: string;
   parentId: string | null;
@@ -133,6 +145,8 @@ export interface SessionReport {
   rateLimits: RateLimit[];
   blowouts: number;
   plan: Plan | null;
+  /** The main loop's steps, tools and skills. null when the reporter is too old to send it. */
+  loop: LoopReport | null;
 }
 
 export interface Report {

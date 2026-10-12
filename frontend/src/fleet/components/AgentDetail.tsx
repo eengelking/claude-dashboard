@@ -10,7 +10,7 @@ import { IconBack, IconFork, IconSub } from "./Icons";
 const TOOL_CHIPS_SHOWN = 5;
 
 /** Tools the agent used, most used first (ties by name); the five most used unless expanded. */
-function ToolChips(props: { counts: Record<string, number>; calls: number; lastTool: string | null }) {
+export function ToolChips(props: { counts: Record<string, number>; calls: number; lastTool: string | null }) {
   const [all, setAll] = useState(false);
   const sorted = Object.entries(props.counts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   const shown = all ? sorted : sorted.slice(0, TOOL_CHIPS_SHOWN);
@@ -43,12 +43,35 @@ function ToolChips(props: { counts: Record<string, number>; calls: number; lastT
   );
 }
 
-/** True for a mod older than 0.2.0, the first to send per-tool counts. A hooks session has no mod to update. */
-function reporterLacksToolCounts(s: Pick<SessionView, "reporter" | "reporterVersion">): boolean {
-  if (s.reporter !== "mod" || !s.reporterVersion) return false;
-  const [major = 0, minor = 0] = s.reporterVersion.split(".").map((n) => parseInt(n, 10));
-  return major === 0 && minor < 2;
+/** Skills a loop loaded, as chips; "None seen" when there are none. */
+export function SkillChips(props: { skills: string[] }) {
+  return (
+    <>
+      <span className="lab">Skills loaded</span>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {props.skills.length ? (
+          props.skills.map((k) => (
+            <span key={k} className="chip skill">
+              {k}
+            </span>
+          ))
+        ) : (
+          <span style={{ color: "var(--muted)" }}>None seen</span>
+        )}
+      </div>
+    </>
+  );
 }
+
+/** True for a mod older than 0.<minor>. A hooks session has no mod to update, and an unparsable version says nothing. */
+export function reporterBelow(s: Pick<SessionView, "reporter" | "reporterVersion">, minor: number): boolean {
+  if (s.reporter !== "mod" || !s.reporterVersion) return false;
+  const m = /^(\d+)\.(\d+)\.\d+$/.exec(s.reporterVersion);
+  return m !== null && m[1] === "0" && Number(m[2]) < minor;
+}
+
+/** True for a mod older than 0.2.0, the first to send per-tool counts. */
+const reporterLacksToolCounts = (s: Pick<SessionView, "reporter" | "reporterVersion">) => reporterBelow(s, 2);
 
 export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; onBack: () => void; onAgent: (id: string) => void }) {
   const { s, a, now } = props;
@@ -134,18 +157,7 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
           </div>
         )}
         {a.toolCounts !== null && <ToolChips key={a.id} counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
-        <span className="lab">Skills loaded</span>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {a.skills.length ? (
-            a.skills.map((k) => (
-              <span key={k} className="chip skill">
-                {k}
-              </span>
-            ))
-          ) : (
-            <span style={{ color: "var(--muted)" }}>None seen</span>
-          )}
-        </div>
+        <SkillChips skills={a.skills} />
         <span className="lab">Task prompt</span>
         <div className="pr">{a.promptExcerpt || "Not reported."}</div>
         {a.answerExcerpt && (

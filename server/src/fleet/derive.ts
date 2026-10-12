@@ -10,6 +10,7 @@ import type {
   Failure,
   GitInfo,
   Kpis,
+  LoopReport,
   ModelFamily,
   Plan,
   SessionStatusView,
@@ -222,6 +223,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
       })),
     },
     plan: parse<Plan | null>(row.plan_json, null),
+    loop: parse<LoopReport | null>(row.loop_json, null),
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

@@ -129,6 +129,8 @@ Only to the server URL above, and only this:
 - the session's id, working directory, repository name, git branch and counts (ahead, behind, modified),
   model, effort, context fill, cost, token counts and rate-limit percentages;
 - the plan's step titles (from TaskCreate, TaskUpdate or TodoWrite);
+- for the orchestrator's own loop: how many model requests it made, the name of every tool it used with how
+  many times, and the skills it loaded;
 - per agent: type, description, model, effort, status, token counts, skills it loaded, the name of every
   tool it used with how many times, the first 400 characters of its task prompt and of its final answer;
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file

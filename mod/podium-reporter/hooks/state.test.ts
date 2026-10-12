@@ -5,7 +5,7 @@ import { agentRequested, agentSpawned, blowout, compaction, newSession, reconcil
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
-const SESSION_KEYS = ['blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'git', 'id', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
+const SESSION_KEYS = ['blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
 const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type']
 const FAILURE_KEYS = ['at', 'call', 'class', 'evidence', 'exitCode', 'explanation', 'outputTail', 'retriedAs', 'tool']
 const STEP_KEYS = ['activeText', 'id', 'ownerAgentId', 'ownerLabel', 'state', 'text']
@@ -30,6 +30,16 @@ describe('scripted session -> Report', () => {
     expect(r.session.context).toEqual({ tokens: 100_000, window: 1_000_000, percent: 10 })
     expect(r.session.tokens).toEqual({ input: 1000, output: 100, cacheRead: 50_000, cacheWrite: 0 })
     expect(r.session.rateLimits).toEqual([{ kind: 'five_hour', percentUsed: 12.5, resetsAt: null }])
+  })
+
+  test('the main loop block carries its own steps, tools and skills, not the agents', () => {
+    expect(r.session.loop).toEqual({
+      skills: ['code-review'],
+      lastTool: 'TaskUpdate',
+      toolCalls: 3,
+      toolCounts: { TaskCreate: 2, TaskUpdate: 1 },
+      steps: { done: 1, total: null },
+    })
   })
 
   test('plan with title, states and owners', () => {

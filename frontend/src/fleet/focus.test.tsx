@@ -145,6 +145,59 @@ describe("orchestrator page", () => {
     expect(side.textContent).toContain("settings hooks");
   });
 
+  describe("orchestrator panel steps, tools and skills (#75)", () => {
+    const loop = {
+      skills: ["frontend-design", "code-review"],
+      lastTool: "Agent",
+      toolCalls: 19,
+      toolCounts: { Agent: 4, Read: 8, Edit: 5, TaskUpdate: 2 },
+      steps: { done: 23, total: null },
+    };
+    const panel = (over = {}) => {
+      const { container } = openFocus(over);
+      fireEvent.click(container.querySelector("button.trow.root")!);
+      return container.querySelector(".side") as HTMLElement;
+    };
+
+    it("shows Steps, the tool chips most used first, and Skills loaded, as the agent panel does", () => {
+      const side = panel({ loop });
+      expect(side.textContent).toContain("23 model requests");
+      expect(side.textContent).toContain("Tools used (19 calls)");
+      expect([...side.querySelectorAll(".chip.tool")].map((c) => c.textContent?.replace(/\s+/g, " ").trim())).toEqual(["Read 8", "Edit 5", "Agent 4 (last used)", "TaskUpdate 2"]);
+      expect(side.textContent).toContain("Skills loaded");
+      expect([...side.querySelectorAll(".chip.skill:not(.tool)")].map((c) => c.textContent)).toEqual(["frontend-design", "code-review"]);
+      expect(side.textContent).not.toContain("podium-reporter 0.4.0");
+    });
+
+    it("says None seen for a loop that has used no tools and loaded no skills", () => {
+      const side = panel({ loop: { ...loop, toolCalls: 0, toolCounts: {}, skills: [], lastTool: null } });
+      expect(side.textContent?.match(/None seen/g)).toHaveLength(2);
+    });
+
+    it("leaves the rows out and names the update for a mod older than 0.4.0", () => {
+      const side = panel({ loop: null, reporterVersion: "0.3.0" });
+      expect(side.querySelector("dt")?.textContent).toBe("Role");
+      expect([...side.querySelectorAll("dt")].map((d) => d.textContent)).not.toContain("Steps");
+      expect(side.textContent).not.toContain("Tools used");
+      expect(side.textContent).not.toContain("Skills loaded");
+      expect(side.textContent).toContain("need podium-reporter 0.4.0 or later");
+      expect(side.textContent).toContain("This session reports 0.3.0");
+    });
+
+    it("does not tell an ended session to update, since there is nothing left to update", () => {
+      const side = panel({ loop: null, reporterVersion: "0.3.0", status: "done" });
+      expect(side.textContent).not.toContain("need podium-reporter 0.4.0");
+    });
+
+    it("shows neither the rows nor the update note for a settings-hooks session or an unparsable version", () => {
+      for (const over of [{ reporter: "hooks", reporterVersion: null }, { reporterVersion: "0.1.0-sim" }]) {
+        const side = panel({ loop: null, ...over });
+        expect(side.textContent).not.toContain("Skills loaded");
+        expect(side.textContent).not.toContain("need podium-reporter 0.4.0");
+      }
+    });
+  });
+
   it("selecting a row opens the agent panel and does not flash it; the selected background marks it (#70)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "requestAnimationFrame", "cancelAnimationFrame"] });
     const { container } = openFocus();

@@ -433,6 +433,7 @@ interface Report {
     rateLimits: { kind: string; percentUsed: number; resetsAt: string | null }[];
     blowouts: number;                   // main loop count, cumulative for this session id
     plan: Plan | null;
+    loop: LoopReport | null;            // the main loop's own steps, tools and skills; null from a reporter older than 0.4.0
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
@@ -443,6 +444,16 @@ interface Plan {
   source: 'TaskCreate' | 'TodoWrite' | 'podium_plan';
   steps: { id: string; text: string; state: 'pending' | 'active' | 'done' | 'blocked';
            activeText: string | null; ownerAgentId: string | null; ownerLabel: string | null }[];
+}
+
+// What an agent entry carries about its own work, for the orchestrator's main loop. Same fields, same meaning,
+// as the AgentReport fields of the same name; calls made by agents the orchestrator launched are not counted here.
+interface LoopReport {
+  skills: string[];
+  lastTool: string | null;
+  toolCalls: number;
+  toolCounts: Record<string, number>;   // finished calls per tool name, summing to toolCalls (less when capped, see 7.7)
+  steps: { done: number; total: null }; // model requests the main loop has made so far
 }
 
 interface AgentReport {
@@ -582,7 +593,8 @@ CREATE TABLE sessions (
   context_tokens INTEGER, context_window INTEGER, context_percent REAL,
   cost_usd REAL, tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER,
   rate_limits_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
-  plan_json TEXT, reporter_version TEXT, engine_version TEXT
+  plan_json TEXT, reporter_version TEXT, engine_version TEXT,
+  loop_json TEXT                                                           -- Report.session.loop; NULL from a reporter older than 0.4.0
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -644,6 +656,7 @@ interface SessionView {
   blowouts: { orchestrator: number; agents: number; total: number; level: 0 | 1 | 2; loopsHit: number; loopsTotal: number;
               log: { t: number; agentId: string | null; kind: string; tokensBefore: number | null; tokensAfter: number | null }[] };
   plan: Plan | null;
+  loop: LoopReport | null;              // the main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a settings-hooks session
   agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
 }
@@ -684,7 +697,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 ### 7.7 Hardening
 
 - Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
-- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. Reject, never crash, on junk.
+- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
 - CORS: none needed (same origin). Do not enable `*`.
@@ -707,7 +720,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 
 **Effort meter.** Wherever effort appears (cards, facts bar, agent tree, agent panel) it is five small bars with no text: one bar lit for `low` up to five for `max`, so the count carries the level and color is never the only signal. Lit bars are colored by level: low orange, medium green, high blue, xhigh purple, and max one rainbow color per bar. The level is the meter's tooltip and accessible name ("Effort: medium"). When effort was not reported, or is not one of the five levels, the bars are dimmed and the tooltip says "Effort not reported".
 
-**Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: plan checklist (done, active, blocked, pending, with owner label) and the agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel; the selected row keeps a highlighted background and does not flash. The orchestrator's own row is selectable too and opens an orchestrator panel (name, status, model, effort, context with blowout badge, tokens, cost, time, git line); the report carries no tools or skills for the main loop, so the panel shows none.
+**Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: plan checklist (done, active, blocked, pending, with owner label) and the agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel; the selected row keeps a highlighted background and does not flash. The orchestrator's own row is selectable too and opens an orchestrator panel (name, status, model, effort, context with blowout badge, tokens, cost, time, git line, and from `session.loop` the steps, tools used and skills loaded, laid out and worded as in the agent panel). The orchestrator's tool counts cover its own calls, not those of the agents it launched. When the reporter sent no `session.loop` (a mod older than 0.4.0), those rows are left out rather than shown empty, and one note under the facts says they need podium-reporter 0.4.0 or later, as the agent panel does for tool counts. A settings-hooks session has no mod, so it shows neither the rows nor the note.
 
 **Right panel.** *Activity*: newest first, **12 rows**, "Show 12 more" and "Show fewer", count text "Showing N of M", footnote "Only the latest 150 events are kept in memory." Each row is a button that selects the session and agent it is about, scrolls the agent row into view and flashes the whole row once (the only place a row flashes); failure rows say "Show root cause", blowout rows "Show context history"; rows of sessions that have left the live set are greyed and say "Session ended" and do nothing. Filtered to the selected orchestrator when one is selected. *Agent detail*: status, **failure box** (class, failing call, output tail, evidence list, explanation if present, what happened next), **blowout box** (timeline of each overflow with time and token counts, explanation), kind, type, model and effort (marked "inherited" for a fork), context, tokens, cost, time, steps, **tools used** as chips (below), skills as chips, prompt excerpt, child agents as buttons, back button. *Tools used*: one chip per tool with its call count, most used first and ties by name, in the Skills chip style, under the label "Tools used (N calls)". The five most used show; with more, a "Show all N" button (`aria-expanded`) shows every tool and then reads "Show fewer". A green dot on a chip marks the tool used last (with a visually hidden "last used"); when that tool is not among the five shown, a line "Last used: name" says so. An agent with no calls shows "None seen". When the reporter sent no `toolCounts` (older than 0.2.0), the panel shows the "Last tool  name (N calls)" line instead and no chips. When that reporter is a mod below 0.2.0 (not a settings-hooks session, which has no mod to update), one note under the line says tool counts need podium-reporter 0.2.0 or later, gives the version the session reports and the update command, and points at `/reload-plugins`.
 

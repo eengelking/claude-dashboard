@@ -74,6 +74,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     plan_json: json(s.plan),
     reporter_version: r.reporter.version,
     engine_version: r.reporter.engineVersion,
+    loop_json: json(s.loop),
   };
 }
 

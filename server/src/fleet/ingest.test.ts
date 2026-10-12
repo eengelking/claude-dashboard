@@ -39,6 +39,16 @@ describe('ingestReport', () => {
     expect(json(r.agents[1]!.id)).toBeNull();
   });
 
+  it('stores the main loop block, and null for a reporter that sends none', () => {
+    const r = fixtureReport();
+    ingestReport(f, r, T0);
+    expect(JSON.parse(f.getSession(r.session.id)!.loop_json!)).toMatchObject({ toolCalls: 19, steps: { done: 23, total: null } });
+    const old = fixtureReport();
+    old.session.loop = null;
+    ingestReport(f, old, T0 + 1000);
+    expect(f.getSession(old.session.id)!.loop_json).toBeNull();
+  });
+
   it('is idempotent: a repeat changes only last_seen_at', () => {
     const r = fixtureReport();
     ingestReport(f, r, T0);

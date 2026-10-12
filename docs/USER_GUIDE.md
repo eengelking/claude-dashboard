@@ -153,6 +153,10 @@ Click an agent to open its detail in the right panel. If it failed, you get the 
 of its output, the evidence behind the likely cause and what happened next. If its context blew out, you get a
 timeline of each overflow.
 
+Click the orchestrator's own row, at the top of the tree, to open its detail. It shows the same facts as an agent's
+and, with podium-reporter 0.4.0 or later, its own steps, the tools it used and the skills it loaded. Calls made by
+the agents it launched are counted in those agents' panels, not here.
+
 ### Activity
 
 The right panel lists what just happened, newest first, 12 at a time. Click a row to jump to the session and

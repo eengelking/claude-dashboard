@@ -10,7 +10,7 @@ function session(over: Partial<SessionRow> = {}): SessionRow {
     started_at: 1000, last_seen_at: 2000, ended_at: null, dropped_at: null, cwd: '/tmp/demo', project_root: null,
     repo_name: null, git_json: null, model: 'opus', effort: 'high', context_tokens: null, context_window: null,
     context_percent: null, cost_usd: 1.5, tok_in: 0, tok_out: 0, tok_cr: 0, tok_cw: 0, rate_limits_json: null,
-    blowouts: 0, plan_json: null, reporter_version: '0.1.0', engine_version: null,
+    blowouts: 0, plan_json: null, reporter_version: '0.1.0', engine_version: null, loop_json: null,
     ...over,
   };
 }
@@ -25,7 +25,7 @@ describe('openDb', () => {
     const db = openDb(':memory:');
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['agents', 'blowouts', 'events', 'samples', 'schema_migrations', 'sessions']));
-    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     db.close();
   });
 
@@ -39,11 +39,13 @@ describe('openDb', () => {
     const old = openDb(file);
     old.exec('INSERT INTO agents (session_id, id, kind, type, description, status, started_at, tool_calls) VALUES (\'s1\', \'a\', \'subagent\', \'x\', \'d\', \'done\', 1, 7)');
     old.exec('ALTER TABLE agents DROP COLUMN tool_counts_json');
-    old.exec('DELETE FROM schema_migrations WHERE version = 2');
+    old.exec('ALTER TABLE sessions DROP COLUMN loop_json');
+    old.exec('DELETE FROM schema_migrations WHERE version >= 2');
     old.close();
     const db = openDb(file);
-    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     expect(db.prepare("SELECT tool_calls, tool_counts_json FROM agents WHERE id = 'a'").get()).toEqual({ tool_calls: 7, tool_counts_json: null });
+    expect(db.prepare("SELECT name, loop_json FROM sessions WHERE id = 's1'").get()).toEqual({ name: 'demo', loop_json: null });
     db.close();
   });
 
@@ -56,7 +58,7 @@ describe('openDb', () => {
     a.close();
     const db = openDb(file);
     expect(db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 2 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 3 });
     expect(db.prepare('SELECT name FROM sessions').all()).toEqual([{ name: 'demo' }]);
     expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     db.close();

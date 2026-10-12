@@ -31,6 +31,11 @@
         { "id": "3", "text": "Run staging backfill", "state": "blocked", "activeText": null, "ownerAgentId": null, "ownerLabel": null },
         { "id": "4", "text": "Write rollout notes", "state": "pending", "activeText": null, "ownerAgentId": null, "ownerLabel": null }
       ]
+    },
+    "loop": {
+      "skills": ["frontend-design", "code-review"], "lastTool": "Agent", "toolCalls": 19,
+      "toolCounts": {"Agent": 4, "Read": 8, "Edit": 5, "TaskUpdate": 2},
+      "steps": { "done": 23, "total": null }
     }
   },
   "agents": [

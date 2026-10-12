@@ -53,6 +53,7 @@ function storedSession(row: SessionRow | undefined, id: string, cwd: string, now
     rateLimits: [],
     blowouts: 0,
     plan: null,
+    loop: null,
   };
 }
 

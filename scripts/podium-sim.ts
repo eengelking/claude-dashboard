@@ -6,7 +6,7 @@
 // of reports (timestamps aside). The Simulator class is pure apart from its injected clock; main()
 // does the HTTP.
 import os from 'node:os';
-import type { ActivityEvent, AgentReport, Effort, Failure, Plan, Report } from '../server/src/fleet/protocol.ts';
+import type { ActivityEvent, AgentReport, Effort, Failure, LoopReport, Plan, Report } from '../server/src/fleet/protocol.ts';
 import { costOf, shortName, windowOf, type Family } from '../mod/podium-reporter/hooks/models.ts';
 
 const HELP = `podium-sim: POST simulated Claude Code session reports to a Podium server.
@@ -182,6 +182,9 @@ const FAILS: FailSpec[] = [
 const MAX_AGENTS = 195;
 
 const TOOLS = ['Read', 'Grep', 'Edit', 'Bash', 'Glob', 'Read', 'Edit'];
+/** What an orchestrator's own loop calls: it plans and delegates more than it edits. */
+const LOOP_TOOLS = ['Agent', 'Read', 'TaskUpdate', 'Bash', 'Edit', 'Read', 'Agent'];
+const LOOP_SKILLS = ['frontend-design', 'code-review', 'git-branching', 'documentation-sync'];
 
 // ------------------------------------------------------------------------------------------------
 // Simulation
@@ -216,6 +219,8 @@ interface SimSession {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
   ownCost: number;
   blowouts: number;
+  /** The main loop's own steps, tools and skills (Report.session.loop). */
+  loop: LoopReport;
   steps: SimStep[] | null;
   agents: SimAgent[];
   events: ActivityEvent[];
@@ -299,6 +304,7 @@ export class Simulator {
       tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       ownCost: 0,
       blowouts: 0,
+      loop: this.seedLoop(initial ? age : 0),
       steps: tpl.plan ? tpl.steps.map((spec, i) => ({ spec, id: String(i + 1), state: 'pending', agentId: null })) : null,
       agents: [],
       events: [],
@@ -480,6 +486,19 @@ export class Simulator {
     }
   }
 
+  /** A loop that has already worked `ageSec` seconds: a few calls per tool, some steps, up to two skills. */
+  private seedLoop(ageSec: number): LoopReport {
+    const rng = this.rng;
+    const toolCounts: Record<string, number> = {};
+    const calls = Math.round(ageSec / 20);
+    for (let i = 0; i < calls; i++) {
+      const t = rng.pick(LOOP_TOOLS);
+      toolCounts[t] = (toolCounts[t] ?? 0) + 1;
+    }
+    const skills = LOOP_SKILLS.filter(() => rng.chance(0.35)).slice(0, 2);
+    return { skills, lastTool: calls ? rng.pick(LOOP_TOOLS) : null, toolCalls: calls, toolCounts, steps: { done: calls + rng.int(1, 4), total: null } };
+  }
+
   private tickSession(s: SimSession) {
     const rng = this.rng;
     if (s.status === 'waiting') {
@@ -508,6 +527,13 @@ export class Simulator {
       if (a.ctx >= 0.97) this.blowout(s, a);
       if (a.report.status === 'running' && rng.chance(0.15) && a.report.steps) a.report.steps.done++;
     }
+    if (rng.chance(0.4)) {
+      const tool = rng.pick(LOOP_TOOLS);
+      s.loop.toolCalls += 1;
+      s.loop.toolCounts = { ...s.loop.toolCounts, [tool]: (s.loop.toolCounts[tool] ?? 0) + 1 };
+      s.loop.lastTool = tool;
+    }
+    if (rng.chance(0.3)) s.loop.steps = { done: s.loop.steps.done + 1, total: null };
     const own = splitTokens(rng, rng.int(200, 900) * 6);
     add(s.tokens, own);
     s.ownCost += costOf(own, s.model);
@@ -605,6 +631,7 @@ export class Simulator {
         rateLimits: [{ kind: 'five_hour', percentUsed: Math.min(100, Math.round((this.tickN / 40) * 10) / 10), resetsAt: null }],
         blowouts: s.blowouts,
         plan: this.planOf(s),
+        loop: { ...s.loop, skills: [...s.loop.skills], toolCounts: { ...s.loop.toolCounts }, steps: { ...s.loop.steps } },
       },
       agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
       events: s.events.slice(0, 100),

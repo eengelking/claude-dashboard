@@ -4,8 +4,8 @@ import { clip, excerpt } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
-import type { ActivityEvent, AgentReport, Failure, Report } from './protocol.ts';
-import { resolveOwners, type AgentState, type SessionState } from './state.ts';
+import type { ActivityEvent, AgentReport, Failure, LoopReport, Report } from './protocol.ts';
+import { resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
 
 export const REPORTER_NAME = 'podium-reporter';
 export const MAX_EVENTS_PER_REPORT = 100;
@@ -58,6 +58,17 @@ function pct(tokens: number | null, window: number | null): number | null {
   return Math.round(Math.min(100, (tokens / window) * 100) * 10) / 10;
 }
 
+/** The fields an agent entry and the main loop's block share: skills, last tool, call counts and steps. */
+function loopFields(l: LoopStats): LoopReport {
+  return {
+    skills: l.skills.slice(0, 50).map((k) => clip(k, 120)),
+    lastTool: l.lastTool,
+    toolCalls: l.toolCalls,
+    toolCounts: Object.fromEntries(Object.entries(l.toolCounts).map(([k, n]) => [clip(k, 120), n])),
+    steps: { done: l.steps, total: null },
+  };
+}
+
 export function agentReport(a: AgentState): AgentReport {
   const window = a.window ?? (a.model ? windowOf(a.model) : null);
   return {
@@ -76,12 +87,8 @@ export function agentReport(a: AgentState): AgentReport {
     context: { tokens: a.ctxTokens, window, percent: pct(a.ctxTokens, window) },
     tokens: { ...a.tokens },
     costUsdEst: Math.round(a.cost * 1e6) / 1e6,
-    skills: a.skills.slice(0, 50).map((k) => clip(k, 120)),
-    lastTool: a.lastTool,
-    toolCalls: a.toolCalls,
-    toolCounts: Object.fromEntries(Object.entries(a.toolCounts).map(([k, n]) => [clip(k, 120), n])),
+    ...loopFields(a),
     blowouts: a.blowouts,
-    steps: { done: a.steps, total: null },
     promptExcerpt: excerpt(a.promptExcerpt),
     answerExcerpt: a.answerExcerpt ? excerpt(a.answerExcerpt) : null,
     failure: cleanFailure(a.failure),
@@ -121,6 +128,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       rateLimits: s.rateLimits.slice(0, 10),
       blowouts: s.main.blowouts,
       plan: toPlan(s.plan),
+      loop: loopFields(s.main),
     },
     agents: agents.map(agentReport),
     events: events.slice(0, MAX_EVENTS_PER_REPORT).map((e) => ({ ...e, text: clip(e.text, 240) })),

@@ -179,4 +179,53 @@ describe('protocol', () => {
       expect(out[`t${String(LIMITS.toolNames + 4).padStart(3, '0')}`]).toBeUndefined();
     });
   });
+
+  describe('session.loop', () => {
+    const sess = (f: unknown) => (f as { session: Record<string, unknown> }).session;
+    const loopOf = (r: ReturnType<typeof validateReport>) =>
+      r.ok ? (r.report.session as unknown as { loop: unknown }).loop : 'rejected';
+    const sample = () => ({
+      skills: ['frontend-design'],
+      lastTool: 'Edit',
+      toolCalls: 5,
+      toolCounts: { Edit: 3, Read: 2 },
+      steps: { done: 7, total: null },
+    });
+
+    it('keeps the main loop block the fixture carries', () => {
+      expect(loopOf(validateReport(loadFixture()))).toMatchObject({ toolCounts: expect.any(Object), steps: { total: null } });
+    });
+
+    it('treats a missing block, from an older reporter, as null', () => {
+      const f = loadFixture();
+      delete sess(f).loop;
+      expect(loopOf(validateReport(f))).toBeNull();
+    });
+
+    it('accepts the same field shapes an agent entry uses', () => {
+      const f = loadFixture();
+      sess(f).loop = sample();
+      expect(loopOf(validateReport(f))).toEqual(sample());
+    });
+
+    it('clips and caps names, skills and counts like an agent entry', () => {
+      const f = loadFixture();
+      sess(f).loop = { ...sample(), toolCounts: { ['x'.repeat(300)]: 2 }, skills: ['s'.repeat(300)] };
+      const out = loopOf(validateReport(f)) as { toolCounts: Record<string, number>; skills: string[] };
+      expect(out.toolCounts).toEqual({ ['x'.repeat(LIMITS.short)]: 2 });
+      expect(out.skills).toEqual(['s'.repeat(LIMITS.short)]);
+    });
+
+    it('rejects a block with no steps rather than reading it as zero', () => {
+      const f = loadFixture();
+      sess(f).loop = { ...sample(), steps: undefined };
+      expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.loop.steps' });
+    });
+
+    it('rejects a malformed block with a path', () => {
+      const f = loadFixture();
+      sess(f).loop = { ...sample(), toolCounts: { Bash: -1 } };
+      expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.loop.toolCounts.Bash' });
+    });
+  });
 });

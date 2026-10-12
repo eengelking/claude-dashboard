@@ -117,6 +117,15 @@ describe('sessionView', () => {
     expect(v.secondsSinceSeen).toBe(1);
   });
 
+  it('exposes the main loop block, and null when the reporter sent none', () => {
+    const v = viewOf(fixtureReport(), 1_791_648_001_000);
+    expect(v.loop).toMatchObject({ skills: ['frontend-design', 'code-review'], lastTool: 'Agent', toolCalls: 19, steps: { done: 23, total: null } });
+    expect(v.loop?.toolCounts).toEqual({ Agent: 4, Read: 8, Edit: 5, TaskUpdate: 2 });
+    const old = fixtureReport();
+    old.session.loop = null;
+    expect(viewOf(old, 1_791_648_001_000).loop).toBeNull();
+  });
+
   it('carries the reporter version and where it sits against the supported range', () => {
     const at = (version: string) => {
       const r = fixtureReport();

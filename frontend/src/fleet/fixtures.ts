@@ -37,7 +37,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     id: "s1",
     name: "api-refactor",
     reporter: "mod",
-    reporterVersion: "0.3.0",
+    reporterVersion: "0.4.0",
     compat: "ok",
     project: "~/dev/billing-service",
     cwd: "~/dev/billing-service/.claude/worktrees/invoice-v2",
@@ -69,6 +69,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
         { id: "4", text: "Write rollout notes", state: "pending", activeText: null, ownerAgentId: null, ownerLabel: null },
       ],
     },
+    loop: null,
     agents: [],
     series: { tokensPerSec: new Array(60).fill(0), peakContext: new Array(60).fill(0), running: new Array(60).fill(0), blowoutSecondsAgo: [] },
     ...over,
@@ -95,7 +96,7 @@ export function makeState(over: Partial<StateBody> = {}): StateBody {
     kpis: makeKpis(),
     clearedToday: 0,
     events: [makeEvent()],
-    server: { version: "0.3.0", reporterSupport: { min: "0.2.0", max: "0.3.0" } },
+    server: { version: "0.3.0", reporterSupport: { min: "0.2.0", max: "0.4.0" } },
     ...over,
   };
 }
