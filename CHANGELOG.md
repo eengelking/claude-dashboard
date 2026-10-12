@@ -27,6 +27,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- With the server in a container, project and working-directory paths under your home now show as `~/...`
+  on the wall, in the focused view and on the history page, as they do in standalone mode. `podiumctl`
+  passes the host's home to the container as `PODIUM_HOST_HOME`; an unset or non-absolute value is
+  ignored, so no wrong `~` is shown. (#20)
 - A long branch name on a session card no longer wraps mid-name: it ends in an ellipsis, and a long
   worktree name does the same, with the full value in the tooltip. A project path that does not fit is
   now cut from the front, so the last folders stay visible, and its tooltip shows the full path. The focused

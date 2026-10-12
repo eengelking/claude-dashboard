@@ -41,8 +41,12 @@ function envMs(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
 /** Lifecycle and retention settings from the environment (SPEC 7.2, 7.5). */
 export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPath: string }): FleetConfig {
   const d = DEFAULT_CONFIG;
+  // A containerised server cannot see the host's home, so podiumctl passes it in. Anything but an absolute
+  // path other than `/` is ignored: a home of `/` would turn every path into `~/...`.
+  const hostHome = env.PODIUM_HOST_HOME;
   return {
     ...base,
+    home: hostHome && hostHome.startsWith('/') && hostHome !== '/' ? hostHome : base.home,
     staleAfterMs: envMs(env, 'STALE_AFTER_MS', d.staleAfterMs),
     hookStaleAfterMs: envMs(env, 'HOOK_STALE_AFTER_MS', d.hookStaleAfterMs),
     dropAfterMs: envMs(env, 'DROP_AFTER_MS', d.dropAfterMs),

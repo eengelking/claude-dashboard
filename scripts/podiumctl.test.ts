@@ -96,6 +96,14 @@ describe("podiumctl command construction", () => {
     expect(env).toMatchObject({ HOST: "0.0.0.0", PORT: "4317", PODIUM_DB: "/data/podium.sqlite", STALE_AFTER_MS: "9000" });
   });
 
+  it("tells a containerised server the host's home, by name only, and leaves standalone alone", () => {
+    const env = serverEnv(cfg, true);
+    expect(env.PODIUM_HOST_HOME).toBe(os.homedir());
+    expect(containerRunArgs(cfg, Object.keys(env))).toContain("PODIUM_HOST_HOME");
+    expect(containerRunArgs(cfg, Object.keys(env)).join(" ")).not.toContain(os.homedir());
+    expect(serverEnv(cfg, false)).not.toHaveProperty("PODIUM_HOST_HOME");
+  });
+
   it("passes an empty token through so auth stays off", () => {
     expect(serverEnv(resolveConfig({ PODIUM_TOKEN: "" }), false).PODIUM_TOKEN).toBe("");
     expect("PODIUM_TOKEN" in serverEnv(resolveConfig({}), false)).toBe(false);

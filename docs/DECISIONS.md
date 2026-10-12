@@ -150,3 +150,17 @@ shared the repo and the server but none of the fleet console's code. Overrides t
 `#/usage`" statements in SPEC and entry 14.
 **Cost.** A breaking change for anyone who used the page (pre-1.0). Cross-session cost history, if wanted,
 would be a new feature in the fleet console built from what the mod reports.
+
+## 16. The host passes its home directory to a containerised server
+
+**Choice.** `podiumctl` sets `PODIUM_HOST_HOME` to the host's home directory when it starts the container,
+and `configFromEnv` uses it in place of the server's own `os.homedir()` when it is an absolute path.
+Standalone mode and `npm run dev` do not set it and behave as before. The name avoids `PODIUMCTL_HOME`,
+which is where `podiumctl` keeps its own files.
+**Why.** In a container the server runs as `node`, so its home is `/home/node` and a session's
+`/Users/<name>/...` never shortened to `~/...` (#20). Nothing in the report carries the reporter's home. The
+other options were worse: having the mod report its home changes the report format and SPEC 6.2 for a
+display detail, and guessing `/Users/<name>` or `/home/<name>` can show a wrong `~`. The value is not a
+secret and needs no change on the wire.
+**Cost.** One more variable for `podiumctl` to set. A server started in a container by hand, without
+`podiumctl`, must set it itself or paths stay long.

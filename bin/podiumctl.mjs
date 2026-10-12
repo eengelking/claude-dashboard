@@ -122,7 +122,8 @@ export function serverEnv(cfg, inContainer) {
   const env = { ...cfg.extra };
   // An empty token is deliberate (auth off): pass it through so a stray PODIUM_TOKEN in the shell or .env cannot win.
   if (cfg.token !== undefined) env.PODIUM_TOKEN = cfg.token;
-  if (inContainer) Object.assign(env, { HOST: '0.0.0.0', PORT: String(INNER_PORT), PODIUM_DB: '/data/podium.sqlite' });
+  // The container's own home is /home/node, so the server needs the host's to show session paths as ~/...
+  if (inContainer) Object.assign(env, { HOST: '0.0.0.0', PORT: String(INNER_PORT), PODIUM_DB: '/data/podium.sqlite', PODIUM_HOST_HOME: os.homedir() });
   else Object.assign(env, { HOST: cfg.bind, PORT: String(cfg.port), PODIUM_DB: cfg.db ?? '' });
   return env;
 }
