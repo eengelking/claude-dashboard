@@ -18,8 +18,12 @@ under `pluginConfigs`, `podium-reporter`, `options`, `token` also worked when we
 
 ### The status line has a warning sign in front of `podium ● 1 live`
 
-That is how Claude Code draws a plugin's status line entry, not a Podium warning. The mod sets plain text
-and has no way to set a severity (inferred, not confirmed). `podium ○ offline` is the real warning.
+The line reads `⚠ podium-reporter: podium ● 1 live`. Claude Code adds the `⚠` and the mod's name to every
+line a mod pins with `$.ui.status`; its [mods API docs](https://code.claude.com/docs/en/plugins/mods/api.md)
+give the format as `⚠ my-mod: checks: 3 passing`. It is not a Podium warning and not a trust marker: the docs
+describe no approval, signing or marketplace step that clears it, and the mod passes only `podium ● 1 live`.
+Nothing you can do removes it. `podium ○ offline` is the real warning. We have not checked it against a
+mod loaded with `--plugin-dir`, but the docs do not say the icon depends on where the mod came from.
 
 ### The effort shown is the old one after I run `/effort`
 

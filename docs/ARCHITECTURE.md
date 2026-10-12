@@ -237,8 +237,9 @@ a reader of the spec would expect:
     appears in Podium after the session's next prompt, not when it is picked. A probe of `$.config.list()`
     and `$.settings.read()` to catch it sooner has been proposed and not tried.
 11. **Claude Code draws a warning sign before the status line entry.** The mod sets plain text with
-    `$.ui.status`, which takes no severity, so the sign looks like the host's own styling of a plugin's
-    entry (inferred, not confirmed). `podium ● N live` is the normal state.
+    `$.ui.status`, which takes no severity. Claude Code's mods API docs say the host starts every mod's
+    status line with `⚠` and the mod's name, so it is not a trust state and the mod cannot remove it (#29).
+    `podium ● N live` is the normal state.
 12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
 13. *(Removed with the usage dashboard, #30. The number is kept so other references stay valid.)*
 

@@ -295,7 +295,7 @@ All calls are async unless noted. Read each one's doc comment in the types file 
 | `$.settings.read()`, `$.env.get(NAME)` | merged settings; env var (name must be a **string literal**) | Optional: read `CLAUDE_EFFORT`, `LANG`. |
 | `$.command.register({ name, description, argumentHint? })` | Registers a slash command | `/podium`. Serve with `on('command.run', { command: 'podium' }, …)` returning `{ text }`. Call in `session.start`. |
 | `$.tool.register({ name, description, inputSchema, isDeferred? })` | Registers `mcp__podium-reporter__<name>` | Optional `plan` tool so an orchestrator can name its plan (section 6.3). Serve with `on('tool.call', { tool: 'mcp__podium-reporter__plan' }, …)` returning `{ result }`. |
-| `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium ● 4 live` or `podium ○ offline`. `log` to `debug` only. No toasts except on first successful connect and first failure. |
+| `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium ● 4 live` or `podium ○ offline`; the host draws it as `⚠ podium-reporter: <text>`, which the mod does not control. `log` to `debug` only. No toasts except on first successful connect and first failure. |
 | `$.model.complete({ model, prompt, effort? })` | `{ isAnswered, text?, usage, reason? }`, never rejects over provider errors | Optional failure explanation (Phase 5), default **off**. |
 | `$.agent.register(spec)`, `$.agent.spawn(args)` | Define or start agent types | **Not used.** Listed so the implementer does not reach for them. |
 

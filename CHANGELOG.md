@@ -19,6 +19,12 @@ be ahead, because a mod fix is bumped in its own PR.
   the `recharts` dependency. The `ANTHROPIC_ADMIN_API_KEY` setting is retired: `podiumctl` ignores a
   leftover value and `podiumctl config unset ANTHROPIC_ADMIN_API_KEY` clears it. (#30)
 
+### Changed
+
+- The README, `docs/GOTCHAS.md` and `docs/SPEC.md` now explain the `⚠` in front of Podium's status line:
+  Claude Code adds it, with the mod's name, to every mod's status line, and it is not a Podium warning or a
+  trust state. (#29)
+
 ### Fixed
 
 - A long branch name on a session card no longer wraps mid-name: it ends in an ellipsis, and a long
