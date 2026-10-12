@@ -7,7 +7,7 @@ propose a change, and how it gets merged.
 
 Podium shows every Claude Code session on one machine in one browser tab. This repo holds the whole thing:
 the reporter mod (`mod/podium-reporter/`), the server (`server/`), the UI (`frontend/`), `podiumctl` and the
-container image, and the earlier usage dashboard that shares the server.
+container image.
 
 A change fits if it makes Podium better at watching sessions. Some things are out on purpose, and
 `docs/SPEC.md` ("Non-goals") lists them:

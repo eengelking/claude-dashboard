@@ -11,9 +11,8 @@ runs several Claude Code sessions and agents at once and wants to see what they 
 without watching each terminal. Podium only observes. It never sends a prompt or touches a session.
 
 It ships as a server and UI (this repo, run with `podiumctl` in a Podman container or as a plain Node
-process) and a reporter mod, `podium-reporter`, installed from `eengelking-marketplace`. The repo also
-holds the earlier usage dashboard (`#/usage`). `docs/SPEC.md` is the source of truth for intended
-behavior; `docs/ARCHITECTURE.md` records how it was built.
+process) and a reporter mod, `podium-reporter`, installed from `eengelking-marketplace`. `docs/SPEC.md` is
+the source of truth for intended behavior; `docs/ARCHITECTURE.md` records how it was built.
 
 ## Shortcuts
 

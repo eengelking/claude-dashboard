@@ -82,12 +82,6 @@ too.
 
 ## What the dashboard shows
 
-### The usage page (`#/usage`) is empty for Claude Code in container mode
-
-It reads the logs under `~/.claude/projects` in the server's home directory, and a container has its own
-home with no logs in it. The Podium fleet console is not affected. Use `podiumctl start --mode standalone`
-if you want that page. (Mounting your logs into the container read-only would fix it; it is not done.)
-
 ### A plan step has no owner
 
 Podium links an agent to a plan step by matching the agent's description to the step's title, and the match

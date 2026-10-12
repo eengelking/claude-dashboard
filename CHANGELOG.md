@@ -12,6 +12,13 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** the usage dashboard is gone: the "Usage dashboard" link in the top bar, the `#/usage` page
+  (a `#/usage` link now opens the fleet console), the `/api/claude-code` and `/api/api-usage` routes, and
+  the `recharts` dependency. The `ANTHROPIC_ADMIN_API_KEY` setting is retired: `podiumctl` ignores a
+  leftover value and `podiumctl config unset ANTHROPIC_ADMIN_API_KEY` clears it. (#30)
+
 ### Fixed
 
 - Sessions nobody asked for no longer show up as cards. Claude Code's background daemon runs a parked

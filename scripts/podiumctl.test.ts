@@ -47,6 +47,43 @@ describe("podiumctl config", () => {
   });
 });
 
+describe("podiumctl with a retired ANTHROPIC_ADMIN_API_KEY left in the config", () => {
+  function homeWithOldKey() {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    fs.writeFileSync(path.join(home, "config.env"), "PODIUMCTL_PORT=4400\nANTHROPIC_ADMIN_API_KEY=sk-ant-admin-old\n");
+    return home;
+  }
+
+  it("is ignored by the server settings", () => {
+    const cfg = resolveConfig({ PODIUMCTL_PORT: "4400", ANTHROPIC_ADMIN_API_KEY: "sk-ant-admin-old" });
+    expect(cfg.port).toBe(4400);
+    expect(serverEnv(cfg, true)).not.toHaveProperty("ANTHROPIC_ADMIN_API_KEY");
+  });
+
+  it("still shows the config and lets the old key be unset", () => {
+    const home = homeWithOldKey();
+    try {
+      expect(ctl(home, "config").status).toBe(0);
+      const r = ctl(home, "config", "unset", "ANTHROPIC_ADMIN_API_KEY");
+      expect(r.status).toBe(0);
+      expect(fs.readFileSync(path.join(home, "config.env"), "utf8")).not.toContain("ANTHROPIC_ADMIN_API_KEY");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to set the retired key again, and says why", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    try {
+      const r = ctl(home, "config", "set", "ANTHROPIC_ADMIN_API_KEY=x");
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/no longer used/);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("podiumctl command construction", () => {
   const cfg = resolveConfig({ PODIUM_TOKEN: "s3cret", STALE_AFTER_MS: "9000" }, { port: "4400" });
 

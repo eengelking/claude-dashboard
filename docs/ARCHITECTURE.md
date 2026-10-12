@@ -1,10 +1,8 @@
 # Architecture
 
-This repo holds two apps that share one Express server and one Vite frontend:
-
-- the earlier **usage dashboard** (`server/src/*.ts`, `frontend/src/App.tsx`), reachable at `#/usage`;
-- **Podium**, a live fleet console for Claude Code sessions (`mod/podium-reporter/`, `server/src/fleet/`,
-  `frontend/src/fleet/`), the default view at `#/`.
+This repo holds **Podium**, a live fleet console for Claude Code sessions: the reporter mod
+(`mod/podium-reporter/`), an Express server (`server/src/fleet/`) and a Vite frontend (`frontend/src/fleet/`),
+the default view at `#/`. An earlier usage dashboard lived here until it was removed (DECISIONS 15).
 
 `docs/SPEC.md` is the build spec for Podium. This file records how it was actually built, where it differs
 from the spec and why, what was verified, and what is still open.
@@ -107,12 +105,11 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     page header), `waitReason` (to word the waiting callout: "Permission prompt: ..." vs "Waiting for
     your input"), and `/state` gained `config` (stale, drop and linger timings, so a stale card can say
     "dropped from the fleet at 1:15" without hard-coding server settings). All additive.
-21. **CSS scoping.** The usage page shares the document, so every Podium rule is scoped under `.podium`
-    and the tokens are defined on `.podium`, not `:root`. The theme attribute still lives on `<html>`
-    (`data-theme`), as in the mockup.
-22. **Link between the apps.** `#/usage` renders the old `App` unchanged, with a one-line "← Podium fleet
-    console" link above it rendered by `main.tsx`; the fleet top bar has a "Usage dashboard" link. The
-    mockup's Pause, Start session and Clear buttons are left out (8.1 says they belong to the simulator).
+21. **CSS scoping.** Every Podium rule is scoped under `.podium` and the tokens are defined on `.podium`, not
+    `:root`, apart from a small document base (`html`, `body`, `#root` height and margin) in `fleet.css`.
+    The theme attribute lives on `<html>` (`data-theme`), as in the mockup.
+22. **Routing.** `main.tsx` picks the view with `routeFor` (`route.ts`): `#/history` is the history view and
+    every other hash, including the retired `#/usage`, is the fleet console. The mockup's Pause, Start session and Clear buttons are left out (8.1 says they belong to the simulator).
 23. **Resync on reconnect.** The server sends a full `snapshot` (the `/state` body) on every SSE connect,
     so a reconnect resyncs from it rather than issuing a separate `GET /state`. The first paint still
     fetches `/state`.
@@ -243,10 +240,7 @@ a reader of the spec would expect:
     `$.ui.status`, which takes no severity, so the sign looks like the host's own styling of a plugin's
     entry (inferred, not confirmed). `podium ● N live` is the normal state.
 12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
-13. **The usage page is empty for Claude Code in container mode.** The scanner reads
-    `os.homedir()/.claude/projects` (`server/src/claudeCode.ts`), and the container's home holds no logs, so
-    `/api/claude-code` answers with empty lists. Standalone mode reads them. A read-only bind mount of the
-    host's logs would fix it and has not been built.
+13. *(Removed with the usage dashboard, #30. The number is kept so other references stay valid.)*
 
 ## Browser checklist (T4.2)
 
@@ -392,9 +386,9 @@ Fixed test-first (see Spec question 10).
 
 Built: `frontend/src/fleet/` (`FleetApp`, `useFleet`, `store.ts` reducer, `logic.ts`, `chart.ts`,
 `format.ts`, `useTheme`, `useResizable`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
-hash routing in `main.tsx` (`#/` fleet, `#/usage` the old app).
+hash routing in `main.tsx` (`#/` fleet, `#/history`; the old `#/usage` app was removed in #30).
 
-Verified by tests (frontend suite 89 tests, the old app's 15 unchanged): reducer actions and the 150 cap;
+Verified by tests (frontend suite 89 tests, plus the old app's 15 that existed then): reducer actions and the 150 cap;
 formatters at 0, 999, 1000, 1.5M, 3,600 s and 86,400 s; all six sorts and every filter; tree guides,
 cycles and orphans; polyline points; git line in all four cases; blowout levels 1 and 2 on cards; agent
 strip classes; focus page navigation, selection kept across updates and cleared with a message on
@@ -411,7 +405,7 @@ facts bar, plan, agent tree, flash on select), side panel (activity paging, a cl
 row opened the session and agent and flashed the row, failure box with "The step went back to the
 plan"), Model sort order in rail and wall, text filter and its empty message, a real mouse drag on the
 activity handle (340 to 510 px, saved), double-click reset, Tab focus ring, Copy resume command
-("Copied", then back), theme kept across a reload, `#/usage` unchanged. Stopping the server showed
+("Copied", then back), theme kept across a reload, `#/usage` unchanged (the old app has since been removed). Stopping the server showed
 "disconnected, retrying" at once; restarting it brought the page back in 2.3 s with no reload.
 
 400 px: Chrome would not size the window that narrow, so the check ran in a 400 px same-origin iframe

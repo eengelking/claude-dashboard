@@ -133,7 +133,20 @@ Claude Code clone over SSH, which fails for anyone without a GitHub SSH key.
 ## 14. The project is named Podium, in one repo
 
 **Choice.** The repo was `claude-dashboard` and is now `eengelking/podium` (PR #5). The earlier usage
-dashboard stays in the same repo at `#/usage`.
+dashboard stayed in the same repo at `#/usage` until it was removed (entry 15).
 **Why.** The repo is published, and the name should say what the product is. "Podium" was already the
 working name in the spec (open question 10, kept in one constant).
 **Cost.** Old links to `claude-dashboard` rely on GitHub's redirect.
+
+## 15. The usage dashboard is removed
+
+**Choice.** The earlier usage dashboard is gone: the "Usage dashboard" link, the `#/usage` page, the
+`/api/claude-code` and `/api/api-usage` routes, the modules only they used, `recharts` and the
+`ANTHROPIC_ADMIN_API_KEY` setting. A `#/usage` link now lands on the fleet console. `podiumctl` ignores a
+leftover `ANTHROPIC_ADMIN_API_KEY` in an existing config and lets `config unset` clear it.
+**Why.** The maintainer moved away from it. Checking the empty-in-container case (#16) showed the page had
+little value, and fixing it would have meant mounting transcripts into the container just to feed it. It
+shared the repo and the server but none of the fleet console's code. Overrides the "stays reachable at
+`#/usage`" statements in SPEC and entry 14.
+**Cost.** A breaking change for anyone who used the page (pre-1.0). Cross-session cost history, if wanted,
+would be a new feature in the fleet console built from what the mod reports.

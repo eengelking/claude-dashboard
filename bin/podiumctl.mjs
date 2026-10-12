@@ -19,11 +19,13 @@ const INNER_PORT = 4317;
 /** Server settings podiumctl passes through to the server unchanged when they are set in the config. */
 export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS',
-  'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS', 'ANTHROPIC_ADMIN_API_KEY',
+  'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS',
 ];
 /** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. */
 export const OWN_KEYS = ['PODIUMCTL_MODE', 'PODIUMCTL_PORT', 'PODIUMCTL_BIND', 'PODIUM_TOKEN', 'PODIUM_DB'];
 const ALL_KEYS = [...OWN_KEYS, ...PASSTHROUGH];
+/** Keys an older config may still hold. Ignored by the server; `config unset` removes them, `config set` refuses. */
+export const RETIRED_KEYS = ['ANTHROPIC_ADMIN_API_KEY'];
 
 const HELP = `podiumctl: manage the Podium server
 
@@ -436,7 +438,9 @@ function cmdConfig(cfg, args, flags) {
     const pair = args.slice(1).join(' ');
     const [k, ...v] = pair.split('=');
     const key = k.trim();
-    if (!ALL_KEYS.includes(key)) fail(`unknown key "${key}". Keys: ${ALL_KEYS.join(', ')}`);
+    if (RETIRED_KEYS.includes(key)) {
+      if (args[0] === 'set') fail(`${key} is no longer used (the usage dashboard was removed). Use \`podiumctl config unset ${key}\` to clear an old value.`);
+    } else if (!ALL_KEYS.includes(key)) fail(`unknown key "${key}". Keys: ${ALL_KEYS.join(', ')}`);
     if (args[0] === 'set') {
       if (!pair.includes('=')) fail('usage: podiumctl config set KEY=VALUE');
       file[key] = v.join('=');

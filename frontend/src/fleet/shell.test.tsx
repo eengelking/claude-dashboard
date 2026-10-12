@@ -150,7 +150,8 @@ describe("accessibility", () => {
     const clickables = [...container.querySelectorAll("[onclick], [role=button]")];
     expect(clickables).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Toggle light and dark theme" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Usage dashboard" })).toHaveAttribute("href", "#/usage");
+    expect(screen.getByRole("link", { name: "History" })).toHaveAttribute("href", "#/history");
+    expect(screen.queryByRole("link", { name: "Usage dashboard" })).not.toBeInTheDocument();
   });
 });
 

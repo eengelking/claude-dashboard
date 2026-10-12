@@ -8,7 +8,6 @@ Two dashboards for Claude Code on one machine, served by one local server:
   is, how often a window blew out, why anything failed, and which git branch or worktree it works in.
   Sessions appear when they start and leave when they end, with no refresh. Podium only observes: it
   never sends prompts or touches a session.
-- **Usage** (`#/usage`): the earlier dashboard that charts Claude Code and Admin API usage.
 
 New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
 

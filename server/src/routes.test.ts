@@ -1,29 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import express from "express";
 import request from "supertest";
 import { createRouter } from "./routes.js";
-
-vi.mock("./claudeCode.js", () => ({
-  scanClaudeCodeUsage: vi.fn().mockResolvedValue({
-    daily: [],
-    byModel: [],
-    byProject: [],
-    today: { totalTokens: 0 },
-    week: { totalTokens: 0 },
-    month: { totalTokens: 0 },
-  }),
-}));
-
-vi.mock("./adminApi.js", () => ({
-  fetchApiUsage: vi.fn().mockResolvedValue({
-    configured: false,
-    daily: [],
-    byModel: [],
-    today: { totalTokens: 0, costUsd: 0 },
-    week: { totalTokens: 0, costUsd: 0 },
-    month: { totalTokens: 0, costUsd: 0 },
-  }),
-}));
 
 describe("routes", () => {
   it("GET /api/health returns ok", async () => {
@@ -34,20 +12,13 @@ describe("routes", () => {
     expect(res.body).toEqual({ status: "ok" });
   });
 
-  it("GET /api/claude-code returns aggregated usage from the cache", async () => {
+  it("answers an unknown /api path with a JSON 404, not the single-page app, so the removed usage routes read as gone", async () => {
     const app = express();
     app.use(createRouter());
-    const res = await request(app).get("/api/claude-code");
-    expect(res.status).toBe(200);
-    expect(res.body.daily).toEqual([]);
-    expect(res.body.today).toEqual({ totalTokens: 0 });
-  });
-
-  it("GET /api/api-usage reports not-configured when no admin key is set", async () => {
-    const app = express();
-    app.use(createRouter());
-    const res = await request(app).get("/api/api-usage");
-    expect(res.status).toBe(200);
-    expect(res.body.configured).toBe(false);
+    for (const url of ["/api/claude-code", "/api/api-usage", "/api/anything-else"]) {
+      const res = await request(app).get(url);
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: "Not found" });
+    }
   });
 });

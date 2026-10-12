@@ -59,7 +59,7 @@ Podium is added next to it. Do not remove or break it.
   an estimate. Never present it as an invoice.
 - No reading of conversation transcripts. Podium sends short excerpts only (section 6.4), never whole
   messages or files.
-- No replacement of the existing usage dashboard. It stays reachable at `#/usage`.
+- No usage dashboard. The earlier one was removed (issue #30); it is not replaced.
 - No terminal UI or pane inside Claude Code in this spec. A minimal `/podium` command and a status-line entry
   are in scope; a full pane is deferred (section 10).
 - No authentication system. An optional shared-secret header is in scope (section 7.7). Nothing more.
@@ -76,7 +76,7 @@ Podium is added next to it. Do not remove or break it.
 | Database | SQLite through Node's built-in `node:sqlite` (`DatabaseSync`) | No native build step, no new dependency, plenty for one machine. If `node:sqlite` proves unusable under vitest, fall back to `better-sqlite3` and say why in `docs/ARCHITECTURE.md`. Bump `@types/node` in `server/` to a version that declares `node:sqlite`. |
 | Live updates | Server-Sent Events (`text/event-stream`) | One-way push, built into browsers, no dependency, reconnects by itself. |
 | Frontend | React 18 + Vite + TypeScript (already in the repo) | Matches the existing `frontend/` workspace. |
-| Charts | Hand-written inline SVG | The mockup's charts are small polylines with markers; a library would fight the design. `recharts` stays only for the old usage page. |
+| Charts | Hand-written inline SVG | The mockup's charts are small polylines with markers; a library would fight the design. |
 | Styling | Plain CSS with custom properties, ported from the mockup | The mockup defines the tokens for both themes. |
 | Tests | vitest (server, frontend), `claude plugin test` (mod) | vitest is already configured. The mod's tests must run on the engine itself. |
 | Fonts | Schibsted Grotesk and JetBrains Mono from Google Fonts, with system fallbacks | Same as the mockup. The app must still work offline with the fallbacks. |
@@ -159,7 +159,7 @@ Containerfile, .containerignore      the server and UI as a Podman image (4.4)
 ```
 
 `server/src/index.ts` mounts the fleet router and starts the sweeper. `frontend/src/main.tsx` renders
-`FleetApp` for `#/` (default) and the existing `App` for `#/usage`.
+`FleetApp` for `#/` (default) and `HistoryView` for `#/history`.
 
 ### 4.2 Ports and addresses
 
@@ -774,7 +774,7 @@ Phases run in order. Each ends with committed, passing, runnable work. Inside a 
 - **Acceptance:**
   1. All endpoints in 7.1 except `history` and `hook` exist and behave as specified, including 400 with `{ ok:false, error, path }`, 413 over 512 KB, 401 without the token when `PODIUM_TOKEN` is set, 404 for an unknown session.
   2. `GET /api/fleet/events` pages correctly with `before` and `limit`, newest first.
-  3. The existing `/api/claude-code` and `/api/api-usage` routes and tests are untouched and pass.
+  3. `GET /api/health` still answers. (The old `/api/claude-code` and `/api/api-usage` routes were removed in issue #30.)
   4. The server starts with `npm run dev -w server`, creates `data/podium.sqlite`, and logs the URL. It binds `127.0.0.1`.
 
 #### T1.6 Simulator
@@ -793,10 +793,10 @@ Phases run in order. Each ends with committed, passing, runnable work. Inside a 
 **Goal:** the UI from the mockup, running on live server data.
 
 #### T2.1 Foundations
-- **Scope:** `frontend/src/fleet/` shell: `FleetApp`, `useFleet`, reducer, `format.ts`, `fleet.css` tokens, theme hook, `main.tsx` routing (`#/` fleet, `#/usage` old app, a link between them).
+- **Scope:** `frontend/src/fleet/` shell: `FleetApp`, `useFleet`, reducer, `format.ts`, `fleet.css` tokens, theme hook, `main.tsx` routing (`#/` fleet, `#/history`).
 - **Depends on:** T0.1, T1.5.
 - **Acceptance:**
-  1. `#/usage` renders the existing app unchanged (its tests still pass). `#/` renders the shell with the top bar.
+  1. `#/` renders the shell with the top bar. (The old `#/usage` app this once had to leave unchanged was removed in issue #30; that hash now shows the fleet.)
   2. The reducer is a pure function with tests for `snapshot`, `session` upsert, `activity` prepend with a 150 cap, `removed`, and `tick`.
   3. With the server and simulator running, the connection pill shows the live reporter count; stopping the server shows "disconnected, retrying" within 6 s and recovers by itself when the server returns.
   4. `fmtTok`, `fmtUsd`, `fmtDur` and `fmtClock` have tests including edge values (0, 999, 1000, 1.5M, 3,600 s, 86,400 s).

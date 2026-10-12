@@ -152,11 +152,10 @@ another terminal, and send a prompt. It shows up marked "settings hooks" with th
 model and agents, and with the context, cost and plan left empty. Remove the hooks afterwards if you do
 not want them on permanently.
 
-## Beat 4: history and usage (optional)
+## Beat 4: history (optional)
 
 - `#/history` lists the sessions that ended on a chosen day. Open one to see its agent detail from
   stored rows. This works after a server restart too, because everything is in SQLite.
-- `#/usage` is the older dashboard that charts Claude Code and Admin API usage.
 
 To show that nothing is lost, run `podiumctl restart` (or stop and start `npm run dev`) with a session
 live. The session comes back as stale and recovers as soon as its reporter sends again.

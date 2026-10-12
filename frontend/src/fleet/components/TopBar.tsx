@@ -35,9 +35,6 @@ export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: 
       <a className="btn" href="#/history">
         History
       </a>
-      <a className="btn" href="#/usage">
-        Usage dashboard
-      </a>
       <button type="button" className="btn" onClick={props.onTheme} aria-label="Toggle light and dark theme" title={`Theme: ${props.theme}`}>
         Theme
       </button>
