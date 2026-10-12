@@ -121,6 +121,29 @@ describe("FailureBox and agent detail", () => {
   });
 });
 
+describe("agent detail Kind row", () => {
+  const cases = [
+    { kind: "subagent", word: "Subagent", note: "Starts from a blank slate" },
+    { kind: "fork", word: "Fork", note: "Keeps the parent’s context and memory" },
+    { kind: "teammate", word: "Teammate", note: "A named agent of the session’s team" },
+  ] as const;
+  it.each(cases)("shows $kind as an icon and one word, with the explanation as its description", ({ kind, word, note }) => {
+    const s = makeSession({ agents: [makeAgent({ id: "k", kind, type: kind, description: "Kind task" })] });
+    const { container } = render(<FleetView state={stateFrom({ sessions: [s] })} />);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    fireEvent.click(container.querySelector('button.trow[data-agent="k"]')!);
+    const dl = container.querySelector(".side dl")!;
+    const dd = [...dl.querySelectorAll("dt")].find((d) => d.textContent === "Kind")!.nextElementSibling!;
+    const el = dd.querySelector("[aria-describedby]")!;
+    expect(el.textContent).toBe(word);
+    expect(el.querySelector("svg")).toBeInTheDocument();
+    const desc = document.getElementById(el.getAttribute("aria-describedby")!)!;
+    expect(desc.textContent).toContain(note);
+    expect(desc).not.toBeVisible();
+    expect(el.getAttribute("data-tip")).toContain(note);
+  });
+});
+
 describe("reported text is never HTML", () => {
   it("renders hostile strings from a description, a failure line and an event as text", () => {
     const evil = '<img src=x onerror="window.__pwned=1">';

@@ -21,6 +21,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- In the agent detail panel, the Kind row is now an icon and one word (`Subagent`, `Fork` or `Teammate`) on
+  one line, aligned with its label. The icon takes the agent's model color, as the squares in the session
+  card's agent strip do. The explanation moved into a tooltip, on hover or keyboard focus, and is the
+  value's accessible description. (#28)
 - Sessions nobody asked for no longer show up as cards. Claude Code's background daemon runs a parked
   twin of an interactive window and a pool of pre-warmed spares, and each one loads the reporter and
   reported as a session of its own. Opening one window in a project could put three identical "waiting on

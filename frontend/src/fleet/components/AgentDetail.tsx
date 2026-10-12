@@ -2,7 +2,7 @@ import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
 import { agentElapsedSec, agentTokens } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { BlowoutBox } from "./BlowoutBox";
-import { BlowBadge, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
+import { BlowBadge, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
 import { FailureBox } from "./FailureBox";
 import { IconBack, IconFork, IconSub } from "./Icons";
 
@@ -10,6 +10,11 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
   const { s, a, now } = props;
   const kids = s.agents.filter((x) => x.parentId === a.id);
   const fork = a.kind === "fork";
+  const [kindWord, kindNote] = fork
+    ? ["Fork", "Keeps the parent’s context and memory."]
+    : a.kind === "teammate"
+      ? ["Teammate", "A named agent of the session’s team."]
+      : ["Subagent", "Starts from a blank slate."];
   const inherited = <span style={{ color: "var(--muted)" }}>inherited</span>;
   return (
     <>
@@ -28,23 +33,14 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
           <dt>Orchestrator</dt>
           <dd>{s.name}</dd>
           <dt>Kind</dt>
-          <dd style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
-            {fork ? (
-              <>
-                <IconFork />
-                <span className="ddt">Fork. Keeps the parent’s context and memory.</span>
-              </>
-            ) : a.kind === "teammate" ? (
-              <>
-                <IconSub />
-                <span className="ddt">Teammate. A named agent of the session’s team.</span>
-              </>
-            ) : (
-              <>
-                <IconSub />
-                <span className="ddt">Subagent. Starts from a blank slate.</span>
-              </>
-            )}
+          <dd>
+            <span className="kind" style={cssVar(FAMILY_COLOR[a.modelFamily])} tabIndex={0} data-tip={kindNote} aria-describedby={`kind-${a.id}`}>
+              {fork ? <IconFork /> : <IconSub />}
+              {kindWord}
+            </span>
+            <span id={`kind-${a.id}`} hidden>
+              {kindNote}
+            </span>
           </dd>
           <dt>Type</dt>
           <dd className="mono">{a.type}</dd>

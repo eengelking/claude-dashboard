@@ -259,8 +259,8 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .det { padding: 0 14px 20px; }
 .podium .det h3 { margin: 0 0 2px; font-size: 15px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .podium .det .grid2 { display: grid; grid-template-columns: 92px 1fr; gap: 7px 10px; margin: 12px 0; align-items: center; }
-.podium .det .grid2 dt { color: var(--muted); font-size: 12px; }
-.podium .det .grid2 dd { margin: 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.podium .det .grid2 dt { color: var(--muted); font-size: 12px; line-height: 18px; }
+.podium .det .grid2 dd { margin: 0; line-height: 18px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
 .podium .det .pr { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px; font-size: 12.5px; color: var(--ink2); overflow-wrap: anywhere; }
 .podium .det .lab { font-size: 12px; color: var(--muted); margin: 14px 0 5px; display: block; }
 .podium .det .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
@@ -374,7 +374,12 @@ body.podium-resizing * { cursor: col-resize !important; }
 @media (prefers-reduced-motion: reduce) {
   .podium *, .podium *::before, .podium *::after { animation: none !important; transition: none !important; }
 }
-.podium .det .grid2 dd .ddt { flex: 1; min-width: 0; }
+.podium .kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.podium .kind svg.i { color: var(--c); }
+/* Shared tooltip: any element with data-tip shows it on hover or keyboard focus. */
+.podium .det .grid2 dd { position: relative; }
+.podium .kind[data-tip] { position: static; }
+.podium [data-tip]:hover::after, .podium [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: max-content; max-width: 100%; box-sizing: border-box; white-space: normal; background: var(--raised); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.35; box-shadow: 0 4px 14px rgb(0 0 0 / .25); pointer-events: none; }
 
 /* history (#/history) */
 .podium .history { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
