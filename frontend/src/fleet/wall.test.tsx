@@ -272,6 +272,34 @@ describe("sessions reported by settings hooks", () => {
   });
 });
 
+describe("reporter and server versions that do not match (#49)", () => {
+  const chipOf = (container: HTMLElement) => container.querySelector(".wall .card .chip.warn");
+
+  it("shows nothing extra when the versions match, or for a hooks session", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession(), makeSession({ id: "h", name: "hooked", reporter: "hooks", reporterVersion: null, compat: "unknown" })] })} />);
+    expect(chipOf(container)).toBeNull();
+    expect(container.querySelector(".top")!.textContent).not.toContain("update");
+    expect(container.querySelector(".top")!.textContent).not.toContain("newer than the server");
+  });
+
+  it("marks an outdated reporter on the card and the top bar, and says what to do on its page", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ reporterVersion: "0.1.0", compat: "outdated" }), makeSession({ id: "s2", name: "other", reporterVersion: "0.1.5", compat: "outdated" })] })} />);
+    expect(chipOf(container)!.textContent).toContain("0.1.0");
+    expect(chipOf(container)!.textContent).toContain("update");
+    expect(container.querySelector(".top")!.textContent).toContain("2 reporters need an update");
+    fireEvent.click(container.querySelector(".wall .card")!);
+    expect(screen.getByText(/update the podium-reporter mod/i)).toBeInTheDocument();
+  });
+
+  it("gives the opposite advice for a reporter newer than the server", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ reporterVersion: "0.9.0", compat: "newer" })] })} />);
+    expect(chipOf(container)!.textContent).toContain("upgrade server");
+    expect(container.querySelector(".top")!.textContent).toContain("1 reporter newer than the server");
+    fireEvent.click(container.querySelector(".wall .card")!);
+    expect(screen.getByText(/upgrade the Podium server/i)).toBeInTheDocument();
+  });
+});
+
 describe("Remove a heartbeat-lost session (#41)", () => {
   it("the card and the rail row each post to the drop route, with no token", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });

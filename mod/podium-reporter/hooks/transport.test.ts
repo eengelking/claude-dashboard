@@ -43,6 +43,36 @@ describe('transport', () => {
     expect(t.online).toBe(true)
   })
 
+  test('reads where the server places this reporter, and says what to do about it', async () => {
+    const reply = (c: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, liveSessions: 2, serverVersion: '0.3.0', reporterCompat: c }) })
+    const run = async (r: HttpResult) => {
+      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+      await t.send(build, 0)
+      return t
+    }
+    const outdated = await run(reply('outdated'))
+    expect(outdated.statusText()).toBe('podium ● 2 live · update mod')
+    expect(outdated.versionNotice()).toContain('update the podium-reporter mod')
+    const newer = await run(reply('newer'))
+    expect(newer.statusText()).toBe('podium ● 2 live · upgrade server')
+    expect(newer.versionNotice()).toContain('upgrade the Podium server')
+    for (const quiet of [reply('ok'), reply('unknown'), reply('garbage'), ok(0, 2)]) {
+      const t = await run(quiet)
+      expect(t.statusText()).toBe('podium ● 2 live')
+      expect(t.versionNotice()).toBeNull()
+    }
+  })
+
+  test('clears the notice once the server says the versions match again', async () => {
+    const bad = { status: 200, ok: true, text: '{"ok":true,"reporterCompat":"outdated"}' }
+    const good = { status: 200, ok: true, text: '{"ok":true,"reporterCompat":"ok"}' }
+    const t = new Transport(fake([bad, good]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    await t.send(build, 0)
+    expect(t.versionNotice()).not.toBeNull()
+    await t.send(build, 10)
+    expect(t.versionNotice()).toBeNull()
+  })
+
   test('sends at most 100 events per report', async () => {
     const f = fake([ok()])
     const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })

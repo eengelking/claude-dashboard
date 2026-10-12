@@ -8,6 +8,14 @@ import { Sparkline } from "./Sparkline";
 
 export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens and the plan are unavailable.";
 
+/** What to tell the user when the server places this session's reporter outside the range it supports; null when it does not. */
+export function versionNote(s: Pick<SessionView, "compat" | "reporterVersion">): { chip: string; text: string } | null {
+  const v = s.reporterVersion ?? "unknown";
+  if (s.compat === "outdated") return { chip: `reporter ${v} · update`, text: `This session's reporter (${v}) is older than the server supports. Update the podium-reporter mod from eengelking-marketplace. Reports are still accepted, but newer fields may be missing.` };
+  if (s.compat === "newer") return { chip: `reporter ${v} · upgrade server`, text: `This session's reporter (${v}) is newer than the server supports. Upgrade the Podium server. Reports are still accepted, but some fields may be ignored.` };
+  return null;
+}
+
 // The reporter clips a wait note at this many characters (LIMITS.waitNote); a note that long is cut off.
 const WAIT_NOTE_LIMIT = 160;
 
@@ -34,6 +42,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const c = agentCounts(s.agents);
   const step = currentStep(s.plan);
   const risk = s.blowouts.level === 2;
+  const vNote = versionNote(s);
   const cls = `card${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}`;
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
   // The card is one big button, so Remove sits beside it in a slot rather than inside it.
@@ -59,6 +68,11 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         {s.reporter === "hooks" && (
           <span className="chip" title={HOOKS_NOTE}>
             settings hooks
+          </span>
+        )}
+        {vNote && (
+          <span className="chip warn" title={vNote.text}>
+            {vNote.chip}
           </span>
         )}
       </div>

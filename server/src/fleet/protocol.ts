@@ -168,11 +168,24 @@ export interface BlowoutLogEntry {
   tokensAfter: number | null;
 }
 
+/** `outdated`: below the supported range, update the mod. `newer`: above it, upgrade the server. `unknown`: unreadable, no warning. */
+export type ReporterCompat = 'ok' | 'outdated' | 'newer' | 'unknown';
+
+/** The reporter versions a server reads correctly (major.minor compared; patch ignored). */
+export interface ReporterSupport {
+  min: string;
+  max: string;
+}
+
 export interface SessionView {
   id: string;
   name: string;
   /** `mod`: the reporter mod (full detail); `hooks`: classic settings hooks only (no usage, cost, plan). */
   reporter: 'mod' | 'hooks';
+  /** The mod's version as it reported it; null for a hooks-only session, which has no mod. */
+  reporterVersion: string | null;
+  /** How that version sits against the range this server supports. Always `unknown` for hooks. */
+  compat: ReporterCompat;
   project: string;
   /** The session's working directory, home shortened to `~`. */
   cwd: string;
@@ -254,6 +267,8 @@ export interface StateBody {
   kpis: Kpis;
   clearedToday: number;
   events: ActivityView[];
+  /** The server's own version and the reporter range it supports, for the mismatch notice. */
+  server: { version: string; reporterSupport: ReporterSupport };
 }
 
 export type RemovedReason = 'done' | 'dropped' | 'deleted';

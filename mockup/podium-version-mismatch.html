@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium version mismatch</title>
+<!-- Mockup for issue #49. Uses Podium's own tokens (fleet.css) and existing .pill, .chip, .callout patterns, so nothing here is a new visual language. Three places: the top bar, a session card, and the session's page. -->
+<style>
+:root {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --border: rgba(0,0,0,.14); --good: #1f9d55; --warn: #b7791f; --warn-text: #8a5a0c; --crit: #c53030;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --raised: #232321; --ink: #f0efec; --ink2: #b3b2ac; --muted: #8f8e88;
+    --border: rgba(240,239,236,.14); --good: #3ecf7a; --warn: #fab219; --warn-text: #fab219; --crit: #d03b3b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #232321; --ink: #f0efec; --ink2: #b3b2ac; --muted: #8f8e88;
+  --border: rgba(240,239,236,.14); --good: #3ecf7a; --warn: #fab219; --warn-text: #fab219; --crit: #d03b3b; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; padding-inline: 16px; padding-block: 20px; max-width: 760px; margin: 0 auto; }
+h1 { font-size: 16px; margin: 0 0 4px; }
+h2 { font-size: 13px; margin: 28px 0 8px; color: var(--ink2); font-weight: 600; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; max-width: 62ch; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.logo { font-weight: 700; margin-right: 6px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.pill.warn { color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.dot.warn { background: var(--warn); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; max-width: 360px; }
+.card b { display: block; margin-bottom: 6px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); white-space: nowrap; color: var(--ink2); }
+.chip.warn { color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.callout { padding: 8px 10px; border-radius: 5px; font-size: 12.5px; background: color-mix(in srgb, var(--warn) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); max-width: 62ch; }
+code { font-family: ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Reporter and server versions do not match</h1>
+<p class="note">A warning, never an error: the session keeps reporting. Amber is the existing warn colour; red stays for failures.</p>
+
+<h2>Top bar: one pill, only when something is off</h2>
+<div class="top">
+  <span class="logo">Podium</span>
+  <span class="pill"><span class="dot"></span>4 reporters live, synced 0.8s ago</span>
+  <span class="pill warn" title="Reporters outside the range this server supports (0.2 to 0.3)"><span class="dot warn"></span>2 reporters need an update</span>
+</div>
+<p class="note">Counts sessions whose reporter is outdated or newer than the server. Hidden when there are none, so matching versions look exactly as they do today. Hook-only sessions are not counted.</p>
+
+<h2>Session card: a chip beside the model and effort</h2>
+<div class="card">
+  <b>billing-service</b>
+  <div class="meta">
+    <span class="chip">opus</span>
+    <span class="chip">ctx 41%</span>
+    <span class="chip warn" title="Reporter 0.1.0 is older than server 0.3.0 supports. Update the podium-reporter mod.">reporter 0.1.0 · update</span>
+  </div>
+</div>
+<p class="note">Newer-than-server reads "reporter 0.9.0 · upgrade server". The chip says what to do; the hover text gives both versions.</p>
+
+<h2>Session page: a callout with the full instruction</h2>
+<div class="callout" role="note">This session's reporter is 0.1.0 and the server supports 0.2 to 0.3. Update the podium-reporter mod from <code>eengelking-marketplace</code>. Reports are still accepted, but newer fields may be missing.</div>
+<p class="note">For a reporter newer than the server: "upgrade the Podium server". Same spot as the settings-hooks note.</p>
+</body>
+</html>

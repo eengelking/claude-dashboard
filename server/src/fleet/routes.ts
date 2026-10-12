@@ -2,6 +2,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Fleet } from './fleet.js';
+import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { validateReport } from './protocol.js';
 
 export interface FleetRouterOptions {
@@ -46,7 +47,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     }
     try {
       const out = fleet.ingest(result.report);
-      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount() });
+      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version) });
     } catch (err) {
       log(`podium: ingest failed for a report: ${(err as Error).message}`);
       res.status(500).json({ ok: false, error: 'ingest failed', path: '$' });

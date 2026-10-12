@@ -117,6 +117,19 @@ describe('sessionView', () => {
     expect(v.secondsSinceSeen).toBe(1);
   });
 
+  it('carries the reporter version and where it sits against the supported range', () => {
+    const at = (version: string) => {
+      const r = fixtureReport();
+      r.reporter.version = version;
+      const v = viewOf(r, 1_791_648_001_000);
+      return [v.reporterVersion, v.compat];
+    };
+    expect(at('0.1.0')).toEqual(['0.1.0', 'outdated']);
+    expect(at('0.3.1')).toEqual(['0.3.1', 'ok']);
+    expect(at('0.9.0')).toEqual(['0.9.0', 'newer']);
+    expect(at('0.1.0-sim')).toEqual(['0.1.0-sim', 'unknown']);
+  });
+
   it('is stale past STALE_AFTER_MS unless done, and stale until heard after a restart', () => {
     const r = fixtureReport();
     const f = new FleetDb(openDb(':memory:'));

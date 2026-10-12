@@ -1,6 +1,7 @@
 // Pure derivation (SPEC 7.3, 7.4): SessionView, blowout level, series, KPIs. No I/O here: callers
 // pass rows in and get views out, so every rule is unit-tested without a database.
 import type { AgentRow, BlowoutRow, EventRow, SampleRow, SessionRow } from './db.js';
+import { checkReporter } from './compat.js';
 import { tokenSum } from './ingest.js';
 import type {
   ActivityView,
@@ -184,6 +185,8 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     id: row.id,
     name: row.name,
     reporter: row.reporter_version === 'hooks' ? 'hooks' : 'mod',
+    reporterVersion: row.reporter_version === 'hooks' ? null : row.reporter_version,
+    compat: row.reporter_version === 'hooks' ? 'unknown' : checkReporter(row.reporter_version),
     project: shortenHome(row.project_root ?? row.cwd, cfg.home),
     cwd: shortenHome(row.cwd, cfg.home),
     repoName: row.repo_name,

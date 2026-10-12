@@ -58,7 +58,7 @@ The top bar shows the connection (`N reporters live, synced Xs ago`, or a red "d
 clock. The row under it has the theme picker. The left rail lists your sessions. The right panel shows activity.
 Drag the handles between the columns to resize them.
 
-**Themes.** Pick a color theme from the Theme dropdown in the row under the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin or GitHub), then choose Light, Dark or System for it. System follows your operating system and changes with it. Podium is the default. Your choice is kept in this browser, and a light or dark choice from an older version carries over as Podium in that mode. The palettes belong to their authors and are credited under Theme credits at the bottom left of the left rail, next to a License link, and in `THIRD_PARTY_NOTICES.md`.
+**Themes.** Pick a color theme from the Theme dropdown in the row under the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin or GitHub), then choose Light, Dark or System for it. System follows your operating system and changes with it. Podium is the default. Your choice is kept in this browser, and a light or dark choice from an older version carries over as Podium in that mode. The palettes belong to their authors and are credited under Theme credits at the bottom left of the left rail, next to a License link, and in `THIRD_PARTY_NOTICES.md`. The same footer shows the version of the server you are looking at, for example `Podium v0.1.0`, so you can tell which build is live.
 
 For a wall display, collapse what you do not need. Each of the left pane, the right pane and the top bar
 collapses from its own button and from a key: `[` for the left pane, `]` for the right pane and `\` for
@@ -210,6 +210,8 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 | A session I closed is still on the wall | It moved to the background. `claude agents` lists it and `claude stop <id>` ends it. See "Closing a background session" |
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
+| A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. Update `podium-reporter` from `eengelking-marketplace` and restart the session. It keeps reporting meanwhile |
+| A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (`podiumctl build`, then `podiumctl restart`) |
 
 More in [GOTCHAS.md](GOTCHAS.md).
 

@@ -37,6 +37,8 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     id: "s1",
     name: "api-refactor",
     reporter: "mod",
+    reporterVersion: "0.3.0",
+    compat: "ok",
     project: "~/dev/billing-service",
     cwd: "~/dev/billing-service/.claude/worktrees/invoice-v2",
     repoName: "acme/billing-service",
@@ -93,6 +95,7 @@ export function makeState(over: Partial<StateBody> = {}): StateBody {
     kpis: makeKpis(),
     clearedToday: 0,
     events: [makeEvent()],
+    server: { version: "0.3.0", reporterSupport: { min: "0.2.0", max: "0.3.0" } },
     ...over,
   };
 }

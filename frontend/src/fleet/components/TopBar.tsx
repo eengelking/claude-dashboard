@@ -4,7 +4,7 @@ import type { Phase } from "../store";
 import { APP_NAME } from "../types";
 import { Logo } from "./Icons";
 
-export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: number; now: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
+export function TopBar(props: { phase: Phase; reporters: number; outdated?: number; newer?: number; lastMessageAt: number; now: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters, lastMessageAt, now } = props;
   const synced = lastMessageAt ? Math.max(0, (now - lastMessageAt) / 1000) : null;
   return (
@@ -27,6 +27,18 @@ export function TopBar(props: { phase: Phase; reporters: number; lastMessageAt: 
         <span className="pill" role="status">
           <span className="dot running" aria-hidden="true" />
           {reporters} reporter{reporters === 1 ? "" : "s"} live, synced {synced === null ? "–" : `${synced.toFixed(1)}s`} ago
+        </span>
+      )}
+      {!!props.outdated && (
+        <span className="pill warn" role="status" title="Update the podium-reporter mod from eengelking-marketplace">
+          <span className="dot warn" aria-hidden="true" />
+          {props.outdated} reporter{props.outdated === 1 ? "" : "s"} need{props.outdated === 1 ? "s" : ""} an update
+        </span>
+      )}
+      {!!props.newer && (
+        <span className="pill warn" role="status" title="Upgrade the Podium server">
+          <span className="dot warn" aria-hidden="true" />
+          {props.newer} reporter{props.newer === 1 ? "" : "s"} newer than the server
         </span>
       )}
       <span className="pill mono" aria-label="Local time">

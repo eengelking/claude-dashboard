@@ -38,7 +38,7 @@ describe('POST /api/fleet/hook', () => {
     };
     await send(P.start);
     let v = fleet.view('hk-1')!;
-    expect(v).toMatchObject({ reporter: 'hooks', name: 'billing-service', project: '~/billing-service', status: 'waiting', model: 'claude-sonnet-5-5', effort: 'high', costUsd: null, plan: null });
+    expect(v).toMatchObject({ reporter: 'hooks', name: 'billing-service', project: '~/billing-service', status: 'waiting', model: 'claude-sonnet-5-5', effort: 'high', costUsd: null, plan: null, reporterVersion: null, compat: 'unknown' });
     expect(v.context).toEqual({ tokens: null, window: null, percent: null });
     await send(P.prompt);
     expect(fleet.view('hk-1')!.status).toBe('running');

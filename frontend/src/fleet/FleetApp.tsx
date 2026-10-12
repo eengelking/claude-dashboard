@@ -88,6 +88,8 @@ export function FleetView({ state }: { state: FleetState }) {
     stale: live.filter((s) => s.status === "stale").length,
   };
   const reporters = live.filter((s) => s.status !== "stale").length;
+  const outdated = live.filter((s) => s.compat === "outdated").length;
+  const newer = live.filter((s) => s.compat === "newer").length;
   const ready = state.phase !== "loading";
   const enteringSession = useEntering(all.map((s) => s.id), ready);
   const newEvent = useEntering(state.events.map((e) => e.id), ready);
@@ -226,6 +228,8 @@ export function FleetView({ state }: { state: FleetState }) {
         <TopBar
           phase={state.phase}
           reporters={reporters}
+          outdated={outdated}
+          newer={newer}
           lastMessageAt={state.lastMessageAt}
           now={now}
           collapsed={panes.collapsed.top}
@@ -265,6 +269,7 @@ export function FleetView({ state }: { state: FleetState }) {
             leaving={state.leaving}
             liveCount={live.length}
             onRemove={onRemove}
+            version={state.server?.version ?? null}
             collapsed={panes.collapsed.left}
             onToggle={() => toggle("left")}
           />

@@ -175,3 +175,18 @@ always-on wall display (#33) wants, and one rule covers both panes, the top bar 
 change the main area's width.
 **Cost.** A last row that is not full leaves empty space on its right, and the cards no longer stretch to fill
 a wide row.
+
+## 18. A supported range of reporter versions, not a protocol number
+
+**Choice.** The server keeps one range, `REPORTER_SUPPORT { min, max }`, of mod versions it reads correctly
+(SPEC 6.8). It compares `major.minor` of each report's `reporter.version` and tells the reporter in the reply.
+Below the range is `outdated`, above it is `newer`, and a version it cannot parse is `unknown` and never warns.
+**Why.** The issue (#49) asked whether to follow `kubectl`, which allows a skew of one minor version, or to
+add a protocol version that changes only with the report format. A protocol number would warn less often, but
+`Report.v` already exists and has never needed to change, and a warning that never fires is not much use. A
+range on the mod's own version needs no new field on the wire, works for reporters that already send
+`reporter.version`, and gives the opposite direction (a mod newer than the server) for free. Ignoring the
+patch number keeps a mod-only fix from warning anyone.
+**Cost.** Someone must move `min` or `max` when a change needs it. Forgetting `max` when a new mod minor
+ships makes every up-to-date mod show `upgrade server`, and a test cannot catch that on its own. The release
+steps in `CLAUDE.md` do not mention it yet.

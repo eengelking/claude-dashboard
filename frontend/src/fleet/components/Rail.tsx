@@ -23,6 +23,8 @@ export function Rail(props: {
   leaving: Record<string, number>;
   liveCount: number;
   onRemove?: (id: string) => void;
+  /** The running server's version; null until the first snapshot. */
+  version?: string | null;
   collapsed?: boolean;
   onToggle?: () => void;
 }) {
@@ -96,7 +98,10 @@ export function Rail(props: {
             License
           </a>
         </span>
-        <span>{COPYRIGHT}</span>
+        <span>
+          {props.version && props.version !== "unknown" ? `Podium v${props.version} · ` : ""}
+          {COPYRIGHT}
+        </span>
       </footer>
       </div>
     </nav>

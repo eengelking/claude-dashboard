@@ -3,7 +3,7 @@ import { sessionElapsedSec } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
 import { IconBack } from "./Icons";
-import { HOOKS_NOTE } from "./SessionCard";
+import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
 /** The side panel for the orchestrator's own row. The report carries the main loop only as session-level fields. */
 export function OrchestratorDetail(props: { s: SessionView; now: number; onBack: () => void }) {
@@ -20,6 +20,7 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
           <StatusChip status={s.status} />
         </div>
         {s.reporter === "hooks" && <div className="note">{HOOKS_NOTE}</div>}
+        {versionNote(s) && <div className="note">{versionNote(s)!.text}</div>}
         <dl className="grid2">
           <dt>Role</dt>
           <dd>Orchestrator</dd>

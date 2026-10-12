@@ -35,6 +35,9 @@ export class Transport {
   lastSentAt = 0;
   nextAttemptAt = 0;
   liveSessions: number | null = null;
+  /** Where the server places this reporter's version; null until a reply says (an older server never does). */
+  compat: 'ok' | 'outdated' | 'newer' | null = null;
+  serverVersion: string | null = null;
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
@@ -99,9 +102,11 @@ export class Transport {
       if (res.ok) {
         let acked = events.length;
         try {
-          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown };
+          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown };
           if (typeof body.ackedEvents === 'number') acked = Math.max(0, Math.min(events.length, body.ackedEvents));
           if (typeof body.liveSessions === 'number') this.liveSessions = body.liveSessions;
+          this.compat = body.reporterCompat === 'outdated' || body.reporterCompat === 'newer' || body.reporterCompat === 'ok' ? body.reporterCompat : null;
+          this.serverVersion = typeof body.serverVersion === 'string' ? body.serverVersion : null;
         } catch {
           // a 200 without a JSON body still acks what was sent
         }
@@ -153,6 +158,17 @@ export class Transport {
   statusText(): string {
     if (this.online === false) return 'podium ○ offline';
     if (this.online === null) return 'podium ○ connecting';
-    return `podium ● ${this.liveSessions ?? 1} live`;
+    const live = `podium ● ${this.liveSessions ?? 1} live`;
+    if (this.compat === 'outdated') return `${live} · update mod`;
+    if (this.compat === 'newer') return `${live} · upgrade server`;
+    return live;
+  }
+
+  /** What to tell the user when the server says this reporter and it do not match; null when they do (or it cannot tell). */
+  versionNotice(): string | null {
+    const server = this.serverVersion ? ` (server ${this.serverVersion})` : '';
+    if (this.compat === 'outdated') return `This reporter is older than the Podium server supports${server}: update the podium-reporter mod from eengelking-marketplace.`;
+    if (this.compat === 'newer') return `This reporter is newer than the Podium server supports${server}: upgrade the Podium server.`;
+    return null;
   }
 }

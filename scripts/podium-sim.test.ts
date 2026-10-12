@@ -56,6 +56,7 @@ describe('podium-sim', () => {
     expect(parseArgs(['--sessions', '3', '--speed', '2', '--seed', '9', '--duration', '20', '--chaos', '--token', 'x', '--url', 'http://h:1/'])).toMatchObject({
       sessions: 3, speed: 2, seed: 9, duration: 20, chaos: true, token: 'x', url: 'http://h:1',
     });
+    expect(parseArgs(['--reporter-version', '0.1.0'])).toMatchObject({ reporterVersion: '0.1.0' });
     expect(() => parseArgs(['--sessions', 'many'])).toThrow();
     expect(() => parseArgs(['--bogus'])).toThrow();
   });

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { checkReporter } from "../server/src/fleet/compat";
 
 const ROOT = path.join(__dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -12,6 +13,15 @@ describe("mod version", () => {
     const manifest = JSON.parse(read("mod/podium-reporter/.claude-plugin/plugin.json")).version as string;
     const m = /export const VERSION = '([^']+)'/.exec(read("mod/podium-reporter/hooks/register.ts"));
     expect(m?.[1]).toBe(manifest);
+  });
+});
+
+describe("supported reporter range", () => {
+  // Without this, a mod minor bump that forgets REPORTER_SUPPORT.max makes every up-to-date mod show
+  // "upgrade server" (SPEC 6.8, DECISIONS 18).
+  it("includes the mod version in this repo", () => {
+    const manifest = JSON.parse(read("mod/podium-reporter/.claude-plugin/plugin.json")).version as string;
+    expect(checkReporter(manifest)).toBe("ok");
   });
 });
 

@@ -39,7 +39,7 @@ import {
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -74,6 +74,8 @@ interface Runtime {
   lastStatus: string | null;
   toastedOk: boolean;
   toastedFail: boolean;
+  /** The version notice last toasted, so each distinct one shows once. */
+  toastedVersion: string | null;
   /** Skill tool calls in flight: a skill.prompt during one belongs to that call's loop. */
   skillCalls: number;
 }
@@ -179,6 +181,21 @@ function toastOnce($: Engine, r: Runtime, ok: boolean): void {
   }
 }
 
+function toastVersionOnce($: Engine, r: Runtime): void {
+  const notice = r.transport.versionNotice();
+  if (!notice) {
+    r.toastedVersion = null; // matched again: a later mismatch is news again
+    return;
+  }
+  if (notice === r.toastedVersion) return;
+  r.toastedVersion = notice;
+  try {
+    $.ui.toast(`Podium: ${notice}`);
+  } catch {
+    // no toasts on this host
+  }
+}
+
 /** Moves queued events to the transport and posts one report if one is due (or `force`). */
 async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Promise<void> {
   const [st, events] = drainEvents(r.state);
@@ -193,6 +210,7 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
     toastOnce($, r, false);
   } else if (outcome === 'ok') toastOnce($, r, true);
   else if (outcome === 'busy') r.state = { ...r.state, dirty: true };
+  toastVersionOnce($, r);
   showStatus($, r);
 }
 
@@ -352,6 +370,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     lastStatus: null,
     toastedOk: rt?.toastedOk ?? false,
     toastedFail: rt?.toastedFail ?? false,
+    toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,
   };
   const r = rt;
@@ -425,6 +444,8 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
   return [
     `Podium fleet console: ${opts.serverUrl.replace(/\/+$/, '')}/#/`,
     `Connection: ${t.online === null ? 'not tried yet' : t.online ? 'online' : 'offline, retrying'}${t.liveSessions !== null ? ` (${t.liveSessions} live sessions)` : ''}`,
+    `Versions: reporter ${VERSION}${t.serverVersion ? `, server ${t.serverVersion}` : ''}`,
+    t.versionNotice() ?? '',
     `Reports sent: ${t.sent}, failed: ${t.failed}, rejected: ${t.rejected}; events queued: ${t.queue.length}${t.dropped ? `, dropped: ${t.dropped}` : ''}`,
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,

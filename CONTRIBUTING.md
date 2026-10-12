@@ -85,6 +85,10 @@ number changes, so a mod fix that lands without a bump reaches nobody. CI (`mod-
 that forgets. Bump the patch number for a fix and the minor number for new behavior. A release sets the mod
 and the `package.json` versions to the same number, and the maintainer handles that when cutting one.
 
+If the bump is a new minor version, also move `max` in `REPORTER_SUPPORT` (`server/src/fleet/compat.ts`) to
+that version. Otherwise the server tells every up-to-date mod it is newer than the server supports. Raise
+`min` only when the server stops reading older reports correctly. SPEC 6.8 has the rule.
+
 ### The report format
 
 The mod and the server share one set of report types, copied between `<protocol:begin>` and

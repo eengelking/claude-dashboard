@@ -32,6 +32,24 @@ describe('POST /api/fleet/report', () => {
     expect(typeof res.body.serverTime).toBe('number');
   });
 
+  it('tells an older, a matching and a newer reporter where it stands, and accepts all three', async () => {
+    const { app } = setup();
+    const send = async (version: string) => {
+      const r = fixtureReport();
+      r.reporter.version = version;
+      return request(app).post('/api/fleet/report').send(r);
+    };
+    const older = await send('0.1.0');
+    const matching = await send('0.3.2');
+    const newer = await send('0.9.0');
+    expect([older.status, matching.status, newer.status]).toEqual([200, 200, 200]);
+    expect(older.body.reporterCompat).toBe('outdated');
+    expect(matching.body.reporterCompat).toBe('ok');
+    expect(newer.body.reporterCompat).toBe('newer');
+    expect(older.body.serverVersion).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(older.body.reporterSupport).toEqual({ min: expect.any(String), max: expect.any(String) });
+  });
+
   it('400 with error and path for an invalid report, logging the path but not the body', async () => {
     const { app, logs } = setup();
     const res = await request(app).post('/api/fleet/report').send({ ...fixtureReport(), v: 2, secret: 'sk-ant-should-not-be-logged' });
@@ -114,6 +132,8 @@ describe('reads', () => {
     await request(app).post('/api/fleet/report').send(fixtureReport());
     const res = await request(app).get('/api/fleet/health');
     expect(res.body).toMatchObject({ ok: true, dbPath: ':memory:', liveSessions: 1, reporterVersionsSeen: ['0.1.0'] });
+    expect(res.body.serverVersion).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(res.body.reporterSupport).toEqual({ min: expect.any(String), max: expect.any(String) });
   });
 
   it('GET /history lists ended sessions of a day', async () => {

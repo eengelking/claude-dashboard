@@ -26,6 +26,8 @@ export interface FleetState {
   clearedToday: number;
   /** Newest first, at most EVENT_CAP. */
   events: ActivityView[];
+  /** The server's version and the reporter range it supports; null until the first snapshot. */
+  server: StateBody["server"] | null;
 }
 
 export type FleetAction =
@@ -50,6 +52,7 @@ export const initialState: FleetState = {
   kpis: null,
   clearedToday: 0,
   events: [],
+  server: null,
 };
 
 function capEvents(list: ActivityView[]): ActivityView[] {
@@ -89,6 +92,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
         kpis: action.body.kpis,
         clearedToday: action.body.clearedToday,
         events: capEvents(action.body.events),
+        server: action.body.server ?? state.server,
       };
     }
     case "session": {

@@ -22,6 +22,7 @@ Options:
   --duration S      Stop after S real seconds and exit 0 (default: run until Ctrl-C)
   --chaos           Also make sessions go silent (stale), fail more and blow out more
   --agents N        Extra ad-hoc agents per session at start, for load tests (default 0)
+  --reporter-version V  Version the reports claim (default 0.1.0-sim, which the server cannot read, so no warning); try 0.1.0 or 0.9.0 to see a mismatch
   --token T         Send X-Podium-Token: T
   --print           Print each report as one JSON line instead of POSTing (no server needed)
   --ticks N         With --print: stop after N ticks
@@ -230,6 +231,8 @@ export interface SimOptions {
   chaos: boolean;
   /** Extra ad-hoc agents per session, for load tests. */
   extraAgents: number;
+  /** The reporter version the reports carry. */
+  reporterVersion?: string;
   now: () => number;
   home: string;
 }
@@ -572,7 +575,7 @@ export class Simulator {
     return {
       v: 1,
       sentAt: this.now(),
-      reporter: { name: 'podium-reporter', version: '0.1.0-sim', engineVersion: null, hostSurface: 'simulator' },
+      reporter: { name: 'podium-reporter', version: this.opts.reporterVersion ?? '0.1.0-sim', engineVersion: null, hostSurface: 'simulator' },
       session: {
         id: s.id,
         name: s.name,
@@ -669,13 +672,14 @@ interface Args {
   duration: number;
   chaos: boolean;
   agents: number;
+  reporterVersion: string | undefined;
   token: string | null;
   print: boolean;
   ticks: number;
 }
 
 export function parseArgs(argv: string[]): Args | 'help' {
-  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, token: null, print: false, ticks: 0 };
+  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, reporterVersion: undefined, token: null, print: false, ticks: 0 };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i]!;
     const val = () => {
@@ -697,6 +701,7 @@ export function parseArgs(argv: string[]): Args | 'help' {
       case '--duration': a.duration = num(0, 7 * 24 * 3600); break;
       case '--chaos': a.chaos = true; break;
       case '--agents': a.agents = Math.round(num(0, 190)); break;
+      case '--reporter-version': a.reporterVersion = val(); break;
       case '--token': a.token = val(); break;
       case '--print': a.print = true; break;
       case '--ticks': a.ticks = Math.round(num(0, 1e7)); break;
@@ -739,7 +744,7 @@ async function main() {
   const a = args;
   if (a.print) {
     let t = 1_800_000_000_000;
-    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, now: () => t, home: '/Users/sim' });
+    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: () => t, home: '/Users/sim' });
     const ticks = a.ticks || 60;
     for (let i = 0; i < ticks; i++) {
       t += 1000;
@@ -752,7 +757,7 @@ async function main() {
     return;
   }
 
-  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, now: Date.now, home: os.homedir() });
+  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: Date.now, home: os.homedir() });
   console.log(`podium-sim: ${a.sessions} sessions, seed ${a.seed}, speed ${a.speed}${a.chaos ? ', chaos' : ''} -> ${a.url}`);
   let stopping = false;
   let failures = 0;

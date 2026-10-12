@@ -398,7 +398,7 @@ Read via the `options` argument of `register`. A config change reloads the modul
 
 ### 6.1 Endpoint
 
-`POST /api/fleet/report` with `Content-Type: application/json`, optional `X-Podium-Token`. Body is one `Report`. Response `200 { "ok": true, "serverTime": <epoch ms>, "ackedEvents": <n> }`, or `400 { "ok": false, "error": "…", "path": "…" }` for a body that fails validation (the mod drops that report and logs once to debug, it never retries a 400), or `413` above 512 KB.
+`POST /api/fleet/report` with `Content-Type: application/json`, optional `X-Podium-Token`. Body is one `Report`. Response `200 { "ok": true, "serverTime": <epoch ms>, "ackedEvents": <n>, "sessionId": "…", "liveSessions": <n>, "serverVersion": "…", "reporterSupport": { "min": "…", "max": "…" }, "reporterCompat": "ok" | "outdated" | "newer" | "unknown" }` (6.8 explains the last three), or `400 { "ok": false, "error": "…", "path": "…" }` for a body that fails validation (the mod drops that report and logs once to debug, it never retries a 400), or `413` above 512 KB.
 
 The mod sends a **full snapshot** every time (idempotent upsert) plus the **events not yet acknowledged**. The server never needs a previous report to understand a new one.
 
@@ -531,6 +531,25 @@ In priority order: a name set with `/podium name <text>` (kept in `$.store` by s
 
 ---
 
+### 6.8 Version compatibility
+
+The mod and the server are released separately, so their versions can drift in either direction. The server keeps one range, `REPORTER_SUPPORT` in `server/src/fleet/compat.ts`: the oldest and newest reporter (mod) versions it reads correctly. It changes when the report format or the mod's behavior needs it, not on every release.
+
+Only `major.minor` is compared, so a mod-only patch fix never warns. `checkReporter` returns:
+
+| Result | Meaning | What to do |
+|---|---|---|
+| `ok` | Inside the range. | Nothing. |
+| `outdated` | Below `min`. | Update the mod from `eengelking-marketplace`. |
+| `newer` | Above `max`. | Upgrade the server. |
+| `unknown` | The version is not `X.Y.Z` (the simulator's `0.1.0-sim`, for one). | Nothing. No warning is shown. |
+
+A mismatch is a warning, never an error. The server still accepts and shows every report it can read.
+
+- The reply to a report carries `serverVersion`, `reporterSupport` and `reporterCompat` for that report's version. A mod that reads them shows `· update mod` or `· upgrade server` on its status line, a line in `/podium`, and a toast once. A mod that predates this ignores them, and a mod talking to a server that predates this sees no `reporterCompat` and shows nothing.
+- `SessionView` carries `reporterVersion` (null for a hooks-only session, which has no mod) and `compat` (always `unknown` for hooks). `StateBody.server` carries `{ version, reporterSupport }`, and the UI shows the server version in the left rail footer.
+- The dashboard marks each affected card, counts them in the top bar, and says what to do on the session's page.
+
 ## 7. The server
 
 ### 7.1 Endpoints (all JSON unless noted)
@@ -538,14 +557,14 @@ In priority order: a name set with `/podium name <text>` (kept in `$.store` by s
 | Method and path | Purpose |
 |---|---|
 | `POST /api/fleet/report` | Ingest (6.1). |
-| `GET /api/fleet/state` | `{ serverTime, sessions: SessionView[], kpis, clearedToday, events: ActivityView[] }`: everything live plus the latest 150 events. First paint and resync. |
+| `GET /api/fleet/state` | `{ serverTime, config, sessions: SessionView[], kpis, clearedToday, events: ActivityView[], server: { version, reporterSupport } }`: everything live plus the latest 150 events. First paint and resync. |
 | `GET /api/fleet/stream` | SSE (7.3). |
 | `GET /api/fleet/sessions/:id` | One `SessionView`, live or historical. 404 if unknown. |
 | `GET /api/fleet/events?sessionId=&before=&limit=` | Page through stored events newest first (`limit` ≤ 200, default 50, `before` = event time). |
 | `GET /api/fleet/history?day=YYYY-MM-DD` | Ended or dropped sessions that day, summary rows only (name, project, model, duration, cost, blowouts, end reason). Phase 4. |
 | `POST /api/fleet/sessions/:id/drop` | Remove a heartbeat-lost session from the live view now: the same exit as the automatic drop (7.5). No token. 404 if the session is not live, 409 if it is not `stale`. |
 | `DELETE /api/fleet/sessions/:id` | Remove a session and its rows (for stuck test data). Requires the token if one is configured. |
-| `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen }`. |
+| `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen, serverVersion, reporterSupport, sseClients, maxClockSkewMs }`. |
 | `POST /api/fleet/hook` | Phase 5: classic settings-hook payloads. |
 
 ### 7.2 Database (SQLite)
@@ -614,6 +633,7 @@ On a valid report, in one transaction:
 ```ts
 interface SessionView {
   id: string; name: string; project: string; repoName: string | null; resumeCommand: string;
+  reporterVersion: string | null; compat: 'ok' | 'outdated' | 'newer' | 'unknown';  // the mod's version and where it sits against the server's range (6.8)
   git: { branch: string | null; detached: boolean; isWorktree: boolean; worktreePath: string | null; ahead: number; behind: number; dirty: number } | null;
   model: string | null; modelFamily: 'opus'|'sonnet'|'haiku'|'fable'|'other'; effort: string | null;
   status: 'running' | 'waiting' | 'stale' | 'done'; waitNote: string | null; endReason: string | null;

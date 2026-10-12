@@ -10,6 +10,14 @@ limitations is under "Known issues" in `docs/ARCHITECTURE.md`; this file is the 
 The server has a token and the mod is not sending it. Get it with `podiumctl token` and enter it with
 `/plugin configure podium-reporter@eengelking-marketplace`. Queued reports go out as soon as it is right.
 
+### The status line says "update mod" or "upgrade server"
+
+The server and the mod are released separately, and the server keeps a range of mod versions it reads
+correctly (SPEC 6.8). `update mod` means the mod in this session is older than that range. `upgrade server`
+means it is newer. Reports still arrive either way. Only `major.minor` is compared, so a patch release never
+triggers it, and a version the server cannot read (the simulator's `0.1.0-sim`) shows nothing. `/podium`
+prints both versions. A mod older than 0.3.0 cannot show this itself, but the dashboard still marks its card.
+
 ### The token option has no row in the `/config` menu
 
 It is marked `sensitive`, and Claude Code only draws menu rows for options that are not secret. Use
