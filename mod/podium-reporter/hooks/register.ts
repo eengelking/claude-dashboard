@@ -7,7 +7,7 @@
 // a top-level function taking `$`, and the runtime lives in module variables (a hot reload re-runs
 // register, which resets them, and session.start rebuilds the state from the engine).
 import type { EngineInterface, Register } from 'claude-code';
-import { lastSegment, readGit } from './git.ts';
+import { lastSegment, readChanges, readGit } from './git.ts';
 import { shortName } from './models.ts';
 import { buildReport, repoFromRemote } from './report.ts';
 import {
@@ -24,6 +24,8 @@ import {
   reconcile,
   resetForNewId,
   sessionEnd,
+  NO_FILES,
+  setFiles,
   setGit,
   setExplanation,
   setIdentity,
@@ -39,7 +41,7 @@ import {
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -235,13 +237,36 @@ async function readAgents($: Engine, r: Runtime, now: number): Promise<void> {
 async function pollGit($: Engine, r: Runtime): Promise<void> {
   try {
     const cwd = r.state.cwd;
-    const git = await readGit(async (argv) => {
+    const run = async (argv: string[]) => {
       const res = await $.process.run(argv, { cwd, timeoutMs: 5000 });
       return { exitCode: res.exitCode, stdout: res.stdout };
-    }, cwd);
+    };
+    const git = await readGit(run, cwd);
     r.state = setGit(r.state, git);
+    const id = r.state.id;
+    let base = r.state.gitBase ?? (await loadBase($, id));
+    // Tried even when readGit gave null: a repository with no commits yet fails that (no HEAD) but has files to list.
+    const changes = await readChanges(run, cwd, base);
+    if (!changes) {
+      if (!git) r.state = setFiles(r.state, NO_FILES, r.state.gitBase);
+      return;
+    }
+    if (r.state.id !== id) return;
+    if (changes.base !== base) await attempt(() => $.store.set(`base:${id}`, changes.base), undefined);
+    base = changes.base;
+    r.state = setFiles(r.state, changes.files, base);
   } catch (err) {
     record($, 'git', err);
+  }
+}
+
+/** The starting commit saved by an earlier run of this session (a hot reload keeps the process, a restart does not). */
+async function loadBase($: Engine, id: string): Promise<string | null> {
+  try {
+    const v = await $.store.get(`base:${id}`);
+    return typeof v === 'string' && v ? v : null;
+  } catch {
+    return null;
   }
 }
 

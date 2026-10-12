@@ -70,6 +70,17 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
       ],
     },
     loop: null,
+    files: {
+      files: [
+        { path: "frontend/src/fleet/components/PlanPanel.tsx", status: "modified", added: 17, removed: 22, from: null },
+        { path: "mod/podium-reporter/hooks/git.test.ts", status: "added", added: 38, removed: 0, from: null },
+        { path: "server/src/fleet/protocol.ts", status: "modified", added: 14, removed: 3, from: null },
+      ],
+      total: 3,
+      added: 69,
+      removed: 25,
+      since: "start",
+    },
     agents: [],
     series: { tokensPerSec: new Array(60).fill(0), peakContext: new Array(60).fill(0), running: new Array(60).fill(0), blowoutSecondsAgo: [] },
     ...over,

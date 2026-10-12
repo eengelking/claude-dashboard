@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fmtCountdown, fmtDur } from "../format";
 import type { LifecycleConfig, SessionView } from "../types";
 import { dropAtOf, type AgentSortKey } from "../logic";
@@ -5,7 +6,7 @@ import { AgentTree, type AgentSort } from "./AgentTree";
 import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
-import { PlanPanel } from "./PlanPanel";
+import { PlanPanel, type PlanTab } from "./PlanPanel";
 import { HOOKS_NOTE, versionNote, waitSummary } from "./SessionCard";
 
 export function FocusView(props: {
@@ -20,6 +21,8 @@ export function FocusView(props: {
   onRemove?: (id: string) => void;
 }) {
   const { s, now, config } = props;
+  // The Files tab needs room for paths, so the left column grows while it is selected.
+  const [tab, setTab] = useState<PlanTab>("plan");
   return (
     <>
       <FocusHeader s={s} now={now} />
@@ -55,8 +58,8 @@ export function FocusView(props: {
         </div>
       )}
       <FactsBar s={s} now={now} onAgent={props.onAgent} />
-      <div className="two">
-        <PlanPanel plan={s.plan} />
+      <div className={`two${tab === "files" ? " wide" : ""}`}>
+        <PlanPanel s={s} onTab={setTab} />
         <AgentTree
           s={s}
           now={now}

@@ -356,6 +356,19 @@ git status --porcelain=v1 -b                     → first line "## branch...ori
 
 If any call exits non-zero (not a repo), report `git: null`. Cache the result; send it with every report.
 
+**Changed files.** The same poll builds `session.files`, the files the session changed. The first read of a session records the commit HEAD points at (the empty tree when there are no commits yet), keeps it in the mod's store under the session id, and every later read diffs the working tree against it, so committed work stays listed. Each query runs as `git -C <toplevel> …`:
+
+```
+git rev-parse HEAD                               → the starting commit, on the first read
+git merge-base --is-ancestor <start> HEAD        → still an ancestor? if not, the commit was dropped (rebase, amend, branch switch)
+git merge-base HEAD @{upstream}                  → the fallback base; with no upstream, diff against HEAD and report since "worktree"
+git diff --name-status -z -M <base>              → status and rename pairs
+git diff --numstat -z -M <base>                  → added and removed lines per file (`-` for a binary file)
+git ls-files -z --others --exclude-standard --full-name   → untracked files, each counted with git diff --no-index --numstat -- /dev/null <path>
+```
+
+Only paths and counts are read, never file contents or diff text. The list is sorted by path and cut at 200 files; `total`, `added` and `removed` cover every file, except that an untracked file past the 200th is counted as a file but adds no lines (only the listed ones are line-counted, 20 at a time, on every poll). A repository with no commits yet is read too, against the empty tree. If any query fails the mod keeps the last list. Two sessions in the same checkout see the same changes, because the diff is of the working tree; worktrees avoid that.
+
 ### 5.8 Session identity, `/clear`, restarts
 
 - A session id changes on `/clear` and on resume. After `/clear` the engine fires `session.end` with `reason: "clear"` and **does not fire `session.start`** for the new id.
@@ -434,9 +447,18 @@ interface Report {
     blowouts: number;                   // main loop count, cumulative for this session id
     plan: Plan | null;
     loop: LoopReport | null;            // the main loop's own steps, tools and skills; null from a reporter older than 0.4.0
+    files: FilesReport | null;          // the files the session changed (5.7); null from a reporter older than 0.6.0
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
+}
+
+interface FilesReport {
+  files: { path: string; status: 'added' | 'modified' | 'deleted' | 'renamed';
+           added: number | null; removed: number | null;   // null for a binary file
+           from: string | null }[];                         // the old path of a rename
+  total: number; added: number; removed: number;            // over every changed file, not only the listed ones
+  since: 'start' | 'upstream' | 'worktree';                 // what the diff is against: the starting commit, the upstream merge base, or HEAD
 }
 
 interface Plan {
@@ -594,7 +616,8 @@ CREATE TABLE sessions (
   cost_usd REAL, tok_in INTEGER, tok_out INTEGER, tok_cr INTEGER, tok_cw INTEGER,
   rate_limits_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
   plan_json TEXT, reporter_version TEXT, engine_version TEXT,
-  loop_json TEXT                                                           -- Report.session.loop; NULL from a reporter older than 0.4.0
+  loop_json TEXT,                                                          -- Report.session.loop; NULL from a reporter older than 0.4.0
+  files_json TEXT                                                          -- Report.session.files; NULL from a reporter older than 0.6.0
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -657,6 +680,7 @@ interface SessionView {
               log: { t: number; agentId: string | null; kind: string; tokensBefore: number | null; tokensAfter: number | null }[] };
   plan: Plan | null;
   loop: LoopReport | null;              // the main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a settings-hooks session
+  files: FilesReport | null;            // the files the session changed; null from a reporter older than 0.6.0 and for a settings-hooks session
   agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
 }
@@ -697,7 +721,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 ### 7.7 Hardening
 
 - Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
-- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. Reject, never crash, on junk.
+- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. `session.files` keeps the first 200 files (paths clipped to 300 characters and stripped of control characters, counts non-negative integers, `total` never below the listed count) rather than rejecting a longer list. Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
 - CORS: none needed (same origin). Do not enable `*`.
@@ -720,7 +744,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 
 **Effort meter.** Wherever effort appears (cards, facts bar, agent tree, agent panel) it is five small bars with no text: one bar lit for `low` up to five for `max`, so the count carries the level and color is never the only signal. Lit bars are colored by level: low orange, medium green, high blue, xhigh purple, and max one rainbow color per bar. The level is the meter's tooltip and accessible name ("Effort: medium"). When effort was not reported, or is not one of the five levels, the bars are dimmed and the tooltip says "Effort not reported".
 
-**Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: plan checklist (done, active, blocked, pending, with owner label) and the agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel; the selected row keeps a highlighted background and does not flash. The orchestrator's own row is selectable too and opens an orchestrator panel (name, status, model, effort, context with blowout badge, tokens, cost, time, git line, and from `session.loop` the steps, tools used and skills loaded, laid out and worded as in the agent panel). The orchestrator's tool counts cover its own calls, not those of the agents it launched. When the reporter sent no `session.loop` (a mod older than 0.4.0), those rows are left out rather than shown empty, and one note under the facts says they need podium-reporter 0.4.0 or later, as the agent panel does for tool counts. A settings-hooks session has no mod, so it shows neither the rows nor the note.
+**Orchestrator page** (click a card or rail item). Header block (name at 28 px with status, goal line = plan title and current step, working directory and session id, git line) on the left and three charts on the right (tokens per second, peak context with a dashed 100% line and red blowout markers and a "N blowouts in 60s" caption, agents running), each with a crosshair and a value readout on hover. A facts bar: orchestrator model and effort, context with blowout badge, agents (running, done, and a red "N failed" button that opens the first failure), est. cost, tokens, running for, and the **Copy resume command** button as the last cell. A callout when any loop has blown out (red at level 2) listing each affected loop as a link. Two columns: the plan section and the agent tree. The plan section is a tab list, **Plan** and **Files** (arrow keys, Home and End move between them; Plan is selected first and the choice is not saved). Plan is the checklist (done, active, blocked, pending, with owner label). Files, from `session.files`, lists every file the session changed, committed or not: the file name in bold over its folder, a letter for the status (A, M, D, R) with the word for screen readers, and the signed counts (`+12 −3`, the word `binary` for a binary file), with a five-block bar beside them (green for the share of added lines, red for the rest) that carries no numbers. A summary line gives the file count and the totals, the list shows 20 files a page with a pager, and a footer says when the reporter cut the list (`Listing the first 200 of 340 files.`) or when the starting commit is gone and the diff is against the upstream or the working tree only. With no files the tab says `Files will appear here once a file has been updated.`; when the reporter is older than 0.6.0 or the session is hook-only, a note under it says to update the mod. The tab label carries the count (`Files 3`). While Files is selected the left column is 400 px wide instead of 300. The agent tree (indented guides, fork vs subagent icon, task, type, model chip, effort meter, context bar with blowout badge and red stripes at 2+, tokens, cost, time, status chip, inline failure class). Sortable column headers switch to a flat list; "Show as tree" returns. Selecting a row opens the agent panel; the selected row keeps a highlighted background and does not flash. The orchestrator's own row is selectable too and opens an orchestrator panel (name, status, model, effort, context with blowout badge, tokens, cost, time, git line, and from `session.loop` the steps, tools used and skills loaded, laid out and worded as in the agent panel). The orchestrator's tool counts cover its own calls, not those of the agents it launched. When the reporter sent no `session.loop` (a mod older than 0.4.0), those rows are left out rather than shown empty, and one note under the facts says they need podium-reporter 0.4.0 or later, as the agent panel does for tool counts. A settings-hooks session has no mod, so it shows neither the rows nor the note.
 
 **Right panel.** *Activity*: newest first, **12 rows**, "Show 12 more" and "Show fewer", count text "Showing N of M", footnote "Only the latest 150 events are kept in memory." Each row is a button that selects the session and agent it is about, scrolls the agent row into view and flashes the whole row once (the only place a row flashes); failure rows say "Show root cause", blowout rows "Show context history"; rows of sessions that have left the live set are greyed and say "Session ended" and do nothing. Filtered to the selected orchestrator when one is selected. *Agent detail*: status, **failure box** (class, failing call, output tail, evidence list, explanation if present, what happened next), **blowout box** (timeline of each overflow with time and token counts, explanation), kind, type, model and effort (marked "inherited" for a fork), context, tokens, cost, time, steps, **tools used** as chips (below), skills as chips, prompt excerpt, child agents as buttons, back button. *Tools used*: one chip per tool with its call count, most used first and ties by name, in the Skills chip style, under the label "Tools used (N calls)". The five most used show; with more, a "Show all N" button (`aria-expanded`) shows every tool and then reads "Show fewer". A green dot on a chip marks the tool used last (with a visually hidden "last used"); when that tool is not among the five shown, a line "Last used: name" says so. An agent with no calls shows "None seen". When the reporter sent no `toolCounts` (older than 0.2.0), the panel shows the "Last tool  name (N calls)" line instead and no chips. When that reporter is a mod below 0.2.0 (not a settings-hooks session, which has no mod to update), one note under the line says tool counts need podium-reporter 0.2.0 or later, gives the version the session reports and the update command, and points at `/reload-plugins`.
 

@@ -228,4 +228,63 @@ describe('protocol', () => {
       expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.loop.toolCounts.Bash' });
     });
   });
+  describe('session.files', () => {
+    const sess = (f: unknown) => (f as { session: Record<string, unknown> }).session;
+    const filesOf = (r: ReturnType<typeof validateReport>) =>
+      r.ok ? (r.report.session as unknown as { files: { files: { path: string }[]; total: number; added: number; removed: number; since: string } | null }).files : 'rejected';
+    const entry = (over: Record<string, unknown> = {}) => ({ path: 'src/a.ts', status: 'modified', added: 3, removed: 1, from: null, ...over });
+    const block = (over: Record<string, unknown> = {}) => ({ files: [entry()], total: 1, added: 3, removed: 1, since: 'start', ...over });
+
+    it('keeps the files block the fixture carries', () => {
+      expect(filesOf(validateReport(loadFixture()))).toMatchObject({ total: 4, added: 85, removed: 119, since: 'start' });
+    });
+
+    it('treats a missing block, from an older reporter, as null', () => {
+      const f = loadFixture();
+      delete sess(f).files;
+      expect(filesOf(validateReport(f))).toBeNull();
+    });
+
+    it('accepts binary files with null counts, and a rename with its old path', () => {
+      const f = loadFixture();
+      sess(f).files = block({ files: [entry({ path: 'a.png', added: null, removed: null }), entry({ path: 'b.ts', status: 'renamed', from: 'a.ts' })], total: 2 });
+      expect(filesOf(validateReport(f))).toMatchObject({ files: [{ path: 'a.png', added: null }, { path: 'b.ts', from: 'a.ts' }] });
+    });
+
+    it('clips paths and strips control characters', () => {
+      const f = loadFixture();
+      sess(f).files = block({ files: [entry({ path: 'x/' + 'y'.repeat(2000) }), entry({ path: 'a\u0007b\nc' })] });
+      const out = filesOf(validateReport(f)) as { files: { path: string }[] };
+      expect(out.files[0]!.path.length).toBe(LIMITS.filePath);
+      expect(out.files[1]!.path).toBe('a b c');
+    });
+
+    it('rounds a fractional count like every other count', () => {
+      const f = loadFixture();
+      sess(f).files = block({ files: [entry({ removed: 1.4 })] });
+      expect(filesOf(validateReport(f))).toMatchObject({ files: [{ removed: 1 }] });
+    });
+
+    it('keeps the first 200 files and never lets total fall below what is listed', () => {
+      const f = loadFixture();
+      const many = Array.from({ length: LIMITS.files + 40 }, (_, i) => entry({ path: `f${i}.ts` }));
+      sess(f).files = block({ files: many, total: 3 });
+      const out = filesOf(validateReport(f)) as { files: unknown[]; total: number };
+      expect(out.files).toHaveLength(LIMITS.files);
+      expect(out.total).toBe(LIMITS.files);
+    });
+
+    it.each([
+      ['a negative count', { files: [entry({ added: -1 })] }, '$.session.files.files[0].added'],
+      ['an unknown status', { files: [entry({ status: 'moved' })] }, '$.session.files.files[0].status'],
+      ['a missing path', { files: [entry({ path: undefined })] }, '$.session.files.files[0].path'],
+      ['a negative total', { total: -2 }, '$.session.files.total'],
+      ['an unknown since', { since: 'yesterday' }, '$.session.files.since'],
+      ['files that are not an array', { files: 'a.ts' }, '$.session.files.files'],
+    ])('rejects %s with a path', (_n, over, at) => {
+      const f = loadFixture();
+      sess(f).files = block(over as Record<string, unknown>);
+      expect(validateReport(f)).toMatchObject({ ok: false, path: at });
+    });
+  });
 });

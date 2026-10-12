@@ -431,7 +431,7 @@ body.podium-resizing .podium .cols { transition: none; }
   .podium .rail { border-bottom: 1px solid var(--border); }
   .podium .main { overflow: visible; }
   .podium .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .podium .two { grid-template-columns: minmax(0, 1fr); }
+  .podium .two, .podium .two.wide { grid-template-columns: minmax(0, 1fr); }
   .podium .hcs { width: 100%; }
   .podium .hc { flex: 1; width: auto; }
   .podium .top, .podium .banner, .podium .main { padding-inline: 16px; }
@@ -494,3 +494,42 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .ev li.w .lead { font-weight: 500; }
 .podium .ev li.ans .tt { color: var(--muted); }
 .podium .ev li.ans .tt b { font-weight: 500; }
+
+/* Plan and Files tabs, and the file list */
+.podium .two.wide { grid-template-columns: 400px minmax(0, 1fr); }
+.podium .tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); align-items: stretch; }
+.podium .tabs [role="tab"] { font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 9px 8px 8px; cursor: pointer; display: inline-flex; gap: 4px; align-items: baseline; }
+.podium .tabs [role="tab"]:hover { color: var(--ink2); }
+.podium .tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.podium .tabs .ct { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--muted); }
+.podium .tabs .meta { margin-left: auto; align-self: center; font-size: 11.5px; color: var(--muted); padding-right: 4px; }
+.podium .plan-title { padding: 9px 12px 0; font-weight: 600; font-size: 12.5px; overflow-wrap: anywhere; }
+.podium .sum { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--grid); }
+.podium .cnt { display: inline-flex; gap: 6px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.podium .cnt .add { color: var(--good-text); }
+.podium .cnt .del { color: var(--crit-text); }
+.podium .cnt .fnone { color: var(--muted); }
+.podium .files { list-style: none; margin: 0; padding: 4px 0; }
+.podium .files .f { display: flex; gap: 8px; padding: 7px 12px; align-items: flex-start; min-width: 0; }
+.podium .files .f:hover { background: var(--hover); }
+.podium .files .fst { flex: none; width: 16px; height: 16px; margin-top: 1px; border-radius: 4px; display: grid; place-items: center; font: 600 10px/1 var(--font-mono); border: 1px solid var(--axis); color: var(--muted); }
+.podium .files .fst.A { color: var(--good-text); border-color: var(--good); }
+.podium .files .fst.D { color: var(--crit-text); border-color: var(--crit); }
+.podium .files .fst.R { color: var(--ink2); border-style: dashed; }
+.podium .files .fbody { flex: 1; min-width: 0; }
+.podium .files .ftop { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.podium .files .path { min-width: 0; font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium .files .path.l1 { flex: 1; font-size: 12.5px; }
+.podium .files .path.l2 { display: block; font-size: 11px; margin-top: 1px; color: var(--muted); direction: rtl; text-align: left; }
+.podium .files .path .nm { color: var(--ink); font-weight: 600; }
+.podium .files .path .old { color: var(--muted); font-weight: 400; }
+.podium .files .f.deleted .nm { text-decoration: line-through; text-decoration-color: var(--crit-text); }
+.podium .files .blocks { display: inline-flex; gap: 2px; flex: none; }
+.podium .files .blocks b { width: 7px; height: 7px; border-radius: 1.5px; background: var(--grid); }
+.podium .files .blocks b.g { background: var(--good); }
+.podium .files .blocks b.r { background: var(--crit); }
+.podium .pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid var(--grid); font-size: 11.5px; color: var(--muted); }
+.podium .pager .pg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.podium .pager button { font: 500 11.5px var(--font-mono); color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; }
+.podium .pager button[aria-current="page"] { color: var(--ink); border-color: var(--ink2); background: var(--sel); }
+.podium .pager button:disabled { opacity: .4; cursor: default; }

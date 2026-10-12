@@ -6,7 +6,7 @@
 // of reports (timestamps aside). The Simulator class is pure apart from its injected clock; main()
 // does the HTTP.
 import os from 'node:os';
-import type { ActivityEvent, AgentReport, Effort, Failure, LoopReport, Plan, Report } from '../server/src/fleet/protocol.ts';
+import type { ActivityEvent, AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, Plan, Report } from '../server/src/fleet/protocol.ts';
 import { costOf, shortName, windowOf, type Family } from '../mod/podium-reporter/hooks/models.ts';
 
 const HELP = `podium-sim: POST simulated Claude Code session reports to a Podium server.
@@ -594,6 +594,31 @@ export class Simulator {
     };
   }
 
+  /** A made-up changed-files list sized by the template's git counts: the uncommitted files twice over, plus some committed ones. Null for a simulated reporter older than 0.6.0. */
+  private filesOf(s: SimSession): FilesReport | null {
+    if (this.opts.reporterVersion && /^0\.[0-5]\./.test(this.opts.reporterVersion)) return null;
+    const total = s.tpl.dirty * 2 + s.tpl.ahead * 3;
+    const statuses: ChangedFile['status'][] = ['modified', 'modified', 'added', 'modified', 'deleted', 'renamed'];
+    const files: ChangedFile[] = Array.from({ length: total }, (_, i) => {
+      const status = statuses[i % statuses.length]!;
+      const bin = i % 11 === 10;
+      return {
+        path: `src/${s.tpl.project}/area${i % 4}/file${String(i).padStart(2, '0')}.ts`,
+        status,
+        added: bin ? null : status === 'deleted' ? 0 : 3 + ((i * 7) % 40),
+        removed: bin ? null : status === 'added' ? 0 : 1 + ((i * 5) % 25),
+        from: status === 'renamed' ? `src/${s.tpl.project}/area${i % 4}/old${String(i).padStart(2, '0')}.ts` : null,
+      };
+    });
+    return {
+      files,
+      total,
+      added: files.reduce((n, f) => n + (f.added ?? 0), 0),
+      removed: files.reduce((n, f) => n + (f.removed ?? 0), 0),
+      since: 'start',
+    };
+  }
+
   reportOf(s: SimSession): Report {
     const totalCost = s.ownCost + s.agents.reduce((n, a) => n + (a.report.costUsdEst ?? 0), 0);
     const window = 1_000_000;
@@ -632,6 +657,7 @@ export class Simulator {
         blowouts: s.blowouts,
         plan: this.planOf(s),
         loop: { ...s.loop, skills: [...s.loop.skills], toolCounts: { ...s.loop.toolCounts }, steps: { ...s.loop.steps } },
+        files: this.filesOf(s),
       },
       agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
       events: s.events.slice(0, 100),

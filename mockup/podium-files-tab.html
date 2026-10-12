@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium Files tab options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mockup for issue #26. Uses Podium's own tokens and the .sec / .sh / .step / .empty / .foot-note patterns from podium.html, so nothing here is a new visual language. The tabs are live: click them, or focus one and use the arrow keys. -->
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --crit: #d03b3b; --crit-text: #ee6a6a;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --good: #1f9d55; --good-text: #006300; --crit: #c53030; --crit-text: #b52a2a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --good: #1f9d55; --good-text: #006300; --crit: #c53030; --crit-text: #b52a2a; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.45 var(--font-ui); padding: 20px 16px 60px; }
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 17px; margin: 0 0 4px; }
+h2 { font-size: 14px; margin: 38px 0 4px; }
+h3 { font-size: 12.5px; margin: 0 0 6px; color: var(--ink2); font-weight: 600; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; max-width: 70ch; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 12px 0 0; font-size: 12.5px; color: var(--ink2); }
+.bar label { display: inline-flex; gap: 6px; align-items: center; }
+button.theme { font: inherit; font-size: 12px; color: var(--ink2); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--good-text); outline-offset: 2px; }
+
+/* the screen it sits in: a trimmed focus view */
+.two { display: grid; grid-template-columns: var(--left, 300px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.stack { display: grid; gap: 14px; align-content: start; }
+.sec { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow: hidden; }
+.sec > .sh { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); gap: 8px; }
+.sec h2 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.sec .src { font-size: 11.5px; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 4px 0; }
+.step { display: flex; gap: 9px; padding: 6px 12px; align-items: flex-start; }
+.step .ic { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--axis); flex: none; margin-top: 1px; }
+.step.done .ic { background: var(--good); border-color: var(--good); }
+.step.done .tx { color: var(--muted); }
+.step.active .ic { border-color: var(--good); }
+.step.active .tx { font-weight: 600; }
+.ghost { padding: 12px; display: grid; gap: 9px; }
+.ghost i { display: block; height: 9px; border-radius: 3px; background: var(--grid); }
+.empty { padding: 18px 14px; color: var(--muted); font-size: 12.5px; }
+.foot-note { padding: 10px 14px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--grid); }
+
+/* tabs: replace the section heading with a tab list */
+.tabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); align-items: stretch; }
+.tabs [role="tab"] { font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 9px 8px 8px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.tabs [role="tab"]:hover { color: var(--ink2); }
+.tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tabs .ct { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--muted); }
+.tabs .meta { margin-left: auto; align-self: center; font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); padding-right: 4px; }
+[role="tabpanel"][hidden] { display: none; }
+
+/* file rows */
+.sum { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--grid); }
+.add { color: var(--good-text); } .del { color: var(--crit-text); }
+.cnt { display: inline-flex; gap: 6px; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cnt .none { color: var(--muted); }
+.files { list-style: none; margin: 0; padding: 4px 0; }
+.f { display: flex; gap: 8px; padding: 5px 12px; align-items: center; min-width: 0; }
+.f:hover { background: var(--hover); }
+.st { flex: none; width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; font: 600 10px/1 var(--font-mono); border: 1px solid var(--axis); color: var(--muted); }
+.st.A { color: var(--good-text); border-color: var(--good); }
+.st.D { color: var(--crit-text); border-color: var(--crit); }
+.st.R { color: var(--ink2); border-style: dashed; }
+.path { min-width: 0; flex: 1; font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.path .dir { color: var(--muted); }
+.path .nm { color: var(--ink); font-weight: 600; }
+.path .old { color: var(--muted); }
+.f.deleted .nm { text-decoration: line-through; text-decoration-color: var(--crit-text); }
+.blocks { display: inline-flex; gap: 2px; flex: none; }
+.blocks b { width: 7px; height: 7px; border-radius: 1.5px; background: var(--grid); }
+.blocks b.g { background: var(--good); } .blocks b.r { background: var(--crit); }
+.hide-bar .blocks { display: none; }
+
+/* row style 2: two lines. Narrow columns keep the whole path readable. */
+.s2 .f { align-items: flex-start; padding: 7px 12px; }
+.s2 .st { margin-top: 1px; }
+.s2 .body { flex: 1; min-width: 0; }
+.s2 .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.s2 .path.l1 { font-size: 12.5px; flex: 1; }
+.s2 .path.l2 { display: block; font-size: 11px; margin-top: 1px; direction: rtl; text-align: left; }
+.s2 .path.l2 bdi { direction: ltr; unicode-bidi: plaintext; }
+
+/* row style 1: one line. the folder shrinks first, from its left side */
+.s1 .path { display: flex; }
+.s1 .path .dir { overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; flex: 0 1 auto; min-width: 2ch; }
+.s1 .path .dir bdi { direction: ltr; unicode-bidi: plaintext; }
+.s1 .path .nm { flex: none; }
+
+/* row style 3: grouped by folder */
+.grp { padding: 7px 12px 2px; font: 500 11px var(--font-mono); color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.s3 .f { padding-left: 24px; }
+.s3 .path { font-size: 12px; }
+
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--grid); font-size: 11.5px; color: var(--muted); }
+.pager .pg { display: inline-flex; gap: 4px; }
+.pager button { font: 500 11.5px var(--font-mono); color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; cursor: pointer; }
+.pager button[aria-current="page"] { color: var(--ink); border-color: var(--ink2); background: var(--sel); }
+.pager button:disabled { opacity: .4; cursor: default; }
+.opts { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cap { margin: 8px 0 0; font-size: 12px; color: var(--ink2); max-width: 44ch; }
+.cap b { color: var(--ink); }
+.grid2 { display: grid; gap: 18px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pick { font-size: 12.5px; color: var(--ink2); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; max-width: 78ch; margin-top: 22px; }
+.pick ol { margin: 6px 0 0; padding-left: 18px; } .pick li { margin: 3px 0; }
+@media (max-width: 900px) { .opts, .grid2 { grid-template-columns: 1fr; } .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Files tab for the session page (#26)</h1>
+<p class="note">Three choices to make: where the list lives, what a row looks like, and what the edge states say. The tabs are live. Everything below uses a session that touched five files.</p>
+<div class="bar">
+  <label><input type="checkbox" id="optBar" checked> Show the small change bar on each row</label>
+  <label>Rows in sections 1 and 3:
+    <select id="optRow"><option value="s2" selected>B. Two lines</option><option value="s1">A. One line</option><option value="s3">C. Grouped by folder</option></select>
+  </label>
+  <button class="theme" id="theme" type="button">Theme: auto</button>
+</div>
+
+<h2>1. Where the list lives</h2>
+<p class="note">The page keeps its two columns: the plan on the left (300px), the agent tree on the right.</p>
+<div class="opts" style="grid-template-columns:1fr; gap:26px">
+  <div>
+    <h3>Option 1. Tabs in the Plan section, as filed. The column stays 300px.</h3>
+    <div class="two" id="p1"></div>
+    <p class="cap">Matches the issue. Row style B (two lines) or C fits the narrow column. One line (A) clips the folder hard.</p>
+  </div>
+  <div>
+    <h3>Option 2. Same tabs, but the left column grows to 400px while Files is selected.</h3>
+    <div class="two" id="p2" style="--left:400px"></div>
+    <p class="cap">Longer paths stay readable. The layout shifts when you switch tabs, and the agent tree gets 100px narrower. The mockup shows the Files width.</p>
+  </div>
+  <div>
+    <h3>Option 3. No tabs. Files is its own section under the Plan, both always visible.</h3>
+    <div class="two" id="p3"></div>
+    <p class="cap">Nothing to click, and the list is never hidden. The left column gets taller, and a long plan pushes the files down. This drops the "two tabs" wording from the issue.</p>
+  </div>
+</div>
+
+<h2>2. What a row looks like</h2>
+<p class="note">Same five files, same 300px column. Every row shows the status as a letter plus its tooltip, and both counts with signs, so colour is never the only signal.</p>
+<div class="opts">
+  <div><h3>A. One line</h3><div class="sec" id="rowA"></div><p class="cap">Densest. The folder shrinks from its left side, so the file name always survives.</p></div>
+  <div><h3>B. Two lines</h3><div class="sec" id="rowB"></div><p class="cap">File name and counts on top, folder underneath. Longest paths stay legible. About 40% taller.</p></div>
+  <div><h3>C. Grouped by folder</h3><div class="sec" id="rowC"></div><p class="cap">Folder headers with a subtotal. Reads like a tree, costs a header line per folder.</p></div>
+</div>
+
+<h2>3. The edge states</h2>
+<p class="note">Shown with the selected row style. The wording is the part to approve.</p>
+<div class="grid2" id="states"></div>
+
+<div class="pick">
+  <b>To choose</b>
+  <ol>
+    <li>Placement: 1, 2 or 3.</li>
+    <li>Row style: A, B or C, and whether the change bar stays.</li>
+    <li>Beyond the file cap: totals for every file with "listing the first 200", or totals for the listed files only.</li>
+    <li>Older reporter: the plain empty message, or the empty message plus the update hint.</li>
+  </ol>
+</div>
+</div>
+
+<script>
+(function () {
+  var FILES = [
+    { p: 'mod/podium-reporter/hooks/git.ts', s: 'M', a: 46, d: 9 },
+    { p: 'mod/podium-reporter/hooks/git.test.ts', s: 'A', a: 38, d: 0 },
+    { p: 'server/src/fleet/protocol.ts', s: 'M', a: 14, d: 3 },
+    { p: 'frontend/src/fleet/components/PlanPanel.tsx', s: 'M', a: 17, d: 22 },
+    { p: 'docs/SPEC.md', s: 'M', a: 5, d: 0 }
+  ];
+  var LABEL = { A: 'Added', M: 'Modified', D: 'Deleted', R: 'Renamed' };
+  var EMPTY = 'Files will appear here once a file has been updated.';
+  var MINUS = '−';
+  var root = document.documentElement;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function split(p) { var i = p.lastIndexOf('/'); return i < 0 ? ['', p] : [p.slice(0, i + 1), p.slice(i + 1)]; }
+  function cnt(f) {
+    if (f.bin) return '<span class="cnt"><span class="none" title="Binary file, no line counts">binary</span></span>';
+    return '<span class="cnt"><span class="add">+' + f.a + '</span><span class="del">' + MINUS + f.d + '</span></span>';
+  }
+  function blocks(f) {
+    if (f.bin) return '';
+    var t = f.a + f.d, g = t ? Math.round(5 * f.a / t) : 0, h = '<span class="blocks" aria-hidden="true">';
+    if (t && f.a && !g) g = 1; if (t && f.d && g === 5) g = 4;
+    for (var i = 0; i < 5; i++) h += '<b class="' + (!t ? '' : i < g ? 'g' : 'r') + '"></b>';
+    return h + '</span>';
+  }
+  function badge(f) { return '<span class="st ' + f.s + '" title="' + LABEL[f.s] + '" aria-label="' + LABEL[f.s] + '">' + f.s + '</span>'; }
+  function row(f, style) {
+    var sp = split(f.p), cls = 'f' + (f.s === 'D' ? ' deleted' : '');
+    var name = '<span class="nm">' + esc(sp[1]) + '</span>';
+    if (f.s === 'R' && f.from) name += ' <span class="old">← ' + esc(f.from) + '</span>';
+    if (style === 's2') {
+      return '<li class="' + cls + '">' + badge(f) + '<div class="body"><div class="top"><span class="path l1" title="' + esc(f.p) + '">' + name + '</span>' + blocks(f) + cnt(f) + '</div>' +
+        (sp[0] ? '<span class="path l2" title="' + esc(f.p) + '"><span class="dir"><bdi>' + esc(sp[0]) + '</bdi></span></span>' : '') + '</div></li>';
+    }
+    return '<li class="' + cls + '">' + badge(f) + '<span class="path" title="' + esc(f.p) + '">' + (style === 's1' ? '<span class="dir"><bdi>' + esc(sp[0]) + '</bdi></span>' : '') + name + '</span>' + blocks(f) + cnt(f) + '</li>';
+  }
+  function totals(fs) { return fs.reduce(function (t, f) { return { a: t.a + (f.a || 0), d: t.d + (f.d || 0) }; }, { a: 0, d: 0 }); }
+  function summary(fs, text) {
+    var t = totals(fs), n = fs.length;
+    return '<div class="sum"><span>' + (text || n + (n === 1 ? ' file' : ' files')) + '</span><span class="cnt"><span class="add">+' + t.a + '</span><span class="del">' + MINUS + t.d + '</span></span></div>';
+  }
+  function list(fs, style) {
+    if (style === 's3') {
+      var by = {}, order = [];
+      fs.forEach(function (f) { var d = split(f.p)[0] || './'; if (!by[d]) { by[d] = []; order.push(d); } by[d].push(f); });
+      return '<ul class="files s3" style="padding-top:0">' + order.map(function (d) {
+        var t = totals(by[d]);
+        return '<li class="grp" aria-hidden="true"><span>' + esc(d) + '</span><span class="cnt"><span class="add">+' + t.a + '</span><span class="del">' + MINUS + t.d + '</span></span></li>' +
+          by[d].map(function (f) { var c = split(f.p); return row({ p: c[1], s: f.s, a: f.a, d: f.d, bin: f.bin, from: f.from }, 's3'); }).join('');
+      }).join('') + '</ul>';
+    }
+    return '<ul class="files ' + style + '">' + fs.map(function (f) { return row(f, style); }).join('') + '</ul>';
+  }
+  function filesBody(fs, style, opts) {
+    opts = opts || {};
+    if (!fs.length) return '<div class="empty">' + (opts.empty || EMPTY) + '</div>' + (opts.hint ? '<div class="foot-note">' + opts.hint + '</div>' : '');
+    return summary(fs, opts.sumText) + list(fs, style) + (opts.foot ? '<div class="foot-note">' + opts.foot + '</div>' : '');
+  }
+  var PLAN = '<ol class="steps">' +
+    '<li class="step done"><span class="ic"></span><div class="tx">Read the git reporter</div></li>' +
+    '<li class="step done"><span class="ic"></span><div class="tx">Extend the report format</div></li>' +
+    '<li class="step active"><span class="ic"></span><div class="tx">Write the Files tab</div></li>' +
+    '<li class="step"><span class="ic"></span><div class="tx">Update the docs</div></li></ol>';
+  var AGENTS = '<section class="sec"><div class="sh"><h2>Agents</h2><span class="src">3 running</span></div><div class="ghost"><i style="width:70%"></i><i style="width:55%"></i><i style="width:62%"></i><i style="width:40%"></i></div></section>';
+
+  var uid = 0;
+  function tabsSection(fs, style, opts) {
+    opts = opts || {}; var id = 't' + (++uid), n = fs.length;
+    return '<section class="sec" data-tabs aria-label="Plan and files">' +
+      '<div class="tabs" role="tablist" aria-label="Plan and files">' +
+      '<button role="tab" id="' + id + 'a" aria-controls="' + id + 'ap" aria-selected="' + (opts.start === 'files' ? 'false' : 'true') + '" tabindex="' + (opts.start === 'files' ? '-1' : '0') + '">Plan</button>' +
+      '<button role="tab" id="' + id + 'b" aria-controls="' + id + 'bp" aria-selected="' + (opts.start === 'files' ? 'true' : 'false') + '" tabindex="' + (opts.start === 'files' ? '0' : '-1') + '">Files' + (n ? ' <span class="ct">' + n + '</span>' : '') + '</button>' +
+      '<span class="meta">2/4</span></div>' +
+      '<div role="tabpanel" id="' + id + 'ap" aria-labelledby="' + id + 'a"' + (opts.start === 'files' ? ' hidden' : '') + '>' + PLAN + '</div>' +
+      '<div role="tabpanel" id="' + id + 'bp" aria-labelledby="' + id + 'b"' + (opts.start === 'files' ? '' : ' hidden') + '>' + filesBody(fs, style, opts) + '</div></section>';
+  }
+  function plainSection(title, right, body) { return '<section class="sec"><div class="sh"><h2>' + title + '</h2><span class="src mono">' + right + '</span></div>' + body + '</section>'; }
+
+  function bindTabs(scope) {
+    Array.prototype.forEach.call(scope.querySelectorAll('[data-tabs]'), function (sec) {
+      var tabs = Array.prototype.slice.call(sec.querySelectorAll('[role="tab"]'));
+      function select(t) {
+        tabs.forEach(function (x) {
+          var on = x === t; x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1;
+          document.getElementById(x.getAttribute('aria-controls')).hidden = !on;
+        });
+      }
+      tabs.forEach(function (t, i) {
+        t.addEventListener('click', function () { select(t); });
+        t.addEventListener('keydown', function (e) {
+          var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+          if (j < 0) return; e.preventDefault(); j = (j + tabs.length) % tabs.length; tabs[j].focus(); select(tabs[j]);
+        });
+      });
+    });
+  }
+
+  function render() {
+    var style = document.getElementById('optRow').value, bar = document.getElementById('optBar').checked;
+    document.body.classList.toggle('hide-bar', !bar);
+    uid = 0;
+    document.getElementById('p1').innerHTML = tabsSection(FILES, style, { start: 'files' }) + AGENTS;
+    document.getElementById('p2').innerHTML = tabsSection(FILES, style, { start: 'files' }) + AGENTS;
+    document.getElementById('p3').innerHTML = '<div class="stack">' + plainSection('Plan', '2/4', PLAN) +
+      plainSection('Files', FILES.length + ' changed', filesBody(FILES, style)) + '</div>' + AGENTS;
+    document.getElementById('rowA').innerHTML = summary(FILES) + list(FILES, 's1');
+    document.getElementById('rowB').innerHTML = summary(FILES) + list(FILES, 's2');
+    document.getElementById('rowC').innerHTML = summary(FILES) + list(FILES, 's3');
+
+    var many = []; for (var i = 0; i < 200; i++) many.push(0);
+    var odd = [
+      { p: 'assets/logo.png', s: 'M', bin: true },
+      { p: 'src/old-name.ts', s: 'D', a: 0, d: 64 },
+      { p: 'src/new-name.ts', s: 'R', a: 3, d: 1, from: 'src/legacy-name.ts' }
+    ];
+    var st = document.getElementById('states');
+    function box(h, html, cap) { return '<div><h3>' + h + '</h3><div class="sec">' + html + '</div>' + (cap ? '<p class="cap">' + cap + '</p>' : '') + '</div>'; }
+    st.innerHTML =
+      box('Nothing changed yet', '<div class="tabs" role="presentation"><span style="padding:9px 8px 8px;font-size:12px;font-weight:600;color:var(--muted)">Plan</span><span style="padding:9px 8px 8px;font-size:12px;font-weight:600;color:var(--ink);border-bottom:2px solid var(--ink);margin-bottom:-1px">Files</span></div>' + filesBody([], style),
+        'The tab label has no number. After a commit the list stays, so this only shows before the first change.') +
+      box('Older reporter, no file data', '<div class="tabs" role="presentation"><span style="padding:9px 8px 8px;font-size:12px;font-weight:600;color:var(--muted)">Plan</span><span style="padding:9px 8px 8px;font-size:12px;font-weight:600;color:var(--ink);border-bottom:2px solid var(--ink);margin-bottom:-1px">Files</span></div>' + filesBody([], style, { hint: 'This session’s reporter is 0.5.0 and does not send files. Update podium-reporter to 0.6.0 to see them.' }),
+        'Choice 4. Without the hint it is the plain message above, and an old reporter looks the same as an idle session. The Last tool hint (#76) follows this pattern.') +
+      box('Binary, deleted and renamed', summary(odd) + list(odd, style === 's3' ? 's2' : style),
+        'Binary files show the word binary instead of counts. Deleted names are struck through and renamed ones show where they came from. The letter carries the status too.') +
+      box('More than 20 files: pages of 20', summary(FILES, '47 files').replace('<span class="cnt">', '<span class="cnt" title="Totals cover all 47 files">') + list(FILES, style === 's3' ? 's2' : style) + '<nav class="pager" aria-label="Files pages"><span>1\u201320 of 47</span><span class="pg"><button type="button" disabled aria-label="Previous page">\u2039</button><button type="button" aria-current="page">1</button><button type="button">2</button><button type="button">3</button><button type="button" aria-label="Next page">\u203a</button></span></nav>',
+        'Chosen: 20 per page. Totals cover every file. The reporter sends at most 200; past that the footer adds "Listing the first 200 of 340 files." Shown here with five rows to keep it short.') +
+      box('The starting commit is gone', summary(FILES) + list(FILES, style === 's3' ? 's2' : style) + '<div class="foot-note">The commit this session started from is gone (rebase or amend). Showing changes in the working tree only.</div>',
+        'After a rebase with no upstream to fall back on. A repo with no commits says the same, with "no commits yet".');
+    bindTabs(document);
+  }
+
+  document.getElementById('optRow').addEventListener('change', render);
+  document.getElementById('optBar').addEventListener('change', render);
+  var modes = ['auto', 'light', 'dark'], mi = 0;
+  document.getElementById('theme').addEventListener('click', function () {
+    mi = (mi + 1) % 3;
+    if (modes[mi] === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', modes[mi]);
+    this.textContent = 'Theme: ' + modes[mi];
+  });
+  render();
+})();
+</script>
+</body>
+</html>

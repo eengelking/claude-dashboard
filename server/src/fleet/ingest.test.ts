@@ -49,6 +49,16 @@ describe('ingestReport', () => {
     expect(f.getSession(old.session.id)!.loop_json).toBeNull();
   });
 
+  it('stores the changed files, and null for a reporter that sends none', () => {
+    const r = fixtureReport();
+    ingestReport(f, r, T0);
+    expect(JSON.parse(f.getSession(r.session.id)!.files_json!)).toMatchObject({ total: 4, added: 85, removed: 119, since: 'start' });
+    const old = fixtureReport();
+    old.session.files = null;
+    ingestReport(f, old, T0 + 1000);
+    expect(f.getSession(old.session.id)!.files_json).toBeNull();
+  });
+
   it('is idempotent: a repeat changes only last_seen_at', () => {
     const r = fixtureReport();
     ingestReport(f, r, T0);

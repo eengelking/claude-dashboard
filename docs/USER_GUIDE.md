@@ -144,7 +144,12 @@ minute (tokens per second, the largest context fill in any loop with blowout mar
 and a bar of facts: model and effort, context, agents (with a red "N failed" button that opens the first
 failure), estimated cost, tokens and running time.
 
-Below that is the plan, as a checklist with the agent that owns each step, and the agent tree: every
+Below that, on the left, is the plan, as a checklist with the agent that owns each step, with a **Files** tab
+beside it. Files lists every file the session changed since it started, committed or not, each with how many
+lines were added and removed (a binary file shows the word "binary"), 20 to a page. The column gets wider
+while Files is open. The list comes from `git diff` against the commit the session began on, so two sessions
+in the same checkout see the same changes; use a worktree to keep them apart. It needs podium-reporter 0.6.0
+or later, and says so when the reporter is older. On the right is the agent tree: every
 subagent and fork with its task, type, model, effort, context bar, tokens, cost, time and status. Click a
 column header to switch to a sorted flat list, and "Show as tree" to go back. **Copy resume command** copies
 the command that resumes the session.

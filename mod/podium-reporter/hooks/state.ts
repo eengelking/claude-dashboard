@@ -13,11 +13,13 @@ import {
 } from './failures.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
-import type { ActivityEvent, AgentStatus, Effort, Failure, GitInfo, RateLimit } from './protocol.ts';
+import type { ActivityEvent, AgentStatus, Effort, Failure, FilesReport, GitInfo, RateLimit } from './protocol.ts';
 
 export const BLOWOUT_DEDUP_MS = 2000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const EVENT_QUEUE_MAX = 500;
+/** Nothing changed yet (also what a session that is not in a repository reports). */
+export const NO_FILES: FilesReport = { files: [], total: 0, added: 0, removed: 0, since: 'start' };
 export const PLAN_TOOL = 'mcp__podium-reporter__plan';
 
 export interface Tokens {
@@ -93,6 +95,9 @@ export interface SessionState {
   projectRoot: string | null;
   repoName: string | null;
   git: GitInfo | null;
+  /** The commit HEAD was at when the session began; the files list is the diff against it. */
+  gitBase: string | null;
+  files: FilesReport;
   status: 'running' | 'waiting' | 'done';
   /** The main loop is between turns (waiting for the person). */
   mainIdle: boolean;
@@ -147,6 +152,8 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
     projectRoot: null,
     repoName: null,
     git: null,
+    gitBase: null,
+    files: NO_FILES,
     status: 'waiting',
     mainIdle: true,
     waitReason: 'input',
@@ -278,6 +285,13 @@ export function setIdentity(
 export function setGit(s: SessionState, git: GitInfo | null): SessionState {
   if (JSON.stringify(git) === JSON.stringify(s.git)) return s;
   return { ...s, git, dirty: true };
+}
+
+/** The changed-files list; a report is due only when it differs from the last one. */
+export function setFiles(s: SessionState, files: FilesReport, base: string | null): SessionState {
+  const same = JSON.stringify(files) === JSON.stringify(s.files);
+  if (same && base === s.gitBase) return s;
+  return { ...s, files, gitBase: base, dirty: s.dirty || !same };
 }
 
 // ---- turns --------------------------------------------------------------------------------------

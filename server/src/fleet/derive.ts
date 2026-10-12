@@ -8,6 +8,7 @@ import type {
   AgentView,
   EventKind,
   Failure,
+  FilesReport,
   GitInfo,
   Kpis,
   LoopReport,
@@ -225,6 +226,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     },
     plan: parse<Plan | null>(row.plan_json, null),
     loop: parse<LoopReport | null>(row.loop_json, null),
+    files: parse<FilesReport | null>(row.files_json, null),
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

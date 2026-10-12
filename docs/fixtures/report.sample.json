@@ -36,6 +36,15 @@
       "skills": ["frontend-design", "code-review"], "lastTool": "Agent", "toolCalls": 19,
       "toolCounts": {"Agent": 4, "Read": 8, "Edit": 5, "TaskUpdate": 2},
       "steps": { "done": 23, "total": null }
+    },
+    "files": {
+      "files": [
+        { "path": "src/invoice/export.ts", "status": "modified", "added": 24, "removed": 6, "from": null },
+        { "path": "src/invoice/export.test.ts", "status": "added", "added": 58, "removed": 0, "from": null },
+        { "path": "src/invoice/legacy.ts", "status": "deleted", "added": 0, "removed": 112, "from": null },
+        { "path": "src/invoice/totals.ts", "status": "renamed", "added": 3, "removed": 1, "from": "src/invoice/sum.ts" }
+      ],
+      "total": 4, "added": 85, "removed": 119, "since": "start"
     }
   },
   "agents": [

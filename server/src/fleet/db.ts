@@ -63,6 +63,11 @@ CREATE TABLE samples (
     // The main loop's steps, tools and skills as JSON; NULL for rows and reporters from before it existed.
     sql: 'ALTER TABLE sessions ADD COLUMN loop_json TEXT;',
   },
+  {
+    version: 4,
+    // The files the session changed, as JSON; NULL for rows and reporters from before it existed.
+    sql: 'ALTER TABLE sessions ADD COLUMN files_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -97,6 +102,7 @@ export interface SessionRow {
   reporter_version: string | null;
   engine_version: string | null;
   loop_json: string | null;
+  files_json: string | null;
 }
 
 export interface AgentRow {

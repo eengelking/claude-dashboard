@@ -54,6 +54,7 @@ function storedSession(row: SessionRow | undefined, id: string, cwd: string, now
     blowouts: 0,
     plan: null,
     loop: null,
+    files: parse(row?.files_json ?? null, null),
   };
 }
 

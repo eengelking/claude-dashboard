@@ -9,6 +9,7 @@ import {
   drainEvents,
   measure,
   newSession,
+  setFiles,
   setGit,
   setIdentity,
   skillLoaded,
@@ -27,6 +28,22 @@ export function scriptedState(): SessionState {
   let s = newSession({ id: 'sess-1', cwd: '/Users/dev/app/.claude/worktrees/feat-x', startedAt: T0, model: 'claude-opus-5-5' });
   s = setIdentity(s, { projectRoot: '/Users/dev/app', repoName: 'acme/app' });
   s = setGit(s, { branch: 'feat/x', detached: false, isWorktree: true, worktreePath: '/Users/dev/app/.claude/worktrees/feat-x', ahead: 2, behind: 0, dirty: 1 });
+  s = setFiles(
+    s,
+    {
+      files: [
+        { path: 'src/invoice/export.ts', status: 'modified', added: 24, removed: 6, from: null },
+        { path: 'src/invoice/export.test.ts', status: 'added', added: 58, removed: 0, from: null },
+        { path: 'src/invoice/legacy.ts', status: 'deleted', added: 0, removed: 112, from: null },
+        { path: 'src/invoice/totals.ts', status: 'renamed', added: 3, removed: 1, from: 'src/invoice/sum.ts' },
+      ],
+      total: 4,
+      added: 85,
+      removed: 119,
+      since: 'start',
+    },
+    'a1b2c3d',
+  );
   s = turnStart(s);
   s = step(s, { model: 'claude-opus-5-5', effort: 'high', usage: usage(1000, 50_000), stopReason: 'tool_use' }, T0 + 1000);
   // the plan

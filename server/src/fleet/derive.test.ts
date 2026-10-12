@@ -125,6 +125,15 @@ describe('sessionView', () => {
     expect(v.secondsSinceSeen).toBe(1);
   });
 
+  it('exposes the changed files, and null when the reporter sent none', () => {
+    const v = viewOf(fixtureReport(), 1_791_648_001_000);
+    expect(v.files).toMatchObject({ total: 4, added: 85, removed: 119, since: 'start' });
+    expect(v.files?.files[3]).toEqual({ path: 'src/invoice/totals.ts', status: 'renamed', added: 3, removed: 1, from: 'src/invoice/sum.ts' });
+    const old = fixtureReport();
+    old.session.files = null;
+    expect(viewOf(old, 1_791_648_001_000).files).toBeNull();
+  });
+
   it('exposes the main loop block, and null when the reporter sent none', () => {
     const v = viewOf(fixtureReport(), 1_791_648_001_000);
     expect(v.loop).toMatchObject({ skills: ['frontend-design', 'code-review'], lastTool: 'Agent', toolCalls: 19, steps: { done: 23, total: null } });

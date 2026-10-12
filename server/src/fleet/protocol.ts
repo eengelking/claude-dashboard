@@ -45,6 +45,31 @@ export interface GitInfo {
   dirty: number;
 }
 
+export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed';
+
+/** One file the session changed. `added` and `removed` are null for a binary file. */
+export interface ChangedFile {
+  path: string;
+  status: FileStatus;
+  added: number | null;
+  removed: number | null;
+  /** The old path of a renamed file. */
+  from: string | null;
+}
+
+/**
+ * What the session changed in its repository: the files (at most 200, by path) and the totals over
+ * all of them. `since` says what the diff is against: the commit HEAD was at when the session began,
+ * the merge base with the upstream branch when that commit is gone, or HEAD alone.
+ */
+export interface FilesReport {
+  files: ChangedFile[];
+  total: number;
+  added: number;
+  removed: number;
+  since: 'start' | 'upstream' | 'worktree';
+}
+
 export interface RateLimit {
   kind: string;
   percentUsed: number;
@@ -150,6 +175,8 @@ export interface SessionReport {
   plan: Plan | null;
   /** The main loop's steps, tools and skills. null when the reporter is too old to send it. */
   loop: LoopReport | null;
+  /** The files the session changed. null when the reporter is too old to send it. */
+  files: FilesReport | null;
 }
 
 export interface Report {
@@ -233,6 +260,8 @@ export interface SessionView {
   plan: Plan | null;
   /** The main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a hooks-only session. */
   loop: LoopReport | null;
+  /** The files the session changed; null from a reporter older than 0.6.0 and for a hooks-only session. */
+  files: FilesReport | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -330,6 +359,8 @@ export const LIMITS = {
   toolNames: 100,
   rateLimits: 10,
   blowoutLog: 50,
+  files: 200,
+  filePath: 300,
 } as const;
 
 export type ValidateResult = { ok: true; report: Report } | { ok: false; error: string; path: string };
@@ -584,6 +615,37 @@ function loop(v: unknown, path: string): LoopReport | null {
   };
 }
 
+const FILE_STATUSES: readonly FileStatus[] = ['added', 'modified', 'deleted', 'renamed'];
+
+function intOrNull(v: unknown, path: string): number | null {
+  return v === null || v === undefined ? null : int(v, path);
+}
+
+/** Keeps the first LIMITS.files entries rather than rejecting a longer list; `total` never falls below what is listed. */
+function filesReport(v: unknown, path: string): FilesReport | null {
+  if (v === null || v === undefined) return null;
+  const o = obj(v, path);
+  const listed = arr(o.files, `${path}.files`, 1000).slice(0, LIMITS.files);
+  const files = listed.map((f, i) => {
+    const p = `${path}.files[${i}]`;
+    const fo = obj(f, p);
+    return {
+      path: str(fo.path, `${p}.path`, LIMITS.filePath),
+      status: oneOf(fo.status, `${p}.status`, FILE_STATUSES),
+      added: intOrNull(fo.added, `${p}.added`),
+      removed: intOrNull(fo.removed, `${p}.removed`),
+      from: strOrNull(fo.from, `${p}.from`, LIMITS.filePath),
+    };
+  });
+  return {
+    files,
+    total: Math.max(int(o.total, `${path}.total`), files.length),
+    added: int(o.added, `${path}.added`),
+    removed: int(o.removed, `${path}.removed`),
+    since: oneOf(o.since, `${path}.since`, ['start', 'upstream', 'worktree'] as const),
+  };
+}
+
 function session(v: unknown, path: string): SessionReport {
   const o = obj(v, path);
   const id = str(o.id, `${path}.id`, LIMITS.id);
@@ -621,6 +683,7 @@ function session(v: unknown, path: string): SessionReport {
     blowouts: int(o.blowouts, `${path}.blowouts`),
     plan: plan(o.plan, `${path}.plan`),
     loop: loop(o.loop, `${path}.loop`),
+    files: filesReport(o.files, `${path}.files`),
   };
 }
 

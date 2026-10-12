@@ -246,12 +246,12 @@ describe("MiniChart", () => {
 
 describe("PlanPanel and context bars", () => {
   it("shows state icons, owner labels, and the empty text", () => {
-    const { container } = render(<PlanPanel plan={makeSession().plan} />);
+    const { container } = render(<PlanPanel s={makeSession()} />);
     expect([...container.querySelectorAll(".step")].map((s) => s.className)).toEqual(["step done", "step active", "step blocked", "step pending"]);
     expect(container.textContent).toContain("Explore · Haiku low");
     expect(container.textContent).toContain("blocked by an unfinished step");
     cleanup();
-    render(<PlanPanel plan={null} />);
+    render(<PlanPanel s={makeSession({ plan: null })} />);
     expect(screen.getByText(/No plan reported. Agents were launched ad hoc/)).toBeInTheDocument();
   });
   it("turns amber at 75% and striped red at two blowouts", () => {
@@ -262,5 +262,140 @@ describe("PlanPanel and context bars", () => {
     expect(cool.className).not.toContain("hot");
     cleanup();
     expect(render(<ContextBar percent={10} blowouts={2} />).container.firstElementChild!.className).toContain("bx2");
+  });
+});
+
+const fileOf = (i: number, over = {}) => ({ path: `src/dir/f${String(i).padStart(3, "0")}.ts`, status: "modified" as const, added: 2, removed: 1, from: null, ...over });
+const filesOf = (n: number, total = n) => ({ files: Array.from({ length: n }, (_, i) => fileOf(i)), total, added: total * 2, removed: total, since: "start" as const });
+
+describe("Plan and Files tabs", () => {
+  it("is a tab list with Plan selected, and the Files tab counts the files", () => {
+    render(<PlanPanel s={makeSession()} />);
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Plan", "Files 3"]);
+    expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false"]);
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName("Plan");
+    expect(screen.getByText(/Port invoice endpoints/)).toBeInTheDocument();
+  });
+
+  it("clicking Files lists each file with its signed counts and a summary, and hides the plan", () => {
+    const onTab = vi.fn();
+    const { container } = render(<PlanPanel s={makeSession()} onTab={onTab} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Files/ }));
+    expect(onTab).toHaveBeenLastCalledWith("files");
+    expect(screen.getByRole("tabpanel")).toHaveAccessibleName(/Files/);
+    expect(screen.getByText(/Port invoice endpoints/)).not.toBeVisible();
+    expect(container.textContent).toContain("3 files");
+    expect(container.textContent).toContain("+69");
+    expect(container.textContent).toContain("\u221225");
+    const rows = [...container.querySelectorAll(".files li")];
+    expect(rows).toHaveLength(3);
+    expect(rows[0]!.textContent).toContain("PlanPanel.tsx");
+    expect(rows[0]!.textContent).toContain("+17");
+    expect(rows[0]!.textContent).toContain("\u221222");
+    expect(rows[0]!.textContent).toContain("frontend/src/fleet/components/");
+    expect(rows[1]!.textContent).toContain("added");
+    fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(onTab).toHaveBeenLastCalledWith("plan");
+  });
+
+  it("arrow keys, Home and End move between the tabs and select them", () => {
+    render(<PlanPanel s={makeSession()} />);
+    const [plan, files] = screen.getAllByRole("tab") as [HTMLElement, HTMLElement];
+    plan.focus();
+    fireEvent.keyDown(plan, { key: "ArrowRight" });
+    expect(files).toHaveAttribute("aria-selected", "true");
+    expect(files).toHaveFocus();
+    expect(plan).toHaveAttribute("tabindex", "-1");
+    fireEvent.keyDown(files, { key: "ArrowRight" });
+    expect(plan).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(plan, { key: "End" });
+    expect(files).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(files, { key: "Home" });
+    expect(plan).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("with no files the tab has no number and the panel says where they will appear", () => {
+    render(<PlanPanel s={makeSession({ files: { files: [], total: 0, added: 0, removed: 0, since: "start" } })} />);
+    expect(screen.getAllByRole("tab")[1]!.textContent).toBe("Files");
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(screen.getByText("Files will appear here once a file has been updated.")).toBeInTheDocument();
+  });
+
+  it("an older reporter, or hook-only session, says why there is no file data", () => {
+    const { container } = render(<PlanPanel s={makeSession({ files: null, reporterVersion: "0.5.0" })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(container.textContent).toContain("Files will appear here once a file has been updated.");
+    expect(container.textContent).toContain("reporter is 0.5.0 and does not send files");
+    expect(container.textContent).toContain("0.6.0");
+    cleanup();
+    const hooks = render(<PlanPanel s={makeSession({ files: null, reporter: "hooks", reporterVersion: null })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(hooks.container.textContent).toContain("hook-only");
+  });
+
+  it("shows binary, deleted and renamed files in words as well as letters", () => {
+    const files = {
+      files: [
+        { path: "a/logo.png", status: "modified" as const, added: null, removed: null, from: null },
+        { path: "a/gone.ts", status: "deleted" as const, added: 0, removed: 9, from: null },
+        { path: "a/new.ts", status: "renamed" as const, added: 1, removed: 1, from: "a/old.ts" },
+      ],
+      total: 3,
+      added: 1,
+      removed: 10,
+      since: "start" as const,
+    };
+    const { container } = render(<PlanPanel s={makeSession({ files })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    const rows = [...container.querySelectorAll(".files li")].map((r) => r.textContent!);
+    expect(rows[0]).toContain("binary");
+    expect(rows[0]).not.toContain("+");
+    expect(rows[1]).toContain("deleted");
+    expect(rows[2]).toContain("renamed");
+    expect(rows[2]).toContain("a/old.ts");
+  });
+
+  it("pages the list 20 at a time, and the pager follows the data", () => {
+    const { container } = render(<PlanPanel s={makeSession({ files: filesOf(47) })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(container.querySelectorAll(".files li")).toHaveLength(20);
+    expect(container.textContent).toContain("1\u201320 of 47");
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(container.textContent).toContain("21\u201340 of 47");
+    expect(container.querySelector(".files li")!.textContent).toContain("f020.ts");
+    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    expect(container.querySelectorAll(".files li")).toHaveLength(7);
+    expect(container.textContent).toContain("41\u201347 of 47");
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "3" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("has no pager for 20 files or fewer", () => {
+    render(<PlanPanel s={makeSession({ files: filesOf(20) })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(screen.queryByRole("navigation", { name: "Files pages" })).not.toBeInTheDocument();
+  });
+
+  it("says when the list is cut at the reporter's limit, and what the diff is against", () => {
+    const { container } = render(<PlanPanel s={makeSession({ files: { ...filesOf(200, 340), since: "upstream" } })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(container.textContent).toContain("340 files");
+    expect(container.textContent).toContain("Listing the first 200 of 340 files.");
+    expect(container.textContent).toContain("since the branch's upstream");
+    cleanup();
+    const w = render(<PlanPanel s={makeSession({ files: { ...filesOf(2), since: "worktree" } })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(w.container.textContent).toContain("working tree only");
+  });
+
+  it("the orchestrator page widens the plan column while Files is selected", () => {
+    const { container } = openFocus();
+    expect(container.querySelector(".two")).not.toHaveClass("wide");
+    fireEvent.click(screen.getByRole("tab", { name: /Files/ }));
+    expect(container.querySelector(".two")).toHaveClass("wide");
+    fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(container.querySelector(".two")).not.toHaveClass("wide");
   });
 });

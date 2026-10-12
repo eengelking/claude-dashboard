@@ -194,3 +194,20 @@ patch number keeps a mod-only fix from warning anyone.
 **Cost.** Someone must move `min` or `max` when a change needs it. Forgetting `max` when a new mod minor
 ships makes every up-to-date mod show `upgrade server`, and a test cannot catch that on its own. The release
 steps in `CLAUDE.md` do not mention it yet.
+
+## 19. The changed-files list is a git diff against where the session started
+
+**Choice.** The mod records the commit HEAD pointed at when the session began and lists the files that differ
+from it in the working tree, with line counts from `git diff --numstat` and untracked files counted
+separately (SPEC 5.7). It does not count only the files the session's own Edit and Write calls touched. If
+that commit is no longer an ancestor of HEAD (a rebase, an amend, a branch switch) it diffs against the merge
+base with the upstream, and with no upstream against HEAD alone, and the report says which (`since`). The
+Files tab pages the list 20 at a time and the left column widens to 400 px while it is open (#26).
+**Why.** It matches what GitHub shows, includes changes made by shell commands and formatters, and survives a
+commit, which a count of tool calls does not. The starting commit is kept in the mod's store under the session
+id, so a hot reload does not move it.
+**Cost.** Two sessions in the same checkout both see the same changes, because the diff is of the working
+tree; worktrees avoid it. A session that switches to an unrelated branch reads as `upstream` or `worktree`
+rather than as its own changes. The mod runs five git queries every 10 seconds instead of one, and counts at
+most the first 200 files; an untracked folder with hundreds of files costs up to 200 extra `git diff --no-index` calls on every poll, and untracked files past the 200th add no lines to the totals. The report carries the list in every snapshot, since a report is a full snapshot
+(SPEC 6.7), and the mod only marks a report due when the list changes.

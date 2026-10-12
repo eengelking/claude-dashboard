@@ -79,6 +79,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     reporter_version: r.reporter.version,
     engine_version: r.reporter.engineVersion,
     loop_json: json(s.loop),
+    files_json: json(s.files),
   };
 }
 
