@@ -223,6 +223,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .card .foot svg.sp { width: 92px; height: 22px; flex: none; }
 .podium .card .noplan { margin-top: 10px; color: var(--muted); font-size: 12px; }
 .podium .alert { margin-top: 10px; padding: 5px 8px; border-radius: 5px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); display: flex; gap: 6px; align-items: flex-start; }
+.podium .alert .wait-detail { margin-top: 2px; color: var(--muted); overflow-wrap: anywhere; }
 .podium .alert svg { margin-top: 1px; }
 .podium .alert.stale { background: color-mix(in srgb, var(--serious) 14%, transparent); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
 .podium .alert.risk { background: color-mix(in srgb, var(--crit) 16%, transparent); border-color: var(--crit); }

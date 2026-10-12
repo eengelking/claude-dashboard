@@ -205,12 +205,46 @@ describe("session card", () => {
 });
 
 describe("a waiting session", () => {
-  it("keeps the card short and the orchestrator page shows the full note (#50)", () => {
-    const note = "Bash(npm run e2e -- --grep long-running-suite)";
-    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ status: "waiting", waitReason: "permission", waitNote: note })] })} />);
-    expect(container.querySelector(".wall .card")!.textContent).not.toContain(note);
+  function pageFor(over: Parameters<typeof makeSession>[0]) {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ status: "waiting", ...over })] })} />);
+    const cardText = container.querySelector(".wall .card")!.textContent;
     fireEvent.click(container.querySelector(".wall .card")!);
-    expect(container.textContent).toContain(`Permission prompt: ${note}`);
+    return { container, cardText, callout: container.querySelector(".card.notice .alert")! };
+  }
+
+  it("keeps the card short; the page leads with a plain message and the tool name (#50, #64)", () => {
+    const plan = "ExitPlanMode(# Plan: Issue #24, effort as a colored indicator with a tooltip ## Context Reported by the maintainer on 2026-10-12 draws f";
+    const { cardText, callout } = pageFor({ waitReason: "permission", waitNote: plan });
+    expect(cardText).not.toContain("ExitPlanMode");
+    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: ExitPlanMode");
+    expect(callout.textContent).not.toContain("# Plan");
+  });
+
+  it("names the tool of a Bash permission prompt without its command", () => {
+    const { callout } = pageFor({ waitReason: "permission", waitNote: "Bash(npm run e2e -- --grep long-running-suite)" });
+    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: Bash");
+  });
+
+  it("shows a short question as the detail under a plain input message", () => {
+    const { callout } = pageFor({ waitReason: "input", waitNote: "Which branch should I use?" });
+    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your input. Answer in its terminal.");
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Which branch should I use?");
+  });
+
+  it("leaves out a note clipped at the 160-character limit instead of presenting it as whole", () => {
+    const { callout } = pageFor({ waitReason: "input", waitNote: "x".repeat(160) });
+    expect(callout.querySelector(".wait-detail")).toBeNull();
+  });
+
+  it("works with no note, and with a notification message from settings hooks", () => {
+    const none = pageFor({ waitReason: "permission", waitNote: null });
+    expect(none.callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
+    expect(none.callout.querySelector(".wait-detail")).toBeNull();
+    cleanup();
+    const hooks = pageFor({ reporter: "hooks", waitReason: "permission", waitNote: "Claude needs your permission to use Bash" });
+    expect(hooks.callout.querySelector(".wait-detail")!.textContent).toBe("Claude needs your permission to use Bash");
   });
 });
 

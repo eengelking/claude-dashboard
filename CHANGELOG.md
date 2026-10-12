@@ -29,6 +29,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- The orchestrator page's waiting callout now leads with "Waiting for your approval. Answer in its terminal." (or "input" for a question) and shows the tool name, such as `Tool: ExitPlanMode`, as a muted line under it, instead of the raw tool call cut off at 160 characters. A note that was cut off is left out rather than shown as if it were the whole prompt. The card and the activity feed are unchanged. (#64)
 - A heartbeat-lost card now counts down to when it goes away ("Goes away in 37 s") instead of showing a fixed "Dropped from the fleet at 1:15". The server sends the time as `dropAt`, so it is right after a server restart and for hook-only sessions. (#41)
 - Effort shows as five colored bars with no text, and the level is in a tooltip and the meter's accessible name. Each level has its own color (low orange, medium green, high blue, xhigh purple, max rainbow). The Agents table's Effort column shrank to fit and its freed width went to the Context, Tokens, Cost and Time columns. (#24)
 - The README, `docs/GOTCHAS.md` and `docs/SPEC.md` now explain the `⚠` in front of Podium's status line:

@@ -6,7 +6,7 @@ import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel } from "./PlanPanel";
-import { HOOKS_NOTE, waitText } from "./SessionCard";
+import { HOOKS_NOTE, waitSummary } from "./SessionCard";
 
 export function FocusView(props: {
   s: SessionView;
@@ -31,9 +31,7 @@ export function FocusView(props: {
       <BlowoutCallout s={s} onAgent={props.onAgent} />
       {s.status === "waiting" && (
         <div className="card notice" style={{ cursor: "default" }}>
-          <div className="alert" style={{ margin: 0 }}>
-            {waitText(s)} This orchestrator is paused until you answer in its terminal.
-          </div>
+          <WaitCallout s={s} />
         </div>
       )}
       {s.status === "stale" && (
@@ -65,5 +63,17 @@ export function FocusView(props: {
         />
       </div>
     </>
+  );
+}
+
+function WaitCallout({ s }: { s: SessionView }) {
+  const { lead, detail } = waitSummary(s);
+  return (
+    <div className="alert" style={{ margin: 0 }}>
+      <div>
+        <div className="wait-lead">{lead} Answer in its terminal.</div>
+        {detail && <div className="wait-detail">{detail}</div>}
+      </div>
+    </div>
   );
 }
