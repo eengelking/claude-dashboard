@@ -240,7 +240,7 @@ body.podium-resizing * { cursor: col-resize !important; }
 
 /* agent tree */
 .podium .tw { overflow-x: auto; position: relative; }
-.podium .trow { display: grid; grid-template-columns: minmax(210px, 1fr) 92px 44px 150px 64px 64px 70px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: 892px; }
+.podium .trow { display: grid; grid-template-columns: minmax(210px, 1fr) 92px 52px 142px 64px 64px 70px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: 892px; }
 .podium .trow.hd { min-height: 28px; color: var(--muted); font-size: 11.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .podium button.trow:hover { background: var(--hover); }
 .podium button.trow[aria-current="true"] { background: var(--sel); }
@@ -377,7 +377,7 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .trow.hd button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
 
 @media (max-width: 1280px) {
-  .podium .trow { grid-template-columns: minmax(200px, 1fr) 92px 44px 158px 64px 70px 104px; }
+  .podium .trow { grid-template-columns: minmax(200px, 1fr) 92px 52px 150px 64px 70px 104px; }
   .podium .trow .c-tok { display: none; }
   .podium .cols { --rail-w: 224px; --side-w: 310px; }
 }
