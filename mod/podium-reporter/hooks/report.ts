@@ -2,7 +2,7 @@
 // to its limit here, so nothing leaves the machine unredacted.
 import { clip, excerpt } from './failures.ts';
 import { lastSegment } from './git.ts';
-import { windowOf } from './models.ts';
+import { family, windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
 import type { ActivityEvent, AgentReport, Failure, LoopReport, Report } from './protocol.ts';
 import { resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
@@ -86,7 +86,7 @@ export function agentReport(a: AgentState): AgentReport {
     endedAt: a.endedAt,
     context: { tokens: a.ctxTokens, window, percent: pct(a.ctxTokens, window) },
     tokens: { ...a.tokens },
-    costUsdEst: Math.round(a.cost * 1e6) / 1e6,
+    costUsdEst: a.model && family(a.model) === 'other' ? null : Math.round(a.cost * 1e6) / 1e6,
     ...loopFields(a),
     blowouts: a.blowouts,
     promptExcerpt: excerpt(a.promptExcerpt),
@@ -123,7 +123,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       model: s.main.model,
       effort: s.main.effort,
       context: { tokens: ctxTokens, window: ctxWindow, percent: ctxPercent === null ? null : Math.max(0, Math.min(100, ctxPercent)) },
-      costUsd: s.costUsd,
+      costUsd: s.main.model && family(s.main.model) === 'other' ? null : s.costUsd,
       tokens: { ...s.main.tokens },
       rateLimits: s.rateLimits.slice(0, 10),
       blowouts: s.main.blowouts,

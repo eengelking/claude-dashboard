@@ -1,7 +1,7 @@
 import { fmtTok, fmtUsd } from "../format";
 import { SORTS, STATUS_FILTERS, type SortKey, type StatusFilter } from "../logic";
 import type { Kpis, LifecycleConfig, ModelFamily, SessionView } from "../types";
-import { ModelChip } from "./Chips";
+import { ModelChip, NO_PRICE_TITLE } from "./Chips";
 import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
 import { Sparkline } from "./Sparkline";
@@ -39,7 +39,13 @@ export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
       <div className="kpi">
         <div className="k">Est. cost today</div>
         <div className="v mono">{k ? fmtUsd(k.costToday) : "–"}</div>
-        <Sparkline values={k?.costPerMinute ?? []} w={100} h={26} />
+        {k && k.unpricedSessions > 0 ? (
+          <div className="kpi-cap" title={NO_PRICE_TITLE}>
+            not counting {k.unpricedSessions} unpriced session{k.unpricedSessions > 1 ? "s" : ""}
+          </div>
+        ) : (
+          <Sparkline values={k?.costPerMinute ?? []} w={100} h={26} />
+        )}
       </div>
       <div className="kpi">
         <div className="k">Tokens, last minute</div>

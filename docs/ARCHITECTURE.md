@@ -231,6 +231,15 @@ a reader of the spec would expect:
 7. **Cost estimates undershoot the ledger a little.** Run 1: main loop plus agent estimates $0.01237
    against a ledger of $0.01445. The orchestrator's figure is the ledger; agent figures are estimates and
    labeled so.
+8a. **What Claude Code reports for a non-Claude model (Ollama), partly observed.** On 2026-10-12 Claude Code
+   2.1.296 was launched with `ANTHROPIC_BASE_URL=http://localhost:11434` and `--model gemma4:12b-pinned`
+   (Ollama 0.34.4) with the 0.5.0 reporter. The session registered and appeared on the wall. Observed: the
+   model string is the Ollama tag as given (`gemma4:12b-pinned`), the engine's `context.window` is 200,000
+   (a default, not the model's real window, so the percentage computed from it would be a guess), effort is
+   null, and no plan. The model never answered (the run hung), so the ledger cost, token usage, context
+   percent and stop reasons for such a model are unobserved. The mod sends `costUsd` and `costUsdEst` as
+   `null` for it, and the dashboard shows the model's own name in an "other" chip, cost "n/a", and "not
+   counting 1 unpriced session" under Est. cost today.
 8. **A session that starts at the prompt shows as waiting.** An idle interactive session is honestly
    "waiting on you"; with many idle sessions the wall fills with waiting callouts.
 9. **The production build also compiles the server's test files into `server/dist`** (as the existing

@@ -335,10 +335,10 @@ For a fork the model sets `subagent_type: "fork"`; in `agent.spawn` that arrives
 | Subagent effort | `tool.call` Agent input `effort` (requested), then `turn.step.effort` for that `agentId` (observed, wins) | `agent.spawn` has no effort. Fork: copy the parent's. Record `effortSource`. |
 | Skills loaded | `tool.call` with `tool === "Skill"` (per loop via `agentId`), `skill.prompt` (no loop) | An agent definition may preload skills; that is not visible. Report what was observed. |
 | Context fill, main loop | `$.session.usage().context.percent`, `session.measure` | `tokens` may be absent before the first response. |
-| Context fill, an agent | `turn.step` result `usage` (input + cache read + cache creation tokens) over the model's window | No per-agent window API. Use the table in 6.5. Clamp to 100. |
+| Context fill, an agent | `turn.step` result `usage` (input + cache read + cache creation tokens) over the model's window | No per-agent window API. Use the table in 6.5. Clamp to 100. Unknown window (non-Claude model): percent is `null`. |
 | Blowouts | `session.compact` (auto) and `turn.step` `stopReason` | If the build lacks `session.compact` for agents, fall back to the `stopReason` signal and note it. |
 | Cost, session | `$.session.usage().cost.usd` | Real ledger. Likely includes all agents. **Assumption:** verify by running a subagent and watching it grow. |
-| Cost, agent | tokens × price table | Estimate only. |
+| Cost, agent | tokens × price table | Estimate only. `null` for a non-Claude model (no price). |
 | Plan | `tool.call` for Task*/TodoWrite | Built-in tools have no plan title or phase. |
 | Waiting on the user | `classic.PermissionRequest`, `classic.Notification`, `turn.complete` of the main loop | Best effort. If neither classic event is hookable, main-loop `turn.complete` ⇒ `waiting` with `waitReason: "input"`. |
 | Git | `$.process.run(["git", …])` | Section 5.7. |
@@ -524,9 +524,9 @@ interface ActivityEvent {
 
 ### 6.5 Models, windows, prices (`models.ts`, pure)
 
-- `family(modelIdOrAlias)`: lowercase substring match: `opus` → `opus`, `sonnet` → `sonnet`, `haiku` → `haiku`, `fable` → `fable`, else `other`. The UI colors by family (section 8.3).
-- `windowOf(model)`: **Assumption:** 200,000 for `haiku`, 1,000,000 for the others; for the main loop prefer `$.session.usage().context.window`. Verify with the `claude-api` skill and record the sources in `docs/ARCHITECTURE.md`.
-- `priceOf(family)`: USD per million tokens, split input / output / cache read / cache write. **Placeholder values must be replaced with current published prices** (use the `claude-api` skill). Keep all of it in this one file with a visible comment and a `PRICES_AS_OF` date constant. Cost estimate = Σ tokens × price / 1e6.
+- `family(modelIdOrAlias)`: lowercase substring match: `opus` → `opus`, `sonnet` → `sonnet`, `haiku` → `haiku`, `fable` → `fable`, else `other`. Only a Claude model matches: a bare alias (`opus`, `sonnet[1m]`) or an id containing `claude`. A local model such as `my-sonnet-finetune:latest` is `other` even though its name holds a family word. The UI colors by family (section 8.3); `other` is shown with the raw model name and labeled as not a Claude model.
+- `windowOf(model)`: `null` for a model in the `other` family (the percentage is then shown as unknown, never computed against 1M). **Assumption:** 200,000 for `haiku`, 1,000,000 for the others; for the main loop prefer `$.session.usage().context.window`. Verify with the `claude-api` skill and record the sources in `docs/ARCHITECTURE.md`.
+- `priceOf(family)`: USD per million tokens, split input / output / cache read / cache write. **Placeholder values must be replaced with current published prices** (use the `claude-api` skill). Keep all of it in this one file with a visible comment and a `PRICES_AS_OF` date constant. Cost estimate = Σ tokens × price / 1e6. A model in the `other` family has no price: `priceOf` and `costOf` return `null`, the report carries `null` for the agent's `costUsdEst` and for the session's `costUsd` (the engine's ledger figure is not trusted for a model Podium has no price for, because what it is priced from is not known; see Known issues in `docs/ARCHITECTURE.md`), the UI shows "n/a" with the reason, and the fleet's "est. cost today" leaves those sessions out and says how many (`kpis.unpricedSessions`).
 
 ### 6.6 Session display name
 

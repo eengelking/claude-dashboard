@@ -2,13 +2,13 @@
 // page for one of them, built from its stored rows.
 import { useEffect, useState } from "react";
 import "./fleet.css";
-import { fmtClock, fmtDur, fmtUsd } from "./format";
+import { fmtClock, fmtDur } from "./format";
 import type { AgentSortKey } from "./logic";
 import { defaultAgentDir, ORCHESTRATOR_ROW } from "./logic";
 import { AgentDetail } from "./components/AgentDetail";
 import { OrchestratorDetail } from "./components/OrchestratorDetail";
 import type { AgentSort } from "./components/AgentTree";
-import { ModelChip } from "./components/Chips";
+import { Cost, ModelChip } from "./components/Chips";
 import { FocusView } from "./components/FocusView";
 import { Logo } from "./components/Icons";
 import { ThemePicker } from "./components/ThemePicker";
@@ -156,7 +156,7 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
                             </td>
                             <td className="num">{fmtClock(r.endedAt)}</td>
                             <td className="num">{fmtDur(r.durationSec)}</td>
-                            <td className="num">{fmtUsd(r.costUsd)}</td>
+                            <td className="num"><Cost usd={r.costUsd} family={r.modelFamily} /></td>
                             <td className="num">{r.blowouts || "–"}</td>
                             <td className="num">{r.agents}</td>
                             <td>{r.endReason ?? "–"}</td>

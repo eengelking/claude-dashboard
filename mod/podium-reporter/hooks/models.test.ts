@@ -24,12 +24,29 @@ describe('models', () => {
     expect(PRICES_AS_OF).toBe('2026-10-06')
     expect(priceOf('claude-opus-5-5')).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 })
     expect(priceOf('opus')).toEqual(priceOf('claude-opus-5-5'))
-    expect(priceOf('claude-opus-5').input).toBe(5)
-    expect(priceOf('claude-sonnet-5-5').input).toBe(2)
-    expect(priceOf('claude-haiku-5-5').output).toBe(0.5)
-    expect(priceOf('claude-haiku-4-5').input).toBe(1)
+    expect(priceOf('claude-opus-5')?.input).toBe(5)
+    expect(priceOf('claude-sonnet-5-5')?.input).toBe(2)
+    expect(priceOf('claude-haiku-5-5')?.output).toBe(0.5)
+    expect(priceOf('claude-haiku-4-5')?.input).toBe(1)
     expect(priceOf('claude-fable-5-1')).toEqual({ input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 })
     expect(priceOf('fable')).toEqual(priceOf('claude-fable-5-1'))
+  })
+
+  test('a non-Claude model is other, even when its name contains a family word', () => {
+    expect(family('llama3.1:8b')).toBe('other')
+    expect(family('qwen2.5-coder:32b')).toBe('other')
+    expect(family('my-sonnet-finetune:latest')).toBe('other')
+    expect(family('opus[1m]')).toBe('opus')
+    expect(family('opusplan')).toBe('opus')
+    expect(family('us.anthropic.claude-sonnet-5-5')).toBe('sonnet')
+  })
+
+  test('a non-Claude model has no price, no window and no cost', () => {
+    for (const m of ['llama3.1:8b', 'my-sonnet-finetune:latest', null, undefined]) {
+      expect(priceOf(m)).toBeNull()
+      expect(windowOf(m)).toBeNull()
+      expect(costOf({ input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 }, m)).toBeNull()
+    }
   })
 
   test('cost is the sum of tokens times price over a million', () => {

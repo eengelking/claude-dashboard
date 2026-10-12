@@ -1,6 +1,10 @@
 // Report -> rows, events, blowouts and samples (SPEC 7.3 steps 1-4). One transaction per report.
 import type { AgentReport, Report, TokenCounts } from './protocol.js';
 import type { AgentRow, EventRow, FleetDb, SessionRow } from './db.js';
+import { family } from './derive.js';
+
+/** An older reporter prices a non-Claude model as Sonnet; Podium has no price for it, so drop the figure. */
+const priced = (model: string | null, usd: number | null): number | null => (model && family(model) === 'other' ? null : usd);
 
 export interface IngestResult {
   sessionId: string;
@@ -64,7 +68,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     context_tokens: s.context.tokens,
     context_window: s.context.window,
     context_percent: s.context.percent,
-    cost_usd: s.costUsd,
+    cost_usd: priced(s.model, s.costUsd),
     tok_in: s.tokens.input,
     tok_out: s.tokens.output,
     tok_cr: s.tokens.cacheRead,
@@ -100,7 +104,7 @@ function agentRow(sessionId: string, a: AgentReport): AgentRow {
     tok_out: a.tokens.output,
     tok_cr: a.tokens.cacheRead,
     tok_cw: a.tokens.cacheWrite,
-    cost_usd_est: a.costUsdEst,
+    cost_usd_est: priced(a.model, a.costUsdEst),
     skills_json: JSON.stringify(a.skills),
     last_tool: a.lastTool,
     tool_calls: a.toolCalls,

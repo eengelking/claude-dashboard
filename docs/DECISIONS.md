@@ -70,6 +70,10 @@ the mod was not moved to a separate repo (entry 12).
 table (`mod/podium-reporter/hooks/models.ts`), and the UI always labels it an estimate.
 **Why.** The engine only gives a ledger for the session, not per agent. Presenting an estimate as a bill
 would be wrong.
+A model with no price (anything that is not a Claude model, such as one served by Ollama) gets no estimate at
+all: `null` in the report and "n/a" in the UI, and its sessions are left out of the fleet's cost total with a
+note. The earlier fallback priced it as Sonnet so the number was never zero, but an invented figure presented
+as an estimate is worse than none (#66).
 **Cost.** Agent figures undershoot the ledger a little (known issue 7 in `ARCHITECTURE.md`).
 
 ## 8. Podman, one image, one volume

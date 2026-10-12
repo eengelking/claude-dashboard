@@ -166,7 +166,7 @@ export function sortAgents(agents: readonly AgentView[], key: AgentSortKey, dir:
     effort: (a) => (a.effort ? EFFORTS.indexOf(a.effort) : -1),
     ctx: (a) => a.context.percent ?? -1,
     tok: agentTokens,
-    cost: (a) => a.costUsdEst,
+    cost: (a) => a.costUsdEst ?? -1,
     time: (a) => agentElapsedSec(a, now),
     status: (a) => AGENT_STATUS_ORDER[a.status],
   };

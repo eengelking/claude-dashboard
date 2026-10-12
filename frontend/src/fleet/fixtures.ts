@@ -79,7 +79,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
 export function makeKpis(over: Partial<Kpis> = {}): Kpis {
   return {
     live: 1, running: 1, waiting: 0, stale: 0, agentsRunning: 0, agentsTotal: 0, planDone: 1, planTotal: 4,
-    costToday: 12.84, tokensLastMinute: 1000, blowoutsTotal: 0, sessionsAtLevel2: 0,
+    costToday: 12.84, unpricedSessions: 0, tokensLastMinute: 1000, blowoutsTotal: 0, sessionsAtLevel2: 0,
     costPerMinute: new Array(60).fill(0), tokensPerSec: new Array(60).fill(0), ...over,
   };
 }

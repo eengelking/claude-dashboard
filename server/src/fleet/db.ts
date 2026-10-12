@@ -120,7 +120,7 @@ export interface AgentRow {
   tok_out: number;
   tok_cr: number;
   tok_cw: number;
-  cost_usd_est: number;
+  cost_usd_est: number | null;
   skills_json: string | null;
   last_tool: string | null;
   tool_calls: number;

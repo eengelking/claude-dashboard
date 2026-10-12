@@ -25,9 +25,14 @@ export interface Tokens {
   cacheWrite: number;
 }
 
-/** Lowercase substring match: `opus`, `sonnet`, `haiku`, `fable`, else `other`. */
+/**
+ * Lowercase substring match: `opus`, `sonnet`, `haiku`, `fable`, else `other`. Only a Claude model
+ * counts: a bare alias (`opus`, `sonnet[1m]`) or an id containing `claude`. A local model such as
+ * `my-sonnet-finetune:latest` is `other` even though its name holds a family word.
+ */
 export function family(model: string | null | undefined): Family {
   const m = (model ?? '').toLowerCase();
+  if (!/^(opus|sonnet|haiku|fable|opusplan)(\[[^\]]*\])?$/.test(m) && !m.includes('claude')) return 'other';
   if (m.includes('opus')) return 'opus';
   if (m.includes('sonnet')) return 'sonnet';
   if (m.includes('haiku')) return 'haiku';
@@ -40,13 +45,11 @@ function price(input: number, output: number, cacheRead: number): Price {
 }
 
 /** Current generation per family (an alias such as `opus` resolves to these). */
-const FAMILY_PRICE: Record<Family, Price> = {
+const FAMILY_PRICE: Record<Exclude<Family, 'other'>, Price> = {
   opus: price(4, 20, 0.2), // claude-opus-5-5
   sonnet: price(2, 10, 0.2), // claude-sonnet-5-5
   haiku: price(0.1, 0.5, 0.01), // claude-haiku-5-5 (<=100K prompt tier)
   fable: price(10, 50, 0.25), // claude-fable-5-1
-  // Unknown model: priced as Sonnet so the estimate is neither zero nor alarming.
-  other: price(2, 10, 0.2),
 };
 
 /** Older ids that are still served and priced differently from their family's current model. */
@@ -59,26 +62,30 @@ const ID_PRICE: [RegExp, Price][] = [
   [/haiku-4/, price(1, 5, 0.1)], // claude-haiku-4-5
 ];
 
-/** USD per million tokens for a model id, an alias, or a family name. */
-export function priceOf(model: string | null | undefined): Price {
+/** USD per million tokens for a model id, an alias, or a family name. `null` for a non-Claude model. */
+export function priceOf(model: string | null | undefined): Price | null {
   const m = (model ?? '').toLowerCase();
+  const f = family(m);
+  if (f === 'other') return null;
   for (const [re, p] of ID_PRICE) if (re.test(m)) return p;
-  return FAMILY_PRICE[family(m)];
+  return FAMILY_PRICE[f];
 }
 
 /**
- * Context window in tokens. Every current family has a 1M window; Haiku 4.5 (and older Haiku and
+ * Context window in tokens, or `null` for a non-Claude model. Every current family has a 1M window; Haiku 4.5 (and older Haiku and
  * Claude 3 ids) have 200K. For the main loop prefer `$.session.usage().context.window`.
  */
-export function windowOf(model: string | null | undefined): number {
+export function windowOf(model: string | null | undefined): number | null {
   const m = (model ?? '').toLowerCase();
+  if (family(m) === 'other') return null;
   if (/haiku-4|haiku-3|claude-3/.test(m)) return 200_000;
   return 1_000_000;
 }
 
-/** Estimated cost in USD: Σ tokens × price / 1e6. */
-export function costOf(t: Tokens, model: string | null | undefined): number {
+/** Estimated cost in USD: Σ tokens × price / 1e6. `null` when the model has no price. */
+export function costOf(t: Tokens, model: string | null | undefined): number | null {
   const p = priceOf(model);
+  if (!p) return null;
   return (t.input * p.input + t.output * p.output + t.cacheRead * p.cacheRead + t.cacheWrite * p.cacheWrite) / 1e6;
 }
 

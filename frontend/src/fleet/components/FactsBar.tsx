@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtDur, fmtPct, fmtTok } from "../format";
 import { agentCounts, sessionElapsedSec } from "../logic";
 import type { SessionView } from "../types";
-import { BlowBadge, ContextBar, EffortMeter, ModelChip } from "./Chips";
+import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip } from "./Chips";
 import { IconX } from "./Icons";
 
 export const COPIED_MS = 1600;
@@ -79,7 +79,7 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
       </div>
       <div className="fact">
         <div className="k">Est. cost</div>
-        <div className="v mono">{fmtUsd(s.costUsd)}</div>
+        <div className="v mono"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
       </div>
       <div className="fact">
         <div className="k">Tokens</div>

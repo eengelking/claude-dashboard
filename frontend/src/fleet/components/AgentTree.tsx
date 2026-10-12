@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtDur, fmtPct, fmtTok } from "../format";
 import { buildTree, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
-import { BlowBadge, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
+import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
 import { IconOrch } from "./Icons";
 
 export interface AgentSort {
@@ -91,7 +91,7 @@ export function AgentTree(props: {
             <BlowBadge n={s.blowouts.orchestrator} />
           </div>
           <div className="num c-tok">{fmtTok(s.tokensTotal)}</div>
-          <div className="num">{fmtUsd(s.costUsd)}</div>
+          <div className="num"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
           <div className="cell">
             <StatusChip status={s.status} />

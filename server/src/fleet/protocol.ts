@@ -105,7 +105,7 @@ export interface AgentReport {
   endedAt: number | null;
   context: ContextFill;
   tokens: TokenCounts;
-  costUsdEst: number;
+  costUsdEst: number | null;
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
@@ -260,6 +260,8 @@ export interface Kpis {
   planDone: number;
   planTotal: number;
   costToday: number;
+  /** Live sessions on a model with no price (not a Claude model); their cost is left out of `costToday`. */
+  unpricedSessions: number;
   tokensLastMinute: number;
   blowoutsTotal: number;
   sessionsAtLevel2: number;
@@ -536,7 +538,10 @@ function agent(v: unknown, path: string): AgentReport {
     endedAt: numOrNull(o.endedAt, `${path}.endedAt`),
     context: context(o.context, `${path}.context`),
     tokens: tokens(o.tokens, `${path}.tokens`),
-    costUsdEst: Math.max(0, num(o.costUsdEst, `${path}.costUsdEst`)),
+    costUsdEst: (() => {
+      const c = numOrNull(o.costUsdEst, `${path}.costUsdEst`);
+      return c === null ? null : Math.max(0, c);
+    })(),
     skills: arr(o.skills, `${path}.skills`, LIMITS.skills).map((s, i) => str(s, `${path}.skills[${i}]`, LIMITS.short)),
     lastTool: strOrNull(o.lastTool, `${path}.lastTool`, LIMITS.short),
     toolCalls: int(o.toolCalls, `${path}.toolCalls`),

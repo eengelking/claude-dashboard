@@ -315,7 +315,7 @@ export class Simulator {
     };
     const own = splitTokens(rng, rng.int(60_000, 220_000));
     add(s.tokens, own);
-    s.ownCost += costOf(own, s.model);
+    s.ownCost += costOf(own, s.model) ?? 0;
     this.ev(s, 'start', null, `session.start · ${shortName(s.model)} ${tpl.effort}`);
     if (s.steps) {
       const doneN = initial ? (tpl.done ?? 0) : 0;
@@ -349,7 +349,7 @@ export class Simulator {
     if (spec.under !== undefined && s.steps) parentId = s.steps[spec.under]?.agentId ?? null;
     const id = `a${(this.agentSeq++).toString(16).padStart(6, '0')}${rng.hex(10)}`;
     const total = rng.int(4, 9);
-    const window = windowOf(model);
+    const window = windowOf(model) ?? 1_000_000;
     const ctx = isFork ? rng.range(0.12, 0.3) : rng.range(0.01, 0.06);
     const report: AgentReport = {
       id,
@@ -381,7 +381,7 @@ export class Simulator {
     if (status === 'done') {
       const tok = splitTokens(rng, rng.int(30_000, 260_000));
       report.tokens = tok;
-      report.costUsdEst = costOf(tok, model);
+      report.costUsdEst = costOf(tok, model) ?? 0;
       report.steps = { done: total, total: null };
       report.toolCalls = total * 3;
       report.toolCounts = {};
@@ -412,7 +412,7 @@ export class Simulator {
   }
 
   private syncCtx(a: SimAgent) {
-    const w = a.report.context.window ?? windowOf(a.report.model);
+    const w = a.report.context.window ?? windowOf(a.report.model) ?? 1_000_000;
     const c = Math.min(1, a.ctx);
     a.report.context = { tokens: Math.round(c * w), window: w, percent: Math.round(c * 1000) / 10 };
   }
@@ -433,7 +433,7 @@ export class Simulator {
 
   private blowout(s: SimSession, a: SimAgent | null) {
     const rng = this.rng;
-    const window = a ? (a.report.context.window ?? windowOf(a.report.model)) : 1_000_000;
+    const window = a ? (a.report.context.window ?? windowOf(a.report.model) ?? 1_000_000) : 1_000_000;
     const before = Math.round(window * rng.range(0.99, 1.01));
     const after = Math.round(window * 0.3);
     const n = a ? ++a.report.blowouts : ++s.blowouts;
@@ -515,7 +515,7 @@ export class Simulator {
       const n = Math.round(rng.int(900, 5200) * (fam.includes('haiku') ? 1.6 : fam.includes('opus') ? 0.7 : 1) * 8);
       const tok = splitTokens(rng, n);
       add(a.report.tokens, tok);
-      a.report.costUsdEst += costOf(tok, a.report.model);
+      a.report.costUsdEst = (a.report.costUsdEst ?? 0) + (costOf(tok, a.report.model) ?? 0);
       const tool = rng.pick(TOOLS);
       if (rng.chance(0.6)) {
         a.report.toolCalls += 1;
@@ -536,7 +536,7 @@ export class Simulator {
     if (rng.chance(0.3)) s.loop.steps = { done: s.loop.steps.done + 1, total: null };
     const own = splitTokens(rng, rng.int(200, 900) * 6);
     add(s.tokens, own);
-    s.ownCost += costOf(own, s.model);
+    s.ownCost += costOf(own, s.model) ?? 0;
     s.ctx += (own.input + own.cacheRead + own.cacheWrite) / 1e6 * (this.opts.chaos ? 3 : 1.2);
     if (s.ctx >= 0.97) this.blowout(s, null);
 
@@ -595,7 +595,7 @@ export class Simulator {
   }
 
   reportOf(s: SimSession): Report {
-    const totalCost = s.ownCost + s.agents.reduce((n, a) => n + a.report.costUsdEst, 0);
+    const totalCost = s.ownCost + s.agents.reduce((n, a) => n + (a.report.costUsdEst ?? 0), 0);
     const window = 1_000_000;
     const ctx = Math.min(1, s.ctx);
     return {

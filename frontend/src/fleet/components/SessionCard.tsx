@@ -1,7 +1,7 @@
-import { fmtCountdown, fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
 import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
-import { BlowBadge, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
+import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { toolOfNote, waitLead } from "../waiting";
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
@@ -120,7 +120,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       )}
       <div className="foot">
         <div className="mono">
-          <span className="v">{fmtUsd(s.costUsd)} ·</span>{" "}
+          <span className="v"><Cost usd={s.costUsd} family={s.modelFamily} /> ·</span>{" "}
           <span className="v">{fmtTok(s.tokensTotal)} tok ·</span>{" "}
           <span className="v">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>

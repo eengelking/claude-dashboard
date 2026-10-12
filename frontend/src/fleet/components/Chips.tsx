@@ -1,5 +1,6 @@
 // Small shared pieces: model chip, effort meter, status chip, blowout badge, git line.
 import type { CSSProperties } from "react";
+import { fmtUsd } from "../format";
 import { EFFORTS, familyName } from "../logic";
 import type { GitInfo, ModelFamily } from "../types";
 import { IconBranch, IconCheck, IconClock, IconDown, IconMod, IconTree, IconUp, IconWarn, IconX } from "./Icons";
@@ -16,9 +17,18 @@ export function cssVar(c: string): CSSProperties {
   return { ["--c" as string]: c } as CSSProperties;
 }
 
+export const NO_PRICE_TITLE = "Not a Claude model, so Podium has no price for it and shows no cost estimate";
+
+/** A cost figure. A non-Claude model has no price: it reads "n/a" with the reason, not a made-up dollar amount. */
+export function Cost({ usd, family }: { usd: number | null; family: ModelFamily }) {
+  if (usd === null && family === "other") return <span title={NO_PRICE_TITLE}>n/a</span>;
+  return <>{fmtUsd(usd)}</>;
+}
+
 export function ModelChip({ family, model }: { family: ModelFamily; model?: string | null }) {
+  const title = family === "other" && model ? `${model} (not a Claude model)` : (model ?? undefined);
   return (
-    <span className="chip" style={cssVar(FAMILY_COLOR[family])} title={model ?? undefined}>
+    <span className="chip" style={cssVar(FAMILY_COLOR[family])} title={title}>
       <i />
       {familyName(family, model ?? null)}
     </span>
@@ -135,7 +145,7 @@ export function ContextBar({ percent, blowouts, width }: { percent: number | nul
   const p = Math.max(0, Math.min(100, percent ?? 0));
   const cls = `bar ctx${p >= 75 ? " hot" : ""}${blowouts >= 2 ? " bx2" : blowouts ? " bx" : ""}`;
   return (
-    <div className={cls} style={width ? { width } : undefined} role="img" aria-label={`Context ${percent === null ? "unknown" : `${Math.round(p)}%`}`}>
+    <div className={cls} style={width ? { width } : undefined} role="img" aria-label={`Context ${percent === null ? "unknown" : `${Math.round(p)}%`}`} title={percent === null ? "Context window unknown" : undefined}>
       <i style={{ width: `${p}%` }} />
     </div>
   );

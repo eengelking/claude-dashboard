@@ -176,7 +176,7 @@ also read as plain sentences, such as "Session ended (cleared)."
 
 Cost is an estimate from token counts and a price table, and it is never a bill. The session's own figure is
 the exact ledger from Claude Code; the figures for agents are estimates, and the dashboard labels them so.
-Context fill is the share of the model's window in use. A blowout is a loop that overflowed its window and was
+A session on a model that is not a Claude model (a local model served by Ollama, for example) has no price, so its cost reads "n/a" and the "Est. cost today" tile leaves it out and says how many sessions it skipped. Context fill is the share of the model's window in use; when Podium does not know a model's window the bar is empty and marked unknown rather than computed against a guessed size. A blowout is a loop that overflowed its window and was
 compacted or stopped.
 
 The effort shown is read from each model request, so after `/effort` it updates at your next prompt.

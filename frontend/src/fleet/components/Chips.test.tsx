@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { EffortMeter } from "./Chips";
+import { ContextBar, Cost, EffortMeter, ModelChip, NO_PRICE_TITLE } from "./Chips";
 import { EFFORTS } from "../logic";
 
 afterEach(cleanup);
@@ -44,3 +44,28 @@ describe("EffortMeter", () => {
     expect(eff.textContent).toBe("");
   });
 });
+
+describe("a model that is not a Claude model (#66)", () => {
+  it("labels the chip with the raw model name and says it is not a Claude model", () => {
+    render(<ModelChip family="other" model="llama3.1:8b" />);
+    const chip = screen.getByText("llama3.1:8b").closest(".chip")!;
+    expect(chip).toHaveAttribute("title", "llama3.1:8b (not a Claude model)");
+  });
+
+  it("reads n/a with the reason instead of a dollar figure when there is no price", () => {
+    render(<Cost usd={null} family="other" />);
+    expect(screen.getByText("n/a")).toHaveAttribute("title", NO_PRICE_TITLE);
+  });
+
+  it("still shows a Claude model's cost, and a dash when a Claude model has none yet", () => {
+    const { container } = render(<><Cost usd={1.5} family="sonnet" /> <Cost usd={null} family="sonnet" /></>);
+    expect(container.textContent).toBe("$1.50 –");
+  });
+
+  it("marks an unknown context window instead of drawing an empty bar", () => {
+    render(<ContextBar percent={null} blowouts={0} />);
+    const bar = screen.getByRole("img", { name: "Context unknown" });
+    expect(bar).toHaveAttribute("title", "Context window unknown");
+  });
+});
+

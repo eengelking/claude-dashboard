@@ -46,6 +46,14 @@ describe('family', () => {
     expect(family('gpt')).toBe('other');
     expect(family(null)).toBe('other');
   });
+
+  it('does not take a non-Claude model for a Claude family because of its name', () => {
+    expect(family('my-sonnet-finetune:latest')).toBe('other');
+    expect(family('llama3.1:8b')).toBe('other');
+    expect(family('opus[1m]')).toBe('opus');
+    expect(family('opusplan')).toBe('opus');
+    expect(family('us.anthropic.claude-sonnet-5-5')).toBe('sonnet');
+  });
 });
 
 describe('paths and commands', () => {
@@ -204,5 +212,31 @@ describe('computeKpis', () => {
     expect(k.tokensPerSec[59]).toBe(3000);
     expect(k.costPerMinute).toHaveLength(60);
     expect(k.costPerMinute.reduce((a, b) => a + b, 0)).toBeCloseTo(0.5);
+  });
+});
+
+describe('computeKpis with a model that has no price (#66)', () => {
+  it('leaves the unpriced session out of cost today and counts it', () => {
+    const now = 1_791_648_100_000;
+    const f = new FleetDb(openDb(':memory:'));
+    const base = fixtureReport();
+    ingestReport(f, base, now - 2000);
+    const local: Report = {
+      ...base,
+      agents: [],
+      events: [],
+      session: { ...base.session, id: 'local', model: 'llama3.1:8b', plan: null, costUsd: null, context: { tokens: 5000, window: null, percent: null }, blowouts: 0 },
+    };
+    ingestReport(f, local, now - 1000);
+    const views = ['5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11', 'local'].map((id) =>
+      sessionView({ row: f.getSession(id)!, agents: f.getAgents(id), blowouts: f.getBlowouts(id), samples: f.samplesSince(id, 0), heard: true }, now, CFG),
+    );
+    const local_ = views[1]!;
+    expect(local_.modelFamily).toBe('other');
+    expect(local_.costUsd).toBeNull();
+    expect(local_.context.percent).toBeNull();
+    const k = computeKpis({ views, costToday: f.costSince(startOfDay(now)), tokensPerSecond: [], costPerMinute: [] }, now);
+    expect(k.costToday).toBeCloseTo(12.84);
+    expect(k.unpricedSessions).toBe(1);
   });
 });

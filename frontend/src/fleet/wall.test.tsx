@@ -4,7 +4,7 @@ import { FleetView } from "./FleetApp";
 import { GitLine } from "./components/Chips";
 import { SessionCard } from "./components/SessionCard";
 import { fleetReducer } from "./store";
-import { makeAgent, makeSession } from "./fixtures";
+import { makeAgent, makeKpis, makeSession } from "./fixtures";
 import { stateFrom } from "./testState";
 
 afterEach(cleanup);
@@ -336,3 +336,17 @@ describe("Remove a heartbeat-lost session (#41)", () => {
     }
   });
 });
+
+describe("fleet cost with an unpriced session (#66)", () => {
+  it("says how many sessions the cost total leaves out", () => {
+    const st = stateFrom({ sessions: [makeSession()], kpis: makeKpis({ unpricedSessions: 2 }) });
+    render(<FleetView state={st} />);
+    expect(screen.getByText("not counting 2 unpriced sessions")).toBeInTheDocument();
+  });
+
+  it("adds no note when every session is priced", () => {
+    render(<FleetView state={stateFrom({ sessions: [makeSession()] })} />);
+    expect(screen.queryByText(/unpriced/)).toBeNull();
+  });
+});
+

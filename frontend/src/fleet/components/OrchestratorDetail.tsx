@@ -1,8 +1,8 @@
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtDur, fmtPct, fmtTok } from "../format";
 import { sessionElapsedSec } from "../logic";
 import type { SessionView } from "../types";
 import { reporterBelow, SkillChips, ToolChips } from "./AgentDetail";
-import { BlowBadge, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
+import { BlowBadge, Cost, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
 import { IconBack } from "./Icons";
 import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
@@ -42,7 +42,7 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
           <dt>Tokens</dt>
           <dd className="mono">{fmtTok(s.tokensTotal)}</dd>
           <dt>Est. cost</dt>
-          <dd className="mono">{fmtUsd(s.costUsd)}</dd>
+          <dd className="mono"><Cost usd={s.costUsd} family={s.modelFamily} /></dd>
           <dt>Time</dt>
           <dd className="mono">{fmtDur(sessionElapsedSec(s, now))}</dd>
           {s.loop && (

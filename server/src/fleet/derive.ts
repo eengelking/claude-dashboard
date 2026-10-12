@@ -19,9 +19,10 @@ import type {
 
 export const SERIES_POINTS = 60;
 
-/** Model family by case-insensitive substring (SPEC 6.5). */
+/** Model family by case-insensitive substring, for Claude models only (SPEC 6.5); mirrors the mod. */
 export function family(model: string | null | undefined): ModelFamily {
   const m = (model ?? '').toLowerCase();
+  if (!/^(opus|sonnet|haiku|fable|opusplan)(\[[^\]]*\])?$/.test(m) && !m.includes('claude')) return 'other';
   if (m.includes('opus')) return 'opus';
   if (m.includes('sonnet')) return 'sonnet';
   if (m.includes('haiku')) return 'haiku';
@@ -271,6 +272,7 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
     planDone: 0,
     planTotal: 0,
     costToday: input.costToday,
+    unpricedSessions: 0,
     tokensLastMinute: 0,
     blowoutsTotal: 0,
     sessionsAtLevel2: 0,
@@ -287,6 +289,7 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
       k.planTotal += v.plan.steps.length;
       k.planDone += v.plan.steps.filter((s) => s.state === 'done').length;
     }
+    if (v.modelFamily === 'other' && v.model) k.unpricedSessions++;
     k.blowoutsTotal += v.blowouts.total;
     if (v.blowouts.level === 2) k.sessionsAtLevel2++;
   }

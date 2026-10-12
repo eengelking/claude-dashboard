@@ -173,3 +173,20 @@ describe('ingestReport', () => {
     expect(res.clockSkewMs).toBe(42 - T0);
   });
 });
+
+describe('ingestReport with a model that has no price (#66)', () => {
+  it('drops a cost an older reporter priced as Sonnet, and keeps a Claude model\'s cost', () => {
+    const r = fixtureReport();
+    const local: Report = {
+      ...r,
+      agents: r.agents.map((a) => ({ ...a, model: 'llama3.1:8b', costUsdEst: 0.4 })),
+      session: { ...r.session, model: 'llama3.1:8b', costUsd: 3.2 },
+    };
+    ingestReport(f, local, T0);
+    expect(f.getSession(r.session.id)!.cost_usd).toBeNull();
+    expect(f.getAgents(r.session.id).every((a) => a.cost_usd_est === null)).toBe(true);
+    const f2 = new FleetDb(openDb(':memory:'));
+    ingestReport(f2, r, T0);
+    expect(f2.getSession(r.session.id)!.cost_usd).toBe(r.session.costUsd);
+  });
+});

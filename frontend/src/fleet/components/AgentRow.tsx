@@ -1,8 +1,8 @@
 import { forwardRef } from "react";
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtDur, fmtPct, fmtTok } from "../format";
 import { agentElapsedSec, agentTokens, type Guide } from "../logic";
 import type { AgentView } from "../types";
-import { BlowBadge, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
+import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
 import { IconFork, IconSub } from "./Icons";
 
 function Indent({ guides }: { guides: Guide[] }) {
@@ -57,7 +57,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
         <BlowBadge n={a.blowouts} />
       </div>
       <div className="num c-tok">{fmtTok(agentTokens(a))}</div>
-      <div className="num">{fmtUsd(a.costUsdEst)}</div>
+      <div className="num"><Cost usd={a.costUsdEst} family={a.modelFamily} /></div>
       <div className="num">{fmtDur(agentElapsedSec(a, now))}</div>
       <div className="cell">
         <StatusChip status={a.status} />

@@ -102,7 +102,7 @@ export interface AgentReport {
   endedAt: number | null;
   context: ContextFill;
   tokens: TokenCounts;
-  costUsdEst: number;
+  costUsdEst: number | null;
   skills: string[];
   lastTool: string | null;
   toolCalls: number;

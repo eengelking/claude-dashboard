@@ -310,7 +310,7 @@ export function step(s0: SessionState, i: StepInput, now: number): SessionState 
   if (u) {
     const t = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
     next.tokens = { input: loop.tokens.input + t.input, output: loop.tokens.output + t.output, cacheRead: loop.tokens.cacheRead + t.cacheRead, cacheWrite: loop.tokens.cacheWrite + t.cacheWrite };
-    next.cost = loop.cost + costOf(t, model);
+    next.cost = loop.cost + (costOf(t, model) ?? 0);
     next.ctxTokens = t.input + t.cacheRead + t.cacheWrite;
     next.window = windowOf(model);
   }
@@ -682,7 +682,7 @@ export function setExplanation(s: SessionState, agentId: string, text: string, u
   const explanation = excerpt(text, 400);
   if (!explanation) return s;
   const cost = usage
-    ? costOf({ input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheWrite: usage.cache_creation_input_tokens || 0 }, model)
+    ? costOf({ input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheWrite: usage.cache_creation_input_tokens || 0 }, model) ?? 0
     : 0;
   return { ...s, agents: { ...s.agents, [agentId]: { ...a, failure: { ...a.failure, explanation }, cost: a.cost + cost } }, dirty: true };
 }

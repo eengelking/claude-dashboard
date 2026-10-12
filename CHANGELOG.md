@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Changed
+
+- A session that runs a model that is not a Claude model, such as one served by Ollama, is no longer priced as Sonnet or given a 1,000,000-token window. It keeps its own model name with an "other" chip that says it is not a Claude model, its cost reads "n/a" with the reason, its context shows as unknown when Claude Code does not report a window, and the "Est. cost today" tile leaves it out and says how many sessions it skipped. A model whose name merely contains `opus`, `sonnet`, `haiku` or `fable` (`my-sonnet-finetune`) is no longer taken for that family; only a bare alias or an id containing `claude` is. Claude models are unchanged. A report can now carry `null` for an agent's `costUsdEst`, so this moves the mod to 0.5.0 and the supported reporter range to 0.2.0–0.5.0; a 0.5.0 mod talking to an older server may have a report with a null cost rejected, and the version notice says to upgrade the server. (#66)
+
 ### Added
 
 - The orchestrator panel now shows Steps, the tools it used as chips (most used first, as in the agent panel) and Skills loaded, on the live page and on the History page. They are the orchestrator's own: calls made by the agents it launched stay in those agents' panels. This adds a `loop` block to the report's `session` (SPEC 6.2), a database migration (version 3, a nullable `sessions.loop_json`), and moves the mod to 0.4.0 and the supported reporter range to 0.2.0–0.4.0. A mod older than 0.4.0 sends no `loop`, so its panel stays as it was and one note says the rows need podium-reporter 0.4.0 or later; a settings-hooks session shows neither the rows nor the note. The update notes (this one and the agent panel's tool-counts one) now ignore a version that is not plain `major.minor.patch`, such as the simulator's `0.1.0-sim`, and this one is not shown for an ended session. (#75)

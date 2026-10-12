@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { fmtDur, fmtPct, fmtTok } from "../format";
 import { agentElapsedSec, agentTokens } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { BlowoutBox } from "./BlowoutBox";
-import { BlowBadge, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
+import { BlowBadge, Cost, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
 import { FailureBox } from "./FailureBox";
 import { IconBack, IconFork, IconSub } from "./Icons";
 
@@ -136,7 +136,7 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
           <dt>Tokens</dt>
           <dd className="mono">{fmtTok(agentTokens(a))}</dd>
           <dt>Est. cost</dt>
-          <dd className="mono">{fmtUsd(a.costUsdEst)}</dd>
+          <dd className="mono"><Cost usd={a.costUsdEst} family={a.modelFamily} /></dd>
           <dt>Time</dt>
           <dd className="mono">{fmtDur(agentElapsedSec(a, now))}</dd>
           <dt>Steps</dt>
