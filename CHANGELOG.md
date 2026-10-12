@@ -14,7 +14,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
-- Color themes: a Theme dropdown in the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin, GitHub) with a Light, Dark or System mode for each, replacing the Theme toggle button. Podium stays the default, an old light or dark choice carries over, and the choice is applied before first paint. The palettes are credited in `THIRD_PARTY_NOTICES.md`, and `scripts/theme-contrast.ts` checks contrast for every theme and mode. (#32)
+- Color themes: a Theme dropdown in the row under the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin, GitHub) with a Light, Dark or System mode for each, replacing the Theme toggle button. A footer in the bottom left of the left rail links the palette credits and the license and shows the copyright. Podium stays the default, an old light or dark choice carries over, and the choice is applied before first paint. The palettes are credited in `THIRD_PARTY_NOTICES.md`, and `scripts/theme-contrast.ts` checks contrast for every theme and mode. (#32)
 - The left pane, the right pane and the top bar collapse and expand on their own, from edge buttons and from `[`, `]` and `\`, and are remembered across reloads. A Wall mode button (or `w`) collapses all three at once, asks for fullscreen, hides the cursor and its own buttons after a few idle seconds, and leaves with `Esc` or the Exit button. A lost connection still shows its red alert with everything collapsed. (#33)
 - A heartbeat-lost card, its rail row and its page have a Remove control that takes the session off the wall at once in every open tab. The session stays in History and returns if it reports again. (#41)
 

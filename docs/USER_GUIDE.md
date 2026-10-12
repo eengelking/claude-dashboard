@@ -55,10 +55,10 @@ Give a session a name that shows on its card with `/podium name <text>`.
 ## Reading the dashboard
 
 The top bar shows the connection (`N reporters live, synced Xs ago`, or a red "disconnected, retrying"), a
-clock and a theme picker. The left rail lists your sessions. The right panel shows activity.
+clock. The row under it has the theme picker. The left rail lists your sessions. The right panel shows activity.
 Drag the handles between the columns to resize them.
 
-**Themes.** Pick a color theme from the Theme dropdown in the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin or GitHub), then choose Light, Dark or System for it. System follows your operating system and changes with it. Podium is the default. Your choice is kept in this browser, and a light or dark choice from an older version carries over as Podium in that mode. The palettes belong to their authors and are credited under Theme credits and in `THIRD_PARTY_NOTICES.md`.
+**Themes.** Pick a color theme from the Theme dropdown in the row under the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin or GitHub), then choose Light, Dark or System for it. System follows your operating system and changes with it. Podium is the default. Your choice is kept in this browser, and a light or dark choice from an older version carries over as Podium in that mode. The palettes belong to their authors and are credited under Theme credits at the bottom left of the left rail, next to a License link, and in `THIRD_PARTY_NOTICES.md`.
 
 For a wall display, collapse what you do not need. Each of the left pane, the right pane and the top bar
 collapses from its own button and from a key: `[` for the left pane, `]` for the right pane and `\` for

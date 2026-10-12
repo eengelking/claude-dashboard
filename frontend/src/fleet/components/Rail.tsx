@@ -1,6 +1,7 @@
 import { agentCounts, planProgress } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, ModelChip, PlanBar } from "./Chips";
+import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
 
 export interface Split {
@@ -85,6 +86,18 @@ export function Rail(props: {
           </div>
         );
       })}
+      <footer className="rail-foot">
+        <span>
+          <a href={NOTICES_URL} target="_blank" rel="noreferrer">
+            Theme credits
+          </a>
+          {" · "}
+          <a href={LICENSE_URL} target="_blank" rel="noreferrer">
+            License
+          </a>
+        </span>
+        <span>{COPYRIGHT}</span>
+      </footer>
       </div>
     </nav>
   );

@@ -253,7 +253,7 @@ Run in Chrome (Claude in Chrome) against the dev server, Vite, and either `podiu
 
 | Item (SPEC 8.1) | 1440 dark | 1440 light | 400 dark | 400 light |
 |---|---|---|---|---|
-| Top bar: logo, connection pill, clock, theme picker, link to usage | yes | yes | yes | yes |
+| Top bar: logo, connection pill, clock, theme toggle, link to usage | yes | yes | yes | yes |
 | Connection pill shows "disconnected, retrying" with the server stopped, recovers by itself | yes (at once; back 2.3 s after restart) | | | |
 | Three columns, drag handles (real drag 340 -> 510 px, saved), double-click reset, focus ring | yes | yes | hidden, stacked | hidden, stacked |
 | Rail: status dot, name, blowout badge, model chip, plan bar, agents; red edge at level 2 | yes | yes | yes | yes |

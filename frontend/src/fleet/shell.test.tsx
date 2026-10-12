@@ -241,7 +241,32 @@ describe("theme picker", () => {
     expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("radio", { name: "Light" })).toHaveAttribute("tabindex", "-1");
-    expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("THIRD_PARTY_NOTICES"));
+  });
+
+  it("sits in the info row under the top bar, not in the top bar", () => {
+    osPrefers(true);
+    const { container } = render(<FleetView state={stateFrom()} />);
+    const select = screen.getByRole("combobox", { name: "Theme" });
+    expect(select.closest(".banner")).not.toBeNull();
+    expect(container.querySelector(".top")!.contains(select)).toBe(false);
+  });
+
+  it("goes away with the top bar", () => {
+    osPrefers(true);
+    render(<FleetView state={stateFrom()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Hide top bar" }));
+    expect(screen.queryByRole("combobox", { name: "Theme" })).not.toBeInTheDocument();
+  });
+});
+
+describe("rail footer", () => {
+  it("links the theme credits and the license and carries the copyright", () => {
+    const { container } = render(<FleetView state={stateFrom()} />);
+    const foot = container.querySelector(".rail .rail-foot") as HTMLElement;
+    expect(foot).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("THIRD_PARTY_NOTICES.md"));
+    expect(screen.getByRole("link", { name: "License" })).toHaveAttribute("href", expect.stringMatching(/\/LICENSE$/));
+    expect(foot).toHaveTextContent("© 2026 Ed Engelking");
   });
 });
 

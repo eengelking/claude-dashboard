@@ -456,13 +456,20 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .ritem-slot.has-remove .ritem .l1 { padding-right: 30px; }
 .podium .remove-inline { margin-left: 10px; }
 
-/* theme picker (top bar) */
+/* theme picker (info row under the top bar) */
 .podium .themepick { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .podium .themepick .field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
-.podium .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.podium .seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--raised); border: 0; padding: 5px 9px; cursor: pointer; }
-.podium .seg button + button { border-left: 1px solid var(--border); }
-.podium .seg button:hover { background: var(--sel); }
-.podium .seg button[aria-checked="true"] { background: var(--sel); color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
-.podium .seg button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: -2px; }
-.podium .themepick .credits { font-size: 12px; color: var(--muted); }
+.podium .modeseg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.podium .modeseg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--raised); border: 0; padding: 5px 9px; cursor: pointer; }
+.podium .modeseg button + button { border-left: 1px solid var(--border); }
+.podium .modeseg button:hover { background: var(--sel); }
+.podium .modeseg button[aria-checked="true"] { background: var(--sel); color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.podium .modeseg button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: -2px; }
+.podium .banner.has-picker { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.podium .banner.has-picker .themepick { margin-left: auto; }
+.podium .banner.has-picker .sel, .podium .banner.has-picker .modeseg button { padding-block: 3px; }
+
+/* rail footer: credits, license and copyright, pinned to the bottom left of the rail */
+.podium #podium-rail-body:not([hidden]) { min-height: 100%; display: flex; flex-direction: column; }
+.podium .rail-foot { margin-top: auto; padding: 9px 14px; border-top: 1px solid var(--border); font-size: 11.5px; line-height: 1.4; color: var(--muted); display: grid; gap: 2px; }
+.podium .rail-foot a { color: var(--ink2); text-decoration: underline; text-underline-offset: 2px; }

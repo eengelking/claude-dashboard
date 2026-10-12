@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { ModeChoice } from "../themes";
-import { NOTICES_URL, THEMES } from "../themes";
+import { THEMES } from "../themes";
 import type { useTheme } from "../useTheme";
 
 const MODES: { id: ModeChoice; label: string }[] = [
@@ -21,8 +21,8 @@ function onRadioKey(e: KeyboardEvent<HTMLDivElement>, mode: ModeChoice, set: (m:
   buttons[MODES.findIndex((m) => m.id === next)]?.focus();
 }
 
-// A theme dropdown plus a light/dark/system radio group. The palettes are other people's work, so the
-// credits link sits next to the control.
+// A theme dropdown plus a light/dark/system radio group, shown at the right of the info row under the
+// top bar. The palette credits are in the rail footer.
 export function ThemePicker({ theme }: { theme: ReturnType<typeof useTheme> }) {
   const current = THEMES.find((t) => t.id === theme.theme);
   return (
@@ -37,16 +37,13 @@ export function ThemePicker({ theme }: { theme: ReturnType<typeof useTheme> }) {
           ))}
         </select>
       </label>
-      <div className="seg" role="radiogroup" aria-label="Mode" onKeyDown={(e) => onRadioKey(e, theme.mode, theme.setMode)}>
+      <div className="modeseg" role="radiogroup" aria-label="Mode" onKeyDown={(e) => onRadioKey(e, theme.mode, theme.setMode)}>
         {MODES.map((m) => (
           <button key={m.id} type="button" role="radio" aria-checked={theme.mode === m.id} tabIndex={theme.mode === m.id ? 0 : -1} onClick={() => theme.setMode(m.id)}>
             {m.label}
           </button>
         ))}
       </div>
-      <a className="credits" href={NOTICES_URL} target="_blank" rel="noreferrer">
-        Theme credits
-      </a>
     </div>
   );
 }

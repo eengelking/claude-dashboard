@@ -6,6 +6,7 @@ import { filterSessions, defaultAgentDir, sortSessions, type AgentSortKey, type 
 import { PAGE } from "./components/ActivityList";
 import type { AgentSort } from "./components/AgentTree";
 import { FocusView } from "./components/FocusView";
+import { ThemePicker } from "./components/ThemePicker";
 import { Rail, type Split } from "./components/Rail";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SidePanel } from "./components/SidePanel";
@@ -227,7 +228,6 @@ export function FleetView({ state }: { state: FleetState }) {
           reporters={reporters}
           lastMessageAt={state.lastMessageAt}
           now={now}
-          theme={theme}
           collapsed={panes.collapsed.top}
           onCollapse={() => toggle("top")}
           wall={wallButton}
@@ -248,8 +248,11 @@ export function FleetView({ state }: { state: FleetState }) {
             <b>Cannot reach the Podium server.</b> Start it with <code>npm run dev</code> (or <code>npm run dev -w server</code>); this page connects by itself.
           </div>
         ) : panes.collapsed.top ? null : (
-          <div className="banner">
-            <b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.
+          <div className="banner has-picker">
+            <span>
+              <b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.
+            </span>
+            <ThemePicker theme={theme} />
           </div>
         )}
         <div className="cols" ref={cols} style={colStyle}>

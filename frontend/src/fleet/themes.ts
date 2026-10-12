@@ -6,8 +6,6 @@ export type ModeChoice = Mode | "system";
 export type ThemeChoice = { theme: string; mode: ModeChoice };
 export type ThemeInfo = { id: string; label: string; credit: string; modes: readonly Mode[] };
 
-export const NOTICES_URL = "https://github.com/eengelking/podium/blob/main/THIRD_PARTY_NOTICES.md";
-
 export const THEMES: readonly ThemeInfo[] = [
   { id: "podium", label: "Podium", credit: "Podium's own palette", modes: ["light", "dark"] },
   { id: "solarized", label: "Solarized", credit: "Ethan Schoonover, MIT license", modes: ["light", "dark"] },

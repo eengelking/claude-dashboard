@@ -89,10 +89,12 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
           <a className="btn" href="#/">
             Live fleet
           </a>
-          <ThemePicker theme={theme} />
         </header>
-        <div className="banner">
-          <b>Past sessions.</b> Read-only: built from what the server stored. Cost is an estimate, not a bill.
+        <div className="banner has-picker">
+          <span>
+            <b>Past sessions.</b> Read-only: built from what the server stored. Cost is an estimate, not a bill.
+          </span>
+          <ThemePicker theme={theme} />
         </div>
         <div className="history">
           <main className="main">
