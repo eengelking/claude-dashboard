@@ -450,7 +450,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .card-slot.has-remove > .card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
 .podium .remove-bar { display: flex; justify-content: flex-end; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; }
 .podium .card-slot .remove { padding: 2px 10px; }
-.podium .ritem-slot { position: relative; min-width: 0; }
+.podium .ritem-slot { position: relative; min-width: 0; flex-shrink: 0; }
 .podium .ritem-slot .rx { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--raised); color: var(--ink2); font-size: 14px; line-height: 1; }
 .podium .ritem-slot .rx:hover, .podium .ritem-slot .rx:focus-visible { background: var(--sel); color: var(--ink); }
 .podium .ritem-slot.has-remove .ritem .l1 { padding-right: 30px; }
