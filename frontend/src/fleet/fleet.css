@@ -154,7 +154,8 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium button.card:hover { border-color: var(--axis); background: var(--raised); }
 .podium .card .h { display: flex; align-items: center; gap: 8px; }
 .podium .card .nm { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.podium .card .path { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* rtl puts the ellipsis at the front of an over-long path so the last folders stay visible; the bdi keeps the text itself in reading order */
+.podium .card .path { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .podium .card .meta { display: flex; gap: 8px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
 .podium .card .plan { margin-top: 10px; }
 .podium .card .plan .t { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }
@@ -280,6 +281,13 @@ body.podium-resizing * { cursor: col-resize !important; }
 .podium .git .wt.no { color: var(--muted); border-style: dashed; }
 .podium .git .dirty { color: var(--warn); }
 .podium .card .git { margin-top: 5px; }
+.podium .card .git > span { flex: none; white-space: nowrap; overflow-wrap: normal; }
+/* The branch starts narrow so the other chips stay on its line, then grows into the free space; a name that does not fit ends in an ellipsis. */
+.podium .card .git > .br { flex: 1 1 8ch; min-width: 8ch; }
+.podium .card .git > .wt { flex: 0 1 auto; max-width: 16ch; }
+.podium .card .git .br svg, .podium .card .git .wt svg { flex: none; }
+.podium .git .brn, .podium .git .wtn { min-width: 0; }
+.podium .card .git .brn, .podium .card .git .wtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* context blowouts */
 .podium .blow { display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11.5px; font-weight: 600; white-space: nowrap; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); color: var(--ink); background: color-mix(in srgb, var(--warn) 16%, transparent); }

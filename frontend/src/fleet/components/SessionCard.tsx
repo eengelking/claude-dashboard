@@ -36,7 +36,9 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         <span className="nm">{s.name}</span>
         <StatusChip status={s.status} />
       </div>
-      <div className="path mono">{s.project}</div>
+      <div className="path mono" title={s.project}>
+        <bdi>{s.project}</bdi>
+      </div>
       <GitLine git={s.git} />
       <div className="meta">
         <ModelChip family={s.modelFamily} model={s.model} />

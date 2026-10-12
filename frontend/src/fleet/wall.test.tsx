@@ -88,6 +88,17 @@ describe("git line", () => {
     const { container } = render(<GitLine git={{ branch: "1a2b3c4", detached: true, isWorktree: false, worktreePath: null, ahead: 0, behind: 0, dirty: 1 }} />);
     expect(container.textContent).toContain("1a2b3c4 (detached)");
   });
+  it("a long branch name sits in its own truncating element and its tooltip carries the full name", () => {
+    const branch = "chore/marketplace-description-and-name-fixes";
+    const { container } = render(<GitLine git={{ branch, detached: false, isWorktree: true, worktreePath: "/r/.claude/worktrees/x", ahead: 1, behind: 2, dirty: 3 }} />);
+    expect(container.querySelector(".br .brn")?.textContent).toBe(branch);
+    expect(container.querySelector(".br")?.getAttribute("title")).toBe(`Branch: ${branch}`);
+    expect(container.textContent).toContain("3 modified");
+  });
+  it("a detached head's tooltip still says so and carries the full value", () => {
+    const { container } = render(<GitLine git={{ branch: "1a2b3c4", detached: true, isWorktree: false, worktreePath: null, ahead: 0, behind: 0, dirty: 0 }} />);
+    expect(container.querySelector(".br")?.getAttribute("title")).toBe("Detached HEAD: 1a2b3c4");
+  });
   it("git: null shows nothing", () => {
     const { container } = render(<GitLine git={null} />);
     expect(container.innerHTML).toBe("");
@@ -96,6 +107,12 @@ describe("git line", () => {
 
 describe("session card", () => {
   const renderCard = (s = makeSession()) => render(<SessionCard s={s} now={2_000_000} config={CFG} entering={false} leaving={false} onOpen={() => {}} />);
+
+  it("the project path's tooltip is the full path", () => {
+    const project = "/Users/someone/dev/a/very/long/path/to/some/deeply-nested/project-folder";
+    const { container } = renderCard(makeSession({ project }));
+    expect(container.querySelector(".path")?.getAttribute("title")).toBe(project);
+  });
 
   it("level 1: amber badge, no red edge, no callout", () => {
     const { container } = renderCard(makeSession({ blowouts: blow(1, 0, 1) }));

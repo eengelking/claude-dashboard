@@ -88,15 +88,17 @@ export function GitLine({ git }: { git: GitInfo | null }) {
   const wtName = git.worktreePath ? git.worktreePath.split("/").filter(Boolean).pop() : null;
   return (
     <div className="git">
-      <span className="br" title={git.detached ? "Detached HEAD" : "Branch"}>
+      <span className="br" title={`${git.detached ? "Detached HEAD" : "Branch"}: ${git.branch ?? "unknown"}`}>
         <IconBranch />
-        {git.branch ?? "unknown"}
-        {git.detached ? " (detached)" : ""}
+        <span className="brn">
+          {git.branch ?? "unknown"}
+          {git.detached ? " (detached)" : ""}
+        </span>
       </span>
       {git.isWorktree ? (
         <span className="wt" title={`Git worktree at ${git.worktreePath ?? "unknown path"}`}>
           <IconTree />
-          worktree{wtName ? ` · ${wtName}` : ""}
+          <span className="wtn">worktree{wtName ? ` · ${wtName}` : ""}</span>
         </span>
       ) : (
         <span className="wt no" title="Working in the main checkout">

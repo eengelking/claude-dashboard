@@ -21,6 +21,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- A long branch name on a session card no longer wraps or makes the card taller: it ends in an ellipsis, and
+  a long worktree name does the same, with the full value in the tooltip. A project path that does not fit is
+  now cut from the front, so the last folders stay visible, and its tooltip shows the full path. The focused
+  view still shows both in full. (#19)
 - A session card whose content is shorter than the card beside it now starts at the top, with the extra
   space at the bottom, instead of centering its content vertically. The cards in a row still stretch to the
   same height. (#17)
