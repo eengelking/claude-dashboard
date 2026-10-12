@@ -144,3 +144,10 @@ Both need Claude Code installed, and CI cannot run them. Run them locally when y
 Installed copies only update when `version` in `mod/podium-reporter/.claude-plugin/plugin.json` changes.
 Bump it in the same PR, together with `VERSION` in `mod/podium-reporter/hooks/register.ts` (the number the
 mod reports; a test checks the two match). CI (`mod-version-check`) fails a PR that forgets the first.
+
+### A new color theme shows up in the dropdown but the page stays on Podium's colors
+
+A theme lives in three places: its entry in `frontend/src/fleet/themes.ts`, its light and dark token blocks
+in `themes.css`, and the id list in the inline script in `frontend/index.html` that applies the choice
+before first paint. `themes.test.ts` fails if they disagree. A new palette also needs an entry in
+`THIRD_PARTY_NOTICES.md` and a clean run of `npx tsx scripts/theme-contrast.ts`.

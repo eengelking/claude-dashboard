@@ -110,7 +110,7 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     per-session `dropAt` instead, which stays right after a restart and for hook-only sessions). All additive.
 21. **CSS scoping.** Every Podium rule is scoped under `.podium` and the tokens are defined on `.podium`, not
     `:root`, apart from a small document base (`html`, `body`, `#root` height and margin) in `fleet.css`.
-    The theme attribute lives on `<html>` (`data-theme`), as in the mockup.
+    The theme attributes live on `<html>`: `data-theme` (resolved light or dark, as in the mockup), `data-theme-name` (the palette) and `data-mode` (light, dark or system). Podium's palette stays in `fleet.css`; the other five are token blocks in `themes.css`, selected by `[data-theme-name][data-theme]`, which also set the page background on `<html>`. `useTheme` sets the attributes and an inline script in `index.html` sets them before first paint from the same `podium.theme` value (`themes.test.ts` checks the two lists agree).
 22. **Routing.** `main.tsx` picks the view with `routeFor` (`route.ts`): `#/history` is the history view and
     every other hash, including the retired `#/usage`, is the fleet console. The mockup's Pause, Start session and Clear buttons are left out (8.1 says they belong to the simulator).
 23. **Resync on reconnect.** The server sends a full `snapshot` (the `/state` body) on every SSE connect,
@@ -253,7 +253,7 @@ Run in Chrome (Claude in Chrome) against the dev server, Vite, and either `podiu
 
 | Item (SPEC 8.1) | 1440 dark | 1440 light | 400 dark | 400 light |
 |---|---|---|---|---|
-| Top bar: logo, connection pill, clock, theme toggle, link to usage | yes | yes | yes | yes |
+| Top bar: logo, connection pill, clock, theme picker, link to usage | yes | yes | yes | yes |
 | Connection pill shows "disconnected, retrying" with the server stopped, recovers by itself | yes (at once; back 2.3 s after restart) | | | |
 | Three columns, drag handles (real drag 340 -> 510 px, saved), double-click reset, focus ring | yes | yes | hidden, stacked | hidden, stacked |
 | Rail: status dot, name, blowout badge, model chip, plan bar, agents; red edge at level 2 | yes | yes | yes | yes |
@@ -389,7 +389,7 @@ Fixed test-first (see Spec question 10).
 ### Phase 2: frontend
 
 Built: `frontend/src/fleet/` (`FleetApp`, `useFleet`, `store.ts` reducer, `logic.ts`, `chart.ts`,
-`format.ts`, `useTheme`, `useResizable`, `usePanes`, `useHotkeys`, `useIdle`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
+`format.ts`, `useTheme`, `themes.ts`, `themes.css`, `ThemePicker`, `useResizable`, `usePanes`, `useHotkeys`, `useIdle`, `useNow`, `storage.ts`, `fleet.css` and the components in 8.2) and
 hash routing in `main.tsx` (`#/` fleet, `#/history`; the old `#/usage` app was removed in #30).
 
 Verified by tests (frontend suite 89 tests, plus the old app's 15 that existed then): reducer actions and the 150 cap;
