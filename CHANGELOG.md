@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Documentation
+
+- The README and the user guide now say that load grows with the number of sessions and agents reporting, what grows on the server and in each open tab, an example measurement from #81, how to measure your own with `scripts/gpu-sample.sh`, and what lowers it. (#107)
+
 ### Fixed
 
 - The facts bar on the orchestrator page now adds up. The orchestrator's row showed the whole session's cost, the same figure as the bar, so the rows summed to far more than the total; it now shows its own share (the session's cost less each agent's estimate) and the rows add up to the bar. A real run confirmed that Claude Code's session figure includes every agent: it rose by about the new agent's estimate when one finished. The Agents cell counts the orchestrator (running while the session runs, done once it is done, neither while it is stale), as do the rail and the card. A new **Agent time** cell sums the orchestrator's time and every agent's, beside the wall-clock **Running for**. The Orchestrator model and Context cells are gone, because the orchestrator's row in the agent table already shows its model, effort and context. The wall's "agents running" tile still counts agents only. (#109)

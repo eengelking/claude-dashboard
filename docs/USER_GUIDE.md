@@ -72,6 +72,16 @@ to how it was. After a few seconds without movement the cursor and the buttons h
 a key to bring them back. If the connection to the server is lost, a red alert stays on screen even with
 everything collapsed. Below 1040 px wide the panes stack, and the buttons fold a stacked section instead.
 
+**What it costs to run.** The more sessions and agents report, the more Podium needs: every agent adds data
+that the server stores and sends to the browser, and the browser draws it. The server's CPU and memory (ingest,
+SQLite, the state sent to every client) are used whether or not a browser is open. The browser's CPU, memory and
+GPU (more rows, charts, animations and updates to draw) are used by each open tab. As one example, Chrome on an
+M5 MacBook Pro used about 24% GPU with ten simulated sessions and a hundred agents on screen, against about 15%
+for a plain page. That is one machine and one browser, not a promise; `scripts/gpu-sample.sh` (macOS) measures
+your own. To lower it, keep fewer sessions on screen, leave the tab hidden (animations pause while it is), use
+wall mode, which hides the side panes and top bar so the browser stops drawing them, and close the dashboard
+when nobody is looking.
+
 ### The wall
 
 The default view (`#/`) is a card per session. At the top are six tiles: sessions live, agents running,

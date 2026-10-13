@@ -47,6 +47,24 @@ which show under Admin when they send the admin secret with `--token`.
 To serve the built UI and the API without a container, `npm run build` and then `npm run start -w server`
 (http://127.0.0.1:4317). `podiumctl`, below, does the same thing and manages it for you.
 
+### What it costs to run
+
+The more sessions and agents report, the more Podium needs. Every agent adds data that the server stores and
+sends to the browser, and the browser draws it, so the work grows with the amount of data consumed.
+
+- **Server CPU and memory** grow with ingest, the SQLite writes and the state sent to every open client. This
+  load is there whether or not a browser is open.
+- **Browser CPU, memory and GPU** grow with the rows, charts, animations and updates to draw. This load is
+  per open tab.
+
+As one example, Chrome on an M5 MacBook Pro used about 24% GPU with ten simulated sessions and a hundred
+agents on screen, against about 15% for a plain page (#81). That is one machine and one browser, not a
+promise. To measure your own, open a tab and run `scripts/gpu-sample.sh` (macOS; `--help` lists its options).
+
+To lower it, keep fewer sessions on screen, leave the tab hidden (animations pause while it is), use wall mode
+(`w`), which hides the side panes and top bar so the browser stops drawing them, and close the dashboard when
+nobody is looking.
+
 ## Run it as a service (podiumctl)
 
 `bin/podiumctl.mjs` starts, stops and watches the server without a dev setup. It runs Podium either in
