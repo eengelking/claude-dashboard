@@ -125,8 +125,11 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       {s.status === "waiting" && <div className="alert">{waitSummary(s).lead}</div>}
       {s.status === "stale" && (
         <div className="alert stale">
-          Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in{" "}
-          <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>.
+          {/* One child: .alert is a flex row, and its gap would otherwise open between every text run and span. */}
+          <span>
+            Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in{" "}
+            <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>.
+          </span>
         </div>
       )}
       <div className="foot">

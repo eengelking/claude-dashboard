@@ -52,6 +52,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- The heartbeat-lost message on a card, and the same notice on the orchestrator page, now reads as one sentence.
+  It used to show wide gaps around the time and a gap before the final period (`Last heartbeat 0:34 ago. Goes
+  away in 41 s .`), because the alert box spaced every piece of text and every time as a separate item. The
+  wording and the countdown format are unchanged. (#87)
 - In the activity list the colored square now sits level with the time and the first line of text. It used to
   be centered in the row, so on a row that wrapped to two lines (the text and the `Open agent` link) it floated
   between them. The square keeps its size and color; the yellow ring on a waiting row moves with it. (#88)

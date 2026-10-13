@@ -45,15 +45,18 @@ export function FocusView(props: {
       {s.status === "stale" && (
         <div className="card notice" style={{ cursor: "default" }}>
           <div className="alert stale" style={{ margin: 0 }}>
-            No heartbeat for <span className="mono">{fmtDur(Math.max(0, (now - s.lastSeenAt) / 1000))}</span>. The session may have crashed or
-            been closed without a clean exit. It goes away in{" "}
-            <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>
-            {props.onRemove ? ", or you can remove it now." : "."}
-            {props.onRemove && (
-              <button type="button" className="btn remove-inline" onClick={() => props.onRemove?.(s.id)}>
-                Remove now
-              </button>
-            )}
+            {/* One child: .alert is a flex row, and its gap would otherwise open between every text run and span. */}
+            <span>
+              No heartbeat for <span className="mono">{fmtDur(Math.max(0, (now - s.lastSeenAt) / 1000))}</span>. The session may have crashed or
+              been closed without a clean exit. It goes away in{" "}
+              <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>
+              {props.onRemove ? ", or you can remove it now." : "."}
+              {props.onRemove && (
+                <button type="button" className="btn remove-inline" onClick={() => props.onRemove?.(s.id)}>
+                  Remove now
+                </button>
+              )}
+            </span>
           </div>
         </div>
       )}

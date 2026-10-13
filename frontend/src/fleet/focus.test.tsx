@@ -48,6 +48,14 @@ describe("orchestrator page", () => {
     expect(screen.getByText(/api-refactor ended and left the fleet/)).toBeInTheDocument();
   });
 
+  it("the heartbeat-lost notice is one flex child, so the alert's gap cannot split the sentence (#87)", () => {
+    const { container } = openFocus({ status: "stale", dropAt: Date.now() + 41_000 });
+    const alert = container.querySelector(".notice .alert.stale")!;
+    expect(alert.textContent).toMatch(/It goes away in .*\./);
+    expect(alert.childNodes).toHaveLength(1);
+    expect(alert.firstChild!.nodeType).toBe(Node.ELEMENT_NODE);
+  });
+
   it("has the facts bar with Copy resume command as the last cell", () => {
     const { container } = openFocus();
     const cells = [...container.querySelectorAll(".facts > .fact")];

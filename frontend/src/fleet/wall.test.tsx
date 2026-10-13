@@ -163,6 +163,15 @@ describe("session card", () => {
     expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Goes away in 37 s.");
   });
 
+  it("the heartbeat-lost message is one flex child, so the alert's gap cannot split the sentence (#87)", () => {
+    const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 34_000, dropAt: 2_000_000 + 41_000 }));
+    const alert = container.querySelector(".alert.stale")!;
+    expect(alert.textContent).toBe("Last heartbeat 0:34 ago. Goes away in 41 s.");
+    // .alert is display: flex with a gap; every text run or element directly inside it gets that gap around it.
+    expect(alert.childNodes).toHaveLength(1);
+    expect(alert.firstChild!.nodeType).toBe(Node.ELEMENT_NODE);
+  });
+
   it("a heartbeat-lost card counts down to the server's drop time, which can be later than the last heartbeat plus 75 s (#41)", () => {
     // The last heartbeat was 3:49 ago, but the server restarted since: the drop clock started then.
     const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 229_000, dropAt: 2_000_000 + 72_000 }));
