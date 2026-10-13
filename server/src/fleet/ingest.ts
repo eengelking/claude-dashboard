@@ -83,6 +83,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     attached: s.attached == null ? null : s.attached ? 1 : 0,
     // The clock starts at the first report with nobody attached and keeps running while that stays true.
     detached_at: s.attached === false ? (prev?.attached === 0 && prev.detached_at !== null ? prev.detached_at : serverTime) : null,
+    owner: prev?.owner ?? null,
   };
 }
 

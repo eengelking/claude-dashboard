@@ -73,6 +73,32 @@ CREATE TABLE samples (
     // Whether any client is attached (1 or 0; NULL when the reporter does not say), and when it first reported nobody attached.
     sql: 'ALTER TABLE sessions ADD COLUMN attached INTEGER; ALTER TABLE sessions ADD COLUMN detached_at INTEGER;',
   },
+  {
+    version: 6,
+    // Per-person tokens, groups, the admin log and server settings (SPEC 7.2, issue #36). A token is never stored,
+    // only its SHA-256 and its last four characters. sessions.owner is the name the server decided from the token
+    // (the person's name, 'Admin' for the admin secret); NULL for rows from before it existed or with auth off.
+    sql: `
+CREATE TABLE groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_lower TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL
+);
+CREATE TABLE people (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_lower TEXT NOT NULL UNIQUE,
+  key_id TEXT NOT NULL UNIQUE, token_hash TEXT NOT NULL, token_last4 TEXT NOT NULL,
+  group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL, rotated_at INTEGER, revoked_at INTEGER, last_report_at INTEGER
+);
+CREATE TABLE person_machines (
+  person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE, machine TEXT NOT NULL, last_seen_at INTEGER NOT NULL,
+  PRIMARY KEY (person_id, machine)
+);
+CREATE TABLE admin_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, source TEXT NOT NULL
+);
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+ALTER TABLE sessions ADD COLUMN owner TEXT;
+`,
+  },
 ];
 
 export interface SessionRow {
@@ -110,6 +136,7 @@ export interface SessionRow {
   files_json: string | null;
   attached: number | null;
   detached_at: number | null;
+  owner: string | null;
 }
 
 export interface AgentRow {
