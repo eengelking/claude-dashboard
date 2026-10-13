@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { buildTree, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, type AgentSortKey } from "../logic";
+import { buildTree, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, TOKENS_HINT, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
@@ -57,7 +57,7 @@ export function AgentTree(props: {
             const on = sort.key === h.key;
             return (
               <div key={h.key} className={h.cls}>
-                <button type="button" aria-pressed={on} onClick={() => props.onSort(h.key)} title={`Sort by ${h.label.toLowerCase()}`}>
+                <button type="button" aria-pressed={on} onClick={() => props.onSort(h.key)} title={h.key === "tok" ? `Sort by tokens. ${TOKENS_HINT}` : `Sort by ${h.label.toLowerCase()}`}>
                   {h.label}
                   {on ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
                 </button>
@@ -90,7 +90,7 @@ export function AgentTree(props: {
             <span>{fmtPct(s.context.percent)}</span>
             <BlowBadge n={s.blowouts.orchestrator} />
           </div>
-          <div className="num c-tok">{fmtTok(s.tokensTotal)}</div>
+          <div className="num c-tok" title={TOKENS_HINT}>{fmtTok(s.context.tokens)}</div>
           <div className="num"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
           <div className="cell">

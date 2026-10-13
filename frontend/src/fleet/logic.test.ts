@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agentCounts, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
+import { agentCounts, agentTokens, sessionTokens, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -95,7 +95,7 @@ describe("sortAgents", () => {
   const now = 10_000;
   const A = [
     makeAgent({ id: "1", modelFamily: "sonnet", effort: "high", context: { tokens: 1, window: 1, percent: 30 }, costUsdEst: 2, startedAt: 0, endedAt: 4000, status: "done" }),
-    makeAgent({ id: "2", modelFamily: "fable", effort: "low", context: { tokens: 1, window: 1, percent: 90 }, costUsdEst: 5, startedAt: 5000, status: "running", tokens: { input: 9e6, output: 0, cacheRead: 0, cacheWrite: 0 } }),
+    makeAgent({ id: "2", modelFamily: "fable", effort: "low", costUsdEst: 5, startedAt: 5000, status: "running", context: { tokens: 9e6, window: 1, percent: 90 } }),
     makeAgent({ id: "3", modelFamily: "haiku", effort: "max", context: { tokens: 1, window: 1, percent: 10 }, costUsdEst: 1, startedAt: 1000, status: "failed" }),
   ];
   const ids = (k: Parameters<typeof sortAgents>[1], dir: 1 | -1) => sortAgents(A, k, dir, now).map((a) => a.id).join("");
@@ -137,5 +137,24 @@ describe("splitDetached (sessions nobody is attached to leave the wall after the
   it("brings a session back as soon as it is attached again", () => {
     const back = list.map((s) => (s.id === "gone" ? { ...s, attached: true, hideAt: null } : s));
     expect(ids(splitDetached(back, NOW, false).hidden)).toEqual(["now"]);
+  });
+});
+
+describe("Tokens figure (issue #96)", () => {
+  it("is the context an agent holds now, not a running total of cache re-reads", () => {
+    const a = makeAgent({ context: { tokens: 417_783, window: 1_000_000, percent: 41.8 }, tokens: { input: 348, output: 124_151, cacheRead: 48_663_543, cacheWrite: 746_738 } });
+    expect(agentTokens(a)).toBe(417_783);
+  });
+
+  it("is zero while an agent has not reported its context yet", () => {
+    expect(agentTokens(makeAgent({ context: { tokens: null, window: null, percent: null } }))).toBe(0);
+  });
+
+  it("adds the orchestrator and its agents, so the rows add up", () => {
+    const s = makeSession({
+      context: { tokens: 200_000, window: 1_000_000, percent: 20 },
+      agents: [makeAgent({ id: "x", context: { tokens: 50_000, window: 1_000_000, percent: 5 } }), makeAgent({ id: "y", context: { tokens: 30_000, window: 1_000_000, percent: 3 } })],
+    });
+    expect(sessionTokens(s)).toBe(280_000);
   });
 });

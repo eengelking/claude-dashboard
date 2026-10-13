@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, sessionElapsedSec } from "../logic";
+import { agentCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip } from "./Chips";
 import { IconX } from "./Icons";
@@ -82,8 +82,8 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
         <div className="v mono"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
       </div>
       <div className="fact slim">
-        <div className="k">Tokens</div>
-        <div className="v mono">{fmtTok(s.tokensTotal)}</div>
+        <div className="k" title={TOKENS_HINT}>Tokens</div>
+        <div className="v mono" title={TOKENS_HINT}>{fmtTok(sessionTokens(s))}</div>
       </div>
       <div className="fact slim">
         <div className="k">Running for</div>

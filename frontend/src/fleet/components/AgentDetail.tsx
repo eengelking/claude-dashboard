@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentElapsedSec, agentTokens } from "../logic";
+import { agentElapsedSec, agentTokens, TOKENS_HINT } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { BlowoutBox } from "./BlowoutBox";
 import { BlowBadge, Cost, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
@@ -133,8 +133,12 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
             <span>{fmtPct(a.context.percent)}</span>
             <BlowBadge n={a.blowouts} />
           </dd>
-          <dt>Tokens</dt>
-          <dd className="mono">{fmtTok(agentTokens(a))}</dd>
+          <dt title={TOKENS_HINT}>Tokens</dt>
+          <dd className="mono" title={TOKENS_HINT}>{fmtTok(agentTokens(a))}</dd>
+          <dt>Used so far</dt>
+          <dd className="mono" title="Running totals over every model request, cache re-reads included">
+            {fmtTok(a.tokens.input)} in · {fmtTok(a.tokens.output)} out · {fmtTok(a.tokens.cacheRead)} cache read · {fmtTok(a.tokens.cacheWrite)} cache write
+          </dd>
           <dt>Est. cost</dt>
           <dd className="mono"><Cost usd={a.costUsdEst} family={a.modelFamily} /></dd>
           <dt>Time</dt>

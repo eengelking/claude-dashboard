@@ -109,6 +109,9 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     progress is age 0).
 11. **`tokensTotal`** counts all four token kinds (input, output, cache read, cache write) for the main
     loop and every agent. Cache reads dominate, which is what the requests really processed.
+    It feeds the samples and the tokens-per-second series, a throughput. No "Tokens" figure in the UI
+    shows it: those show context held now (`agentTokens` and `sessionTokens` in `logic.ts`), which is what
+    Claude Code shows, because a running total re-counts the cached context on every request (#96).
 12. **`costPerMinute`** (the KPI sparkline) is 60 one-minute buckets of fleet cost added, from the
     samples' cumulative `cost_usd`. **`tokensPerSec`** is 60 one-second points of Σ `tokens_delta`.
 13. **`clearedToday`** is a count: sessions that ended or were dropped since local midnight and are no

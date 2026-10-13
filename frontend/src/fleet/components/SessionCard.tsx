@@ -1,5 +1,5 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec } from "../logic";
+import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { toolOfNote, waitLead } from "../waiting";
@@ -143,7 +143,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       <div className="foot">
         <div className="mono">
           <span className="v"><Cost usd={s.costUsd} family={s.modelFamily} /> ·</span>{" "}
-          <span className="v">{fmtTok(s.tokensTotal)} tok ·</span>{" "}
+          <span className="v" title={TOKENS_HINT}>{fmtTok(sessionTokens(s))} tok ·</span>{" "}
           <span className="v">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>
         <Sparkline values={s.series.tokensPerSec} w={100} h={22} />

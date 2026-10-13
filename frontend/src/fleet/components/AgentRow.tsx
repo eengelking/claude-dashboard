@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentElapsedSec, agentTokens, type Guide } from "../logic";
+import { agentElapsedSec, agentTokens, TOKENS_HINT, type Guide } from "../logic";
 import type { AgentView } from "../types";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
 import { IconFork, IconSub } from "./Icons";
@@ -56,7 +56,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
         <span>{fmtPct(a.context.percent)}</span>
         <BlowBadge n={a.blowouts} />
       </div>
-      <div className="num c-tok">{fmtTok(agentTokens(a))}</div>
+      <div className="num c-tok" title={TOKENS_HINT}>{fmtTok(agentTokens(a))}</div>
       <div className="num"><Cost usd={a.costUsdEst} family={a.modelFamily} /></div>
       <div className="num">{fmtDur(agentElapsedSec(a, now))}</div>
       <div className="cell">

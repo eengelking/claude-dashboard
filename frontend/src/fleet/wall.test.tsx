@@ -199,11 +199,11 @@ describe("session card", () => {
   });
 
   it("footer keeps the cost, tokens and duration each in one unbreakable value (#18)", () => {
-    const { container } = renderCard(makeSession({ costUsd: 8.55, tokensTotal: 28_320_000, startedAt: 2_000_000 - (15 * 3600 + 54 * 60) * 1000 }));
+    const { container } = renderCard(makeSession({ costUsd: 8.55, context: { tokens: 283_200, window: 1_000_000, percent: 28 }, agents: [], startedAt: 2_000_000 - (15 * 3600 + 54 * 60) * 1000 }));
     const values = [...container.querySelectorAll(".foot .v")].map((e) => e.textContent?.replace(/\s*·$/, ""));
     expect(values).toHaveLength(3);
     expect(values[0]).toBe("$8.55");
-    expect(values[1]).toBe("28.32M tok");
+    expect(values[1]).toBe("283k tok");
     expect(values[2]).toMatch(/^15h\s?54m$/);
   });
 

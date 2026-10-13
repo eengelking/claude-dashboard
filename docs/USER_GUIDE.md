@@ -83,7 +83,8 @@ context blowouts, plan steps done, estimated cost today and tokens in the last m
 
 A card shows the session's name and status, its project and git branch (or worktree, with ahead and behind
 counts and how many files changed), its model, effort and context fill, its plan with the current step,
-a strip with one square per agent, and its cost, tokens and running time. A path or branch that is too long
+a strip with one square per agent, and its cost, tokens and running time. Tokens is the context the session and its agents hold right now, the
+same figure Claude Code shows for an agent; hover it for the definition. A path or branch that is too long
 for the card is shortened (the path from the front, the branch at the end); hover it to see the full value.
 A red callout means the session has blown out its context window twice or more, which usually means it has lost context. A **waiting** card
 means the session wants you: a permission prompt, a question, or the end of its turn. It says whether it needs
@@ -191,7 +192,9 @@ subagent and fork with its task, type, model, effort, context bar, tokens, cost,
 column header to switch to a sorted flat list, and "Show as tree" to go back. **Copy resume command** copies
 the command that resumes the session.
 
-Click an agent to open its detail in the right panel. If it failed, you get the failing call, the last lines
+Click an agent to open its detail in the right panel. Its **Tokens** line is the context it holds now, and
+**Used so far** under it lists the running totals (input, output, cache read, cache write); cache read is large
+because the cached context is read again on every request. If it failed, you get the failing call, the last lines
 of its output, the evidence behind the likely cause and what happened next. If its context blew out, you get a
 timeline of each overflow.
 
