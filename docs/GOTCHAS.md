@@ -185,6 +185,23 @@ the id on the card, which differs after `/clear`. `claude rm <id>` also deletes 
 Settings hooks send no heartbeat, so a hook-only session gets `HOOK_STALE_AFTER_MS` (10 minutes) before it
 shows as stale. A session the mod reports uses the 15-second default.
 
+### A session waiting on a permission prompt is not kept warm
+
+Cache warming pings only a session waiting for your next prompt. A permission prompt comes in the middle of a
+turn, after a tool call that has no answer yet, so a request then would not fit the conversation. The card
+still shows the cooling alert while warming is off.
+
+### A session that uses the 1-hour cache shows the 5-minute countdown
+
+The mod learns the cache lifetime only from Claude Code's `PostModelSwitch` hook, which fires when the model
+changes. Until then it assumes 5 minutes, so the alert comes early and a warming ping is sent sooner than
+needed (it still reads the cache).
+
+### Cache alerts stopped appearing
+
+After two alerts without cache warming turned on, Podium stops showing them (`PODIUM_CACHE_ALERTS=auto`). The
+wall says so under the toolbar, with a button that turns them back on.
+
 ## Developing
 
 ### `npm run test:mod` and `npm run typecheck:mod` fail on a clean machine

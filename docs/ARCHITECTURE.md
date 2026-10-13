@@ -62,6 +62,18 @@ keeps SPEC 7.7's rule that reported strings reach the page only as text nodes, a
 modal is portaled to `<body>` inside its own `.podium` wrapper (for the theme tokens), and blurs `#root`; a
 capturing key listener keeps Esc and the shell shortcuts from reaching the page behind it.
 
+**The prompt cache** (`mod/podium-reporter/hooks/cache.ts`, `server/src/fleet/cache.ts`, `components/CacheNote.tsx`,
+issue #27, mod 0.11.0). The mod's `turn.step` hook reads `$.clock.now()` before a main-thread request and keeps it
+as `cache.lastRequestAt` once a response arrives; `classic.PostModelSwitch` gives the lifetime. Warming is decided
+on the flush timer by pure rules in `cache.ts` (`decide`, `pingDone`), so it runs on the engine's clock like the
+heartbeat and is testable with `mock.clock`; the ping itself is `$.model.fork`, fired without awaiting, like a
+failure explanation. The server stores the block in `sessions.cache_json` (migration 9) with its times moved by
+`serverTime − sentAt`, keeping the stored time while the reported one is unchanged. `derive.ts` turns it into
+`SessionView.cache`; `Fleet` keeps one episode per cooling period and the count of alerts shown in
+`settings.cache_alerts_shown`. The sweep counts an episode the first time it runs with an SSE client connected,
+and sends the session when its cache state or alert changes. `POST /cache-alerts/reset` sets the count to 0,
+forgets the episodes and runs a sweep and a tick at once.
+
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
 `sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to
@@ -240,6 +252,17 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     hidden session is still spending. Known limit: a non-interactive `claude -p` run has no client and reads
     as nobody attached.
 
+43. **Cache warming and permission waits (#27).** The issue says a ping goes out while the session is idle. Reading
+    chosen: only while it waits for a prompt (`waitReason: 'input'`). A permission wait is mid-turn, with a tool
+    call that has no result yet, and a fork appended there would not fit the conversation. The cooling alert still
+    shows for any waiting session with warming off.
+44. **Where an idle period starts (#27).** The flush timer notices the session went idle within a second of the
+    turn ending, and the maximum duration counts from then, on the engine's clock. Using the hook's `Date.now()`
+    would mix two clocks.
+45. **Cost of a cold start (#27).** `coldCostUsd` is the extra over a warm request: the context at the write price
+    (1.25× input, 2× for the 1-hour lifetime) less the read price, from `models.ts`. The server has no price
+    table, so the mod sends the figure.
+
 ## Deviations from the spec
 
 The numbered Spec questions above are the full list, each with its reason. The ones that change behavior
@@ -307,6 +330,10 @@ a reader of the spec would expect:
     `podium ● N live` is the normal state.
 12. **The `systemd` boot unit has not run on a Linux host.** Its generated text is unit-tested only.
 13. *(Removed with the usage dashboard, #30. The number is kept so other references stay valid.)*
+14. **Cache warming has not run against the real model yet (#27).** It is tested in the kit with a stand-in for
+    `$.model.fork`. Not yet seen for real: that a warmed session's next request reads the cache, whether a fork
+    raises `turn.step` (which would count as a main-thread request and its tokens), and whether its cost is in the
+    session's ledger. The issue's real check (12 minutes idle, warming on and off) records these.
 
 ## Browser checklist (T4.2)
 

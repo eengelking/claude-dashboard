@@ -15,6 +15,8 @@ a session. At most the UI copies a resume command to the clipboard.
 A dashboard that could steer sessions would need much stronger authentication and would be a much more
 attractive target. It is the first "Non-goal" in `docs/SPEC.md`.
 **Cost.** Nothing in the UI can act on what it shows. You switch to the terminal for that.
+Entry 22 adds an opt-in request the mod makes of its own to keep a prompt cache warm; it still sends nothing to
+the session, and the dashboard cannot turn it on.
 
 ## 2. A Claude Code mod reports from inside the session
 
@@ -251,3 +253,27 @@ person whose sessions have all ended has no band, though today's spend still lis
 so a copied `~/.claude` makes two machines share one id (the host name still differs in most cases). Group changes
 in Admin reach a live session's card with its next report rather than at once.
 
+## 22. Warn before a prompt cache goes cold, and keep it warm only when asked
+
+**Choice.** The mod reports when the main thread's last model request started and the cache lifetime (5 minutes
+unless `PostModelSwitch` says 1 hour). The server moves those times into its own clock and derives `warm`,
+`cooling` (the last minute) and `cold`, and a waiting session that is cooling gets an alert on its card and rail
+row. Cache warming is a mod option (`cacheWarming`, off) and `/podium warm on|off` for one session: one
+`$.model.fork` request ("Reply with OK.") a minute before each expiry while the session waits for a prompt, at most
+`cacheWarmingMinutes` (30) per idle period, stopped for good in that period by an API error, an abort, nothing to
+fork or an expired cache. The first two alerts say how to turn warming on; in the default `auto` mode no alert is
+shown after that, the dashboard says so and offers to turn them back on, and `PODIUM_CACHE_ALERTS=on|off` overrides
+it. An alert counts only when an SSE client is connected during its cooling period, and the count is kept in the
+settings table. All decided by the maintainer on 2026-10-11 (#27).
+**Why.** A cold start costs about 1.15 times the prompt's input price more than a warm request, and a ping costs
+about 0.1 times, so warming pays only for about 11 pings (46 minutes) at the standard read price; a limit keeps it
+from costing more than it saves. `$.model.fork` reads the session's own transcript from the cache without
+appending to it or typing into the terminal, like `explainFailures` uses `$.model.complete`, so the session is
+not touched. A dashboard switch would have the server tell the mod to spend tokens, a larger decision left out.
+Not acting on the tip twice is read as not wanting it, but the guess can be undone in one click. Moving times to
+the server's clock keeps the server owning time (entry 3) and keeps a reporter whose clock is off from showing a
+wrong countdown.
+**Cost.** The SPEC's first non-goal is narrowed (entry 1). The 1-hour lifetime is learned only on a model switch,
+so a session on it gets an early alert. A permission wait is mid-turn and is never warmed. The alert count can
+pass two when two sessions start cooling in the same second. The pings cost tokens and are not in the agent
+estimates; the card shows their own estimate.

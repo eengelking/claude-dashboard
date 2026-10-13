@@ -4,7 +4,8 @@ How to set up Podium and read the dashboard. For the option and environment vari
 [README](../README.md). If something looks wrong, see [GOTCHAS.md](GOTCHAS.md).
 
 Podium shows every Claude Code session on your machine in one browser tab. It only watches: it never sends
-a prompt to a session, stops an agent or changes anything.
+a prompt to a session, stops an agent or changes anything. The one request the mod can make to keep a cache
+warm is off until you turn it on, and it does not touch the session either (see "Prompt cache" below).
 
 ## What you need
 
@@ -263,6 +264,32 @@ The effort shown is read from each model request, so after `/effort` it updates 
 
 Effort is drawn as five bars with no text: more lit bars mean more effort, and the color changes with the level (low orange, medium green, high blue, xhigh purple, max rainbow). Hover the bars to read the level. Dimmed bars mean the level was not reported.
 
+### Prompt cache
+
+While you use a session, its requests keep Claude's prompt cache warm. When you step away for 5 minutes the
+cache expires, and your next prompt writes the whole conversation to the cache again, which costs more than
+reading it. About a minute before that happens to a session that is waiting on you, its card shows an alert
+with a countdown and what going cold costs ("About 410k tokens would be written to the cache again, roughly
+$1.97 more."), and its row in the left list shows the countdown too. A running session never alerts: its own
+requests keep the cache warm. When you come back the alert goes away.
+
+To keep the cache warm while you are away, turn on cache warming. For one session, type `/podium warm on` in
+it (`/podium warm off` turns it off again). For every session, set the mod's `cacheWarming` option with
+`/plugin configure podium-reporter@eengelking-marketplace`. While the session waits on you, the mod then sends
+one small request about a minute before the cache would expire: "Reply with OK." over the session's own
+conversation, read from the cache. The reply is thrown away. Nothing is added to the conversation and nothing
+is typed into your terminal. Each one costs about a tenth of the prompt's input price, so it is not free:
+warming stops after `cacheWarmingMinutes` of waiting (30 by default), when a request gets an API error such
+as a rate limit, and when the session runs, ends or is cleared. The card then shows "cache kept warm" or
+"cache warming stopped", with how many requests were sent and what they cost, and each one is a line in
+Activity. While warming is on there is no cooling alert.
+
+The first two alerts say how to turn warming on. If you have not turned it on by the third, Podium stops
+showing them, on the guess that you do not want it. The count is across all your sessions and survives a
+restart, and a dashboard that is not open does not count. The wall then says "Prompt cache alerts are off"
+with a **Turn cache alerts back on** button that starts the count over. The server owner can set
+`PODIUM_CACHE_ALERTS=on` to always show them or `off` to never show them.
+
 ## Admin
 
 Admin is for the person who runs the server. Open it with the **Admin** button in the top bar's upper right
@@ -357,6 +384,10 @@ Only to the server URL you set, and only the fields the README lists under "What
 is cut to fixed limits, and anything that looks like a secret is replaced with `[redacted]` before it is sent.
 Podium never reads transcripts or files. An agent's whole task prompt and final answer leave the session only
 if you turn on the mod's `fullPrompts` option, which is off by default.
+
+With cache warming off, which it is by default, the mod sends no request of its own for the cache; it only
+reports when the session's last request started. With it on, its requests go to Claude through the session's
+own client, never to Podium's server.
 
 Your name and your machine leave the session only once you set the mod's `userName` option, which is empty
 by default. Then each report carries that name, the machine's short host name and a random id the mod keeps

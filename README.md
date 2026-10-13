@@ -9,7 +9,8 @@ Two dashboards for Claude Code on one machine, served by one local server:
   its plan, the agents it launched (subagents and forks), what each costs, how full each context window
   is, how often a window blew out, why anything failed, and which git branch or worktree it works in.
   Sessions appear when they start and leave when they end, with no refresh. Podium only observes: it
-  never sends prompts or touches a session.
+  never sends prompts or touches a session. It also warns you a minute before an idle session's prompt
+  cache expires, and can keep that cache warm if you turn that on.
 
 New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
 
@@ -160,8 +161,9 @@ claude --plugin-dir /path/to/podium/mod/podium-reporter
 The session appears in Podium once you send its first prompt. A session that has done nothing yet is kept
 off the wall, because Claude Code's background daemon also runs idle twins and spares that report too (see
 "Sessions that have not done anything yet" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)).
-In the session, `/podium` prints the dashboard link, the connection state and report counts, and
-`/podium name <text>` gives the session a display name. The status line under the prompt reads
+In the session, `/podium` prints the dashboard link, the connection state and report counts,
+`/podium name <text>` gives the session a display name, and `/podium warm on` or `/podium warm off` turns
+cache warming on or off for that session (see "Prompt cache" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)). The status line under the prompt reads
 `podium ● N live` (N is the cards on the wall, so a session that has not run yet reads 0), or `podium ○ offline` while the server is unreachable (reports queue up and go out
 when it is back). When the mod and the server are on versions that do not match, it ends in `· update mod` or `· upgrade server`. To update the mod, run `claude plugin update podium-reporter@eengelking-marketplace` and then `/reload-plugins` in the session (see "Updating the mod" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)). Claude Code puts a `⚠` and the mod's name in front of the line; that is how it draws every
 mod's status line, not a Podium warning (see [docs/GOTCHAS.md](docs/GOTCHAS.md)). Effort is read from each model request, so a change made with `/effort` shows after
@@ -183,6 +185,8 @@ instead. Everything except `token` also has a row in the `/config` menu.
 | `showStatus` | `true` | Show the status line entry |
 | `fullPrompts` | `false` | Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can open them in a modal. Off by default: only the first 400 characters leave the session. Everyone who can open the console can read them |
 | `explainFailures` | `false` | Ask a small model (Haiku, low effort) for a two-sentence explanation of each failed agent, from the redacted failure record only. Costs a little; off by default |
+| `cacheWarming` | `false` | While the session waits on you, send one small request (`$.model.fork`, "Reply with OK.") about a minute before its prompt cache expires, so your next prompt reads the cache instead of writing it again. Each costs about a tenth of the prompt's input price. Nothing is added to the conversation. Off by default; `/podium warm on` or `off` changes it for one session |
+| `cacheWarmingMinutes` | `30` | Stop keeping the cache warm after this many minutes of waiting. Pings pay for themselves for about 46 minutes at the standard read price |
 
 ### What leaves the session
 
@@ -201,6 +205,9 @@ Only to the server URL above, and only this:
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file
   path), its exit code and the last 12 lines of its output;
 - short activity lines ("spawned Explore (Haiku low): Map call sites");
+- for the main conversation's prompt cache: when its last model request started, whether it uses the
+  5-minute or 1-hour lifetime, its context size and the estimated cost of rewriting it, and with
+  `cacheWarming` on, how many warming requests were sent and what they cost;
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
   and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two
@@ -211,6 +218,11 @@ Before anything is sent, text is cut to those limits and anything that looks lik
 with `[redacted]`: `sk-ant-...` keys, `ghp_...` tokens, `AKIA...` keys, `Bearer ...` values, and the
 values after `password=`, `token=`, `secret=`, `apikey=` and `api_key=`. Podium never reads transcripts or
 files, and sends a whole prompt or answer only for `fullPrompts`.
+
+The mod makes requests of its own only for two options you turn on, both off by default: `explainFailures`
+(a small completion about a failure record) and `cacheWarming` (a one-line request over the session's own
+conversation that keeps its cache warm). Both go through the session's own Claude client and credentials;
+neither is sent to Podium's server, added to the conversation or typed into the terminal.
 
 ### Sessions without the mod
 
@@ -257,6 +269,8 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 | `HOOK_STALE_AFTER_MS` | `600000` | Same as `STALE_AFTER_MS`, for sessions known only from settings hooks (they send no heartbeat) |
 | `DROP_AFTER_MS` | `60000` | A stale session leaves the fleet after this much more |
 | `LINGER_MS` | `8000` | An ended session stays on screen this long |
+| `CACHE_WARN_MS` | `60000` | How long before an idle session's prompt cache expires its card shows the cooling alert |
+| `PODIUM_CACHE_ALERTS` | `auto` | Cooling alerts: `auto` shows the first two with the tip about cache warming and none after that (the dashboard offers to turn them back on), `on` shows every one, `off` none |
 | `DETACHED_HIDE_AFTER_MS` | `60000` | A session nobody is attached to (a background job left running after `/exit`) shows dimmed this long, then is set aside behind a "background sessions hidden" line |
 | `RETAIN_SAMPLES_MS` | 24 hours | Per-second chart samples kept |
 | `RETAIN_EVENTS_MS` | 30 days | Activity events kept |

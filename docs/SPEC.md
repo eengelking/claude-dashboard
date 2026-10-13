@@ -50,8 +50,12 @@ Podium is added next to it. Do not remove or break it.
 ### Non-goals (do NOT build these)
 
 - No control surface. Podium observes. It never sends prompts, stops agents, approves permissions or edits
-  a session. (The dashboard may copy a resume command to the clipboard, and it may remove a heartbeat-lost
-  card from the live view early, 7.5; that is all. Neither sends anything to a session.)
+  a session. (The dashboard may copy a resume command to the clipboard, remove a heartbeat-lost card from
+  the live view early, and turn cooling alerts back on, 7.5; that is all. None of these sends anything to a
+  session.) The mod makes requests of its own only when the user turns them on, both off by default: a
+  failure explanation (`explainFailures`, 5.10) and a cache-warming ping (`cacheWarming`, 6.9). Each is a
+  separate request through the session's own client. It sends nothing to the session, adds nothing to its
+  conversation and does not change it; the dashboard cannot turn either on.
 - No hosted service. Several people may report to one server, each with their own token (7.7), but it is
   still one server you run yourself. The server binds to `127.0.0.1` by default. In the container image it
   listens on all interfaces inside the container, and the port is published only on the host's `127.0.0.1`
@@ -270,6 +274,7 @@ claude --plugin-dir mod/podium-reporter -p "…"       # headless; always loads 
 | `turn.complete` | A loop's turn ends | `answer`, `durationMs`, `isAborted`, `turnId`, `agentId?`, `usage?`, `reason` (`answer` \| `aborted` \| `refusal` \| `error`), `refusal?` when `reason` is `refusal` | Main loop: status `waiting` (waiting on the user). Agent: `answer` → `done`; `aborted` → `aborted`; `refusal`/`error` → `failed` with a failure record. |
 | `session.compact` | Compaction runs, main or in an agent's own transcript | `trigger` (`manual` \| `auto` \| `plugin` \| `precompute`), `agentId?`, `instructions?`, `messages`. Result: either `{ messages, tokensBefore?, tokensAfter?, usage? }` or `{ skip }` | Await `next(e)`. If the result has `messages` and `trigger === "auto"`: **blowout** with `tokensBefore`, `tokensAfter`, `agentId`. `manual`: log a `compact` event, not a blowout. Ignore `precompute` and `skip`. |
 | `session.attach`, `session.detach` | A client (terminal, phone) joins or leaves the session's roster | `surface`, `clientId`, on detach `reason` | Observe, then re-read `$.session.surfaces()` so `attached` follows at once. Await `next(e)` first and return its result unchanged. |
+| `classic.PostModelSwitch` | `/model` (or a fallback) switched the session's model | `cache_ttl` (`5m` \| `1h`) | The only place the session says which prompt cache lifetime it uses (6.9). Observe, then `next(e)`. |
 | `session.measure` | The status line's figures changed | `context: { tokens?, window, percent? }`, `rateLimits: [{ kind, percentUsed, resetsAt? }]`, `cost?: { usd }`, `changed: ('context'\|'rateLimits'\|'cost')[]` | Cheap trigger for main-loop context, session cost and rate limits without polling. Mark state dirty. |
 | `classic.PermissionRequest` | A permission dialog is about to show (**Assumption:** hookable by that name; the doc says every settings-hook event is hookable as `classic.<Event>`) | `tool_name`, `tool_input` | Set orchestrator `status: "waiting"`, `waitReason: "permission"`, `waitNote: "<tool_name>(<short input>)"`. Cleared by the next `tool.call` of that loop or `turn.complete`. |
 | `classic.Notification` | Claude Code raises a notification (needs permission, idle for input) | `message`, `title?`, `notification_type` | Fallback signal for `waiting`. |
@@ -315,6 +320,7 @@ All calls are async unless noted. Read each one's doc comment in the types file 
 | `$.tool.register({ name, description, inputSchema, isDeferred? })` | Registers `mcp__podium-reporter__<name>` | Optional `plan` tool so an orchestrator can name its plan (section 6.3). Serve with `on('tool.call', { tool: 'mcp__podium-reporter__plan' }, …)` returning `{ result }`. |
 | `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium ● 4 live` or `podium ○ offline`; the host draws it as `⚠ podium-reporter: <text>`, which the mod does not control. `log` to `debug` only. No toasts except on first successful connect and first failure. |
 | `$.model.complete({ model, prompt, effort? })` | `{ isAnswered, text?, usage, reason? }`, never rejects over provider errors | Optional failure explanation (Phase 5), default **off**. |
+| `$.model.fork({ prompt })` | One tool-less request over the session's own transcript as the main thread last sent it, with `prompt` after it, so the API serves that prefix from its cache. Appends nothing to the transcript and types nothing into the terminal. `{ isAnswered, text?, usage }` or a `reason`: `nothing-to-fork` (before the first response, after `/clear`), `api-error` (with `status` and `error`), `empty-reply`, `aborted` | The cache-warming ping (6.9), default **off**. |
 | `$.agent.register(spec)`, `$.agent.spawn(args)` | Define or start agent types | **Not used.** Listed so the implementer does not reach for them. |
 
 `$.process`, `$.fs` and the UI nouns may be unavailable in some hosts (`-p`, SDK, desktop). Every call in the
@@ -408,6 +414,8 @@ Declare in `plugin.json` (**Assumption:** confirm the exact `userConfig` field s
 | `sessionName` | string | empty | Override display name for this machine's sessions (rare). |
 | `explainFailures` | boolean | `false` | Phase 5 only. When true, ask a small model to explain a failure (costs tokens). |
 | `fullPrompts` | boolean | `false` | When true, send each agent's whole task prompt and final answer as `promptText` and `answerText` (6.4). Off by default: only the 400-character excerpts are sent. |
+| `cacheWarming` | boolean | `false` | Keep the main thread's prompt cache warm while the session waits on the person (6.9). `/podium warm on\|off` changes it for one session. |
+| `cacheWarmingMinutes` | number | `30` | The longest one idle period is kept warm (6.9 gives the break-even). |
 
 Read via the `options` argument of `register`. A config change reloads the module.
 
@@ -469,11 +477,27 @@ interface Report {
     loop: LoopReport | null;            // the main loop's own steps, tools and skills; null from a reporter older than 0.4.0
     files: FilesReport | null;          // the files the session changed (5.7); null from a reporter older than 0.6.0
     attached: boolean | null;           // whether any client is attached (5.3, 5.4); false for a background session after /exit; null from a reporter older than 0.7.0 or when the roster could not be read
+    cache: CacheReport | null;          // the main thread's prompt cache (6.9); null from a reporter older than 0.11.0
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
   userName?: string;                    // the person this reporter is set up as (the `userName` option); omitted when empty. The server checks it against the token's owner (7.7)
   machine?: { name: string; id: string };  // sent only with userName (0.9.0 and later): the short host name (`hostname` up to the first dot, ≤ 64) and a random 12-hex id the mod keeps in its own store under `machineId`, made on first use, so two machines with one host name stay apart
+}
+
+interface CacheReport {                // times in the reporter's clock; the server moves them into its own (7.3)
+  lastRequestAt: number | null;         // when the main thread's latest model request started, a warming ping included; null before the first response
+  ttlMs: number;                        // 300000, or 3600000 when the session uses the 1-hour lifetime
+  tokens: number | null;                // the tokens the next request re-sends (the main thread's context)
+  coldCostUsd: number | null;           // estimated extra cost of writing them to the cache again instead of reading them; null for a model with no price
+  warming: {
+    on: boolean;                        // the cacheWarming option, or /podium warm for this session
+    state: 'off' | 'ready' | 'warming' | 'stopped';   // ready: on, the session runs; warming: on and idle; stopped: see stopReason
+    stopReason: 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired' | null;
+    pings: number; costUsdEst: number;  // pings sent this session, and their estimated cost from the usage each returned
+    lastPingAt: number | null;
+    untilAt: number | null;             // when warming stops on its own in this idle period; null unless warming
+  };
 }
 
 interface FilesReport {
@@ -610,6 +634,36 @@ A mismatch is a warning, never an error. The server still accepts and shows ever
 - `SessionView` carries `reporterVersion` (null for a hooks-only session, which has no mod) and `compat` (always `unknown` for hooks). `StateBody.server` carries `{ version, reporterSupport }`, and the UI shows the server version in the left rail footer.
 - The dashboard marks each affected card, counts them in the top bar, and says what to do on the session's page.
 
+### 6.9 Prompt cache and cache warming (issue #27)
+
+While a session is in use its requests keep its prompt cache warm. The cache lives 5 minutes (or 1 hour, at a
+higher write price) from the start of the last request that read or wrote it. When the person walks away it
+expires, and the next request writes the whole conversation to the cache again: about 1.25 times the input
+price instead of the 0.1 times a read costs (0.05 on Opus 5.5, 0.025 on Fable 5.1).
+
+- **What the mod reports.** On every main-thread `turn.step` (no `agentId`) the mod reads `$.clock.now()`
+  before the request and, when a response arrives, records it as `cache.lastRequestAt`. Agents' requests use
+  their own caches and do not count. `ttlMs` is 300,000 unless `classic.PostModelSwitch` said `cache_ttl: '1h'`.
+  `tokens` is the main thread's context; `coldCostUsd` is `tokens × (write − read) / 1e6` from the price table
+  (6.5), the write at 2× input for the 1-hour lifetime.
+- **Cache warming, off by default.** On with the `cacheWarming` option or `/podium warm on` (kept in `$.store`
+  by session id, so it is per session; `/podium warm off` turns it off). The flush timer decides, on the
+  engine's clock: while the session waits for a prompt (`waiting` with `waitReason: 'input'`; a permission wait
+  is mid-turn and is never pinged), it sends one `$.model.fork({ prompt: 'Reply with OK.' })` 60 seconds before
+  `lastRequestAt + ttlMs`, one at a time. A ping that reached the model (an answer or an empty reply) counts:
+  its start becomes `lastRequestAt`, so the next ping is measured from it, and its cost is `costOf` of the usage
+  it returned. Warming stops for the idle period, with an activity line (`note`, `data.kind: 'cache-stop'`), when
+  the period reaches `cacheWarmingMinutes` (default 30), when a ping gets an API error or is aborted, when there
+  is nothing to fork, or when the cache has already expired. It never retries; the next idle period starts
+  afresh. It stops when the session runs again (its own requests keep the cache warm), when it ends, and after
+  `/clear` (a new id has no request yet). Each ping is an activity line (`note`, `data.kind: 'cache-ping'`, with
+  the tokens read and written and the cost).
+- **The break-even.** A ping costs the read price; a cold start costs about 1.15 times the prompt's input price
+  more than a warm request. Pings pay for themselves for about 11 pings at the 0.1 read price (some 46 minutes
+  at a ping every 4 minutes), 24 at 0.05 and 49 at 0.025. The 30-minute default stays inside the first.
+- **What a ping does not do.** It is not added to the conversation, nothing is typed into the terminal, and the
+  session's own next request is unchanged except that it finds a warm cache. The dashboard cannot turn it on.
+
 ## 7. The server
 
 ### 7.1 Endpoints (all JSON unless noted)
@@ -617,13 +671,14 @@ A mismatch is a warning, never an error. The server still accepts and shows ever
 | Method and path | Purpose |
 |---|---|
 | `POST /api/fleet/report` | Ingest (6.1). |
-| `GET /api/fleet/state` | `{ serverTime, config, sessions: SessionView[], kpis, clearedToday, events: ActivityView[], server: { version, reporterSupport } }`: everything live plus the latest 150 events. First paint and resync. |
+| `GET /api/fleet/state` | `{ serverTime, config, sessions: SessionView[], kpis, clearedToday, events: ActivityView[], server: { version, reporterSupport }, cacheAlerts: { mode, shown, suppressed } }`: everything live plus the latest 150 events. First paint and resync. |
 | `GET /api/fleet/stream` | SSE (7.3). |
 | `GET /api/fleet/sessions/:id` | One `SessionView`, live or historical. 404 if unknown. |
 | `GET /api/fleet/sessions/:id/agents/:agentId/text` | `{ prompt: string \| null, answer: string \| null }`: the agent's whole task prompt and final answer (6.4). 404 if the server holds neither. No token, like the other reads. |
 | `GET /api/fleet/events?sessionId=&before=&limit=` | Page through stored events newest first (`limit` ≤ 200, default 50, `before` = event time). |
 | `GET /api/fleet/history?day=YYYY-MM-DD` | Ended or dropped sessions that day, summary rows only (name, project, model, duration, cost, blowouts, end reason). Phase 4. |
 | `POST /api/fleet/sessions/:id/drop` | Remove a heartbeat-lost session from the live view now: the same exit as the automatic drop (7.5). No token. 404 if the session is not live, 409 if it is not `stale`. |
+| `POST /api/fleet/cache-alerts/reset` | Turn cooling alerts back on: the count of alerts shown starts over (7.5). No token. Answers `{ ok, cacheAlerts }`. |
 | `DELETE /api/fleet/sessions/:id` | Remove a session and its rows (for stuck test data). Requires the token if one is configured. |
 | `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen, serverVersion, reporterSupport, sseClients, maxClockSkewMs }`. |
 | `POST /api/fleet/hook` | Phase 5: classic settings-hook payloads. |
@@ -650,7 +705,8 @@ CREATE TABLE sessions (
   attached INTEGER,                                                        -- Report.session.attached (1 or 0); NULL when unknown
   detached_at INTEGER,                                                     -- when the first report with attached = false arrived; NULL while attached or unknown
   owner TEXT,                                                              -- who the server decided the session belongs to from the token: a person's name, 'Admin', or NULL (auth off, or from before migration 6)
-  machine_json TEXT                                                        -- Report.machine ({ name, id }); kept when a later report or hook carries none; NULL when never sent (migration 7)
+  machine_json TEXT,                                                       -- Report.machine ({ name, id }); kept when a later report or hook carries none; NULL when never sent (migration 7)
+  cache_json TEXT                                                          -- Report.session.cache with its times in the server's clock (7.3); NULL from a reporter older than 0.11.0 (migration 9)
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -696,7 +752,7 @@ CREATE TABLE people (
 );
 CREATE TABLE person_machines (person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE, machine TEXT NOT NULL, last_seen_at INTEGER NOT NULL, PRIMARY KEY (person_id, machine));
 CREATE TABLE admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, source TEXT NOT NULL);
-CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);       -- allow_admin_secret_reporting: '1' (default) or '0'
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);       -- allow_admin_secret_reporting: '1' (default) or '0'; cache_alerts_shown: the cooling alerts counted (7.5)
 ```
 
 Retention (run by the sweeper hourly): samples older than 24 h deleted; events older than 30 days deleted; sessions ended more than 30 days ago deleted with their rows. All three thresholds are env-configurable.
@@ -710,6 +766,10 @@ On a valid report, in one transaction:
 3. Insert events with `INSERT OR IGNORE` on `id`. Insert a `blowouts` row for each `blow` event carrying `data.kind`.
 4. Sample: compute `tokens_total` (main loop tokens + Σ agent tokens), `tokens_delta` against the previous sample (≥ 0), `peak_context = max(session context %, max over running agents' context %) / 100`, `running_agents`. At most one sample per session per second.
 5. Broadcast the changed `SessionView` and new events over SSE, throttled to one `session` message per session per 500 ms.
+
+The report's `cache` block is stored with its times moved into the server's clock by `serverTime − sentAt`, the
+reporter's offset (plus a few milliseconds of transit). A `lastRequestAt` the reporter sent before keeps the
+time stored then, so the expiry does not move from report to report.
 
 **Blowout level** (the signal, computed in `derive.ts` and tested): `total = session.blowouts + Σ agent.blowouts`. `level = 0` if total is 0; `2` if the orchestrator has ≥ 2 blowouts or any single agent has ≥ 2 or total ≥ 3; else `1`. Level 2 is the red "likely losing context" state. Level 1 is the amber "context exceeded" state.
 
@@ -738,6 +798,9 @@ interface SessionView {
   owner: string | null;                 // who the server decided the session belongs to from the token (7.7): a person's name, 'Admin', or null
   ownerGroup: string | null;            // that person's group from Admin; null for Admin, no owner, or no group
   machine: { name: string; id: string } | null;  // Report.machine as last sent; null when none was
+  cache: { state: 'warm' | 'cooling' | 'cold'; expiresAt: number | null; ttlMs: number; tokens: number | null;
+           coldCostUsd: number | null; warming: CacheReport['warming'];   // times in the server's clock
+           alert: 'tip' | 'plain' | null } | null;   // 7.5; null from a reporter older than 0.11.0 and for a settings-hooks session
   agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
 }
@@ -752,11 +815,23 @@ interface SessionView {
 | `status ≠ done` and no report for `STALE_AFTER_MS` | Shown as `stale` (derived, not stored) | 15,000 |
 | `stale` for `DROP_AFTER_MS` more | `dropped_at` set, removed from the live set, event `end` "heartbeat lost" | 60,000 |
 | `status = done` for `LINGER_MS` | Removed from the live set, event `end` "session ended" | 8,000 |
+| A prompt cache's `expiresAt` (`lastRequestAt + ttlMs`) is less than `CACHE_WARN_MS` away | The cache is `cooling` (derived); past `expiresAt` it is `cold`. A `running` session is always `warm`, and one with no request yet is `cold`. The sweep sends the session when the state or its alert changes | 60,000 |
 | `attached = false` for `DETACHED_HIDE_AFTER_MS` | The wall sets the card aside behind a "N background sessions hidden" line (client-side; the session stays live, in History and in the totals). A client attaching again clears it at once | 60,000 |
 
 A stale session that reports again immediately returns to its stored status. A dropped session that reports again is revived (clear `dropped_at`, `ended_at`). On server start the sweeper treats every stored non-done session as stale until it reports. SSE broadcasts `removed` when a session leaves the live set.
 
 `SessionView.dropAt` is when a stale session leaves the live set by itself: `max(last_seen + staleAfter, server start if not heard since) + DROP_AFTER_MS` (`staleAfter` is `STALE_AFTER_MS`, or `HOOK_STALE_AFTER_MS` for a hook-only session). The sweep and the view use the same calculation, so a heartbeat-lost card shows a countdown that matches what happens, including after a restart.
+
+**Cooling alerts (issue #27).** A session that waits on the person (`waiting`), whose cache is `cooling` and that
+no warming keeps warm (`warming.on` false) gets an alert, as `SessionView.cache.alert`. The count is for the
+person, across all sessions, and is kept in `settings.cache_alerts_shown` so a restart does not reset it. Each
+cooling period of a session is one alert, counted by the first sweep that finds an SSE client connected (a
+dashboard that is not open has seen nothing, and one that opens during the period counts it). `PODIUM_CACHE_ALERTS`
+picks the rule: `auto` (default) shows the first two with the tip about cache warming (`'tip'`) and no alert
+after that (`null`), on the reading that a person who saw the tip twice and did not turn warming on does not want
+it; `on` shows every alert, the tip with the first two (`'plain'` after); `off` shows none and counts none.
+`StateBody.cacheAlerts` and every `tick` carry `{ mode, shown, suppressed }`, where `suppressed` is `auto` with two
+shown. `POST /api/fleet/cache-alerts/reset` sets the count to 0 and decides any cooling session again.
 
 **Remove.** A heartbeat-lost card and its rail row have a Remove control, and the orchestrator page has "Remove now". It calls `POST /api/fleet/sessions/:id/drop`, which runs the same exit as the automatic drop (`dropped_at` set, event `end` "heartbeat lost", `removed` with reason `dropped`), so every open tab updates. The session stays in History, so Remove asks for no confirmation. The server refuses a session that is not `stale`. Removing hides the card and nothing more: a removed session that reports again comes back on the wall, exactly as a dropped one does. Remove needs no token, like the other requests the dashboard makes, and sends nothing to the session.
 
@@ -772,13 +847,13 @@ A session that has done nothing yet is not part of the wall. That means its stat
 | `session` | one `SessionView` | on change (throttled per session) |
 | `activity` | one `ActivityView` | new event |
 | `removed` | `{ sessionId, reason: 'done'|'dropped'|'deleted' }` | leaves the live set |
-| `tick` | `{ serverTime, kpis }` | every 2 s (also serves as keepalive; the client treats 6 s of silence as disconnected) |
+| `tick` | `{ serverTime, kpis, cacheAlerts }` | every 2 s (also serves as keepalive; the client treats 6 s of silence as disconnected), and at once after the cooling-alert count is reset |
 
 The registry removes a client on `close`/`error`, and a write that throws never crashes the process. Supports 20 simultaneous clients. Send `retry: 2000`.
 
 ### 7.7 Hardening
 
-- Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
+- Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads, the `drop` route and `cache-alerts/reset` stay open on localhost.
 - **Who a report is from (issue #36).** `PODIUM_TOKEN` is the *admin secret*. A credential is either a person's token, `pdm_<12 hex key id>_<48 hex secret>` (192 bits of randomness, made by the server in Admin, shown once, stored only as a SHA-256 and the last four characters; random tokens of that length need no slow or keyed hash), or the admin secret. The server finds a person by the key id, compares hashes in constant time, and accepts a report when the token is live (not revoked, not rotated away) and `Report.userName` equals that person's name, compared case-insensitively. The token, not the name, decides identity: the name is visible in the console, so the match is a consistency check and the token's randomness protects the account. A hook has no body name, so a person's token alone identifies it. The admin secret is accepted as before and puts the session under the owner `Admin`, unless the owner turned that off in Admin. With no `PODIUM_TOKEN` and no person token, a report is accepted with no owner ("Unassigned"); a person token that is presented is still checked. A session id that already belongs to another owner is refused with `409`. Any valid credential may `DELETE` a session.
 - **The Admin API (`/api/admin`).** Off (403) when `PODIUM_TOKEN` is empty. `POST unlock` takes the admin secret and starts an in-memory session whose id is in an `HttpOnly; SameSite=Strict` cookie scoped to `/api/admin`; it ends after 10 idle minutes, on lock, and on restart, so rotating the admin secret (which needs a restart) ends every session. Five wrong secrets from one source address lock that source for 15 minutes. Every change needs the header `X-Podium-Admin: 1` and, when an `Origin` is sent, the server's own host; no CORS is enabled. Every response carries `Cache-Control: no-store`. The secret and tokens are never logged, never put in an error, the activity list or the admin log, and never stored by the page in `localStorage` or `sessionStorage`. The admin log records unlocks, failed unlocks, lockouts, people, rotations, revocations, group changes and the reporting switch, each with the source address. A name is 1 to 48 characters and a group name 1 to 24, with no control characters, both unique case-insensitively. The name `Admin` is reserved: it is the owner of a report made with the admin secret. A person sees no one's token, including their own; only the owner rotates it.
 - Tokens and the admin secret travel in a header over plain HTTP. A server reachable over a network needs a trusted network or a TLS proxy.
@@ -802,6 +877,17 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 **Left rail.** "All orchestrators" item and one item per live session: status dot, name, blowout badge, model chip, plan bar and `done/total`, running/total agents. Red left edge when blowout level is 2. Follows the current sort. Rows enter and leave with the mockup's animations (respect `prefers-reduced-motion`).
 
 **Fleet wall (default view).** KPI tiles: orchestrators live, agents running, context blowouts, plan steps done, est. cost today (sparkline), tokens in the last minute (sparkline). Toolbar: status segments All / Running / Waiting / Stale / Blowouts; a Sort menu (Status, Model, Context blowouts, Context used, Cost, Newest); a text filter over name, project and branch; "N shown · M cleared today". Cards are 360 px wide, left-aligned, and as many columns as fit; collapsing or expanding a pane or the top bar, or entering Wall mode, adds or removes columns and never resizes a card (only an area narrower than 360 px does). Cards per session: name, status chip; project path (one line, shortened from the front when too long, full path as its tooltip); git line (branch icon, worktree chip or dashed "main checkout" chip, ahead/behind arrows, modified count or "clean"; the branch is one line ending in an ellipsis when too long, with the full name as its tooltip, and never wraps mid-name; other git chips move to a second line whole when the line is full); model chip, effort meter (see below), context chip with blowout badge; a red callout at level 2; plan title, current step, progress bar; an agent strip (square per agent, filled by model color; circle for a fork; faded when done; red outline when failed; dashed when queued; blinking when running); cost, tokens, elapsed time; sparkline; waiting and stale callouts. Empty states with an instruction, never a blank panel.
+
+**Prompt cache (#27).** A card whose `cache.alert` is set while it is `waiting` and `cooling` shows an alert under the
+waiting callout: a clock icon, "Prompt cache expires in 0:42." counting down to `expiresAt` each second, then
+"About 410k tokens would be written to the cache again, roughly $1.97 more." (the cost left out without a price).
+With `alert: 'tip'` it adds how to keep it warm: `/podium warm on` in the session, or the `cacheWarming` option with
+`/plugin configure`. The rail row shows a short chip with the clock and the countdown. While warming is on the card
+has a chip instead: "cache kept warm", "cache warming on" or, in amber, "cache warming stopped", with the pings sent
+and their estimated cost, and the reason as its tooltip. While `cacheAlerts.suppressed`, a line under the toolbar
+says "Prompt cache alerts are off. They were shown twice and cache warming was not turned on." with one button,
+"Turn cache alerts back on", which posts the reset. Alerts are in the dashboard only, never a browser or desktop
+notification.
 
 **People view (#34, `mockup/podium-people.html`).** It appears once any live session's `owner` is a person (not `Admin`, not null); until then the wall, the rail and the right panel are exactly as above. Then a row above the toolbar holds **Group by** (People, Group, None), **Order by** (Needs attention, Spend, Name; hidden for None), a **You are** picker (Not set, or any person with a live session) and **Only me** (disabled until You are is set). People are derived from live sessions only: a person whose sessions all leave has no band. *People*: one band per owner, keyed by the name, so one person on two machines is one band. A band header is a button that collapses the band to its header (`aria-expanded`, "N hidden") and shows a monogram (one or two initials in a neutral circle; a person never gets a color, because color means model and status), the name, a "you" tag for the viewer, the person's group as a chip, the machines the person's live sessions run on, "N live", the waiting and stale counts in amber, and the person's share of today's estimated spend (`kpis.costTodayByOwner` against `kpis.costToday`) as an amount, a percentage and a neutral bar. Sessions reported with the admin secret are the **Admin** band and sessions with no owner the **Unassigned** band, always after the people. Each card in a person's band gets a line with its machine (`machine.name`, plus the first four characters of `machine.id` when one person has two machines with the same name). *Group*: one band per group from Admin holding every member's orchestrators, each card naming its owner; a group with no live session has no band, and people with no group, Admin and Unassigned are under **No group**, last; the viewer's group is marked "your group". *None*: the flat wall, each card naming its owner. Cards inside a band follow the Sort menu and the status and text filters, and a band with nothing left to show is hidden. *Needs attention* puts the viewer's band first, then the most waiting plus stale, then the most spend; *Spend* is most spend first; *Name* is alphabetical. The left rail groups the same way: a header per band (monogram, name, you tag, attention count, orchestrator count) is a toggle that narrows the wall and the rail to that person or group, "Showing X" with a **Show everyone** button undoes it, and so does **All orchestrators**; for Group and None each rail row carries the owner's monogram. The right panel, on the wall, starts with **Spend today, by person** (or by group, following Group by): horizontal bars in a neutral ink, largest first, each with its amount, a readout line for the hovered bar, and a **Table** view (person or group, live orchestrators, spend, share, and a total row equal to "Est. cost today"). It counts sessions that started today, live or ended, so a person whose sessions ended today still has a row there but no band. Group by, Order by, the chart or table choice and the collapsed bands are remembered in `localStorage` under `podium.people`, and You are under `podium.me`, each read and written with try/catch. The server cannot tell who is looking, so "me" lives in the browser only. Names and machine names are untrusted text and drawn as text nodes.
 

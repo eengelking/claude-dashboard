@@ -13,7 +13,8 @@ A change fits if it makes Podium better at watching sessions. Some things are ou
 `docs/SPEC.md` ("Non-goals") lists them:
 
 - **No control surface.** Podium never sends a prompt, stops an agent, approves a permission or edits a
-  session.
+  session. The two requests the mod can make of its own (`explainFailures`, `cacheWarming`) are opt-in,
+  separate from the session, and cannot be turned on from the dashboard.
 - **One machine, one user.** No multi-machine fleets, accounts or cloud sync.
 - **No billing accuracy.** Cost is an estimate and the UI says so.
 
