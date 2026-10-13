@@ -183,7 +183,7 @@ describe("nested agents in the panel, the activity feed, the card strip and the 
     expect(dd("Est. cost")!.textContent).toContain("own");
     const branch = dd("With its agents")!;
     expect(branch.textContent).toContain("$0.12");
-    expect(branch.textContent).toContain("66.0k tok");
+    expect(branch.textContent).toContain("64.0k tok");
     expect(branch.textContent).toContain("3 agents");
     cleanup();
     expect(openAgent("top").dd("With its agents")).toBeNull();

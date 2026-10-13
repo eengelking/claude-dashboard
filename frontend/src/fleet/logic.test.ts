@@ -93,9 +93,6 @@ describe("buildTree", () => {
 
 // The shape a real nested run produced (#101): a subagent that launched a subagent and a fork, a
 // grandchild under that subagent, and a fork at the top level that launched a subagent of its own.
-/** The output tokens every fixture agent has written (fixtures.ts), which now count toward its Tokens (#108). */
-const OUT = 500;
-
 const NESTED = [
   makeAgent({ id: "p", description: "level1 parent", costUsdEst: 0.05, context: { tokens: 17_000, window: 1, percent: 2 } }),
   makeAgent({ id: "f", kind: "fork", type: "fork", description: "level1 fork", costUsdEst: 0.02, context: { tokens: 25_000, window: 1, percent: 3 } }),
@@ -134,20 +131,20 @@ describe("nested agents (#101)", () => {
   });
 
   it("adds a branch up once per agent: own figures plus every descendant, unpriced ones counted aside", () => {
-    expect(branchTotals(NESTED, "p")).toEqual({ agents: 3, costUsd: 0.05 + 0.04 + 0.01 + 0.003, unpriced: 0, tokens: 17_000 + 18_000 + 15_000 + 14_000 + 4 * OUT });
-    expect(branchTotals(NESTED, "f")).toEqual({ agents: 1, costUsd: 0.02, unpriced: 1, tokens: 25_000 + 15_000 + 2 * OUT });
-    expect(branchTotals(NESTED, "g")).toEqual({ agents: 0, costUsd: 0.003, unpriced: 0, tokens: 14_000 + OUT });
+    expect(branchTotals(NESTED, "p")).toEqual({ agents: 3, costUsd: 0.05 + 0.04 + 0.01 + 0.003, unpriced: 0, tokens: 17_000 + 18_000 + 15_000 + 14_000 });
+    expect(branchTotals(NESTED, "f")).toEqual({ agents: 1, costUsd: 0.02, unpriced: 1, tokens: 25_000 + 15_000 });
+    expect(branchTotals(NESTED, "g")).toEqual({ agents: 0, costUsd: 0.003, unpriced: 0, tokens: 14_000 });
   });
 
   it("a parent cycle does not loop or count twice", () => {
     const cyc = [makeAgent({ id: "x", parentId: "y", costUsdEst: 1 }), makeAgent({ id: "y", parentId: "x", costUsdEst: 2 })];
-    expect(branchTotals(cyc, "x")).toEqual({ agents: 1, costUsd: 3, unpriced: 0, tokens: 200_000 + 2 * OUT });
+    expect(branchTotals(cyc, "x")).toEqual({ agents: 1, costUsd: 3, unpriced: 0, tokens: 200_000 });
   });
 
   it("counts each nested agent once, and the session tokens add every level once", () => {
     expect(agentCounts(NESTED)).toMatchObject({ running: 6, all: 6 });
     const s = makeSession({ agents: NESTED, context: { tokens: 25_000, window: 1_000_000, percent: 3 } });
-    expect(sessionTokens(s)).toBe(25_000 + 17_000 + 25_000 + 18_000 + 15_000 + 14_000 + 15_000 + 6 * OUT);
+    expect(sessionTokens(s)).toBe(25_000 + 17_000 + 25_000 + 18_000 + 15_000 + 14_000 + 15_000);
   });
 
   it("orders the card strip as the tree, so children follow their parent", () => {
@@ -205,20 +202,13 @@ describe("splitDetached (sessions nobody is attached to leave the wall after the
 });
 
 describe("Tokens figure (issue #96)", () => {
-  it("is the context an agent holds plus its output, not a running total of cache re-reads", () => {
+  it("is the context an agent holds now, not a running total of cache re-reads", () => {
     const a = makeAgent({ context: { tokens: 417_783, window: 1_000_000, percent: 41.8 }, tokens: { input: 348, output: 124_151, cacheRead: 48_663_543, cacheWrite: 746_738 } });
-    expect(agentTokens(a)).toBe(417_783 + 124_151);
-  });
-
-  it("adds the output tokens produced so far, as Claude Code's agent line does (issue #108)", () => {
-    // Taken from a real run: the agent's last request held 270,4xx tokens and it had written 8,133 so far; Claude Code showed 281k.
-    const a = makeAgent({ context: { tokens: 270_400, window: 1_000_000, percent: 27 }, tokens: { input: 150, output: 8_133, cacheRead: 12_000_000, cacheWrite: 250_000 } });
-    expect(agentTokens(a)).toBe(278_533);
+    expect(agentTokens(a)).toBe(417_783);
   });
 
   it("is zero while an agent has not reported its context yet", () => {
-    // Output already written must not show on its own as a Tokens figure.
-    expect(agentTokens(makeAgent({ context: { tokens: null, window: null, percent: null }, tokens: { input: 0, output: 8_133, cacheRead: 0, cacheWrite: 0 } }))).toBe(0);
+    expect(agentTokens(makeAgent({ context: { tokens: null, window: null, percent: null } }))).toBe(0);
   });
 
   it("adds the orchestrator and its agents, so the rows add up", () => {
@@ -226,7 +216,7 @@ describe("Tokens figure (issue #96)", () => {
       context: { tokens: 200_000, window: 1_000_000, percent: 20 },
       agents: [makeAgent({ id: "x", context: { tokens: 50_000, window: 1_000_000, percent: 5 } }), makeAgent({ id: "y", context: { tokens: 30_000, window: 1_000_000, percent: 3 } })],
     });
-    expect(sessionTokens(s)).toBe(280_000 + 2 * OUT);
+    expect(sessionTokens(s)).toBe(280_000);
   });
 });
 

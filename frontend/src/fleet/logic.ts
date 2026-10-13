@@ -260,9 +260,9 @@ export type AgentSortKey = "model" | "effort" | "ctx" | "tok" | "cost" | "time" 
 
 const AGENT_STATUS_ORDER: Record<AgentView["status"], number> = { running: 0, failed: 1, queued: 2, aborted: 3, done: 4 };
 
-/** What Claude Code's own agent line shows: the context at the agent's latest request plus every output token it has written so far. Not a running total of input, which would count every cache re-read again. */
+/** What Claude Code's own agent line shows: the context the agent holds now, not a running total (which would count every cache re-read again). */
 export function agentTokens(a: AgentView): number {
-  return a.context.tokens === null ? 0 : a.context.tokens + a.tokens.output;
+  return a.context.tokens ?? 0;
 }
 
 /** The orchestrator's context plus each agent's, so the rows of one session add up. */
@@ -270,7 +270,7 @@ export function sessionTokens(s: SessionView): number {
   return (s.context.tokens ?? 0) + s.agents.reduce((n, a) => n + agentTokens(a), 0);
 }
 
-export const TOKENS_HINT = "Tokens in the context window at the latest request: input, cache read and cache write. An agent's also adds the output it has written so far. The same figure Claude Code shows. A running total is in the side panel.";
+export const TOKENS_HINT = "Tokens in the context window now: input, cache read and cache write of the latest request. The same figure Claude Code shows. A running total is in the side panel.";
 
 export function agentElapsedSec(a: AgentView, now: number): number {
   return Math.max(0, ((a.endedAt ?? now) - a.startedAt) / 1000);

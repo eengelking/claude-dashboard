@@ -7,8 +7,8 @@ usage() {
 Usage: scripts/agent-context-audit.sh [-u URL] [-m MIN_GAP]
 
 For each agent Podium reports, finds its transcript (~/.claude/projects/*/*/subagents/agent-<id>.jsonl),
-takes the last request's input + cache read + cache write plus every output token the agent has
-written (what Claude Code's agent line shows, and what Podium's Tokens should be: issue #108).
+takes the last request's input + cache read + cache write (what Podium's Tokens should be: issues
+#96 and #120; adding every output token counts earlier output twice).
 Prints Podium's figure, the transcript's, and the gap as a percentage. Read-only.
 
   -u URL      Podium base URL (default http://localhost:4317)
@@ -60,8 +60,8 @@ curl -s "$url/api/fleet/state" | MIN="$min" node -e '
         if (!all.length) continue;
         const last = all[all.length - 1];
         const req = (last.input_tokens || 0) + (last.cache_read_input_tokens || 0) + (last.cache_creation_input_tokens || 0);
-        const withOut = req + all.reduce((n, u) => n + (u.output_tokens || 0), 0);
-        const podium = ((a.context && a.context.tokens) || 0) + ((a.tokens && a.tokens.output) || 0);
+        const withOut = req;
+        const podium = (a.context && a.context.tokens) || 0;
         const gap = withOut ? ((withOut - podium) / withOut) * 100 : 0;
         if (Math.abs(gap) < Number(process.env.MIN)) continue;
         console.log(`${a.id.slice(0, 16).padEnd(17)} ${String(a.status).padEnd(8)} ${String(podium).padStart(7)} ${String(withOut).padStart(11)} ${gap.toFixed(1).padStart(5)}  ${(a.description || "").slice(0, 40)}`);
