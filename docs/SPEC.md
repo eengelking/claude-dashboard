@@ -52,9 +52,11 @@ Podium is added next to it. Do not remove or break it.
 - No control surface. Podium observes. It never sends prompts, stops agents, approves permissions or edits
   a session. (The dashboard may copy a resume command to the clipboard, and it may remove a heartbeat-lost
   card from the live view early, 7.5; that is all. Neither sends anything to a session.)
-- No multi-machine or multi-user support. One machine, one user, localhost only. The server binds to
-  `127.0.0.1` by default. In the container image it listens on all interfaces inside the container, and
-  the port is published only on the host's `127.0.0.1` (4.4).
+- No hosted service. Several people may report to one server, each with their own token (7.7), but it is
+  still one server you run yourself. The server binds to `127.0.0.1` by default. In the container image it
+  listens on all interfaces inside the container, and the port is published only on the host's `127.0.0.1`
+  (4.4). Reaching it from other machines is an explicit choice (`--bind`) and needs a trusted network or a
+  TLS proxy.
 - No hosted deployment, accounts, or cloud sync. A container on the same machine is not a hosted deployment.
 - No billing accuracy. Cost is an estimate from token counts and a price table. The UI always labels it as
   an estimate. Never present it as an invoice.
@@ -63,7 +65,7 @@ Podium is added next to it. Do not remove or break it.
 - No usage dashboard. The earlier one was removed (issue #30); it is not replaced.
 - No terminal UI or pane inside Claude Code in this spec. A minimal `/podium` command and a status-line entry
   are in scope; a full pane is deferred (section 10).
-- No authentication system. An optional shared-secret header is in scope (section 7.7). Nothing more.
+- No accounts, passwords, logins, roles or per-person read permissions. Authentication is a token per person plus an admin secret that opens the Admin section (section 7.7). Reading the console stays open.
 - No new chart or UI libraries beyond those in section 2. Charts are inline SVG, as in the mockup.
 
 ---
