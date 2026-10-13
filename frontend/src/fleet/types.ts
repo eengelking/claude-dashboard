@@ -1,4 +1,5 @@
-// The wire types are defined once, in the server (SPEC 7.4). The UI only imports them as types.
+// The wire types are defined once, in the server (SPEC 7.4). The UI imports them as types, and a few pure helpers
+// that must agree with the server (`idleOnBackground`) as values.
 export type {
   ActivityView,
   AgentView,

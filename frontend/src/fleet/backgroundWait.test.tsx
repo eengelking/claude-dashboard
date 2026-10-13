@@ -4,7 +4,7 @@ import { FleetView } from "./FleetApp";
 import { SessionCard } from "./components/SessionCard";
 import { makeEvent, makeSession } from "./fixtures";
 import { stateFrom } from "./testState";
-import { backgroundLead } from "./waiting";
+import { backgroundLead, backgroundTitle } from "./waiting";
 
 afterEach(cleanup);
 
@@ -25,6 +25,12 @@ describe("backgroundLead", () => {
   });
   it("lists several kinds in one sentence", () => {
     expect(backgroundLead({ tasks: [task("shell"), task("agent")], wakeAt: null })).toBe("Waiting for 1 background shell and 1 background agent to finish.");
+  });
+  it("names a wake-up that comes with other work, and the tooltip says wake-up, not wakeup", () => {
+    const b = { tasks: [task("shell"), task("wakeup", "check the deploy")], wakeAt: null };
+    expect(backgroundLead(b)).toBe("Waiting for 1 background shell to finish, and a scheduled wake-up.");
+    expect(backgroundTitle(b)).not.toContain("wakeup");
+    expect(backgroundTitle(b)).toContain("wake-up: check the deploy");
   });
   it("says when a scheduled wake-up will wake, or that one is scheduled", () => {
     expect(backgroundLead({ tasks: [task("wakeup", "check the deploy")], wakeAt: Date.UTC(2026, 9, 13, 14, 30) })).toMatch(/^Waiting for a scheduled wake-up at \d{1,2}:\d{2}\.$/);

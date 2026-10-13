@@ -14,7 +14,7 @@ import {
 } from './failures.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
-import type { ActivityEvent, AgentStatus, BackgroundKind, BackgroundTask, BackgroundWait, Effort, Failure, FilesReport, GitInfo, RateLimit } from './protocol.ts';
+import { backgroundSummary, type ActivityEvent, type AgentStatus, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Failure, type FilesReport, type GitInfo, type RateLimit } from './protocol.ts';
 
 export const BLOWOUT_DEDUP_MS = 2000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -337,13 +337,6 @@ const TASK_KINDS: Record<string, BackgroundKind> = { shell: 'shell', bash: 'shel
 const MAX_BACKGROUND_TASKS = 20;
 const BACKGROUND_DESC = 120;
 
-/** "1 shell, 1 agent": the counts the activity feed's wait row is read from. */
-export function backgroundSummary(b: BackgroundWait): string {
-  const n = new Map<string, number>();
-  for (const t of b.tasks) n.set(t.type, (n.get(t.type) ?? 0) + 1);
-  return [...n].map(([k, c]) => `${c} ${k}`).join(', ');
-}
-
 /**
  * The Stop hook's list of work still in flight. Finished tasks are dropped. A shell's command never leaves the
  * machine: a task with no description is named by the first word of its command (never an NAME=value assignment), and no more.
@@ -359,12 +352,16 @@ export function setBackground(s: SessionState, i: BackgroundInput, now: number):
     tasks.push({ type, description: clip((t.description ?? '').replace(/\s+/g, ' ').trim() || word || type, BACKGROUND_DESC), status: clip(status, 40) });
   }
   const times: number[] = [];
+  let unreadable = false;
   for (const c of i.crons) {
     if (tasks.length >= MAX_BACKGROUND_TASKS) break;
     tasks.push({ type: 'wakeup', description: clip((c.prompt ?? '').replace(/\s+/g, ' ').trim() || 'scheduled wake-up', BACKGROUND_DESC), status: 'scheduled' });
     if (typeof c.nextAt === 'number') times.push(c.nextAt);
+    else unreadable = true;
   }
-  const background: BackgroundWait | null = tasks.length ? { tasks, wakeAt: times.length ? Math.min(...times) : null } : null;
+  // One wake-up whose time cannot be read may fire first, so no time is better than a wrong one.
+  const wakeAt = times.length && !unreadable ? Math.min(...times) : null;
+  const background: BackgroundWait | null = tasks.length ? { tasks, wakeAt } : null;
   if (JSON.stringify(background) === JSON.stringify(s.background)) return s;
   let next: SessionState = { ...s, background };
   // The feed gets one row each time what it waits on changes, not one per Stop.

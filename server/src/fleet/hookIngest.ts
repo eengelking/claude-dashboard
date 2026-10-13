@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import type { AgentRow, SessionRow } from './db.js';
 import { agentView } from './derive.js';
-import type { ActivityEvent, AgentReport, BackgroundKind, BackgroundTask, BackgroundWait, Effort, Report, SessionReport } from './protocol.js';
+import { backgroundSummary, type ActivityEvent, type AgentReport, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Report, type SessionReport } from './protocol.js';
 
 export const HOOKS_REPORTER_VERSION = 'hooks';
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -46,13 +46,6 @@ function backgroundOf(payload: Record<string, unknown>): BackgroundWait | null {
     tasks.push({ type: 'wakeup', description: str(c.prompt, 120) ?? 'scheduled wake-up', status: 'scheduled' });
   }
   return tasks.length ? { tasks, wakeAt: null } : null;
-}
-
-/** "1 shell, 1 agent": the counts the activity feed's wait row is read from. */
-export function backgroundSummary(b: BackgroundWait): string {
-  const n = new Map<string, number>();
-  for (const t of b.tasks) n.set(t.type, (n.get(t.type) ?? 0) + 1);
-  return [...n].map(([k, c]) => `${c} ${k}`).join(', ');
 }
 
 const lastSegment = (p: string) => p.split('/').filter(Boolean).pop() ?? p;

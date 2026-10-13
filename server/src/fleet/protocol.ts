@@ -223,6 +223,18 @@ export interface MachineInfo {
   name: string;
   id: string;
 }
+/** "1 shell, 1 agent": the counts of a background wait by kind. The activity feed's wait row is read from it. */
+export function backgroundSummary(b: BackgroundWait): string {
+  const n = new Map<string, number>();
+  for (const t of b.tasks) n.set(t.type, (n.get(t.type) ?? 0) + 1);
+  return [...n].map(([k, c]) => `${c} ${k}`).join(', ');
+}
+
+/** A waiting session whose only wait is on background work or a wake-up, not on the person (#119). */
+export function idleOnBackground<T extends { status: string; waitReason: string | null; background?: BackgroundWait | null }>(s: T): s is T & { background: BackgroundWait } {
+  return s.status === 'waiting' && s.waitReason === null && !!s.background;
+}
+
 // <protocol:end>
 
 // ---------------------------------------------------------------------------------------------

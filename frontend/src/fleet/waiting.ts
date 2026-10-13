@@ -36,10 +36,8 @@ export function parseWaitEvent(text: string): { reason: "permission" | "input"; 
 
 // ---- Idle on background work (#119, mockup/podium-background-wait.html) ----------------------------------------------
 
-/** A waiting session whose only wait is on background work or a wake-up, not on the person. */
-export function idleOnBackground(s: Pick<SessionView, "status" | "waitReason" | "background">): s is typeof s & { background: BackgroundWait } {
-  return s.status === "waiting" && s.waitReason === null && s.background !== null;
-}
+// One definition for the mod, the server and the UI: the same function the reporter and the server use (protocol.ts).
+export { idleOnBackground } from "../../../server/src/fleet/protocol";
 
 /** The reporter writes this prefix plus counts ("1 shell, 1 agent") for the activity row of a background wait. */
 const WAIT_BG_PREFIX = "waiting on background: ";
@@ -58,12 +56,12 @@ function listOf(parts: string[]): string {
 
 function sentence(counts: [string, number][], past: boolean, wakeAt: number | null): string {
   const tasks = counts.filter(([k]) => k !== "wakeup");
-  if (!tasks.length) {
-    const at = wakeAt === null ? "" : ` at ${fmtClock(wakeAt).slice(0, 5)}`;
-    return past ? `Waited for a scheduled wake-up${at}.` : `Waiting for a scheduled wake-up${at}.`;
-  }
+  const wake = counts.some(([k]) => k === "wakeup");
+  const at = wakeAt === null ? "" : ` at ${fmtClock(wakeAt).slice(0, 5)}`;
+  const verb = past ? "Waited" : "Waiting";
+  if (!tasks.length) return `${verb} for a scheduled wake-up${at}.`;
   const what = listOf(tasks.map(([k, n]) => `${n} ${(KIND_WORD[k] ?? KIND_WORD.other!)[n === 1 ? 0 : 1]}`));
-  return past ? `Waited for ${what} to finish.` : `Waiting for ${what} to finish.`;
+  return `${verb} for ${what} to finish${wake ? `, and a scheduled wake-up${at}` : ""}.`;
 }
 
 function countsOf(b: BackgroundWait): [string, number][] {
@@ -99,7 +97,7 @@ export function backgroundDetail(b: BackgroundWait): string | null {
 
 /** What a session lists in its status tooltip: each task and its description, whole. */
 export function backgroundTitle(b: BackgroundWait): string {
-  return `${backgroundLead(b)} Not waiting on you. ${b.tasks.map((t) => `${t.type}: ${t.description}`).join(" · ")}`.trim();
+  return `${backgroundLead(b)} Not waiting on you. ${b.tasks.map((t) => `${t.type === "wakeup" ? "wake-up" : t.type}: ${t.description}`).join(" · ")}`.trim();
 }
 
 /** Reads a background wait's activity text, or returns null when the event is not one. */

@@ -254,7 +254,7 @@ a reader of the spec would expect:
   host-side `127.0.0.1` publish (40). Both were written back into SPEC.md (4.4) after the first build.
 - Background waits (#119): `classic.Stop` carries `background_tasks` and `session_crons`; the mod keeps them in
   `SessionState.background` and sends `session.background`, which the server stores in `sessions.background_json`
-  and serves as `SessionView.background`. The status stays `waiting` with `waitReason: null`; the UI
+  and serves as `SessionView.background`. `backgroundSummary` and `idleOnBackground` are defined once, in the shared protocol block, so the mod, the server and the UI cannot disagree about them. The status stays `waiting` with `waitReason: null`; the UI
   words it (`frontend/src/fleet/waiting.ts`) and leaves it out of the waiting count. The settings-hook path reads
   the same Stop fields but leaves `wakeAt` null, because the server may not share the cron's time zone.
 - Extra fields, all additive: `SessionView.cwd` and `waitReason`, `/state.config`, `liveSessions` in the

@@ -392,6 +392,13 @@ describe('background work (#119)', () => {
     expect(r.session.background).toMatchObject({ tasks: [{ type: 'wakeup', description: 'check the deploy' }], wakeAt: T0 + 3_600_000 })
   })
 
+  test('with two wake-ups and one time unreadable, no time is shown', () => {
+    const crons = [{ id: 'c1', schedule: '0 15 * * *', recurring: true, prompt: 'a', nextAt: T0 + 3_600_000 }, { id: 'c2', schedule: '@weird', recurring: true, prompt: 'b', nextAt: null }]
+    const r = buildReport(setBackground(idle(), { tasks: [], crons }, T0 + 2), [], meta)
+    expect(r.session.background!.wakeAt).toBeNull()
+    expect(r.session.background!.tasks).toHaveLength(2)
+  })
+
   test('when the work finishes the session goes back to waiting for input at once', () => {
     let s = setBackground(idle(), { tasks: [shell], crons: [] }, T0 + 2)
     s = setBackground(s, { tasks: [], crons: [] }, T0 + 3)

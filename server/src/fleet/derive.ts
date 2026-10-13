@@ -2,6 +2,7 @@
 // pass rows in and get views out, so every rule is unit-tested without a database.
 import type { AgentRow, BlowoutRow, EventRow, SampleRow, SessionRow } from './db.js';
 import { checkReporter } from './compat.js';
+import { idleOnBackground } from './protocol.js';
 import { tokenSum } from './ingest.js';
 import type {
   ActivityView,
@@ -180,11 +181,6 @@ export interface SessionInput {
   hideAt?: number | null;
   /** From the people table: the group the session's owner is in. */
   ownerGroup?: string | null;
-}
-
-/** A waiting session whose only wait is on background work or a wake-up, not on the person (#119). */
-export function idleOnBackground(v: { status: string; waitReason: string | null; background: BackgroundWait | null }): boolean {
-  return v.status === 'waiting' && v.waitReason === null && v.background !== null;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
