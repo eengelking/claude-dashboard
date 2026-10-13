@@ -229,7 +229,13 @@ export class Transport {
     const server = this.serverVersion ? ` (server ${this.serverVersion})` : '';
     if (this.compat === 'outdated') return `This reporter is older than the Podium server supports${server}: update the podium-reporter mod (claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins).`;
     if (this.compat === 'newer') return `This reporter is newer than the Podium server supports${server}: upgrade the Podium server.`;
-    if (this.behind) return `A newer podium-reporter is supported by the server${server}: it reads reporters up to ${this.support!.max}, this one is ${this.cfg.version}. Update with claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins.`;
     return null;
+  }
+
+  /** The mild hint behind `· update available`; for `/podium` only, never a toast. Null when not behind. */
+  updateNotice(): string | null {
+    if (!this.behind || !this.support) return null;
+    const server = this.serverVersion ? ` (server ${this.serverVersion})` : '';
+    return `A newer podium-reporter is supported by the server${server}: it reads reporters up to ${this.support.max}, this one is ${this.cfg.version}. Update with claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins.`;
   }
 }

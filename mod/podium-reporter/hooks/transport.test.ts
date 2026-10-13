@@ -91,7 +91,9 @@ describe('transport', () => {
     }
     const behind = await run('0.11.0', reply('0.11.0', '0.12.0'))
     expect(behind.statusText()).toBe('podium v0.11.0 ● 3 live · update available')
-    expect(behind.versionNotice()).toContain('0.12')
+    // the mild hint is for /podium only: versionNotice also drives a toast
+    expect(behind.versionNotice()).toBeNull()
+    expect(behind.updateNotice()).toContain('0.12')
     // a patch difference is not flagged
     expect((await run('0.11.0', reply('0.11.0', '0.11.4'))).statusText()).toBe('podium v0.11.0 ● 3 live')
     expect((await run('0.12.0', reply('0.12.0', '0.12.0'))).statusText()).toBe('podium v0.12.0 ● 3 live')

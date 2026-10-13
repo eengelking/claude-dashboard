@@ -554,7 +554,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     `Podium fleet console: ${opts.serverUrl.replace(/\/+$/, '')}/#/`,
     `Connection: ${t.online === null ? 'not tried yet' : t.online ? 'online' : 'offline, retrying'}${t.liveSessions !== null ? ` (${t.liveSessions} live sessions)` : ''}`,
     `Versions: reporter ${VERSION}${t.serverVersion ? `, server ${t.serverVersion}` : ''}`,
-    t.versionNotice() ?? '',
+    t.versionNotice() ?? t.updateNotice() ?? '',
     `Reports sent: ${t.sent}, failed: ${t.failed}, rejected: ${t.rejected}; events queued: ${t.queue.length}${t.dropped ? `, dropped: ${t.dropped}` : ''}`,
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,
