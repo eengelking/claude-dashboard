@@ -348,6 +348,13 @@ export interface LifecycleConfig {
   detachedHideAfterMs: number;
 }
 
+/** The wall's display settings, set in Admin > Settings (SPEC 8.1). Notices default on; background sessions default off. */
+export interface WallSettingsView {
+  /** One switch per informational notice, by id. */
+  notices: Record<string, boolean>;
+  showBackgroundSessions: boolean;
+}
+
 export interface StateBody {
   serverTime: number;
   config: LifecycleConfig;
@@ -357,6 +364,7 @@ export interface StateBody {
   events: ActivityView[];
   /** The server's own version and the reporter range it supports, for the mismatch notice. */
   server: { version: string; reporterSupport: ReporterSupport };
+  wall: WallSettingsView;
 }
 
 export type RemovedReason = 'done' | 'dropped' | 'deleted';

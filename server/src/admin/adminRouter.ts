@@ -6,11 +6,14 @@ import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
 import { safeEqualStr } from '../fleet/tokens.js';
+import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 
 export interface AdminRouterOptions {
   /** The admin secret. null when the server runs without authentication: Admin is then switched off. */
   secret: string | null;
   people: PeopleStore;
+  /** The wall's notice switches. Without it the Settings tab has nothing to change. */
+  wall?: WallSettings;
   now?: () => number;
   /** Idle time before a session ends. */
   idleMs?: number;
@@ -53,7 +56,7 @@ function publicPerson(p: PersonRow, groupName: string | null) {
 }
 
 export function createAdminRouter(opts: AdminRouterOptions): Router {
-  const { people } = opts;
+  const { people, wall } = opts;
   const now = opts.now ?? Date.now;
   const idleMs = opts.idleMs ?? 10 * 60_000;
   const maxFails = opts.maxFails ?? 5;
@@ -246,16 +249,46 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   // ---- settings and log -----------------------------------------------------------------------
 
+  const noticeList = () => NOTICES.map((n) => ({ ...n, on: wall ? wall.noticeOn(n.id) : true }));
+
   router.get('/settings', (_req, res) => {
-    res.json({ allowAdminSecretReporting: people.adminReportingAllowed() });
+    res.json({
+      allowAdminSecretReporting: people.adminReportingAllowed(),
+      notices: noticeList(),
+      showBackgroundSessions: wall?.showBackgroundSessions() ?? false,
+    });
   });
 
+  // One setting per call: allowAdminSecretReporting, showBackgroundSessions, or notices ({ id: boolean }).
   router.put('/settings', (req, res) => {
-    const v = req.body?.allowAdminSecretReporting;
-    if (typeof v !== 'boolean') return void res.status(400).json({ ok: false, error: 'allowAdminSecretReporting must be true or false' });
-    people.setAdminReporting(v);
-    people.log('admin_reporting_changed', `Reporting with the admin secret turned ${v ? 'on' : 'off'}`, sourceOf(req), now());
-    res.json({ ok: true, allowAdminSecretReporting: v });
+    const body = req.body ?? {};
+    if ('allowAdminSecretReporting' in body) {
+      const v = body.allowAdminSecretReporting;
+      if (typeof v !== 'boolean') return void res.status(400).json({ ok: false, error: 'allowAdminSecretReporting must be true or false' });
+      people.setAdminReporting(v);
+      people.log('admin_reporting_changed', `Reporting with the admin secret turned ${v ? 'on' : 'off'}`, sourceOf(req), now());
+      return void res.json({ ok: true, allowAdminSecretReporting: v });
+    }
+    if ('showBackgroundSessions' in body) {
+      const v = body.showBackgroundSessions;
+      if (typeof v !== 'boolean' || !wall) return void res.status(400).json({ ok: false, error: 'showBackgroundSessions must be true or false' });
+      wall.setShowBackgroundSessions(v);
+      people.log('wall_background_changed', `Background sessions ${v ? 'shown' : 'hidden'} on the wall`, sourceOf(req), now());
+      return void res.json({ ok: true, showBackgroundSessions: v });
+    }
+    if ('notices' in body) {
+      const n = body.notices;
+      const ids = n && typeof n === 'object' && !Array.isArray(n) ? Object.keys(n) : [];
+      if (!wall || ids.length === 0 || ids.some((id) => !isNoticeId(id) || typeof n[id] !== 'boolean')) {
+        return void res.status(400).json({ ok: false, error: 'notices must map known notice ids to true or false' });
+      }
+      for (const id of ids) {
+        wall.setNotice(id, n[id]);
+        people.log('wall_notice_changed', `Wall notice ${id} turned ${n[id] ? 'on' : 'off'}`, sourceOf(req), now());
+      }
+      return void res.json({ ok: true, notices: noticeList() });
+    }
+    res.status(400).json({ ok: false, error: 'no known setting in the request' });
   });
 
   router.get('/log', (req, res) => {

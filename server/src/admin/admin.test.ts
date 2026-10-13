@@ -4,12 +4,15 @@ import express from 'express';
 import request from 'supertest';
 import { openDb } from '../fleet/db.js';
 import { PeopleStore } from '../fleet/people.js';
+import { WallSettings } from '../fleet/wallSettings.js';
 import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
 
 function setup(over: { secret?: string | null; idleMs?: number } = {}) {
-  const people = new PeopleStore(openDb(':memory:'));
+  const db = openDb(':memory:');
+  const people = new PeopleStore(db);
+  const wall = new WallSettings(db);
   const clock = { t: 1_000_000 };
   const lines: string[] = [];
   const app = express();
@@ -18,12 +21,13 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
     createAdminRouter({
       secret: over.secret === undefined ? SECRET : over.secret,
       people,
+      wall,
       now: () => clock.t,
       idleMs: over.idleMs,
       log: (l) => lines.push(l),
     }),
   );
-  return { app, people, clock, lines };
+  return { app, people, wall, clock, lines };
 }
 
 const H = { 'X-Podium-Admin': '1' };
@@ -185,11 +189,26 @@ describe('groups and settings', () => {
 
   it('switches admin-secret reporting and logs it', async () => {
     const { agent, people } = await unlocked();
-    expect((await agent.get('/api/admin/settings').set(H)).body).toEqual({ allowAdminSecretReporting: true });
+    expect((await agent.get('/api/admin/settings').set(H)).body).toMatchObject({ allowAdminSecretReporting: true });
     expect((await agent.put('/api/admin/settings').set(H).send({ allowAdminSecretReporting: false })).status).toBe(200);
     expect(people.adminReportingAllowed()).toBe(false);
     expect((await agent.put('/api/admin/settings').set(H).send({ allowAdminSecretReporting: 'yes' })).status).toBe(400);
     expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toContain('admin_reporting_changed');
+  });
+
+  it('lists the wall notices with their switches and changes them, the background-sessions setting and nothing unknown', async () => {
+    const { agent, people, wall } = await unlocked();
+    const got = (await agent.get('/api/admin/settings').set(H)).body;
+    expect(got.showBackgroundSessions).toBe(false);
+    expect(got.notices).toEqual([expect.objectContaining({ id: 'background-sessions', name: 'Background sessions', on: true })]);
+    expect((await agent.put('/api/admin/settings').set(H).send({ notices: { 'background-sessions': false } })).status).toBe(200);
+    expect(wall.noticeOn('background-sessions')).toBe(false);
+    expect((await agent.put('/api/admin/settings').set(H).send({ showBackgroundSessions: true })).status).toBe(200);
+    expect(wall.showBackgroundSessions()).toBe(true);
+    for (const bad of [{ notices: { nope: true } }, { notices: { 'background-sessions': 'off' } }, { notices: {} }, { showBackgroundSessions: 1 }, {}]) {
+      expect((await agent.put('/api/admin/settings').set(H).send(bad)).status).toBe(400);
+    }
+    expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toEqual(expect.arrayContaining(['wall_notice_changed', 'wall_background_changed']));
   });
 
   it('pages the admin log, newest first', async () => {

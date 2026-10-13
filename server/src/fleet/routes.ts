@@ -189,6 +189,28 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     res.json({ ok: true });
   });
 
+  // Closing a wall notice and the Show/Hide link on the background-sessions note. Both only change how the wall
+  // looks, like Remove above, so they take no token (and no admin cookie: the wall has none). SPEC 7.1, 8.1.
+  router.post('/notices/:id/close', (req, res) => {
+    if (!fleet.wall.setNotice(req.params.id, false)) {
+      res.status(400).json({ ok: false, error: 'unknown notice', path: '$.id' });
+      return;
+    }
+    opts.people?.log('wall_notice_changed', `Wall notice ${req.params.id} turned off from the wall`, machineOf(req) ?? '', fleet.now());
+    res.json({ ok: true });
+  });
+
+  router.put('/wall/background-sessions', json, (req, res) => {
+    const v = req.body?.show;
+    if (typeof v !== 'boolean') {
+      res.status(400).json({ ok: false, error: 'show must be true or false', path: '$.show' });
+      return;
+    }
+    fleet.wall.setShowBackgroundSessions(v);
+    opts.people?.log('wall_background_changed', `Background sessions ${v ? 'shown' : 'hidden'} on the wall`, machineOf(req) ?? '', fleet.now());
+    res.json({ ok: true });
+  });
+
   router.get('/events', (req, res) => {
     const before = intParam(req.query.before);
     const limit = intParam(req.query.limit);

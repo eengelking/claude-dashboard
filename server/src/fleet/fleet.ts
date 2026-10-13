@@ -9,6 +9,7 @@ import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
 import type { ActivityView, HistoryRow, Kpis, RemovedReason, Report, ReporterSupport, SessionStatusView, SessionView, StateBody } from './protocol.js';
 import { formatSse, SseHub } from './sse.js';
+import { WallSettings } from './wallSettings.js';
 
 export interface FleetConfig {
   staleAfterMs: number;
@@ -77,6 +78,8 @@ interface LiveEntry {
 
 export class Fleet {
   readonly hub = new SseHub();
+  /** The wall's notice switches and background-session setting; a change reaches open browsers at once. */
+  readonly wall: WallSettings;
   private readonly live = new Map<string, LiveEntry>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly startedAt: number;
@@ -89,6 +92,7 @@ export class Fleet {
     readonly now: () => number = Date.now,
   ) {
     this.startedAt = now();
+    this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
     // On start every stored session that has not ended is treated as stale until it reports again;
     // a done session still inside its linger window stays until the window closes.
     for (const row of db.liveCandidates(this.startedAt - cfg.lingerMs)) {
@@ -287,6 +291,7 @@ export class Fleet {
       clearedToday: this.clearedToday(),
       events: this.events({ limit: STATE_EVENTS }),
       server: { version: serverVersion(), reporterSupport: REPORTER_SUPPORT },
+      wall: this.wall.view(),
     };
   }
 

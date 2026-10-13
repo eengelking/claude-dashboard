@@ -28,7 +28,7 @@ const stopSweeper = startSweeper(fleet);
 const app = express();
 app.disable("x-powered-by");
 app.use("/api/fleet", createFleetRouter(fleet, { token: process.env.PODIUM_TOKEN || null, people }));
-app.use("/api/admin", createAdminRouter({ secret: process.env.PODIUM_TOKEN || null, people }));
+app.use("/api/admin", createAdminRouter({ secret: process.env.PODIUM_TOKEN || null, people, wall: fleet.wall }));
 app.use(createRouter());
 
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");

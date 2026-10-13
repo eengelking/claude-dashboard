@@ -250,3 +250,32 @@ describe('GET /stream', () => {
     expect(fleet.hub.size).toBe(0);
   });
 });
+
+describe('wall notices', () => {
+  it('closes a known notice without a token, rejects an unknown one, and carries the switches in the state body', async () => {
+    const { app, fleet } = setup('t');
+    expect((await request(app).get('/api/fleet/state')).body.wall).toEqual({ notices: { 'background-sessions': true }, showBackgroundSessions: false });
+    expect((await request(app).post('/api/fleet/notices/nope/close')).status).toBe(400);
+    expect((await request(app).post('/api/fleet/notices/background-sessions/close')).status).toBe(200);
+    expect((await request(app).get('/api/fleet/state')).body.wall.notices['background-sessions']).toBe(false);
+    expect(fleet.wall.noticeOn('background-sessions')).toBe(false);
+  });
+
+  it('sets the background-sessions setting without a token and rejects a non-boolean', async () => {
+    const { app } = setup('t');
+    expect((await request(app).put('/api/fleet/wall/background-sessions').send({ show: 'yes' })).status).toBe(400);
+    expect((await request(app).put('/api/fleet/wall/background-sessions').send({ show: true })).status).toBe(200);
+    expect((await request(app).get('/api/fleet/state')).body.wall.showBackgroundSessions).toBe(true);
+  });
+
+  it('keeps the switches across a restart and tells open streams when one changes', async () => {
+    const { fleet } = setup();
+    const sent: string[] = [];
+    fleet.hub.add({ write: (c: string) => (sent.push(c), true), end() {} } as never);
+    fleet.wall.setNotice('background-sessions', false);
+    expect(sent.join('')).toContain('event: wall');
+    const restarted = new Fleet(fleet.db, { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' });
+    closers.push(() => restarted.close());
+    expect(restarted.wall.noticeOn('background-sessions')).toBe(false);
+  });
+});
