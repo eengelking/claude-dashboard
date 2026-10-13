@@ -1,6 +1,6 @@
 {
   "name": "podium-reporter",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
   "author": { "name": "Ed Engelking" },
   "userConfig": {
@@ -51,6 +51,12 @@
       "type": "boolean",
       "title": "Explain failures",
       "description": "Ask a small model to explain each failure (costs tokens). Off by default.",
+      "default": false
+    },
+    "fullPrompts": {
+      "type": "boolean",
+      "title": "Send full prompts and answers",
+      "description": "Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can show them in full. Off by default: only the first 400 characters are sent.",
       "default": false
     }
   }

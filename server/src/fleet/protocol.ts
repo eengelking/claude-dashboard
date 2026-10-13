@@ -140,6 +140,12 @@ export interface AgentReport {
   steps: { done: number; total: number | null } | null;
   promptExcerpt: string;
   answerExcerpt: string | null;
+  /**
+   * The whole task prompt and final answer, redacted, line breaks kept. Sent only when the reporter's
+   * `fullPrompts` option is on, and only once per text (the server keeps what it was given).
+   */
+  promptText?: string;
+  answerText?: string;
   failure: Failure | null;
 }
 
@@ -209,8 +215,11 @@ export type ModelFamily = 'opus' | 'sonnet' | 'haiku' | 'fable' | 'other';
 
 export type SessionStatusView = 'running' | 'waiting' | 'stale' | 'done';
 
-export interface AgentView extends AgentReport {
+export interface AgentView extends Omit<AgentReport, 'promptText' | 'answerText'> {
   modelFamily: ModelFamily;
+  /** Length of the full prompt / answer the server holds, null when it has none (served by the text endpoint). */
+  promptChars: number | null;
+  answerChars: number | null;
 }
 
 export interface BlowoutLogEntry {
@@ -376,6 +385,8 @@ export const LIMITS = {
   name: 80,
   text: 240,
   excerpt: 400,
+  /** promptText / answerText: the 20,000-character cap plus room for the mod's cut-off marker. */
+  fullText: 20_100,
   waitNote: 160,
   call: 300,
   line: 240,
@@ -411,6 +422,15 @@ class Invalid extends Error {
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000a-\u001f\u007f]/g;
 
+// The full prompt and answer keep their line breaks: only the other control characters go.
+// eslint-disable-next-line no-control-regex
+const CONTROL_KEEP_NEWLINE = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
+
+function clampText(v: string, max: number): string {
+  const clean = v.replace(CONTROL_KEEP_NEWLINE, ' ');
+  return clean.length > max ? clean.slice(0, max) : clean;
+}
+
 function clampStr(v: string, max: number): string {
   const clean = v.replace(CONTROL, ' ');
   return clean.length > max ? clean.slice(0, max) : clean;
@@ -428,6 +448,11 @@ function obj(v: unknown, path: string): Record<string, unknown> {
 function str(v: unknown, path: string, max: number): string {
   if (typeof v !== 'string') throw new Invalid(path, 'expected a string');
   return clampStr(v, max);
+}
+
+function text(v: unknown, path: string, max: number): string {
+  if (typeof v !== 'string') throw new Invalid(path, 'expected a string');
+  return clampText(v, max);
 }
 
 function strOrNull(v: unknown, path: string, max: number): string | null {
@@ -614,6 +639,8 @@ function agent(v: unknown, path: string): AgentReport {
     steps,
     promptExcerpt: str(o.promptExcerpt, `${path}.promptExcerpt`, LIMITS.excerpt),
     answerExcerpt: strOrNull(o.answerExcerpt, `${path}.answerExcerpt`, LIMITS.excerpt),
+    ...(o.promptText === undefined || o.promptText === null ? {} : { promptText: text(o.promptText, `${path}.promptText`, LIMITS.fullText) }),
+    ...(o.answerText === undefined || o.answerText === null ? {} : { answerText: text(o.answerText, `${path}.answerText`, LIMITS.fullText) }),
     failure: failure(o.failure, `${path}.failure`),
   };
 }

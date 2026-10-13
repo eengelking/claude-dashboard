@@ -97,6 +97,24 @@ describe('protocol', () => {
     expect(validateReport(g)).toMatchObject({ ok: false, path: '$.session.plan.steps' });
   });
 
+  it('keeps line breaks in the full prompt and answer, strips other control characters, and clamps them', () => {
+    const f = loadFixture() as { agents: Record<string, unknown>[] };
+    f.agents[0]!.promptText = '# Task\n\n- one\u0000\n- two';
+    f.agents[0]!.answerText = 'y'.repeat(30_000);
+    const r = validateReport(f);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.agents[0]!.promptText).toBe('# Task\n\n- one \n- two');
+    expect(r.report.agents[0]!.answerText).toHaveLength(LIMITS.fullText);
+    expect('promptText' in r.report.agents[1]!).toBe(false);
+  });
+
+  it('rejects a full text that is not a string', () => {
+    const f = loadFixture() as { agents: Record<string, unknown>[] };
+    f.agents[0]!.promptText = 42;
+    expect(validateReport(f).ok).toBe(false);
+  });
+
   it('clamps names, excerpts and output lines and strips control characters', () => {
     const f = loadFixture() as { session: Record<string, unknown>; agents: Record<string, unknown>[] };
     f.session.name = 'n'.repeat(200);

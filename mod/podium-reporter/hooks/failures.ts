@@ -7,6 +7,8 @@ export const LIMITS = {
   outputLines: 12,
   evidenceLines: 5,
   excerpt: 400,
+  /** The whole prompt or answer, when the fullPrompts option is on. */
+  fullText: 20_000,
   text: 240,
   /** A candidate older than this when its loop fails is not the cause. */
   candidateMaxAgeMs: 60_000,
@@ -38,6 +40,15 @@ export function clip(text: string, max: number): string {
 export function excerpt(text: string | null | undefined, max: number = LIMITS.excerpt): string {
   if (!text) return '';
   return clip(String(text).replace(/\s+/g, ' ').trim(), max);
+}
+
+const CUT_MARKER = '\n\n[cut off at 20,000 characters]';
+
+/** The whole text redacted, line breaks kept, cut to 20,000 characters with a visible marker. */
+export function fullText(text: string | null | undefined): string {
+  if (!text) return '';
+  const r = redact(String(text).replace(/\r\n?/g, '\n')).trim();
+  return r.length > LIMITS.fullText ? r.slice(0, LIMITS.fullText) + CUT_MARKER : r;
 }
 
 /** The last `n` lines of a text, each redacted and cut to 240 characters. */

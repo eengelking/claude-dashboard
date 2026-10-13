@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, newSession, reconcile, resetForNewId, sessionEnd, setAttached, step, toolResult, turnComplete } from './state.ts'
+import { agentRequested, agentSpawned, blowout, compaction, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
@@ -284,5 +284,49 @@ describe('attached', () => {
     const frozen = JSON.stringify(s)
     setAttached(s, false)
     expect(JSON.stringify(s)).toBe(frozen)
+  })
+})
+
+describe('full prompt and answer text (opt-in)', () => {
+  const spawned = (prompt: string) =>
+    agentSpawned(newSession({ id: 's', cwd: '/w', startedAt: T0 }), { toolUseId: 't', agentId: 'a1', model: 'claude-haiku-5-5', subagentType: 'Explore', description: 'd', prompt, fork: false }, T0 + 1)
+
+  test('kept redacted with its line breaks, apart from the 400-char excerpt', () => {
+    const s = spawned('# Task\n\n- find calls\n- token=SECRET123')
+    const a = s.agents.a1!
+    expect(a.promptText).toBe('# Task\n\n- find calls\n- token=[redacted]')
+    expect(a.promptExcerpt).toBe('# Task - find calls - token=[redacted]')
+  })
+
+  test('a text over the cap is cut with a visible marker', () => {
+    const a = spawned('x'.repeat(25_000)).agents.a1!
+    expect(a.promptText!.startsWith('x'.repeat(20_000))).toBe(true)
+    expect(a.promptText!).toContain('cut off')
+    expect(a.promptText!.length).toBeLessThan(20_100)
+  })
+
+  test('the report omits the text unless the option is on', () => {
+    const a = spawned('Find calls.').agents.a1!
+    expect('promptText' in agentReport(a)).toBe(false)
+    expect(agentReport(a, true).promptText).toBe('Find calls.')
+  })
+
+  test('answer text arrives with the answer and goes out once', () => {
+    let s = spawned('Find calls.')
+    s = turnComplete(s, { agentId: 'a1', reason: 'answer', answer: '## Done\n\n42 sites' }, T0 + 5)
+    expect(agentReport(s.agents.a1!, true)).toMatchObject({ promptText: 'Find calls.', answerText: '## Done\n\n42 sites' })
+    s = markTextSent(s)
+    const sent = agentReport(s.agents.a1!, true)
+    expect('promptText' in sent).toBe(false)
+    expect('answerText' in sent).toBe(false)
+    expect(sent.promptExcerpt).toBe('Find calls.')
+  })
+
+  test('a later answer for the same agent is sent again', () => {
+    let s = spawned('p')
+    s = turnComplete(s, { agentId: 'a1', reason: 'answer', answer: 'one' }, T0 + 5)
+    s = markTextSent(s)
+    s = turnComplete(s, { agentId: 'a1', reason: 'answer', answer: 'two' }, T0 + 6)
+    expect(agentReport(s.agents.a1!, true).answerText).toBe('two')
   })
 })

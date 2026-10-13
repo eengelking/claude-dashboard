@@ -137,6 +137,12 @@ export interface AgentReport {
   steps: { done: number; total: number | null } | null;
   promptExcerpt: string;
   answerExcerpt: string | null;
+  /**
+   * The whole task prompt and final answer, redacted, line breaks kept. Sent only when the reporter's
+   * `fullPrompts` option is on, and only once per text (the server keeps what it was given).
+   */
+  promptText?: string;
+  answerText?: string;
   failure: Failure | null;
 }
 

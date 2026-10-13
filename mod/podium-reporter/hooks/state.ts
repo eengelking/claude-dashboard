@@ -7,6 +7,7 @@ import {
   classify,
   evidence,
   excerpt,
+  fullText,
   clip,
   type EndReason,
   type FailureCandidate,
@@ -75,6 +76,12 @@ export interface AgentState extends LoopStats {
   endedAt: number | null;
   promptExcerpt: string;
   answerExcerpt: string | null;
+  /** The whole redacted text, kept so the `fullPrompts` option can send it; null until known. */
+  promptText: string | null;
+  answerText: string | null;
+  /** The current text has gone out in an accepted report; it is not sent again. */
+  promptSent: boolean;
+  answerSent: boolean;
   failure: Failure | null;
   toolUseId: string | null;
 }
@@ -262,6 +269,10 @@ function placeholderAgent(id: string, now: number, over: Partial<AgentState> = {
     endedAt: null,
     promptExcerpt: '',
     answerExcerpt: null,
+    promptText: null,
+    answerText: null,
+    promptSent: false,
+    answerSent: false,
     failure: null,
     toolUseId: null,
     ...over,
@@ -397,6 +408,29 @@ export interface CompleteInput {
 }
 
 /** A loop's turn ended. Main loop: idle. Agent: done, aborted or failed with a failure record. */
+/** A new answer text, to be sent again even if an earlier one already went out. */
+function answerText(answer: string): { answerText: string | null; answerSent: boolean } {
+  return { answerText: fullText(answer) || null, answerSent: false };
+}
+
+/** The texts in an accepted report have gone out; the next reports leave them out. */
+export function markTextSent(s: SessionState, sent: SessionState = s): SessionState {
+  const agents: Record<string, AgentState> = {};
+  let changed = false;
+  for (const [id, a] of Object.entries(s.agents)) {
+    // only a text that is still the one the report carried; a newer one goes out next time
+    const was = sent.agents[id];
+    const next = {
+      ...a,
+      promptSent: a.promptSent || (!!was && was.promptText !== null && was.promptText === a.promptText),
+      answerSent: a.answerSent || (!!was && was.answerText !== null && was.answerText === a.answerText),
+    };
+    if (next.promptSent !== a.promptSent || next.answerSent !== a.answerSent) changed = true;
+    agents[id] = next;
+  }
+  return changed ? { ...s, agents } : s;
+}
+
 export function turnComplete(s: SessionState, i: CompleteInput, now: number): SessionState {
   if (!i.agentId) {
     let next: SessionState = { ...s, mainIdle: true, waitReason: s.waitReason === 'permission' ? null : s.waitReason, main: { ...s.main, candidate: i.reason === 'answer' ? null : s.main.candidate } };
@@ -410,18 +444,18 @@ export function turnComplete(s: SessionState, i: CompleteInput, now: number): Se
   const a = s.agents[i.agentId];
   if (!a || a.status === 'done' || a.status === 'failed' || a.status === 'aborted') {
     // a teammate's later turn, or a duplicate: keep the answer only
-    if (a && i.answer) return { ...s, agents: { ...s.agents, [a.id]: { ...a, answerExcerpt: excerpt(i.answer) } }, dirty: true };
+    if (a && i.answer) return { ...s, agents: { ...s.agents, [a.id]: { ...a, answerExcerpt: excerpt(i.answer), ...answerText(i.answer) } }, dirty: true };
     return s;
   }
   const cls = classify({ reason: i.reason, candidate: a.candidate, stopReason: a.lastStopReason, blowouts: a.blowouts, now });
   let next: AgentState;
   if (i.reason === 'answer') {
-    next = { ...a, status: a.kind === 'teammate' ? 'running' : 'done', endedAt: a.kind === 'teammate' ? null : now, answerExcerpt: i.answer ? excerpt(i.answer) : a.answerExcerpt, candidate: null, failure: null };
+    next = { ...a, status: a.kind === 'teammate' ? 'running' : 'done', endedAt: a.kind === 'teammate' ? null : now, answerExcerpt: i.answer ? excerpt(i.answer) : a.answerExcerpt, ...(i.answer ? answerText(i.answer) : {}), candidate: null, failure: null };
   } else {
     const ev = evidence({ blowoutTimes: a.blowTimes, failedCalls: a.failedCalls, reads: a.reads, denyText: a.candidate?.denied ? a.candidate.denyText : null });
     const fresh = a.candidate && now - a.candidate.at <= 60_000 ? a.candidate : null;
     const failure = buildFailure(cls ?? 'Unknown', fresh, ev, now, cls === 'Model API error' || cls === 'Context window exhausted' ? { tool: 'model request', call: a.model ? `model request (${a.model}${a.effort ? `, effort ${a.effort}` : ''})` : 'model request' } : {});
-    next = { ...a, status: i.reason === 'aborted' ? 'aborted' : 'failed', endedAt: now, failure, answerExcerpt: i.answer ? excerpt(i.answer) : a.answerExcerpt };
+    next = { ...a, status: i.reason === 'aborted' ? 'aborted' : 'failed', endedAt: now, failure, answerExcerpt: i.answer ? excerpt(i.answer) : a.answerExcerpt, ...(i.answer ? answerText(i.answer) : {}) };
   }
   let out: SessionState = { ...s, agents: { ...s.agents, [a.id]: next } };
   if (next.status === 'done') out = addEvent(out, 'done', a.id, `finished: ${a.description}`, now);
@@ -494,6 +528,8 @@ export function agentSpawned(s: SessionState, i: SpawnInput, now: number): Sessi
     status: 'running',
     startedAt: prev?.startedAt ?? now,
     promptExcerpt: excerpt(i.prompt),
+    promptText: fullText(i.prompt) || null,
+    promptSent: false,
     toolUseId: i.toolUseId,
     window: windowOf(model),
   };

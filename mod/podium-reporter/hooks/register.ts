@@ -29,6 +29,7 @@ import {
   setFiles,
   setGit,
   setExplanation,
+  markTextSent,
   setIdentity,
   skillLoaded,
   step,
@@ -44,7 +45,7 @@ import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.9.0';
+export const VERSION = '0.10.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -61,6 +62,7 @@ interface Options {
   userName: string;
   showStatus: boolean;
   explainFailures: boolean;
+  fullPrompts: boolean;
 }
 
 interface HookStat {
@@ -102,6 +104,7 @@ export function readOptions(o: Record<string, unknown>): Options {
     userName: s(o.userName, ''),
     showStatus: typeof o.showStatus === 'boolean' ? o.showStatus : true,
     explainFailures: o.explainFailures === true,
+    fullPrompts: o.fullPrompts === true,
   };
 }
 
@@ -165,6 +168,7 @@ function metaOf(r: Runtime, now: number) {
     optionName: opts.sessionName || null,
     userName: opts.userName || null,
     machine: r.machine,
+    fullText: opts.fullPrompts,
   };
 }
 
@@ -236,6 +240,7 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
     r.state = { ...r.state, dirty: true };
     toastRefusalOnce($, r);
   } else if (outcome === 'ok') {
+    if (opts.fullPrompts) r.state = markTextSent(r.state, snapshot);
     r.toastedRefusal = null; // accepted again: a later refusal is news again
     toastOnce($, r, true);
   }

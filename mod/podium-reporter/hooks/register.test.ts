@@ -285,6 +285,29 @@ describe('podium-reporter end to end', () => {
     expect(texts.has('session.start · Opus')).toBe(true)
   })
 
+  test('fullPrompts off (default): only the 400-character excerpt leaves', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await $.agent.spawn(spawnInput({ tool_use_id: 'f1', prompt: '# Task\n\nDo it.' }))
+    await w.clock.advance(3000)
+    const a = w.posts.at(-1)!.agents[0]!
+    expect(a.promptExcerpt).toBe('# Task Do it.')
+    expect('promptText' in a).toBe(false)
+  })
+
+  test('fullPrompts on: the whole prompt goes out once, then not again', { options: { fullPrompts: true } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await $.agent.spawn(spawnInput({ tool_use_id: 'f1', prompt: '# Task\n\nDo it.' }))
+    await w.clock.advance(3000)
+    const first = w.posts.filter((p) => p.agents[0]?.promptText)
+    expect(first.length).toBe(1)
+    expect(first[0]!.agents[0]!.promptText).toBe('# Task\n\nDo it.')
+    await w.clock.advance(12_000)
+    expect(w.posts.filter((p) => p.agents[0]?.promptText).length).toBe(1)
+    expect(w.posts.length).toBeGreaterThan(1)
+  })
+
   test('explainFailures off (default): no model call', async ($, on) => {
     const w = world(on)
     let calls = 0
