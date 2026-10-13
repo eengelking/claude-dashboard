@@ -545,7 +545,7 @@ export class FleetDb {
         this.stmt('DELETE FROM blowouts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM samples WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM agents WHERE session_id = ?').run(id);
-      this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
+        this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM sessions WHERE id = ?').run(id);
       }
       return { samples, events, sessions: old.length };

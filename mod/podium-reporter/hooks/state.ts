@@ -413,17 +413,20 @@ function answerText(answer: string): { answerText: string | null; answerSent: bo
   return { answerText: fullText(answer) || null, answerSent: false };
 }
 
-/** The texts in an accepted report have gone out; the next reports leave them out. */
-export function markTextSent(s: SessionState, sent: SessionState = s): SessionState {
+/** The full texts an accepted report carried, by agent id. */
+export type SentTexts = Record<string, { promptText?: string | undefined; answerText?: string | undefined }>;
+
+/** The texts in an accepted report have gone out; the next reports leave them out. Without `sent`, every text held counts as sent. */
+export function markTextSent(s: SessionState, sent?: SentTexts): SessionState {
   const agents: Record<string, AgentState> = {};
   let changed = false;
   for (const [id, a] of Object.entries(s.agents)) {
     // only a text that is still the one the report carried; a newer one goes out next time
-    const was = sent.agents[id];
+    const was = sent ? sent[id] : { promptText: a.promptText ?? undefined, answerText: a.answerText ?? undefined };
     const next = {
       ...a,
-      promptSent: a.promptSent || (!!was && was.promptText !== null && was.promptText === a.promptText),
-      answerSent: a.answerSent || (!!was && was.answerText !== null && was.answerText === a.answerText),
+      promptSent: a.promptSent || (!!was?.promptText && was.promptText === a.promptText),
+      answerSent: a.answerSent || (!!was?.answerText && was.answerText === a.answerText),
     };
     if (next.promptSent !== a.promptSent || next.answerSent !== a.answerSent) changed = true;
     agents[id] = next;

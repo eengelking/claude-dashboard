@@ -30,6 +30,7 @@ import {
   setGit,
   setExplanation,
   markTextSent,
+  type SentTexts,
   setIdentity,
   skillLoaded,
   step,
@@ -232,7 +233,12 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
   if (!force && !r.transport.due(now, r.state.dirty)) return;
   const snapshot = r.state;
   r.state = { ...r.state, dirty: false };
-  const outcome = await r.transport.send((evs) => buildReport(snapshot, evs, metaOf(r, now)), now);
+  let sentTexts: SentTexts = {};
+  const outcome = await r.transport.send((evs) => {
+    const report = buildReport(snapshot, evs, metaOf(r, now));
+    sentTexts = Object.fromEntries(report.agents.map((a) => [a.id, { promptText: a.promptText, answerText: a.answerText }]));
+    return report;
+  }, now);
   if (outcome === 'failed') {
     r.state = { ...r.state, dirty: true };
     toastOnce($, r, false);
@@ -240,7 +246,7 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
     r.state = { ...r.state, dirty: true };
     toastRefusalOnce($, r);
   } else if (outcome === 'ok') {
-    if (opts.fullPrompts) r.state = markTextSent(r.state, snapshot);
+    if (opts.fullPrompts) r.state = markTextSent(r.state, sentTexts);
     r.toastedRefusal = null; // accepted again: a later refusal is news again
     toastOnce($, r, true);
   }

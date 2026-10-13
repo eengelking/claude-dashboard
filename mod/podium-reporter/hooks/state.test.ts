@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'claude-code/testing'
-import { agentReport } from './report.ts'
+import { agentReport, buildReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
 import { agentRequested, agentSpawned, blowout, compaction, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, step, toolResult, turnComplete } from './state.ts'
 
@@ -320,6 +320,21 @@ describe('full prompt and answer text (opt-in)', () => {
     expect('promptText' in sent).toBe(false)
     expect('answerText' in sent).toBe(false)
     expect(sent.promptExcerpt).toBe('Find calls.')
+  })
+
+  test('one report carries at most 120,000 characters of full text; the rest waits for the next', () => {
+    let s = newSession({ id: 's', cwd: '/w', startedAt: T0 })
+    for (let i = 0; i < 10; i++) s = agentSpawned(s, { toolUseId: `t${i}`, agentId: `a${i}`, model: 'claude-haiku-5-5', subagentType: 'Explore', description: 'd', prompt: 'x'.repeat(19_000), fork: false }, T0 + i)
+    const carried = (st: typeof s) => Object.values(st.agents).map((a) => agentReport(a, true)).filter((r) => r.promptText)
+    const meta = { version: '0.10.0', engineVersion: null, hostSurface: null, now: T0, storedName: null, optionName: null, fullText: true }
+    const first = buildReport(s, [], meta).agents.filter((a) => a.promptText)
+    expect(carried(s)).toHaveLength(10)
+    expect(first.length).toBeLessThan(10)
+    expect(first.reduce((n, a) => n + a.promptText!.length, 0)).toBeLessThanOrEqual(120_000)
+    s = markTextSent(s, Object.fromEntries(first.map((a) => [a.id, { promptText: a.promptText }])))
+    const second = buildReport(s, [], meta).agents.filter((a) => a.promptText)
+    expect(first.length + second.length).toBe(10)
+    expect(second.map((a) => a.id).some((id) => first.some((f) => f.id === id))).toBe(false)
   })
 
   test('a later answer for the same agent is sent again', () => {

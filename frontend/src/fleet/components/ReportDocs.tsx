@@ -139,7 +139,7 @@ function DocModal(props: { kind: Kind; s: SessionView; a: AgentView; load: Load;
         e.preventDefault();
         onClose.current();
       } else if (e.key === "Tab") {
-        const f = [...(dialog.current?.querySelectorAll<HTMLElement>("button, [tabindex='0']") ?? [])];
+        const f = [...(dialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex='0']") ?? [])];
         const first = f[0];
         const last = f[f.length - 1];
         if (!first || !last) return;
