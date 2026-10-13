@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium wall notices</title>
+<!-- Mockup for issue #114. Informational notices sit at the bottom of the wall, one per row, each with an X. Closing one shows a confirmation that links to Admin > Settings, where every notice has an on/off switch. Tokens are copied from fleet.css (dark is the base). The switcher and the "rules" section are mockup scaffolding, not product UI. -->
+<style>
+/* Layout: one Podium window framed in the page; a switcher above it flips between the wall and Admin > Settings.
+   Tokens are taken from Podium's own fleet.css so the mockup matches the product (dark first). */
+:root {
+  --bg: #0d0d0d; --surface: #151514; --raised: #1c1c1a; --border: #2b2b28; --axis: #3a3a36;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #8d8c84; --warn: #fab219; --good: #3fb27f; --info: #4c8dff;
+  --sel: #232321; --switch-off: #3a3a36;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --border: #dcdbd5; --axis: #c9c8c1;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --warn: #a96b00; --good: #1c7a54; --info: #1f5fd1;
+  --sel: #ebeae5; --switch-off: #c9c8c1; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --border: #dcdbd5; --axis: #c9c8c1;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --warn: #a96b00; --good: #1c7a54; --info: #1f5fd1;
+  --sel: #ebeae5; --switch-off: #c9c8c1; color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.45 var(--font-ui); padding-inline: 16px; padding-block: 20px 40px; max-width: 1100px; margin-inline: auto; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 3px; }
+h1 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
+.lede { color: var(--ink2); margin: 0 0 14px; max-width: 70ch; }
+.switcher { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { padding: 5px 12px; color: var(--ink2); border-right: 1px solid var(--border); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
+.reset { color: var(--ink2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--axis); }
+.frame { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); position: relative; overflow: hidden; }
+.topbar { display: flex; gap: 14px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--raised); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+.topbar b { color: var(--ink); }
+.topbar .sp { margin-left: auto; }
+.wallbody { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; min-height: 470px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink2); }
+.toolbar .seg button { padding: 3px 9px; }
+.toolbar .r { margin-left: auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.card.dashed { border-style: dashed; }
+.card .h { display: flex; justify-content: space-between; gap: 8px; }
+.card .h b { font-size: 14px; }
+.card .sub { color: var(--muted); font-size: 11.5px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st { color: var(--warn); font-size: 12px; white-space: nowrap; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; font-size: 11.5px; color: var(--ink2); }
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.wait { border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); border-radius: 5px; padding: 5px 8px; font-size: 12px; }
+.foot { color: var(--ink2); font-size: 12px; font-family: var(--font-mono); }
+
+/* The pattern under review: wall notices sit at the bottom of the wall, one per row, each with an X. */
+.notices { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.notice { display: flex; align-items: center; gap: 12px; padding: 7px 8px 7px 14px; border: 1px dashed var(--axis); border-radius: 6px; background: color-mix(in srgb, var(--surface) 60%, var(--bg)); color: var(--ink2); font-size: 12.5px; }
+.notice b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.notice .txt { flex: 1; min-width: 0; display: flex; gap: 6px 12px; flex-wrap: wrap; }
+.notice .act { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--axis); white-space: nowrap; }
+.notice .act:hover { text-decoration-color: var(--ink); }
+.x { width: 26px; height: 26px; border-radius: 5px; display: grid; place-items: center; color: var(--ink2); flex: none; }
+.x:hover { background: var(--sel); color: var(--ink); }
+.x svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; }
+.notice.leaving { opacity: 0; transform: translateY(4px); transition: opacity .16s, transform .16s; }
+@media (prefers-reduced-motion: reduce) { .notice.leaving { transition: none; } }
+.empty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+
+.toast { position: absolute; right: 14px; bottom: 14px; max-width: min(420px, calc(100% - 28px)); background: var(--raised); border: 1px solid var(--axis); border-radius: 8px; padding: 10px 10px 10px 14px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 12.5px; }
+.toast .t { flex: 1; min-width: 0; }
+.toast b { display: block; color: var(--ink); margin-bottom: 2px; }
+.toast .t span { color: var(--ink2); }
+.toast .go { display: inline-block; margin-top: 6px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--axis); }
+
+/* Admin */
+.admin { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 470px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tab { padding: 7px 12px; color: var(--ink2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tab.new::after { content: "new"; margin-left: 6px; font-size: 10.5px; color: var(--info); border: 1px solid color-mix(in srgb, var(--info) 55%, transparent); border-radius: 3px; padding: 0 4px; }
+.panel { max-width: 720px; display: flex; flex-direction: column; gap: 6px; }
+.panel h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.panel .hint { color: var(--ink2); margin: 0 0 6px; max-width: 62ch; }
+.rows { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.row { display: flex; gap: 16px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row .l { flex: 1; min-width: 0; }
+.row .l b { display: block; font-weight: 600; }
+.row .l span { color: var(--ink2); font-size: 12px; }
+.row .where { color: var(--muted); font-size: 11.5px; font-family: var(--font-mono); display: block; margin-top: 2px; }
+.sw { display: flex; gap: 10px; align-items: center; flex: none; }
+.sw .lbl { color: var(--ink2); font-size: 12px; width: 26px; text-align: right; }
+.sw button { width: 34px; height: 20px; border-radius: 999px; background: var(--switch-off); position: relative; transition: background .15s; }
+.sw button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--bg); transition: transform .15s; }
+.sw button[aria-checked="true"] { background: var(--good); }
+.sw button[aria-checked="true"]::after { transform: translateX(14px); }
+@media (prefers-reduced-motion: reduce) { .sw button, .sw button::after { transition: none; } }
+.group { color: var(--muted); font-size: 11.5px; margin: 10px 0 2px; }
+.rules { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--ink2); max-width: 78ch; }
+.rules h2 { font-size: 13px; color: var(--ink); margin: 0 0 6px; }
+.rules ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 560px) { .notice { flex-wrap: wrap; } .row { flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+
+<h1>Wall notices</h1>
+<p class="lede">Mockup for the issue. Informational notices sit at the bottom of the wall, one per row, each closable with an X. Closing one shows a confirmation that points to Admin &gt; Settings, where every notice has an on/off switch. Click the X on a notice, then follow the link in the confirmation.</p>
+
+<div class="switcher">
+  <div class="seg" role="group" aria-label="View">
+    <button type="button" id="v-wall" aria-pressed="true">Wall</button>
+    <button type="button" id="v-admin" aria-pressed="false">Admin &gt; Settings</button>
+  </div>
+  <button type="button" class="reset" id="reset">Reset the mockup</button>
+</div>
+
+<div class="frame" id="frame">
+  <div class="topbar"><b>Podium</b><span>2 orchestrators live</span><span class="sp">Admin</span></div>
+
+  <div class="wallbody" id="wall">
+    <div class="toolbar">
+      <div class="seg" aria-hidden="true"><button type="button" aria-pressed="true">All</button><button type="button">Running</button><button type="button">Waiting</button><button type="button">Stale</button></div>
+      <span class="r">3 shown · 140 cleared today</span>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="h"><b>claude-dashboard</b><span class="st">waiting on you</span></div><div class="sub">~/dev/claude-dashboard</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 15%</span><span class="chip">1 modified</span></div><div class="wait">Waiting for your input.</div><div class="foot">$28.27 · 1.21M tok · 1h 13m</div></div>
+      <div class="card"><div class="h"><b>resume-builder</b><span class="st">waiting on you</span></div><div class="sub">~/dev/resume-builder</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span><span class="chip">1 modified</span></div><div class="wait">Waiting for your input.</div><div class="foot">$0.99 · 280k tok · 13:56</div></div>
+      <div class="card dashed" id="bgcard"><div class="h"><b>nightly-report</b><span class="st">waiting on you</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip warn">nobody attached</span></div><div class="wait">Waiting for your input.</div><div class="foot">$0.21 · 62.8k tok · 8:58</div></div>
+    </div>
+    <div class="notices" id="notices" aria-label="Notices"></div>
+  </div>
+
+  <div class="admin" id="admin" hidden>
+    <div class="tabs" role="tablist" aria-label="Admin sections">
+      <button type="button" class="tab" role="tab" aria-selected="false">People</button>
+      <button type="button" class="tab" role="tab" aria-selected="false">Groups</button>
+      <button type="button" class="tab" role="tab" aria-selected="false">Reporting and security</button>
+      <button type="button" class="tab new" role="tab" aria-selected="true" id="settings-tab">Settings</button>
+      <button type="button" class="tab" role="tab" aria-selected="false">Admin log</button>
+    </div>
+    <div class="panel" role="tabpanel" aria-labelledby="settings-tab">
+      <h2>Wall notices</h2>
+      <p class="hint">Short notes shown at the bottom of the wall. Closing one on the wall turns it off here. Turn it back on with its switch.</p>
+      <div class="rows" id="rows"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden>
+    <div class="t"><b id="toast-h">Notice turned off</b><span id="toast-b"></span><br><button type="button" class="go" id="toast-go">Open Admin &gt; Settings</button></div>
+    <button type="button" class="x" id="toast-x" aria-label="Close this message"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>
+  </div>
+</div>
+
+<section class="rules" aria-labelledby="rules-h">
+  <h2 id="rules-h">The rule for every wall notice, now and later</h2>
+  <ol>
+    <li>It sits at the bottom of the wall, below the cards, and never above or between them.</li>
+    <li>It has an X. Closing it turns that notice off and shows the confirmation that points to Admin &gt; Settings.</li>
+    <li>It has a switch in Admin &gt; Settings &gt; Wall notices, with a one-line description of what it says.</li>
+    <li>If the notice has an action (Show them, Turn cache alerts back on), the action stays as a link in the notice.</li>
+    <li>Errors and connection problems are not notices: they stay where they are and cannot be closed.</li>
+  </ol>
+</section>
+
+<script>
+var DEFS = [
+  { id: "background", name: "Background sessions", desc: "Says how many sessions have nobody attached, what they cost so far, and lets you show or hide them.", head: "2 background sessions hidden", text: "nobody is attached, $0.43 so far", act: "Show them", actAlt: "Hide them" },
+  { id: "cachealerts", name: "Prompt cache alerts off", desc: "Says cache alerts were switched off after being shown twice, and lets you turn them back on.", head: "Prompt cache alerts are off.", text: "Two were shown and nothing kept those caches warm.", act: "Turn cache alerts back on" }
+];
+var state = { on: { background: true, cachealerts: true }, bgShown: false, view: "wall", toast: null };
+var $ = function (id) { return document.getElementById(id); };
+var X = '<svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg>';
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+function renderNotices() {
+  var live = DEFS.filter(function (d) { return state.on[d.id]; });
+  $("notices").innerHTML = live.length ? live.map(function (d) {
+    var head = d.id === "background" ? (state.bgShown ? "2 background sessions shown" : d.head) : d.head;
+    var act = d.id === "background" ? (state.bgShown ? d.actAlt : d.act) : d.act;
+    return '<div class="notice" data-id="' + d.id + '"><div class="txt"><b>' + esc(head) + '</b><span>' + esc(d.text) + '</span><button type="button" class="act" data-act="' + d.id + '">' + esc(act) + '</button></div>' +
+      '<button type="button" class="x" data-close="' + d.id + '" aria-label="Close notice: ' + esc(d.name) + '">' + X + '</button></div>';
+  }).join("") : '<div class="empty">No notices. Turn them on in Admin &gt; Settings.</div>';
+  $("bgcard").hidden = !state.bgShown;
+}
+function renderRows() {
+  $("rows").innerHTML = DEFS.map(function (d) {
+    var on = state.on[d.id];
+    return '<div class="row"><div class="l"><b>' + esc(d.name) + '</b><span>' + esc(d.desc) + '</span><span class="where">Shown at the bottom of the wall</span></div>' +
+      '<div class="sw"><span class="lbl">' + (on ? "On" : "Off") + '</span><button type="button" role="switch" aria-checked="' + on + '" aria-label="' + esc(d.name) + '" data-sw="' + d.id + '"></button></div></div>';
+  }).join("");
+}
+function setView(v) {
+  state.view = v;
+  $("wall").hidden = v !== "wall"; $("admin").hidden = v !== "admin";
+  $("v-wall").setAttribute("aria-pressed", v === "wall"); $("v-admin").setAttribute("aria-pressed", v === "admin");
+  if (v === "admin") $("toast").hidden = true; else if (state.toast) $("toast").hidden = false;
+}
+function showToast(d) {
+  state.toast = d.id;
+  $("toast-h").textContent = "Notice turned off";
+  $("toast-b").textContent = "“" + d.name + "” will not show again. You can turn it back on or off in Admin > Settings.";
+  $("toast").hidden = false;
+  clearTimeout(showToast.t); showToast.t = setTimeout(function () { $("toast").hidden = true; state.toast = null; }, 9000);
+}
+$("notices").addEventListener("click", function (e) {
+  var c = e.target.closest("[data-close]"), a = e.target.closest("[data-act]");
+  if (c) {
+    var d = DEFS.filter(function (x) { return x.id === c.dataset.close; })[0];
+    var el = c.closest(".notice"); el.classList.add("leaving");
+    setTimeout(function () { state.on[d.id] = false; renderNotices(); renderRows(); showToast(d); }, 150);
+  } else if (a && a.dataset.act === "background") { state.bgShown = !state.bgShown; renderNotices(); }
+  else if (a) { var d2 = DEFS[1]; state.on.cachealerts = false; renderNotices(); renderRows(); }
+});
+$("rows").addEventListener("click", function (e) {
+  var s = e.target.closest("[data-sw]"); if (!s) return;
+  state.on[s.dataset.sw] = !state.on[s.dataset.sw]; renderRows(); renderNotices();
+});
+$("v-wall").onclick = function () { setView("wall"); };
+$("v-admin").onclick = function () { setView("admin"); };
+$("toast-go").onclick = function () { $("toast").hidden = true; state.toast = null; setView("admin"); };
+$("toast-x").onclick = function () { $("toast").hidden = true; state.toast = null; };
+$("reset").onclick = function () { state.on = { background: true, cachealerts: true }; state.bgShown = false; state.toast = null; $("toast").hidden = true; renderNotices(); renderRows(); setView("wall"); };
+renderNotices(); renderRows();
+</script>
+</body>
+</html>
