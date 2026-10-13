@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium nested agents</title>
+<!-- Mockup for issue #101: agents that launch agents. Uses Podium's own tokens (fleet.css) and the existing
+     agent tree, agent panel, activity row and card strip patterns. Nothing here is a new visual language:
+     the changes are wording, tooltips, one dl row pair in the panel, and a wider Task column for deep trees. -->
+<style>
+:root {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --sel: rgba(11,11,11,.07);
+  --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --deleg: #0a7fb8; --deleg-text: #07608c; --good: #0ca30c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08);
+    --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --deleg: #2fa4e0; --deleg-text: #5cbcf0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --deleg: #2fa4e0; --deleg-text: #5cbcf0; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 13px/1.45 system-ui, sans-serif; padding: 20px 16px; max-width: 900px; margin: 0 auto; }
+h1 { font-size: 16px; margin: 0 0 4px; }
+h2 { font-size: 13px; margin: 28px 0 8px; color: var(--ink2); font-weight: 600; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; max-width: 70ch; }
+.mono { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.sec { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.sh { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+.sh b { font-size: 13px; }
+.src { color: var(--muted); font-size: 12px; }
+.btn { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); color: var(--ink); }
+.tw { overflow-x: auto; }
+/* --deep is how many levels the tree goes past four; each widens the Task column by one 16px guide. */
+.trow { display: grid; grid-template-columns: minmax(calc(210px + var(--deep, 0) * 16px), 1fr) 70px 64px 64px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 34px; border-bottom: 1px solid var(--grid); min-width: calc(560px + var(--deep, 0) * 16px); }
+.trow.hd { min-height: 26px; color: var(--muted); font-size: 11.5px; }
+.trow.root { background: var(--raised); }
+.num { text-align: right; white-space: nowrap; }
+.nm { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx em { color: var(--muted); font-style: normal; margin-left: 6px; }
+.indent { display: inline-flex; flex: none; }
+.indent s { width: 16px; height: 34px; display: block; position: relative; text-decoration: none; }
+.indent s::before { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; border-left: 1px solid var(--axis); }
+.indent s.last::before { bottom: 50%; }
+.indent s.last::after, .indent s.tee::after { content: ""; position: absolute; left: 7px; top: 50%; width: 9px; border-top: 1px solid var(--axis); }
+.indent s.blank::before { display: none; }
+.ic { width: 9px; height: 9px; border-radius: 2px; background: var(--c); flex: none; }
+.ic.fork { border-radius: 50%; }
+.chip { display: inline-flex; gap: 5px; align-items: center; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink2); }
+.chip.deleg { color: var(--deleg-text); border-color: color-mix(in srgb, var(--deleg) 55%, transparent); }
+.chip.deleg i { width: 7px; height: 7px; border-radius: 50%; border: 2px solid var(--deleg); }
+.chip.run i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.hint { border-bottom: 1px dotted var(--muted); cursor: help; }
+.panel { max-width: 340px; padding: 12px 14px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+.link { font: inherit; background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; text-decoration-color: var(--axis); cursor: pointer; }
+.ev { display: grid; grid-template-columns: 58px 8px 1fr; gap: 8px; padding: 6px 14px; max-width: 380px; }
+.ev .ed { width: 7px; height: 7px; border-radius: 2px; background: var(--sonnet); margin-top: 6px; }
+.ev .by { color: var(--muted); }
+.ev .go { color: var(--muted); font-size: 11px; }
+.crew { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 12px; max-width: 336px; }
+.crew span.a { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.crew span.a.fork { border-radius: 50%; }
+.crew .cnt { color: var(--muted); font-size: 11.5px; margin-left: 6px; }
+</style>
+</head>
+<body>
+<h1>Agents that launch agents (#101)</h1>
+<p class="note">A real run on Claude Code 2.1.296 showed a subagent launching a subagent, a subagent launching a fork, and a fork launching a subagent, each with the right parent. These are the places the console lists them.</p>
+
+<h2>1. Agent tree, launch order: every level indented, rows that wait on a child read "delegating"</h2>
+<div class="sec">
+  <div class="sh"><b>Agents</b><span class="src">6 launched, 4 by other agents · click a header to sort</span></div>
+  <div class="tw">
+    <div class="trow hd"><div>Task</div><div class="num">Tokens</div><div class="num"><span class="hint" title="Each agent's row is its own estimated cost. The orchestrator's row is the whole session: the orchestrator and every agent, nested ones included.">Cost</span></div><div class="num">Time</div><div>Status</div></div>
+    <div class="trow root"><div class="nm"><b>payments</b><em style="color:var(--muted)">orchestrator</em></div><div class="num mono">25.2k</div><div class="num mono" title="The whole session: the orchestrator and every agent, nested ones included">$0.21</div><div class="num mono">1m 12s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s class="tee"></s></span><span class="ic" style="--c:var(--sonnet)"></span><span class="tx" title="Plan the payments rewrite · general-purpose"><b>Plan the payments rewrite</b><em>general-purpose</em></span></div><div class="num mono">17.1k</div><div class="num mono" title="This agent's own estimated cost. The agents it launched are not included; their total is in the side panel.">$0.05</div><div class="num mono">58s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s class="tee"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx"><b>Survey payment adapters</b><em>Explore</em></span></div><div class="num mono">17.8k</div><div class="num mono">$0.05</div><div class="num mono">41s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s></s><s class="last"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx"><b>Read the Stripe adapter</b><em>Explore</em></span></div><div class="num mono">14.2k</div><div class="num mono">$0.01</div><div class="num mono">22s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s></s><s class="blank"></s><s class="last"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx" title="Check the Adyen refund path · Explore"><b>Check the Adyen refund path</b><em>Explore</em></span></div><div class="num mono">9.4k</div><div class="num mono">$0.00</div><div class="num mono">9s</div><div><span class="chip run"><i></i>running</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s class="last"></s></span><span class="ic fork" style="--c:var(--sonnet)"></span><span class="tx"><b>Sketch the adapter interface</b><em>fork</em></span></div><div class="num mono">14.8k</div><div class="num mono">$0.00</div><div class="num mono">6s</div><div><span class="chip">done</span></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s class="last"></s></span><span class="ic fork" style="--c:var(--opus)"></span><span class="tx"><b>Weigh the options</b><em>fork</em></span></div><div class="num mono">25.2k</div><div class="num mono">$0.02</div><div class="num mono">30s</div><div><span class="chip">done</span></div></div>
+  </div>
+</div>
+<p class="note">Four levels fit the usual 210px Task column (64px of guides). A deeper tree widens the Task column by 16px per extra level and the table scrolls sideways inside its own box, as it already does at phone width, so a guide is never dropped and no row loses its place. The full task and type are each row's tooltip, since a deep row shows fewer characters.</p>
+
+<h2>2. Sorted by cost: the tree stays, siblings are ordered</h2>
+<div class="sec">
+  <div class="sh"><b>Agents</b><span class="src"><button class="btn">Launch order</button></span></div>
+  <div class="tw" style="--deep:0">
+    <div class="trow hd"><div>Task</div><div class="num">Tokens</div><div class="num"><b>Cost ▼</b></div><div class="num">Time</div><div>Status</div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s class="tee"></s></span><span class="ic" style="--c:var(--sonnet)"></span><span class="tx"><b>Plan the payments rewrite</b></span></div><div class="num mono">17.1k</div><div class="num mono">$0.05</div><div class="num mono">58s</div><div></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s class="tee"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx"><b>Survey payment adapters</b></span></div><div class="num mono">17.8k</div><div class="num mono">$0.05</div><div class="num mono">41s</div><div></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s></s><s class="last"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx"><b>Read the Stripe adapter</b></span></div><div class="num mono">14.2k</div><div class="num mono">$0.01</div><div class="num mono">22s</div><div></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s></s><s class="last"></s></span><span class="ic fork" style="--c:var(--sonnet)"></span><span class="tx"><b>Sketch the adapter interface</b></span></div><div class="num mono">14.8k</div><div class="num mono">$0.00</div><div class="num mono">6s</div><div></div></div>
+    <div class="trow"><div class="nm"><span class="indent"><s class="last"></s></span><span class="ic fork" style="--c:var(--opus)"></span><span class="tx"><b>Weigh the options</b></span></div><div class="num mono">25.2k</div><div class="num mono">$0.02</div><div class="num mono">30s</div><div></div></div>
+  </div>
+</div>
+<p class="note">Before, a header click flattened the tree into one list. Now each parent's own children are sorted and stay under it. "Show as tree" becomes "Launch order", which clears the sort.</p>
+
+<h2>3. Agent panel: who launched it, and the branch total</h2>
+<div class="sec panel">
+  <dl>
+    <dt>Orchestrator</dt><dd>payments</dd>
+    <dt>Launched by</dt><dd><button class="link">Survey payment adapters</button></dd>
+    <dt>Kind</dt><dd>Subagent</dd>
+    <dt>Est. cost</dt><dd class="mono" title="This agent's own usage. The agents it launched are not included.">$0.05 <span style="color:var(--muted)">own</span></dd>
+    <dt>With its agents</dt><dd class="mono" title="This agent plus every agent under it, each counted once">$0.06 · 41.4k tok <span style="color:var(--muted)">(2 agents)</span></dd>
+  </dl>
+</div>
+<p class="note">"Launched by" reads "the orchestrator" for a top-level agent and is a button for a nested one. "With its agents" appears only when the agent launched any. The orchestrator panel already says its cost covers the whole session.</p>
+
+<h2>4. Activity: a nested launch names its parent</h2>
+<div class="sec">
+  <div class="ev"><span class="mono" style="color:var(--muted)">14:02:11</span><span class="ed"></span><div>forked fork (inherits Sonnet low): Sketch the adapter interface <span class="by">· launched by Plan the payments rewrite</span><div class="go">Open agent</div></div></div>
+</div>
+
+<h2>5. Card strip: in tree order, nested squares say who launched them</h2>
+<div class="sec">
+  <div class="crew">
+    <span class="a" style="--c:var(--sonnet)" title="Plan the payments rewrite · running"></span>
+    <span class="a" style="--c:var(--haiku)" title="Survey payment adapters · running · launched by Plan the payments rewrite"></span>
+    <span class="a" style="--c:var(--haiku)" title="Read the Stripe adapter · running · launched by Survey payment adapters"></span>
+    <span class="a" style="--c:var(--haiku)" title="Check the Adyen refund path · running · launched by Read the Stripe adapter"></span>
+    <span class="a fork" style="--c:var(--sonnet)" title="Sketch the adapter interface · done · launched by Plan the payments rewrite"></span>
+    <span class="a fork" style="--c:var(--opus)" title="Weigh the options · done"></span>
+    <span class="cnt mono">4 running · 2 done</span>
+  </div>
+</div>
+<p class="note">Counts on the card, the rail, the Agents fact and the wall's "agents running" tile count every agent once, nested ones included. Hook-only sessions cannot say who launched an agent, so every agent there sits at the top level and the hooks note says so.</p>
+</body>
+</html>
