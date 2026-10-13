@@ -227,6 +227,17 @@ describe('POST /api/fleet/hook', () => {
     expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: 'input' });
   });
 
+  it('a Stop that lists only artifact live-update watchers is still a wait on the person (#128)', async () => {
+    const { app, fleet, tick } = setup();
+    const watchers = Array.from({ length: 10 }, (_, n) => ({ id: `w${n}`, type: 'monitor', status: 'running', description: `live updates for artifact https://claude.ai/artifact/abc${n} (re-armed on session resume)` }));
+    for (const p of [P.start, P.prompt, { ...P.stop, background_tasks: watchers }]) {
+      tick(1000);
+      await request(app).post('/api/fleet/hook').send(p);
+    }
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: 'input' });
+    expect(fleet.view('hk-1')!.background ?? null).toBeNull();
+  });
+
   it('a Stop with only a scheduled wake-up is a background wait', async () => {
     const { app, fleet, tick } = setup();
     for (const p of [P.start, P.prompt, { ...P.stop, background_tasks: [], session_crons: [{ id: 'c1', schedule: '30 14 * * *', recurring: false, prompt: 'check the deploy' }] }]) {

@@ -255,7 +255,7 @@ a reader of the spec would expect:
 - Background waits (#119): `classic.Stop` carries `background_tasks` and `session_crons`; the mod keeps them in
   `SessionState.background` and sends `session.background`, which the server stores in `sessions.background_json`
   and serves as `SessionView.background`. `backgroundSummary` and `idleOnBackground` are defined once, in the shared protocol block, so the mod, the server and the UI cannot disagree about them. The status stays `waiting` with `waitReason: null`; the UI
-  words it (`frontend/src/fleet/waiting.ts`) and leaves it out of the waiting count. The settings-hook path reads
+  words it (`frontend/src/fleet/waiting.ts`) and leaves it out of the waiting count. Artifact live-update watchers (monitors named `live updates for artifact ...`) are skipped on both paths (#128). The settings-hook path reads
   the same Stop fields but leaves `wakeAt` null, because the server may not share the cron's time zone.
 - Extra fields, all additive: `SessionView.cwd` and `waitReason`, `/state.config`, `liveSessions` in the
   report ack, `HistoryRow` for `/history`, and a `showStatus` mod option (20, 31, 33).

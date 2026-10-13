@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport, buildReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, step, toolResult, turnComplete } from './state.ts'
+import { agentRequested, agentSpawned, blowout, compaction, describeBackground, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
@@ -362,6 +362,26 @@ describe('background work (#119)', () => {
     expect(r.session.status).toBe('waiting')
     expect(r.session.waitReason).toBeNull()
     expect(r.session.background).toEqual({ tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null })
+  })
+
+  test('describeBackground lists each held entry, or says none (#128)', () => {
+    expect(describeBackground(idle())).toBe('Background work: none')
+    const s = setBackground(idle(), { tasks: [shell, { id: 'm1', type: 'monitor', status: 'exited', description: 'watch logs' }], crons: [] }, T0 + 2)
+    expect(describeBackground(s)).toBe('Background work (2):\n  shell, running: nightly build\n  monitor, exited: watch logs')
+  })
+
+  test('an artifact live-update watcher is not work in flight, so a session with only watchers waits on the person (#128)', () => {
+    const watch = (n: number) => ({ id: `w${n}`, type: 'monitor', status: 'running', description: `live updates for artifact https://claude.ai/artifact/abc${n} (re-armed on session resume)` })
+    const watchers = Array.from({ length: 10 }, (_, n) => watch(n))
+    const only = setBackground(idle(), { tasks: watchers, crons: [] }, T0 + 2)
+    expect(only.background).toBeNull()
+    expect(only).toMatchObject({ status: 'waiting', waitReason: 'input' })
+    // real work next to the watchers is still listed, and the watchers are not
+    const mixed = setBackground(idle(), { tasks: [...watchers, shell], crons: [] }, T0 + 2)
+    expect(mixed.background!.tasks).toEqual([{ type: 'shell', description: 'nightly build', status: 'running' }])
+    // a monitor the user started is not an artifact watcher
+    const own = setBackground(idle(), { tasks: [{ id: 'm', type: 'monitor', status: 'running', description: 'tail the deploy log' }], crons: [] }, T0 + 2)
+    expect(own.background!.tasks).toHaveLength(1)
   })
 
   test('a shell command is never sent whole', () => {

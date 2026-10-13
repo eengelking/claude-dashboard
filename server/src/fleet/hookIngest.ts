@@ -23,6 +23,8 @@ const effortOf = (v: unknown): Effort | null => {
   return typeof level === 'string' && (EFFORTS as readonly string[]).includes(level) ? (level as Effort) : null;
 };
 const IN_FLIGHT_DONE = /^(completed|complete|done|failed|killed|stopped|cancelled|canceled|error)$/i;
+/** Claude Code's artifact live-update watchers (#128): they run as long as the session does, so they are not work it waits on. */
+const ARTIFACT_WATCHER = /^live updates for artifact /i;
 const BACKGROUND_TYPES: Record<string, BackgroundKind> = { shell: 'shell', bash: 'shell', subagent: 'agent', agent: 'agent', monitor: 'monitor', workflow: 'workflow' };
 
 /**
@@ -38,6 +40,7 @@ function backgroundOf(payload: Record<string, unknown>): BackgroundWait | null {
     const status = str(t.status, 40) ?? 'running';
     if (IN_FLIGHT_DONE.test(status)) continue;
     const type = BACKGROUND_TYPES[(str(t.type, 40) ?? '').toLowerCase()] ?? 'other';
+    if (type === 'monitor' && ARTIFACT_WATCHER.test(str(t.description, 120) ?? '')) continue;
     // The first word that is not an NAME=value assignment, so an inline secret is never kept.
     const word = str(t.command, 400)?.split(/\s+/).find((w) => w !== '' && !w.includes('='))?.split('/').pop() || null;
     tasks.push({ type, description: str(t.description, 120) ?? word ?? type, status });

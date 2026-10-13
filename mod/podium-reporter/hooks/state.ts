@@ -334,6 +334,8 @@ export interface BackgroundInput {
 
 const TASK_DONE = /^(completed|complete|done|failed|killed|stopped|cancelled|canceled|error)$/i;
 const TASK_KINDS: Record<string, BackgroundKind> = { shell: 'shell', bash: 'shell', subagent: 'agent', agent: 'agent', monitor: 'monitor', workflow: 'workflow' };
+/** Claude Code's artifact live-update watchers (#128): they run as long as the session does, so they are not work it waits on. */
+const ARTIFACT_WATCHER = /^live updates for artifact /i;
 const MAX_BACKGROUND_TASKS = 20;
 const BACKGROUND_DESC = 120;
 
@@ -347,6 +349,7 @@ export function setBackground(s: SessionState, i: BackgroundInput, now: number):
     const status = t.status || 'running';
     if (TASK_DONE.test(status) || tasks.length >= MAX_BACKGROUND_TASKS) continue;
     const type = TASK_KINDS[(t.type ?? '').toLowerCase()] ?? 'other';
+    if (type === 'monitor' && ARTIFACT_WATCHER.test((t.description ?? '').trim())) continue;
     // The first word that is not an NAME=value assignment, so an inline secret (API_KEY=...) is never kept.
     const word = (t.command ?? '').trim().split(/\s+/).find((w) => w !== '' && !w.includes('='))?.split('/').pop() ?? '';
     tasks.push({ type, description: clip((t.description ?? '').replace(/\s+/g, ' ').trim() || word || type, BACKGROUND_DESC), status: clip(status, 40) });
@@ -367,6 +370,13 @@ export function setBackground(s: SessionState, i: BackgroundInput, now: number):
   // The feed gets one row each time what it waits on changes, not one per Stop.
   if (background && (!s.background || backgroundSummary(background) !== backgroundSummary(s.background))) next = addEvent(next, 'wait', null, `waiting on background: ${backgroundSummary(background)}`, now);
   return withStatus(next);
+}
+
+/** What `/podium` prints for the background work the mod holds (#128): each entry's type, status and description. */
+export function describeBackground(s: SessionState): string {
+  const tasks = s.background?.tasks ?? [];
+  if (!tasks.length) return 'Background work: none';
+  return [`Background work (${tasks.length}):`, ...tasks.map((t) => `  ${t.type}, ${t.status}: ${t.description}`)].join('\n');
 }
 
 export interface StepInput {

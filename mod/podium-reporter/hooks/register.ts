@@ -23,6 +23,7 @@ import {
   PLAN_TOOL,
   reconcile,
   resetForNewId,
+  describeBackground,
   setBackground,
   sessionEnd,
   NO_FILES,
@@ -48,7 +49,7 @@ import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.11.1';
+export const VERSION = '0.11.2';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -558,6 +559,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     `Reports sent: ${t.sent}, failed: ${t.failed}, rejected: ${t.rejected}; events queued: ${t.queue.length}${t.dropped ? `, dropped: ${t.dropped}` : ''}`,
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,
+    describeBackground(r.state),
     hooks.length ? `Reporter time per hook: ${hooks.join('; ')}` : '',
     'Name this session: /podium name <text>',
   ]
