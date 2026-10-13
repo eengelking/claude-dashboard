@@ -119,6 +119,54 @@ describe('reducers', () => {
     expect(s.agents.c!.parentId).toBe('p')
   })
 
+  // The order and fields a real run on Claude Code 2.1.296 produced (#101, docs/GOTCHAS.md): agent.spawn
+  // carries the launching loop's id as parentAgentId at every depth, and $.agent.list() marks a parent
+  // that waits on its child "waiting", then drops finished nested agents once their parent is done.
+  test('a real nested run: subagent under subagent, fork under subagent, subagent under fork (#101)', () => {
+    const spawn = (id: string, parentAgentId: string | undefined, fork: boolean, model: string) =>
+      ({ toolUseId: `t-${id}`, agentId: id, model, subagentType: fork ? 'fork' : 'general-purpose', description: id, prompt: 'p', fork, parentAgentId })
+    let s = step(base(), { model: 'claude-opus-5-5', effort: 'high', usage: null, stopReason: null }, T0)
+    s = agentRequested(s, 't-p', { description: 'p', prompt: 'p', subagent_type: 'general-purpose', model: 'haiku', effort: 'low' }, T0)
+    s = agentSpawned(s, spawn('p', undefined, false, 'claude-haiku-4-5'), T0)
+    s = agentSpawned(s, spawn('f', undefined, true, 'claude-opus-5-5'), T0)
+    s = step(s, { agentId: 'p', model: 'claude-haiku-4-5', effort: 'low', usage: null, stopReason: null }, T0 + 1)
+    s = agentSpawned(s, spawn('c', 'p', false, 'claude-sonnet-5-5'), T0 + 2)
+    s = agentSpawned(s, spawn('pf', 'p', true, 'claude-haiku-4-5'), T0 + 2)
+    s = agentSpawned(s, spawn('g', 'c', false, 'claude-sonnet-5-5'), T0 + 3)
+    s = agentSpawned(s, spawn('fc', 'f', false, 'claude-sonnet-5-5'), T0 + 3)
+    expect(Object.fromEntries(s.order.map((id) => [id, s.agents[id]!.parentId]))).toEqual({ p: null, f: null, c: 'p', pf: 'p', g: 'c', fc: 'f' })
+    // A fork inherits from the loop that launched it: the subagent's model and effort, not the orchestrator's.
+    expect(s.agents.pf).toMatchObject({ kind: 'fork', model: 'claude-haiku-4-5', effort: 'low', effortSource: 'inherited' })
+    expect(s.agents.f).toMatchObject({ kind: 'fork', model: 'claude-opus-5-5', effort: 'high', effortSource: 'inherited' })
+    expect(s.events.filter((e) => e.kind === 'spawn').map((e) => e.agentId)).toEqual(['p', 'f', 'c', 'pf', 'g', 'fc'])
+
+    // The list says "waiting" for a parent that waits on its child: it is still running here.
+    const listed = (id: string, status: string, parentId?: string) => ({ id, description: id, type: 'general-purpose', status, parentId })
+    s = reconcile(s, [listed('p', 'waiting'), listed('f', 'waiting'), listed('c', 'waiting', 'p'), listed('pf', 'running', 'p'), listed('g', 'running', 'c'), listed('fc', 'running', 'f')], T0 + 4)
+    expect(s.agents.p!.status).toBe('running')
+    expect(s.agents.c!.status).toBe('running')
+
+    for (const id of ['g', 'pf', 'c', 'fc', 'p', 'f']) s = turnComplete(s, { agentId: id, reason: 'answer', answer: 'done' }, T0 + 5)
+    // Finished nested agents are gone from the list; the report keeps them, under their parents.
+    s = reconcile(s, [listed('p', 'completed'), listed('f', 'completed')], T0 + 6)
+    const report = s.order.map((id) => agentReport(s.agents[id]!))
+    expect(report.map((a) => [a.id, a.parentId, a.status])).toEqual([
+      ['p', null, 'done'], ['f', null, 'done'], ['c', 'p', 'done'], ['pf', 'p', 'done'], ['g', 'c', 'done'], ['fc', 'f', 'done'],
+    ])
+  })
+
+  test('a plan step can be owned by a nested agent, the same as by a top-level one', () => {
+    let s = toolResult(base(), { tool: 'TaskCreate', input: { subject: 'Read the Stripe adapter', description: 'd' }, result: { result: { task: { id: '1', subject: 'Read the Stripe adapter' } } } }, T0)
+    s = agentSpawned(s, { toolUseId: 't1', agentId: 'p', model: 'claude-sonnet-5-5', subagentType: 'general-purpose', description: 'Plan the rewrite', prompt: 'p', fork: false }, T0)
+    s = agentSpawned(s, { toolUseId: 't2', agentId: 'g', model: 'claude-haiku-4-5', subagentType: 'Explore', description: 'Read the Stripe adapter', prompt: 'p', fork: false, parentAgentId: 'p' }, T0 + 1)
+    expect(s.plan.tasks[0]).toMatchObject({ ownerAgentId: 'g', ownerLabel: 'Explore · Haiku' })
+  })
+
+  test('an agent the engine lists before its spawn hook keeps the parent the list gives', () => {
+    const s = reconcile(base(), [{ id: 'g', description: 'grandchild', type: 'general-purpose', status: 'running', parentId: 'c' }], T0)
+    expect(s.agents.g!.parentId).toBe('c')
+  })
+
   test('a candidate is discarded when the loop answers', () => {
     let s = agentSpawned(base(), { toolUseId: 't', agentId: 'a', model: 'opus', subagentType: 'x', description: 'd', prompt: 'p', fork: false }, T0)
     s = toolResult(s, { agentId: 'a', tool: 'Bash', input: { command: 'false' }, result: { isError: true, text: 'Exit code 1' } }, T0 + 1)
