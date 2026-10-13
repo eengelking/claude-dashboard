@@ -80,11 +80,23 @@ body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
 .rrow { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
 .rrow:last-child { border-bottom: 0; }
 .feed { display: flex; flex-direction: column; }
-.frow { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.frow { display: grid; grid-template-columns: 44px 8px 1fr; gap: 8px; padding: 6px 10px; align-items: baseline; border-bottom: 1px solid var(--border); font-size: 12.5px; }
 .frow:last-child { border-bottom: 0; }
-.frow time { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; flex: none; width: 44px; }
-.frow .bgt { color: var(--deleg-text); }
-.frow .w { color: var(--warn); }
+.frow time { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; }
+.frow .ed { width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; align-self: start; margin-top: 5px; background: var(--axis); }
+.tool { font-family: var(--font-mono); font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--ink2); white-space: nowrap; display: block; width: fit-content; margin-top: 3px; }
+/* The latest wait row is tinted and outlined, like the card alert. Amber waits on you; blue waits on something else. */
+.frow.w { background: color-mix(in srgb, var(--warn) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 38%, transparent); border-bottom-color: transparent; border-radius: 4px; }
+.frow.w .ed { background: transparent; border: 2px solid var(--warn); }
+.frow.w .lead { font-weight: 500; }
+.frow.bgw { background: color-mix(in srgb, var(--deleg) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--deleg) 38%, transparent); border-bottom-color: transparent; border-radius: 4px; }
+.frow.bgw .ed { background: transparent; border: 1.5px solid var(--deleg); position: relative; }
+.frow.bgw .ed::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; background: var(--deleg); opacity: 0; pointer-events: none; }
+body[data-beat="0"] .frow.bgw .ed::after { transform: scale(1); opacity: .55; }
+body[data-beat="1"] .frow.bgw .ed::after { transform: scale(1.6); opacity: .35; }
+body[data-beat="2"] .frow.bgw .ed::after { transform: scale(2.3); opacity: .12; }
+body[data-beat="3"] .frow.bgw .ed::after { transform: scale(1); opacity: 0; }
+.frow.bgw .lead { font-weight: 500; }
 .tip { align-self: flex-start; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 9px; font-size: 12px; max-width: 360px; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
 .tip small { display: block; color: var(--ink2); margin-top: 2px; }
 .rules { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--ink2); max-width: 80ch; }
@@ -133,15 +145,16 @@ body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
     <li>The orchestrator callout adds the task description after the line, on its own row below it, cut at a character limit and ended with " ..." (a space, then three dots). The full text is in the tooltip.</li>
     <li>A shell's command is shortened and redacted before it leaves the machine, and is never sent whole.</li>
     <li>The blue ring pulses like the green running dot, on the same shared beat. It stops with reduced motion.</li>
+    <li>In the activity feed the newest wait row is tinted and outlined like the card alert, with a kind pill (shell, agent, wake-up). It is blue with a pulsing ring for background work and amber with a plain ring for a wait on you. Once the wait is over the row goes plain.</li>
     <li>The moment the work ends, the wording goes back to normal ("Waiting for your input", or running when a new turn starts).</li>
   </ol>
 </section>
 
 <script>
 var CASES = {
-  shell: { n: 0, line: "Waiting for 1 background shell to finish.", tip: ["Waiting for 1 background shell. Not waiting on you.", "Shell: sleep 120 (nightly build)"], long: "Shell: npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default --reporters=jest-junit then publish the artifacts to the staging bucket and tag the release candidate (nightly build, step 4 of 9)", feed: "Waiting for 1 background shell to finish", rail: "waiting on shell" },
-  mixed: { n: 0, line: "Waiting for 1 background shell and 1 background agent to finish.", tip: ["Waiting for 1 background shell and 1 background agent. Not waiting on you.", "Shell: sleep 120 (nightly build) · Agent: Survey payment adapters"], feed: "Waiting for 1 background shell and 1 background agent to finish", rail: "waiting on 2 tasks" },
-  wake: { n: 0, line: "Waiting for a scheduled wake-up at 14:30.", tip: ["Waiting for a scheduled wake-up at 14:30. Not waiting on you.", "Loop: check the deploy every 5 minutes"], feed: "Waiting for a scheduled wake-up at 14:30", rail: "wakes at 14:30" },
+  shell: { n: 0, line: "Waiting for 1 background shell to finish.", tip: ["Waiting for 1 background shell. Not waiting on you.", "Shell: sleep 120 (nightly build)"], long: "Shell: npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default --reporters=jest-junit then publish the artifacts to the staging bucket and tag the release candidate (nightly build, step 4 of 9)", feed: "Waiting for 1 background shell to finish", kind: "shell", rail: "waiting on shell" },
+  mixed: { n: 0, line: "Waiting for 1 background shell and 1 background agent to finish.", tip: ["Waiting for 1 background shell and 1 background agent. Not waiting on you.", "Shell: sleep 120 (nightly build) · Agent: Survey payment adapters"], feed: "Waiting for 1 background shell and 1 background agent to finish", kind: "shell + agent", rail: "waiting on 2 tasks" },
+  wake: { n: 0, line: "Waiting for a scheduled wake-up at 14:30.", tip: ["Waiting for a scheduled wake-up at 14:30. Not waiting on you.", "Loop: check the deploy every 5 minutes"], feed: "Waiting for a scheduled wake-up at 14:30", kind: "wake-up 14:30", rail: "wakes at 14:30" },
   done: { n: 1, line: "Waiting for your input.", tip: null, feed: "Waiting for your input", rail: "waiting on you" }
 };
 var $ = function (id) { return document.getElementById(id); };
@@ -166,10 +179,12 @@ function render(key) {
   $("rail").innerHTML =
     '<div class="rrow"><span>claude-dashboard</span><span class="st you"><span class="dot you"></span>waiting on you</span></div>' +
     '<div class="rrow"><span>nightly-report</span>' + (quiet ? '<span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span>' : '<span class="st you"><span class="dot you"></span>waiting on you</span>') + '</div>';
-  $("feed").innerHTML =
-    '<div class="frow"><time>14:07</time><span class="' + (quiet ? "bgt" : "w") + '">nightly-report: ' + esc(c.feed) + '</span></div>' +
-    '<div class="frow"><time>14:05</time><span>nightly-report: started a background shell</span></div>' +
-    '<div class="frow"><time>13:58</time><span class="w">claude-dashboard: Waiting for your input</span></div>';
+  var newest = quiet
+    ? '<div class="frow bgw"><time>14:07</time><span class="ed"></span><span><span class="lead">nightly-report: ' + esc(c.feed) + '</span><span class="tool">' + esc(c.kind) + '</span></span></div>'
+    : '<div class="frow w"><time>14:07</time><span class="ed"></span><span><span class="lead">nightly-report: Waiting for your input</span></span></div>';
+  $("feed").innerHTML = newest +
+    '<div class="frow"><time>14:05</time><span class="ed"></span><span>nightly-report: started a background shell</span></div>' +
+    '<div class="frow w"><time>13:58</time><span class="ed"></span><span><span class="lead">claude-dashboard: Waiting for your approval</span><span class="tool">Bash</span></span></div>';
 }
 document.querySelector(".switcher").addEventListener("click", function (e) {
   var b = e.target.closest("[data-case]"); if (!b) return;
