@@ -1,14 +1,15 @@
 // The fleet service: owns the live set, turns ingests and timer sweeps into SSE messages, and
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
-import type { FleetDb, RetentionPolicy, SessionRow } from './db.js';
-import { activityView, computeKpis, family, isUnused, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
+import type { CostOf, FleetDb, RetentionPolicy, SessionRow } from './db.js';
+import { activityView, computeKpis, family, isUnused, repriced, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
 import { REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { ingestReport, type IngestResult } from './ingest.js';
 import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
 import type { ActivityView, HistoryRow, Kpis, RemovedReason, Report, ReporterSupport, SessionStatusView, SessionView, StateBody } from './protocol.js';
 import { formatSse, SseHub } from './sse.js';
+import { ModelPriceStore } from './modelPrices.js';
 import { WallSettings } from './wallSettings.js';
 
 export interface FleetConfig {
@@ -80,6 +81,8 @@ export class Fleet {
   readonly hub = new SseHub();
   /** The wall's notice switches and background-session setting; a change reaches open browsers at once. */
   readonly wall: WallSettings;
+  /** The Admin's model prices; every cost figure follows them (issue #117). */
+  readonly prices: ModelPriceStore;
   private readonly live = new Map<string, LiveEntry>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly startedAt: number;
@@ -93,6 +96,8 @@ export class Fleet {
   ) {
     this.startedAt = now();
     this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
+    // A price change moves every cost on the wall, so open browsers get a fresh snapshot.
+    this.prices = new ModelPriceStore(db.db, () => this.hub.broadcast('snapshot', this.state()));
     // On start every stored session that has not ended is treated as stale until it reports again;
     // a done session still inside its linger window stays until the window closes.
     for (const row of db.liveCandidates(this.startedAt - cfg.lingerMs)) {
@@ -198,6 +203,7 @@ export class Fleet {
         dropAt: entry ? this.dropAtFor(row, entry.heard, now) : null,
         hideAt: row.attached === 0 && row.detached_at !== null ? row.detached_at + this.cfg.detachedHideAfterMs : null,
         ownerGroup: this.db.groupOfOwner(row.owner),
+        pricing: this.prices.pricing(),
       },
       now,
       this.derive,
@@ -228,14 +234,16 @@ export class Fleet {
   kpis(views: readonly SessionView[] = this.liveViews()): Kpis {
     const now = this.now();
     const nowSec = Math.floor(now / 1000);
+    const pricing = this.prices.pricing();
+    const cost: CostOf = (r) => repriced(pricing, r.usage_json, r.cost_usd);
     if (!this.costMinuteCache || now - this.costMinuteCache.at > 5000) {
       this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60) };
     }
     return computeKpis(
       {
         views,
-        costToday: this.db.costSince(startOfDay(now)),
-        costTodayByOwner: this.db.costByOwnerSince(startOfDay(now)),
+        costToday: this.db.costSince(startOfDay(now), cost),
+        costTodayByOwner: this.db.costByOwnerSince(startOfDay(now), cost),
         tokensPerSecond: this.db.fleetTokensPerSecond(nowSec - 61),
         costPerMinute: this.costMinuteCache.rows,
       },
@@ -273,7 +281,7 @@ export class Fleet {
         startedAt: row.started_at,
         endedAt: end,
         durationSec: Math.max(0, Math.round((end - row.started_at) / 1000)),
-        costUsd: row.cost_usd,
+        costUsd: repriced(this.prices.pricing(), row.usage_json, row.cost_usd),
         blowouts: row.blowouts + agents.reduce((n, a) => n + a.blowouts, 0),
         agents: agents.length,
         endReason: row.dropped_at !== null ? 'heartbeat lost' : row.end_reason,

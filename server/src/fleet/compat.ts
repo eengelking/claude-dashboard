@@ -8,7 +8,7 @@ import type { ReporterCompat, ReporterSupport } from "./protocol.js";
  * or the mod's behaviour requires it, not on every release. Only major.minor is compared, so a
  * mod-only patch fix never warns.
  */
-export const REPORTER_SUPPORT: ReporterSupport = { min: "0.2.0", max: "0.11.0" };
+export const REPORTER_SUPPORT: ReporterSupport = { min: "0.2.0", max: "0.12.0" };
 
 export type { ReporterCompat, ReporterSupport };
 

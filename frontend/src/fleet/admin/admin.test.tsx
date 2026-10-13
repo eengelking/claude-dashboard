@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AdminView } from "./AdminView";
 
+interface PriceSet {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheWrite1h: number;
+}
 interface P {
   id: number;
   name: string;
@@ -20,6 +27,12 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     expire: false,
     notices: { "background-sessions": true } as Record<string, boolean>,
     showBackground: false,
+    prices: {
+      "sonnet-5-5": { std: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 } } as { std: PriceSet; long?: PriceSet },
+      "haiku-5-5": { std: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125, cacheWrite1h: 0.2 }, long: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 0.625, cacheWrite1h: 1 } } as { std: PriceSet; long?: PriceSet },
+    } as Record<string, { std: PriceSet; long?: PriceSet }>,
+    builtin: { "sonnet-5-5": 2, "haiku-5-5": 0.1 } as Record<string, number>,
+    priceError: "" as string,
   };
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   const row = (p: P) => ({ id: p.id, name: p.name, last4: "ab12", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
@@ -61,11 +74,32 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       const b = JSON.parse(String(init?.body));
       if (b.notices) for (const [id, on] of Object.entries(b.notices)) state.notices[id] = on as boolean;
       if ("showBackgroundSessions" in b) state.showBackground = b.showBackgroundSessions;
+      if (b.modelPrice) {
+        if (state.priceError) return json(400, { ok: false, error: state.priceError });
+        state.prices[b.modelPrice.key] = { std: b.modelPrice.std, ...(b.modelPrice.long ? { long: b.modelPrice.long } : {}) };
+      }
+      if (b.resetModelPrice) {
+        if (state.builtin[b.resetModelPrice] === 2) state.prices["sonnet-5-5"] = { std: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 } };
+        else delete state.prices[b.resetModelPrice];
+      }
       return json(200, { ok: true });
     }
     if (path === "/settings") {
       const notices = Object.entries(state.notices).map(([id, on]) => ({ id, name: "Background sessions", description: "Says how many are set aside.", on }));
-      return json(200, { allowAdminSecretReporting: true, notices, showBackgroundSessions: state.showBackground });
+      const models = Object.entries(state.prices).map(([key, p]) => {
+        const builtin = key in state.builtin;
+        const base = key === "sonnet-5-5" ? { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 } : undefined;
+        return {
+          key,
+          label: key === "sonnet-5-5" ? "Sonnet 5.5" : key === "haiku-5-5" ? "Haiku 5.5" : key,
+          builtin,
+          overridden: !!base && p.std.input !== base.input,
+          std: p.std,
+          ...(p.long ? { long: p.long } : {}),
+          ...(base ? { builtinStd: base } : {}),
+        };
+      });
+      return json(200, { allowAdminSecretReporting: true, notices, showBackgroundSessions: state.showBackground, modelPrices: { asOf: "2026-10-13", models } });
     }
     return json(404, { ok: false, error: "nope" });
   });
@@ -238,5 +272,96 @@ describe("Settings tab (#114)", () => {
     await unlock();
     expect(screen.getByRole("tab", { name: /^Settings/ })).toHaveAttribute("aria-selected", "true");
     window.location.hash = "";
+  });
+});
+
+describe("Model prices (#117)", () => {
+  async function open() {
+    const srv = fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    await screen.findByRole("heading", { name: "Model prices" });
+    return srv;
+  }
+  const field = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
+
+  it("lists a row per model with its five prices, and a second row for prompts over 100,000 tokens", async () => {
+    await open();
+    expect(field("Sonnet 5.5 input").value).toBe("2");
+    expect(field("Sonnet 5.5 cache write 1 hour").value).toBe("4");
+    expect(field("Haiku 5.5 input").value).toBe("0.1");
+    expect(field("Haiku 5.5 over 100,000 input").value).toBe("0.5");
+    expect(screen.queryByLabelText("Sonnet 5.5 over 100,000 input")).toBeNull();
+  });
+
+  it("saves an edited row with all its prices, then marks it changed and offers a reset", async () => {
+    const srv = await open();
+    expect(screen.queryByRole("button", { name: /Save Sonnet 5.5/ })).toBeNull();
+    fireEvent.change(field("Sonnet 5.5 input"), { target: { value: "2.4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Sonnet 5.5" }));
+    await waitFor(() => expect(srv.prices["sonnet-5-5"]!.std).toEqual({ input: 2.4, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 }));
+    expect(await screen.findByRole("button", { name: "Reset Sonnet 5.5 to built-in" })).toBeInTheDocument();
+    expect(screen.getByText("Changed")).toBeInTheDocument();
+  });
+
+  it("cancel puts the saved value back without calling the server", async () => {
+    const srv = await open();
+    fireEvent.change(field("Sonnet 5.5 input"), { target: { value: "9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel Sonnet 5.5" }));
+    expect(field("Sonnet 5.5 input").value).toBe("2");
+    expect(srv.calls.some((c) => c.startsWith("PUT /settings"))).toBe(false);
+  });
+
+  it("resets a changed row to the built-in price", async () => {
+    const srv = await open();
+    fireEvent.change(field("Sonnet 5.5 input"), { target: { value: "2.4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Sonnet 5.5" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset Sonnet 5.5 to built-in" }));
+    await waitFor(() => expect(srv.prices["sonnet-5-5"]!.std.input).toBe(2));
+    await waitFor(() => expect(field("Sonnet 5.5 input").value).toBe("2"));
+    expect(screen.queryByRole("button", { name: "Reset Sonnet 5.5 to built-in" })).toBeNull();
+  });
+
+  it.each([
+    ["negative", "-1", /zero or more/],
+    ["not a number", "abc", /number/],
+    ["empty", "", /number/],
+    ["over the bound", "5000", /at most 1000/],
+  ])("refuses a %s price on the page and sends nothing", async (_n, value, msg) => {
+    const srv = await open();
+    fireEvent.change(field("Sonnet 5.5 output"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Sonnet 5.5" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(msg);
+    expect(field("Sonnet 5.5 output")).toHaveAttribute("aria-invalid", "true");
+    expect(srv.calls.some((c) => c.startsWith("PUT /settings"))).toBe(false);
+  });
+
+  it("shows the server's message when it refuses a price", async () => {
+    const srv = await open();
+    srv.priceError = "output must be at most 1000 USD per million tokens";
+    fireEvent.change(field("Sonnet 5.5 output"), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Sonnet 5.5" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("at most 1000");
+  });
+
+  it("adds a model by id as a row to fill in, saves it, and can remove it", async () => {
+    const srv = await open();
+    fireEvent.change(screen.getByLabelText("Add a model by its id"), { target: { value: "My-Local-Model" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+    for (const [f, v] of [["input", "0.3"], ["output", "0.9"], ["cache read", "0"], ["cache write 5 minutes", "0"], ["cache write 1 hour", "0"]]) {
+      fireEvent.change(field(`my-local-model ${f}`), { target: { value: v } });
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Save my-local-model" }));
+    await waitFor(() => expect(srv.prices["my-local-model"]!.std.input).toBe(0.3));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove my-local-model" }));
+    await waitFor(() => expect(srv.prices["my-local-model"]).toBeUndefined());
+  });
+
+  it("refuses to add a model id that is already in the table", async () => {
+    await open();
+    fireEvent.change(screen.getByLabelText("Add a model by its id"), { target: { value: "sonnet-5-5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add model" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/already/);
   });
 });

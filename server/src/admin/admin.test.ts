@@ -5,6 +5,7 @@ import request from 'supertest';
 import { openDb } from '../fleet/db.js';
 import { PeopleStore } from '../fleet/people.js';
 import { WallSettings } from '../fleet/wallSettings.js';
+import { ModelPriceStore } from '../fleet/modelPrices.js';
 import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
@@ -13,6 +14,7 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
   const db = openDb(':memory:');
   const people = new PeopleStore(db);
   const wall = new WallSettings(db);
+  const prices = new ModelPriceStore(db);
   const clock = { t: 1_000_000 };
   const lines: string[] = [];
   const app = express();
@@ -22,12 +24,13 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
       secret: over.secret === undefined ? SECRET : over.secret,
       people,
       wall,
+      prices,
       now: () => clock.t,
       idleMs: over.idleMs,
       log: (l) => lines.push(l),
     }),
   );
-  return { app, people, wall, clock, lines };
+  return { app, people, wall, prices, clock, lines };
 }
 
 const H = { 'X-Podium-Admin': '1' };
@@ -209,6 +212,73 @@ describe('groups and settings', () => {
       expect((await agent.put('/api/admin/settings').set(H).send(bad)).status).toBe(400);
     }
     expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toEqual(expect.arrayContaining(['wall_notice_changed', 'wall_background_changed']));
+  });
+
+  describe('model prices (#117)', () => {
+    const S = { input: 3, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 };
+    const put = (agent: Awaited<ReturnType<typeof unlocked>>['agent'], body: unknown) => agent.put('/api/admin/settings').set(H).send(body as object);
+
+    it('lists every built-in row with its price, and refuses it before unlocking', async () => {
+      const { app } = setup();
+      expect((await request(app).get('/api/admin/settings').set(H)).status).toBe(401);
+      const { agent } = await unlocked();
+      const v = (await agent.get('/api/admin/settings').set(H)).body.modelPrices;
+      expect(v.asOf).toBe('2026-10-13');
+      expect(v.models.find((m: { key: string }) => m.key === 'sonnet-5-5')).toMatchObject({ builtin: true, overridden: false, std: { input: 2, output: 10 } });
+    });
+
+    it('saves a price, applies it, and logs it', async () => {
+      const { agent, prices, people } = await unlocked();
+      const res = await put(agent, { modelPrice: { key: 'sonnet-5-5', std: S } });
+      expect(res.status).toBe(200);
+      expect(res.body.modelPrices.models.find((m: { key: string }) => m.key === 'sonnet-5-5')).toMatchObject({ overridden: true, std: S });
+      expect(prices.overrides()['sonnet-5-5']!.std).toEqual(S);
+      const log = people.listLog({ page: 1, pageSize: 50 }).rows.find((x) => x.kind === 'model_price_changed')!;
+      expect(log.detail).toMatch(/sonnet-5-5/);
+    });
+
+    it('saving values equal to the built-in ones changes nothing and logs nothing', async () => {
+      const { agent, people } = await unlocked();
+      const res = await put(agent, { modelPrice: { key: 'sonnet-5-5', std: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 } } });
+      expect(res.status).toBe(200);
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).not.toContain('model_price_changed');
+    });
+
+    it('resets a row to the built-in price and logs it', async () => {
+      const { agent, prices, people } = await unlocked();
+      await put(agent, { modelPrice: { key: 'sonnet-5-5', std: S } });
+      const res = await put(agent, { resetModelPrice: 'sonnet-5-5' });
+      expect(res.status).toBe(200);
+      expect(prices.overrides()).toEqual({});
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toContain('model_price_reset');
+    });
+
+    it('adds a model the Admin names', async () => {
+      const { agent, prices } = await unlocked();
+      expect((await put(agent, { modelPrice: { key: 'my-local-model', std: S } })).status).toBe(200);
+      expect(prices.overrides()['my-local-model']!.std).toEqual(S);
+    });
+
+    it.each([
+      ['a negative price', { key: 'sonnet-5-5', std: { ...S, input: -1 } }],
+      ['a string price', { key: 'sonnet-5-5', std: { ...S, output: '10' } }],
+      ['a price over the bound', { key: 'sonnet-5-5', std: { ...S, output: 100000 } }],
+      ['no std prices', { key: 'sonnet-5-5' }],
+      ['no key', { std: S }],
+      ['a long tier on a model without one', { key: 'sonnet-5-5', std: S, long: S }],
+    ])('rejects %s with a clear error and changes nothing', async (_n, modelPrice) => {
+      const { agent, prices, people } = await unlocked();
+      const res = await put(agent, { modelPrice });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/\w/);
+      expect(prices.overrides()).toEqual({});
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).not.toContain('model_price_changed');
+    });
+
+    it('rejects a reset with no key', async () => {
+      const { agent } = await unlocked();
+      expect((await put(agent, { resetModelPrice: 5 })).status).toBe(400);
+    });
   });
 
   it('pages the admin log, newest first', async () => {

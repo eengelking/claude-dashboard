@@ -4,8 +4,8 @@ import { clip, excerpt } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { family, windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
-import type { ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, Report } from './protocol.ts';
-import { resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
+import type { ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, ModelUsage, Report } from './protocol.ts';
+import { mergeUsage, resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
 
 export const REPORTER_NAME = 'podium-reporter';
 export const MAX_EVENTS_PER_REPORT = 100;
@@ -77,6 +77,11 @@ function loopFields(l: LoopStats): LoopReport {
   };
 }
 
+/** The rows the server accepts: model ids clipped, and no more than it takes. */
+function usageRows(rows: ModelUsage[]): ModelUsage[] {
+  return rows.slice(0, 40).map((r) => ({ ...r, model: clip(r.model, 120) }));
+}
+
 export function agentReport(a: AgentState, fullText = false): AgentReport {
   const window = a.window ?? (a.model ? windowOf(a.model) : null);
   return {
@@ -95,6 +100,7 @@ export function agentReport(a: AgentState, fullText = false): AgentReport {
     context: { tokens: a.ctxTokens, window, percent: pct(a.ctxTokens, window) },
     tokens: { ...a.tokens },
     costUsdEst: a.model && family(a.model) === 'other' ? null : Math.round(a.cost * 1e6) / 1e6,
+    usageByModel: usageRows(mergeUsage(a.usage)),
     ...loopFields(a),
     blowouts: a.blowouts,
     promptExcerpt: excerpt(a.promptExcerpt),
@@ -153,6 +159,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       context: { tokens: ctxTokens, window: ctxWindow, percent: ctxPercent === null ? null : Math.max(0, Math.min(100, ctxPercent)) },
       costUsd: s.main.model && family(s.main.model) === 'other' ? null : s.costUsd,
       tokens: { ...s.main.tokens },
+      usageByModel: usageRows(mergeUsage(s.main.usage, ...s.order.map((id) => s.agents[id]?.usage))),
       rateLimits: s.rateLimits.slice(0, 10),
       blowouts: s.main.blowouts,
       plan: toPlan(s.plan),

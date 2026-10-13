@@ -153,6 +153,50 @@ describe('protocol', () => {
     expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.startedAt' });
   });
 
+  describe('usageByModel (issue #117)', () => {
+    const row = { model: 'claude-sonnet-5-5', tier: 'std', tokens: { input: 10, output: 5, cacheRead: 100, cacheWrite: 20, cacheWrite1h: 0 } };
+    const withUsage = (v: unknown, where: 'session' | 'agent' = 'session') => {
+      const f = loadFixture() as { session: Record<string, unknown>; agents: Record<string, unknown>[] };
+      (where === 'session' ? f.session : f.agents[0]!).usageByModel = v;
+      return f;
+    };
+
+    it('is absent when an older reporter does not send it', () => {
+      const f = loadFixture() as { session: Record<string, unknown>; agents: Record<string, unknown>[] };
+      delete f.session.usageByModel;
+      for (const a of f.agents) delete a.usageByModel;
+      const r = validateReport(f);
+      expect(r.ok && 'usageByModel' in r.report.session).toBe(false);
+      expect(r.ok && 'usageByModel' in r.report.agents[0]!).toBe(false);
+    });
+
+    it('keeps a valid list on the session and on an agent', () => {
+      const s = validateReport(withUsage([row]));
+      expect(s.ok && s.report.session.usageByModel).toEqual([row]);
+      const a = validateReport(withUsage([{ ...row, tier: 'long' }], 'agent'));
+      expect(a.ok && a.report.agents[0]!.usageByModel).toEqual([{ ...row, tier: 'long' }]);
+    });
+
+    it('treats a missing cacheWrite1h as 0 (a reporter that cannot split cache writes)', () => {
+      const { cacheWrite1h: _drop, ...tokens } = row.tokens;
+      const r = validateReport(withUsage([{ ...row, tokens }]));
+      expect(r.ok && r.report.session.usageByModel![0]!.tokens.cacheWrite1h).toBe(0);
+    });
+
+    it.each([
+      ['not an array', 'x', '$.session.usageByModel'],
+      ['a bad tier', [{ ...row, tier: 'huge' }], '$.session.usageByModel[0].tier'],
+      ['a negative count', [{ ...row, tokens: { ...row.tokens, input: -1 } }], '$.session.usageByModel[0].tokens.input'],
+      ['no model', [{ ...row, model: undefined }], '$.session.usageByModel[0].model'],
+    ])('rejects %s with a path', (_n, bad, path) => {
+      expect(validateReport(withUsage(bad))).toMatchObject({ ok: false, path });
+    });
+
+    it('rejects more rows than the limit', () => {
+      expect(validateReport(withUsage(Array.from({ length: LIMITS.usageModels + 1 }, () => row)))).toMatchObject({ ok: false });
+    });
+  });
+
   describe('toolCounts', () => {
     const first = (f: unknown) => (f as { agents: Record<string, unknown>[] }).agents[0]!;
     const counts = (r: ReturnType<typeof validateReport>) => (r.ok ? r.report.agents[0]!.toolCounts : 'rejected');

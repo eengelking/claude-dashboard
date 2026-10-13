@@ -7,6 +7,8 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
 import { safeEqualStr } from '../fleet/tokens.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
+import type { ModelPriceStore } from '../fleet/modelPrices.js';
+import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
 
 export interface AdminRouterOptions {
   /** The admin secret. null when the server runs without authentication: Admin is then switched off. */
@@ -14,6 +16,8 @@ export interface AdminRouterOptions {
   people: PeopleStore;
   /** The wall's notice switches. Without it the Settings tab has nothing to change. */
   wall?: WallSettings;
+  /** The Admin's model prices (issue #117). Without it the Model prices group has nothing to change. */
+  prices?: ModelPriceStore;
   now?: () => number;
   /** Idle time before a session ends. */
   idleMs?: number;
@@ -56,7 +60,7 @@ function publicPerson(p: PersonRow, groupName: string | null) {
 }
 
 export function createAdminRouter(opts: AdminRouterOptions): Router {
-  const { people, wall } = opts;
+  const { people, wall, prices } = opts;
   const now = opts.now ?? Date.now;
   const idleMs = opts.idleMs ?? 10 * 60_000;
   const maxFails = opts.maxFails ?? 5;
@@ -256,10 +260,12 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       allowAdminSecretReporting: people.adminReportingAllowed(),
       notices: noticeList(),
       showBackgroundSessions: wall?.showBackgroundSessions() ?? false,
+      modelPrices: prices?.view() ?? { asOf: PRICES_AS_OF, models: [] },
     });
   });
 
-  // One setting per call: allowAdminSecretReporting, showBackgroundSessions, or notices ({ id: boolean }).
+  // One setting per call: allowAdminSecretReporting, showBackgroundSessions, notices ({ id: boolean }),
+  // modelPrice ({ key, std, long? }: one model's prices) or resetModelPrice (a key).
   router.put('/settings', (req, res) => {
     const body = req.body ?? {};
     if ('allowAdminSecretReporting' in body) {
@@ -287,6 +293,36 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
         people.log('wall_notice_changed', `Wall notice ${id} turned ${n[id] ? 'on' : 'off'}`, sourceOf(req), now());
       }
       return void res.json({ ok: true, notices: noticeList() });
+    }
+    if ('modelPrice' in body) {
+      const m = body.modelPrice;
+      if (!prices || !m || typeof m !== 'object' || typeof m.key !== 'string') {
+        return void res.status(400).json({ ok: false, error: 'modelPrice must name a model and give its prices' });
+      }
+      const before = JSON.stringify(prices.overrides());
+      const err = prices.set(m.key, { std: m.std, ...(m.long === undefined || m.long === null ? {} : { long: m.long }) });
+      if (err) return void res.status(400).json({ ok: false, error: err });
+      // Saving the values a row already has changes nothing, so it is not logged as a change.
+      if (JSON.stringify(prices.overrides()) === before) return void res.json({ ok: true, modelPrices: prices.view() });
+      const k = m.key.trim().toLowerCase();
+      const p = m.std as PriceSet;
+      people.log(
+        'model_price_changed',
+        `Set the price of ${k} per million tokens: input ${p.input}, output ${p.output}, cache read ${p.cacheRead}, cache write ${p.cacheWrite}, 1-hour cache write ${p.cacheWrite1h}` +
+          (m.long ? ` (prompts over 100,000 tokens: input ${m.long.input}, output ${m.long.output})` : ''),
+        sourceOf(req),
+        now(),
+      );
+      return void res.json({ ok: true, modelPrices: prices.view() });
+    }
+    if ('resetModelPrice' in body) {
+      const k = body.resetModelPrice;
+      if (!prices || typeof k !== 'string' || !k.trim()) return void res.status(400).json({ ok: false, error: 'resetModelPrice must name a model' });
+      const had = JSON.stringify(prices.overrides());
+      prices.reset(k);
+      if (JSON.stringify(prices.overrides()) === had) return void res.json({ ok: true, modelPrices: prices.view() });
+      people.log('model_price_reset', `Reset the price of ${k.trim().toLowerCase()} to the built-in value`, sourceOf(req), now());
+      return void res.json({ ok: true, modelPrices: prices.view() });
     }
     res.status(400).json({ ok: false, error: 'no known setting in the request' });
   });

@@ -14,7 +14,7 @@ import {
 } from './failures.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
-import { backgroundSummary, type ActivityEvent, type AgentStatus, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Failure, type FilesReport, type GitInfo, type RateLimit } from './protocol.ts';
+import { backgroundSummary, type ActivityEvent, type AgentStatus, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Failure, type FilesReport, type GitInfo, type ModelUsage, type RateLimit } from './protocol.ts';
 
 export const BLOWOUT_DEDUP_MS = 2000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -35,7 +35,65 @@ export interface Usage {
   output_tokens: number;
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
+  /** Where Claude Code gives it: the cache writes split by how long the cache entry lives. */
+  cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number } | null;
   model?: string;
+}
+
+/** A request whose prompt (input + cache reads + cache writes) is over this is priced at a model's long-prompt tier. */
+export const LONG_PROMPT_TOKENS = 100_000;
+
+const usageKey = (model: string, tier: 'std' | 'long') => `${model}\u0000${tier}`;
+
+/** Adds one request's tokens to a loop's per-model, per-tier totals (issue #117). The server prices them. */
+export function addUsage(usage: Record<string, ModelUsage> | undefined, model: string | null, u: Usage): Record<string, ModelUsage> {
+  const prior = usage ?? {};
+  if (!model) return prior;
+  const input = u.input_tokens || 0;
+  const cacheRead = u.cache_read_input_tokens || 0;
+  const written = u.cache_creation_input_tokens || 0;
+  // The 1-hour part, when Claude Code says; the rest of the cache writes is the 5-minute rate.
+  const hour = Math.min(written, Math.max(0, u.cache_creation?.ephemeral_1h_input_tokens || 0));
+  const tier = input + cacheRead + written > LONG_PROMPT_TOKENS ? 'long' : 'std';
+  const key = usageKey(model, tier);
+  const was = prior[key]?.tokens ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 };
+  return {
+    ...prior,
+    [key]: {
+      model,
+      tier,
+      tokens: {
+        input: was.input + input,
+        output: was.output + (u.output_tokens || 0),
+        cacheRead: was.cacheRead + cacheRead,
+        cacheWrite: was.cacheWrite + (written - hour),
+        cacheWrite1h: was.cacheWrite1h + hour,
+      },
+    },
+  };
+}
+
+/** Folds several loops' totals into one list, one row per model and tier, in a stable order. */
+export function mergeUsage(...sets: (Record<string, ModelUsage> | undefined)[]): ModelUsage[] {
+  const out = new Map<string, ModelUsage>();
+  for (const set of sets) {
+    for (const row of Object.values(set ?? {})) {
+      const key = usageKey(row.model, row.tier);
+      const was = out.get(key)?.tokens;
+      out.set(key, {
+        model: row.model,
+        tier: row.tier,
+        tokens: {
+          input: (was?.input ?? 0) + row.tokens.input,
+          output: (was?.output ?? 0) + row.tokens.output,
+          cacheRead: (was?.cacheRead ?? 0) + row.tokens.cacheRead,
+          cacheWrite: (was?.cacheWrite ?? 0) + row.tokens.cacheWrite,
+          cacheWrite1h: (was?.cacheWrite1h ?? 0) + row.tokens.cacheWrite1h,
+        },
+      });
+    }
+  }
+  return [...out.values()].sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : a.tier < b.tier ? -1 : a.tier > b.tier ? 1 : 0));
 }
 
 /** The most distinct tool names kept per loop; later new names count in toolCalls only. */
@@ -47,6 +105,8 @@ export interface LoopStats {
   ctxTokens: number | null;
   window: number | null;
   tokens: Tokens;
+  /** Tokens per model and prompt-size tier, for the server to price (issue #117). */
+  usage: Record<string, ModelUsage>;
   cost: number;
   /** Model requests seen. */
   steps: number;
@@ -140,6 +200,7 @@ export function emptyLoop(model: string | null = null): LoopStats {
     ctxTokens: null,
     window: null,
     tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    usage: {},
     cost: 0,
     steps: 0,
     toolCalls: 0,
@@ -403,6 +464,7 @@ export function step(s0: SessionState, i: StepInput, now: number): SessionState 
   if (u) {
     const t = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
     next.tokens = { input: loop.tokens.input + t.input, output: loop.tokens.output + t.output, cacheRead: loop.tokens.cacheRead + t.cacheRead, cacheWrite: loop.tokens.cacheWrite + t.cacheWrite };
+    next.usage = addUsage(loop.usage, model ?? null, u);
     next.cost = loop.cost + (costOf(t, model) ?? 0);
     next.ctxTokens = t.input + t.cacheRead + t.cacheWrite;
     next.window = windowOf(model);
@@ -805,5 +867,5 @@ export function setExplanation(s: SessionState, agentId: string, text: string, u
   const cost = usage
     ? costOf({ input: usage.input_tokens || 0, output: usage.output_tokens || 0, cacheRead: usage.cache_read_input_tokens || 0, cacheWrite: usage.cache_creation_input_tokens || 0 }, model) ?? 0
     : 0;
-  return { ...s, agents: { ...s.agents, [agentId]: { ...a, failure: { ...a.failure, explanation }, cost: a.cost + cost } }, dirty: true };
+  return { ...s, agents: { ...s.agents, [agentId]: { ...a, failure: { ...a.failure, explanation }, cost: a.cost + cost, usage: usage ? addUsage(a.usage, model, usage) : a.usage } }, dirty: true };
 }

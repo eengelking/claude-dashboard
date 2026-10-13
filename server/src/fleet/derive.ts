@@ -4,6 +4,7 @@ import type { AgentRow, BlowoutRow, EventRow, SampleRow, SessionRow } from './db
 import { checkReporter } from './compat.js';
 import { idleOnBackground } from './protocol.js';
 import { tokenSum } from './ingest.js';
+import type { ModelUsage, Pricing } from './pricing.js';
 import type {
   ActivityView,
   AgentView,
@@ -74,7 +75,18 @@ function parse<T>(text: string | null, fallback: T): T {
   }
 }
 
-export function agentView(a: AgentRow): AgentView {
+/**
+ * A stored cost, repriced from the per-model usage the reporter sent (issue #117). A row with no usage, from an
+ * older reporter, or whose usage holds a model nobody priced, keeps the cost it was stored with.
+ */
+export function repriced(pricing: Pricing | undefined, usageJson: string | null, stored: number | null): number | null {
+  if (!pricing || !usageJson) return stored;
+  const usage = parse<ModelUsage[] | null>(usageJson, null);
+  if (!usage?.length) return stored;
+  return pricing.costOf(usage) ?? stored;
+}
+
+export function agentView(a: AgentRow, pricing?: Pricing): AgentView {
   return {
     id: a.id,
     parentId: a.parent_id,
@@ -90,7 +102,7 @@ export function agentView(a: AgentRow): AgentView {
     endedAt: a.ended_at,
     context: { tokens: a.context_tokens, window: a.context_window, percent: a.context_percent },
     tokens: { input: a.tok_in, output: a.tok_out, cacheRead: a.tok_cr, cacheWrite: a.tok_cw },
-    costUsdEst: a.cost_usd_est,
+    costUsdEst: repriced(pricing, a.usage_json, a.cost_usd_est),
     skills: parse<string[]>(a.skills_json, []),
     lastTool: a.last_tool,
     toolCalls: a.tool_calls,
@@ -181,6 +193,8 @@ export interface SessionInput {
   hideAt?: number | null;
   /** From the people table: the group the session's owner is in. */
   ownerGroup?: string | null;
+  /** The Admin's prices; a cost is repriced from the usage the reporter sent. */
+  pricing?: Pricing;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -191,7 +205,7 @@ export function sessionStatus(row: SessionRow, heard: boolean, now: number, stal
 
 export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig): SessionView {
   const { row } = input;
-  const agents = input.agents.map(agentView);
+  const agents = input.agents.map((a) => agentView(a, input.pricing));
   const agentBlows = agents.map((a) => a.blowouts);
   const agentTotal = agentBlows.reduce((a, b) => a + b, 0);
   return {
@@ -217,7 +231,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     secondsSinceSeen: Math.max(0, Math.floor((now - row.last_seen_at) / 1000)),
     dropAt: input.dropAt ?? null,
     context: { tokens: row.context_tokens, window: row.context_window, percent: row.context_percent },
-    costUsd: row.cost_usd,
+    costUsd: repriced(input.pricing, row.usage_json, row.cost_usd),
     tokensTotal: tokenSum(row) + input.agents.reduce((n, a) => n + tokenSum(a), 0),
     blowouts: {
       orchestrator: row.blowouts,

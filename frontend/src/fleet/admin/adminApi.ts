@@ -37,6 +37,29 @@ export interface GroupChoice {
   name: string;
 }
 
+/** USD per million tokens (issue #117). */
+export interface PriceSet {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheWrite1h: number;
+}
+export interface ModelPriceRow {
+  key: string;
+  label: string;
+  builtin: boolean;
+  overridden: boolean;
+  std: PriceSet;
+  long?: PriceSet;
+  builtinStd?: PriceSet;
+  builtinLong?: PriceSet;
+}
+export interface ModelPricesView {
+  asOf: string;
+  models: ModelPriceRow[];
+}
+
 export class AdminError extends Error {
   constructor(
     readonly status: number,

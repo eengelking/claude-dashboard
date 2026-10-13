@@ -202,7 +202,8 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     session's own figure is the engine's ledger (which already includes `$.model.complete` calls made on
     the session's client), so the explanation's estimated cost is added to the failed agent's
     `costUsdEst`, the one estimate the report carries. Explanations are requested from the flush timer,
-    never from a hook, at most once per failure; a call that errors is not retried.
+    never from a hook, at most once per failure; a call that errors is not retried. Since #117 its tokens
+    also go into the agent's `usageByModel`, so the server's price of the session total includes them.
 
 39. **The mod is installable from a marketplace (section 11 deferred it).** The first spec listed "installing
     the mod through a marketplace" as deferred until the repo is public, with a `marketplace.json` in this

@@ -121,6 +121,12 @@ ALTER TABLE sessions ADD COLUMN owner TEXT;
     // What a session idle between turns still waits on (BackgroundWait as JSON, issue #119); NULL when nothing.
     sql: 'ALTER TABLE sessions ADD COLUMN background_json TEXT;',
   },
+  {
+    version: 10,
+    // Tokens per model and prompt-size tier as JSON (issue #117), so the server prices them with the Admin's
+    // prices when it reads; NULL for rows and reporters from before it existed (their stored cost stands).
+    sql: 'ALTER TABLE sessions ADD COLUMN usage_json TEXT; ALTER TABLE agents ADD COLUMN usage_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -157,6 +163,7 @@ export interface SessionRow {
   loop_json: string | null;
   files_json: string | null;
   background_json: string | null;
+  usage_json: string | null;
   attached: number | null;
   detached_at: number | null;
   owner: string | null;
@@ -189,6 +196,7 @@ export interface AgentRow {
   last_tool: string | null;
   tool_calls: number;
   tool_counts_json: string | null;
+  usage_json: string | null;
   blowouts: number;
   steps_done: number | null;
   steps_total: number | null;
@@ -229,6 +237,14 @@ export interface SampleRow {
   running_agents: number;
   cost_usd: number | null;
 }
+
+/** What a cost query reads of a session row. */
+export interface CostRow {
+  cost_usd: number | null;
+  usage_json: string | null;
+}
+export type CostOf = (row: CostRow) => number | null;
+const storedCost: CostOf = (r) => r.cost_usd;
 
 export interface RetentionPolicy {
   samplesMs: number;
@@ -340,22 +356,30 @@ export class FleetDb {
     ).all({ from, to }) as unknown as SessionRow[];
   }
 
-  /** Σ cost_usd of sessions that started at or after `since`. */
-  costSince(since: number): number {
-    const r = this.stmt('SELECT COALESCE(SUM(cost_usd), 0) AS c FROM sessions WHERE started_at >= ?').get(since) as {
-      c: number;
-    };
-    return r.c;
+  /**
+   * Σ cost of sessions that started at or after `since`. `cost` says what one session costs (the Admin's prices
+   * repriced from its usage); by default its stored cost_usd.
+   */
+  costSince(since: number, cost: CostOf = storedCost): number {
+    const rows = this.stmt('SELECT cost_usd, usage_json FROM sessions WHERE started_at >= ?').all(since) as unknown as CostRow[];
+    return rows.reduce((n, r) => n + (cost(r) ?? 0), 0);
   }
 
   /** `costSince` split by owner, with the group each owner is in (Admin, no owner and no group give null), largest first. */
-  costByOwnerSince(since: number): { owner: string | null; group: string | null; costUsd: number }[] {
+  costByOwnerSince(since: number, cost: CostOf = storedCost): { owner: string | null; group: string | null; costUsd: number }[] {
     const rows = this.stmt(
-      `SELECT s.owner AS owner, g.name AS grp, COALESCE(SUM(s.cost_usd), 0) AS c
+      `SELECT s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json
        FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
-       WHERE s.started_at >= ? GROUP BY s.owner, g.name ORDER BY c DESC, s.owner`,
-    ).all(since) as { owner: string | null; grp: string | null; c: number }[];
-    return rows.map((r) => ({ owner: r.owner, group: r.grp, costUsd: r.c }));
+       WHERE s.started_at >= ?`,
+    ).all(since) as unknown as (CostRow & { owner: string | null; grp: string | null })[];
+    const by = new Map<string, { owner: string | null; group: string | null; costUsd: number }>();
+    for (const r of rows) {
+      const k = `${r.owner ?? ''}\u0000${r.grp ?? ''}`;
+      const e = by.get(k) ?? { owner: r.owner, group: r.grp, costUsd: 0 };
+      e.costUsd += cost(r) ?? 0;
+      by.set(k, e);
+    }
+    return [...by.values()].sort((a, b) => b.costUsd - a.costUsd || (a.owner ?? '').localeCompare(b.owner ?? ''));
   }
 
   /** The group a session owner is in; null for Admin, an unknown name or a person with no group. */

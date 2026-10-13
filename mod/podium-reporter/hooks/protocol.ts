@@ -26,6 +26,21 @@ export interface TokenCounts {
   cacheWrite: number;
 }
 
+/** `cacheWrite` is the 5-minute cache write; `cacheWrite1h` the 1-hour one (0 when the reporter cannot split them). */
+export interface UsageTokens extends TokenCounts {
+  cacheWrite1h: number;
+}
+
+/**
+ * One model's token totals, so the server prices them with the Admin's prices (issue #117). `tier` is `long`
+ * for requests whose prompt (input + cache reads + cache writes) is over 100,000 tokens.
+ */
+export interface ModelUsage {
+  model: string;
+  tier: 'std' | 'long';
+  tokens: UsageTokens;
+}
+
 export interface ContextFill {
   tokens: number | null;
   window: number | null;
@@ -128,6 +143,8 @@ export interface AgentReport {
   context: ContextFill;
   tokens: TokenCounts;
   costUsdEst: number | null;
+  /** Tokens per model and prompt-size tier. Absent when the reporter is too old to send it. */
+  usageByModel?: ModelUsage[];
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
@@ -189,6 +206,8 @@ export interface SessionReport {
   context: ContextFill;
   costUsd: number | null;
   tokens: TokenCounts;
+  /** Tokens per model and tier for the whole session, agents included. Absent when the reporter is too old to send it. */
+  usageByModel?: ModelUsage[];
   rateLimits: RateLimit[];
   blowouts: number;
   plan: Plan | null;

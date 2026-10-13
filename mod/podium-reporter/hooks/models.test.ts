@@ -21,11 +21,15 @@ describe('models', () => {
   })
 
   test('prices per family and for older ids, dated', () => {
-    expect(PRICES_AS_OF).toBe('2026-10-06')
+    expect(PRICES_AS_OF).toBe('2026-10-13')
     expect(priceOf('claude-opus-5-5')).toEqual({ input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 })
     expect(priceOf('opus')).toEqual(priceOf('claude-opus-5-5'))
     expect(priceOf('claude-opus-5')?.input).toBe(5)
-    expect(priceOf('claude-sonnet-5-5')?.input).toBe(2)
+    expect(priceOf('claude-sonnet-5-5')).toEqual({ input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 })
+    expect(priceOf('claude-opus-4-1-20250805')).toEqual({ input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 })
+    expect(priceOf('claude-opus-4-20250514')?.input).toBe(15)
+    expect(priceOf('claude-opus-4-8')?.input).toBe(5)
+    expect(priceOf('claude-haiku-3-5')).toEqual({ input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 })
     expect(priceOf('claude-haiku-5-5')?.output).toBe(0.5)
     expect(priceOf('claude-haiku-4-5')?.input).toBe(1)
     expect(priceOf('claude-fable-5-1')).toEqual({ input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 })

@@ -52,6 +52,19 @@ describe('ingestReport', () => {
     expect(f.getAgentTexts(r.session.id, r.agents[0]!.id)).toBeNull();
   });
 
+  it('stores per-model usage for the session and each agent, and null for a reporter that sends none (#117)', () => {
+    const usage = [{ model: 'claude-sonnet-5-5', tier: 'std' as const, tokens: { input: 5, output: 6, cacheRead: 7, cacheWrite: 8, cacheWrite1h: 1 } }];
+    const r = fixtureReport();
+    r.session.usageByModel = usage;
+    r.agents[0]!.usageByModel = usage;
+    delete r.agents[1]!.usageByModel;
+    ingestReport(f, r, T0);
+    expect(JSON.parse(f.getSession(r.session.id)!.usage_json!)).toEqual(usage);
+    const rows = f.getAgents(r.session.id);
+    expect(JSON.parse(rows.find((a) => a.id === r.agents[0]!.id)!.usage_json!)).toEqual(usage);
+    expect(rows.find((a) => a.id === r.agents[1]!.id)!.usage_json).toBeNull();
+  });
+
   it('stores the per-tool counts, and null for a reporter that sends none', () => {
     const r = fixtureReport();
     delete (r.agents[1] as { toolCounts?: unknown }).toolCounts;

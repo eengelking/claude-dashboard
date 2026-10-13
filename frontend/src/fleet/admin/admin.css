@@ -1,5 +1,5 @@
 /* #/admin: ported from mockup/podium-people.html and scoped under .adminv so it cannot restyle the fleet console. */
-.podium .adminv { overflow: auto; padding: 18px 16px 32px; min-height: 0; }
+.podium .adminv { overflow: auto; scrollbar-gutter: stable; padding: 18px 16px 32px; min-height: 0; }
 .adminv .wrap { max-width: 1000px; margin: 0 auto; display: grid; gap: 16px; }
 .adminv h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
 .adminv h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
@@ -15,6 +15,7 @@
 .adminv .nowrap { white-space: nowrap; }
 .adminv .bad { color: var(--crit-text); }
 .adminv .stack { display: grid; gap: 10px; }
+.adminv .stack.pad { padding: 14px; gap: 16px; }
 .adminv .row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .adminv .row2.between { justify-content: space-between; }
 .adminv .box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
@@ -68,3 +69,20 @@
 .adminv .setrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .adminv .setrow .setname { min-width: 0; }
 .adminv .setrow .sw { flex: none; }
+
+/* Model prices (#117): one table, five price columns, a second row for a model's long-prompt prices. */
+.adminv .hint.wide { max-width: 72ch; }
+.adminv .pricebox { margin-top: 10px; }
+.adminv .ptab th.n, .adminv .ptab td.n { text-align: right; }
+.adminv .ptab tr.sub td.name { padding-left: 26px; color: var(--ink2); }
+.adminv .ptab td.name { min-width: 200px; }
+.adminv .ptab td.name .hint { display: block; }
+.adminv .ptab td.err { padding: 2px 14px 8px; border-bottom: 1px solid var(--grid); }
+.adminv .price { width: 76px; text-align: right; background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 4px 6px; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; }
+.adminv .price.changed { border-color: var(--sonnet); }
+.adminv .price.bad { border-color: var(--crit-text); }
+.adminv .price:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; }
+.adminv .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--sonnet); white-space: nowrap; }
+.adminv .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.adminv .addrow .f { max-width: 260px; }
+.adminv form.addrow { padding: 12px 14px; border-top: 1px solid var(--border); justify-content: flex-start; }

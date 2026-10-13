@@ -124,8 +124,9 @@ is literal. "Count .ts files under server" and "Count .ts files in server" do no
 An agent's row shows its own estimated cost, not the agents it launched. The facts bar and the card show the
 session's figure from Claude Code, which includes every agent at every depth once, plus the orchestrator itself.
 The orchestrator's row shows its own share: that figure less each agent's estimate, so the rows add up to it. To see a branch, open the agent: **With its agents** adds it and everything under it.
-The session figure is Claude Code's ledger and an agent's is an estimate from a price table, so the rows will
-not sum to the session figure exactly.
+From reporter 0.12.0 the server prices the session and every agent from the same per-model token totals and the
+prices in Admin > Settings, so the rows add up. A session from an older reporter shows Claude Code's ledger as its
+figure while an agent's is an estimate from a price table, so its rows will not sum exactly.
 
 ### Every agent sits under the orchestrator in a session started without the mod
 

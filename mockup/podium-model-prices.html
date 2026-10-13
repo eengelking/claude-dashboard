@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium Model Prices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: Admin > Settings gets a third group below "The wall". One table, one row per model, five price columns in USD per million tokens. A row the Admin changed is marked and gets a Reset button; Haiku 5.5 carries a second row for prompts over 100,000 tokens. Adding a model that Podium has no price for sits under the table. Same tokens and controls as the people mockup. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --sonnet: #3987e5; --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --crit-text: #ee6a6a;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.mock { padding: 5px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 18px 16px 32px; display: grid; gap: 16px; }
+h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.hint { color: var(--muted); font-size: 12px; }
+.hint.ink2 { color: var(--ink2); }
+.box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); font-size: 11.5px; font-weight: 500; }
+.btn:hover { background: var(--sel); }
+.btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn:disabled { opacity: .4; cursor: default; }
+.setrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.sw { display: inline-flex; align-items: center; gap: 8px; }
+.sw button { width: 34px; height: 20px; border-radius: 999px; background: var(--axis); border: 1px solid var(--border); position: relative; flex: none; }
+.sw button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); }
+.tw { overflow-x: auto; }
+.ptab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ptab th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ptab th.n, .ptab td.n { text-align: right; }
+.ptab td { padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+.ptab tr:last-child td { border-bottom: 0; }
+.ptab tr.sub td.name { padding-left: 26px; color: var(--ink2); }
+.ptab .name b { font-weight: 600; }
+.ptab .name .hint { display: block; }
+.price { width: 72px; text-align: right; background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 4px 6px; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; }
+.price.changed { border-color: var(--sonnet); }
+.price.bad { border-color: var(--crit-text); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--sonnet); white-space: nowrap; }
+.tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.acts { display: flex; gap: 6px; justify-content: flex-end; }
+.addrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; padding: 12px 10px; border-top: 1px solid var(--border); }
+.addrow .f { display: grid; gap: 4px; }
+.field { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.err { color: var(--crit-text); font-size: 12.5px; padding: 8px 10px 0; }
+.note { padding: 10px 10px 0; color: var(--ink2); }
+</style>
+</head>
+<body>
+<div class="mock">Mockup, not wired. Admin > Settings. States shown: a built-in row, a row the Admin changed (saved), a row being edited (unsaved, with a bad value), a model with a second price for long prompts, and an Admin-added model.</div>
+<div class="wrap">
+  <div>
+    <h1>Admin</h1>
+    <div class="hint ink2">Settings</div>
+  </div>
+
+  <section>
+    <h2>Wall notices</h2>
+    <div class="hint ink2">Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.</div>
+    <div class="setrow"><div><b>Background sessions</b><div class="hint ink2">Says how many sessions nobody is attached to are set aside, with a link to show them.</div></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-label="Background sessions"></button><span>On</span></div></div>
+  </section>
+
+  <section aria-labelledby="mp-h">
+    <h2 id="mp-h">Model prices</h2>
+    <div class="hint ink2">US dollars per million tokens, as Anthropic lists them. Podium multiplies each model's tokens by these prices, so changing one changes today's cost everywhere at once: the wall, each orchestrator, Est. cost today and History. Prices from the sheet of 2026-10-13.</div>
+    <div class="box" style="margin-top:10px">
+      <div class="tw">
+        <table class="ptab">
+          <thead><tr>
+            <th>Model</th><th class="n">Input</th><th class="n">Output</th><th class="n">Cache read</th><th class="n">Cache write, 5 min</th><th class="n">Cache write, 1 hour</th><th></th>
+          </tr></thead>
+          <tbody>
+            <!-- built-in, saved as the built-in value -->
+            <tr><td class="name"><b>Opus 5.5</b></td>
+              <td class="n"><input class="price" aria-label="Opus 5.5 input" value="4"></td><td class="n"><input class="price" aria-label="Opus 5.5 output" value="20"></td><td class="n"><input class="price" aria-label="Opus 5.5 cache read" value="0.2"></td><td class="n"><input class="price" aria-label="Opus 5.5 cache write 5 minutes" value="5"></td><td class="n"><input class="price" aria-label="Opus 5.5 cache write 1 hour" value="8"></td><td></td></tr>
+            <!-- changed by the Admin and saved -->
+            <tr><td class="name"><b>Sonnet 5.5</b> <span class="tag">Changed</span><span class="hint">Built-in input is 2</span></td>
+              <td class="n"><input class="price changed" aria-label="Sonnet 5.5 input" value="2.4"></td><td class="n"><input class="price" aria-label="Sonnet 5.5 output" value="10"></td><td class="n"><input class="price" aria-label="Sonnet 5.5 cache read" value="0.1"></td><td class="n"><input class="price" aria-label="Sonnet 5.5 cache write 5 minutes" value="2.5"></td><td class="n"><input class="price" aria-label="Sonnet 5.5 cache write 1 hour" value="4"></td>
+              <td><div class="acts"><button class="btn" type="button">Reset to built-in</button></div></td></tr>
+            <!-- being edited, unsaved, with a bad value -->
+            <tr><td class="name"><b>Sonnet 5</b></td>
+              <td class="n"><input class="price changed" aria-label="Sonnet 5 input" value="2"></td><td class="n"><input class="price bad" aria-label="Sonnet 5 output" value="-10" aria-invalid="true"></td><td class="n"><input class="price" aria-label="Sonnet 5 cache read" value="0.2"></td><td class="n"><input class="price" aria-label="Sonnet 5 cache write 5 minutes" value="2.5"></td><td class="n"><input class="price" aria-label="Sonnet 5 cache write 1 hour" value="4"></td>
+              <td><div class="acts"><button class="btn" type="button">Cancel</button><button class="btn pri" type="button">Save</button></div></td></tr>
+            <tr><td colspan="7" class="err" role="alert">Output must be zero or more.</td></tr>
+            <!-- a model with a second price set -->
+            <tr><td class="name"><b>Haiku 5.5</b><span class="hint">Prompts up to 100,000 tokens</span></td>
+              <td class="n"><input class="price" aria-label="Haiku 5.5 input" value="0.1"></td><td class="n"><input class="price" aria-label="Haiku 5.5 output" value="0.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache read" value="0.01"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache write 5 minutes" value="0.125"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache write 1 hour" value="0.2"></td><td></td></tr>
+            <tr class="sub"><td class="name">Prompts over 100,000 tokens</td>
+              <td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 input" value="0.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 output" value="2.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache read" value="0.05"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache write 5 minutes" value="0.625"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache write 1 hour" value="1"></td><td></td></tr>
+            <tr><td class="name"><b>Haiku 4.5</b></td>
+              <td class="n"><input class="price" aria-label="Haiku 4.5 input" value="1"></td><td class="n"><input class="price" aria-label="Haiku 4.5 output" value="5"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache read" value="0.1"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache write 5 minutes" value="1.25"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache write 1 hour" value="2"></td><td></td></tr>
+            <!-- an Admin-added model -->
+            <tr><td class="name"><b class="mono">qwen2.5-coder:32b</b> <span class="tag">Added by you</span><span class="hint">Podium has no built-in price for this model</span></td>
+              <td class="n"><input class="price changed" aria-label="qwen2.5-coder:32b input" value="0.3"></td><td class="n"><input class="price changed" aria-label="qwen2.5-coder:32b output" value="0.9"></td><td class="n"><input class="price changed" aria-label="qwen2.5-coder:32b cache read" value="0"></td><td class="n"><input class="price changed" aria-label="qwen2.5-coder:32b cache write 5 minutes" value="0"></td><td class="n"><input class="price changed" aria-label="qwen2.5-coder:32b cache write 1 hour" value="0"></td>
+              <td><div class="acts"><button class="btn" type="button">Remove</button></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">The rest of the sheet (Opus 5 and earlier, Sonnet 4.x, Haiku 3.5, Fable and Mythos) is in the table in the same way, in the order Anthropic lists it.</div>
+      <form class="addrow">
+        <div class="f"><label for="mp-new" class="hint">Add a model by its id</label><input id="mp-new" class="field mono" placeholder="for example llama3.1:8b" style="width:240px"></div>
+        <button class="btn pri" type="button">Add model</button>
+        <span class="hint">A model with no price shows "n/a" for cost until you add one.</span>
+      </form>
+    </div>
+  </section>
+
+  <section>
+    <h2>The wall</h2>
+    <div class="setrow"><div><b>Show background sessions on the wall</b><div class="hint ink2">Sessions nobody is attached to are set aside after a minute. Turn this on to keep them in view. Off by default.</div></div><div class="sw"><button type="button" role="switch" aria-checked="false" aria-label="Show background sessions"></button><span>Off</span></div></div>
+  </section>
+</div>
+</body>
+</html>

@@ -266,3 +266,21 @@ old per-tab state did.
 trust Remove already has. A notice closed by mistake is easy to restore but affects every viewer until it is. The
 list of notices lives in two places, the server's `NOTICES` and the wall's stack, so a new notice touches both.
 
+## 23. The server prices tokens, with prices the Admin can change
+
+**Choice.** The reporter sends tokens per model and per prompt-size tier (`usageByModel`, for the session and for each
+agent), and the server turns them into dollars in one module, `pricing.ts`, using a built-in table of Anthropic's list
+prices with the Admin's changes laid over it. The cost is worked out when it is read, not when it arrives, so a price
+change moves every figure at once. Each model has five prices (input, output, cache read, 5-minute and 1-hour cache
+write), and Haiku 5.5 a second set for prompts over 100,000 tokens. Podium does not read Claude Code's own
+`modelPricing` or cost figure.
+**Why.** The reporter cannot see the Admin's settings, and the session total it used to send was Claude Code's ledger,
+which the server cannot reprice. Tokens per model are enough to reprice everything, including the orchestrator's share
+(session total minus its agents), so the card, the facts bar and the totals still add up (#109). Pricing on read means
+a price change needs no migration of stored rows. A request's tier depends on its own prompt size, so it has to be
+decided per request in the reporter, not from totals.
+**Cost.** The session figure is now an estimate from the Admin's prices, not Claude Code's ledger, for any reporter
+that sends usage (0.12.0 and later); a person who sets a contracted rate in Claude Code's `modelPricing` must set it
+here too. Reports grow by a few rows per model. The cost-per-minute sparkline still comes from the ledger's samples
+and does not follow the Admin's prices. Cache writes count at the 5-minute rate unless Claude Code reports the
+1-hour part; the `turn.step` usage fields in SPEC 5 carry no such split, so until it does the 1-hour price has no effect.

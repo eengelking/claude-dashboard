@@ -1,12 +1,12 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport, buildReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, describeBackground, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, step, toolResult, turnComplete } from './state.ts'
+import { agentRequested, agentSpawned, blowout, compaction, describeBackground, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, setExplanation, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
-const SESSION_KEYS = ['attached', 'blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
-const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type']
+const SESSION_KEYS = ['attached', 'blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'usageByModel', 'waitNote', 'waitReason']
+const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type', 'usageByModel']
 const FAILURE_KEYS = ['at', 'call', 'class', 'evidence', 'exitCode', 'explanation', 'outputTail', 'retriedAs', 'tool']
 const STEP_KEYS = ['activeText', 'id', 'ownerAgentId', 'ownerLabel', 'state', 'text']
 const keys = (o: object) => Object.keys(o).sort()
@@ -439,5 +439,66 @@ describe('background work (#119)', () => {
     s = setBackground(s, { tasks: [shell], crons: [] }, T0 + 3)
     expect(s.waitReason).toBe('permission')
     expect(buildReport(s, [], meta).session.waitReason).toBe('permission')
+  })
+})
+
+describe('usage per model and prompt-size tier (#117)', () => {
+  const base = () => newSession({ id: 's', cwd: '/x', startedAt: T0, model: 'claude-sonnet-5-5' })
+  const u = (input: number, output: number, cacheRead: number, cacheWrite: number, extra: object = {}) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: cacheWrite, ...extra })
+  const reportMeta = { now: T0 + 99_000, version: '9.9.9', engineVersion: null, hostSurface: null, storedName: null, optionName: null }
+  const usage = (r: ReturnType<typeof buildReport>['session'] | ReturnType<typeof buildReport>['agents'][number]) => r.usageByModel!
+
+  test('adds up tokens per model, and a request with a prompt over 100,000 tokens counts in the long tier', () => {
+    let s = step(base(), { model: 'claude-sonnet-5-5', usage: u(1000, 10, 2000, 300), stopReason: null }, T0 + 1)
+    s = step(s, { model: 'claude-sonnet-5-5', usage: u(500, 5, 1000, 0), stopReason: null }, T0 + 2)
+    s = step(s, { model: 'claude-haiku-5-5', usage: u(60_000, 20, 50_000, 0), stopReason: null }, T0 + 3)
+    s = step(s, { model: 'claude-haiku-5-5', usage: u(10, 20, 1_000, 0), stopReason: null }, T0 + 4)
+    const r = buildReport(s, [], reportMeta)
+    expect(usage(r.session)).toEqual([
+      { model: 'claude-haiku-5-5', tier: 'long', tokens: { input: 60_000, output: 20, cacheRead: 50_000, cacheWrite: 0, cacheWrite1h: 0 } },
+      { model: 'claude-haiku-5-5', tier: 'std', tokens: { input: 10, output: 20, cacheRead: 1_000, cacheWrite: 0, cacheWrite1h: 0 } },
+      { model: 'claude-sonnet-5-5', tier: 'std', tokens: { input: 1500, output: 15, cacheRead: 3000, cacheWrite: 300, cacheWrite1h: 0 } },
+    ])
+  })
+
+  test('a prompt of exactly 100,000 tokens is not over the threshold', () => {
+    const s = step(base(), { model: 'claude-haiku-5-5', usage: u(100_000, 1, 0, 0), stopReason: null }, T0 + 1)
+    expect(usage(buildReport(s, [], reportMeta).session)[0]!.tier).toBe('std')
+  })
+
+  test('splits cache writes into 5 minutes and 1 hour when Claude Code gives the split', () => {
+    const s = step(base(), { model: 'claude-sonnet-5-5', usage: u(10, 1, 0, 500, { cache_creation: { ephemeral_5m_input_tokens: 200, ephemeral_1h_input_tokens: 300 } }), stopReason: null }, T0 + 1)
+    expect(usage(buildReport(s, [], reportMeta).session)[0]!.tokens).toEqual({ input: 10, output: 1, cacheRead: 0, cacheWrite: 200, cacheWrite1h: 300 })
+    expect(buildReport(s, [], reportMeta).session.tokens.cacheWrite).toBe(500)
+  })
+
+  test('without the split, every cache write counts at the 5-minute rate', () => {
+    const s = step(base(), { model: 'claude-sonnet-5-5', usage: u(10, 1, 0, 500), stopReason: null }, T0 + 1)
+    expect(usage(buildReport(s, [], reportMeta).session)[0]!.tokens.cacheWrite1h).toBe(0)
+  })
+
+  test("the session's usage covers the orchestrator and every agent; an agent's covers only itself", () => {
+    let s = step(base(), { model: 'claude-sonnet-5-5', usage: u(1000, 0, 0, 0), stopReason: null }, T0 + 1)
+    s = agentSpawned(s, { toolUseId: 't-a', agentId: 'a', model: 'claude-sonnet-5-5', subagentType: 'Explore', description: 'a', prompt: 'p', fork: false }, T0 + 2)
+    s = step(s, { agentId: 'a', model: 'claude-sonnet-5-5', usage: u(250, 0, 0, 0), stopReason: null }, T0 + 3)
+    s = step(s, { agentId: 'a', model: 'claude-haiku-4-5', usage: u(40, 0, 0, 0), stopReason: null }, T0 + 4)
+    const r = buildReport(s, [], reportMeta)
+    const inputs = (rows: { model: string; tier: string; tokens: { input: number } }[]) => rows.map((x) => [x.model, x.tier, x.tokens.input])
+    expect(inputs(usage(r.session))).toEqual([['claude-haiku-4-5', 'std', 40], ['claude-sonnet-5-5', 'std', 1250]])
+    expect(inputs(usage(r.agents[0]!))).toEqual([['claude-haiku-4-5', 'std', 40], ['claude-sonnet-5-5', 'std', 250]])
+  })
+
+  test('a failure explanation counts in the agent and so in the session', () => {
+    let s = agentSpawned(base(), { toolUseId: 't-a', agentId: 'a', model: 'claude-sonnet-5-5', subagentType: 'Explore', description: 'a', prompt: 'p', fork: false }, T0 + 2)
+    s = { ...s, agents: { ...s.agents, a: { ...s.agents.a!, failure: { at: T0, class: 'Unknown', tool: null, call: null, exitCode: null, outputTail: [], evidence: [], retriedAs: null, explanation: null } as never } } }
+    s = setExplanation(s, 'a', 'It failed because of X.', u(70, 30, 0, 0), 'claude-sonnet-5-5')
+    const r = buildReport(s, [], reportMeta)
+    expect(usage(r.agents[0]!)[0]!.tokens).toMatchObject({ input: 70, output: 30 })
+    expect(usage(r.session)[0]!.tokens).toMatchObject({ input: 70, output: 30 })
+  })
+
+  test('a step with no usage adds no row', () => {
+    const s = step(base(), { model: 'claude-sonnet-5-5', usage: null, stopReason: null }, T0 + 1)
+    expect(usage(buildReport(s, [], reportMeta).session)).toEqual([])
   })
 })

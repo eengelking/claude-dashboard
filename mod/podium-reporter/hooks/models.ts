@@ -1,13 +1,14 @@
 // Model families, context windows and the price table (SPEC 6.5). Pure; no `$` here.
 //
-// SOURCE: the `claude-api` skill bundled with Claude Code 2.1.296, "Current Models (cached:
-// 2026-10-06)" and shared/models.md / shared/prompt-caching.md. Prices are Anthropic first-party API
-// list prices in USD per million tokens. Cache writes are priced at the 5-minute TTL (1.25x input).
-// Cache reads are the per-model figures the skill lists (0.1x input unless it says otherwise).
-// Haiku 5.5 is priced at its <=100K-prompt tier ($0.10 / $0.50); longer prompts cost 5x, which this
-// estimate ignores. Every figure here is an ESTIMATE: Podium never presents it as a bill.
+// SOURCE: Anthropic's pricing sheet (platform.claude.com/docs/en/about-claude/pricing), taken 2026-10-13.
+// Prices are first-party API list prices in USD per million tokens. Cache writes are priced at the
+// 5-minute TTL (1.25x input). Haiku 5.5 is priced at its <=100K-prompt tier ($0.10 / $0.50); longer
+// prompts cost 5x, which this estimate ignores.
+// Since #117 these figures are only the fallback for a server that predates per-model usage: a current
+// server prices the `usageByModel` totals in each report with its own table and the Admin's prices.
+// Every figure here is an ESTIMATE: Podium never presents it as a bill.
 
-export const PRICES_AS_OF = '2026-10-06';
+export const PRICES_AS_OF = '2026-10-13';
 
 export type Family = 'opus' | 'sonnet' | 'haiku' | 'fable' | 'other';
 
@@ -47,7 +48,7 @@ function price(input: number, output: number, cacheRead: number): Price {
 /** Current generation per family (an alias such as `opus` resolves to these). */
 const FAMILY_PRICE: Record<Exclude<Family, 'other'>, Price> = {
   opus: price(4, 20, 0.2), // claude-opus-5-5
-  sonnet: price(2, 10, 0.2), // claude-sonnet-5-5
+  sonnet: price(2, 10, 0.1), // claude-sonnet-5-5
   haiku: price(0.1, 0.5, 0.01), // claude-haiku-5-5 (<=100K prompt tier)
   fable: price(10, 50, 0.25), // claude-fable-5-1
 };
@@ -56,10 +57,12 @@ const FAMILY_PRICE: Record<Exclude<Family, 'other'>, Price> = {
 const ID_PRICE: [RegExp, Price][] = [
   [/fable-5(?!-1)/, price(10, 50, 1)], // claude-fable-5 (and mythos-5)
   [/opus-5(?!-5)/, price(5, 25, 0.5)], // claude-opus-5
-  [/opus-4/, price(5, 25, 0.5)], // claude-opus-4-6 .. 4-8
+  [/opus-4-1(?!\d)|opus-4(?!-[5-8])(?!\d)/, price(15, 75, 1.5)], // claude-opus-4-1 and claude-opus-4
+  [/opus-4/, price(5, 25, 0.5)], // claude-opus-4-5 .. 4-8
   [/sonnet-5(?!-5)/, price(2, 10, 0.2)], // claude-sonnet-5
   [/sonnet-4/, price(3, 15, 0.3)], // claude-sonnet-4-6
   [/haiku-4/, price(1, 5, 0.1)], // claude-haiku-4-5
+  [/haiku-3-5/, price(0.8, 4, 0.08)], // claude-haiku-3-5
 ];
 
 /** USD per million tokens for a model id, an alias, or a family name. `null` for a non-Claude model. */

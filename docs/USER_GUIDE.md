@@ -263,10 +263,12 @@ also read as plain sentences, such as "Session ended (cleared)."
 
 ### What the numbers mean
 
-Cost is an estimate from token counts and a price table, and it is never a bill. The session's own figure is
-the exact ledger from Claude Code and covers the orchestrator and every agent, nested ones included; the
-figures for agents are estimates of each agent's own use, and the dashboard labels them so. The orchestrator's
-row in the agent tree shows the session figure.
+Cost is an estimate from token counts and a price table, and it is never a bill. The prices are the ones in
+**Admin > Settings > Model prices**, which start as Anthropic's published list prices; change them there to
+match what you pay. The session's figure covers the orchestrator and every agent, nested ones included; the
+figures for agents are each agent's own use, and the dashboard labels them as estimates. The orchestrator's row
+in the agent tree shows the session figure. A session from a reporter older than 0.12.0 sends no per-model
+tokens, so its cost is the figure Claude Code's own ledger gave, and your prices do not change it.
 A session on a model that is not a Claude model (a local model served by Ollama, for example) has no price, so its cost reads "n/a" and the "Est. cost today" tile leaves it out and says how many sessions it skipped. Context fill is the share of the model's window in use; when Podium does not know a model's window the bar is empty and marked unknown rather than computed against a guessed size. A blowout is a loop that overflowed its window and was
 compacted or stopped.
 
@@ -299,8 +301,17 @@ Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 an
   turns its switch off for everyone. After you close one, Podium says so and links to this tab. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
   default). These settings apply to every browser and stay after a restart.
+- **Model prices.** One row per model with five prices in US dollars per million tokens: input, output, cache
+  read, cache write for 5 minutes and cache write for 1 hour. They start as the prices on Anthropic's pricing
+  sheet (the date is shown). Edit a price and click **Save**; every cost in Podium (the wall, each
+  orchestrator, **Est. cost today** and History) changes to match at once, including for sessions already
+  running, and the change stays after a restart. A changed row shows **Changed** and a **Reset to
+  built-in** button. Haiku 5.5 has a second row for prompts over 100,000 tokens, which cost more. To price a
+  model Podium has no price for, such as a local model, type its id under **Add a model by its id**, fill in
+  the five prices and save; until then its cost reads "n/a". Cache writes use the 5-minute price unless Claude
+  Code reports which writes were 1-hour ones.
 - **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes and changes to
-  the wall settings, with the
+  the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.
 
 A report is accepted when its token belongs to the person whose name it also sends. The server decides who a

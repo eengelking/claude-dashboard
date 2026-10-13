@@ -29,6 +29,21 @@ export interface TokenCounts {
   cacheWrite: number;
 }
 
+/** `cacheWrite` is the 5-minute cache write; `cacheWrite1h` the 1-hour one (0 when the reporter cannot split them). */
+export interface UsageTokens extends TokenCounts {
+  cacheWrite1h: number;
+}
+
+/**
+ * One model's token totals, so the server prices them with the Admin's prices (issue #117). `tier` is `long`
+ * for requests whose prompt (input + cache reads + cache writes) is over 100,000 tokens.
+ */
+export interface ModelUsage {
+  model: string;
+  tier: 'std' | 'long';
+  tokens: UsageTokens;
+}
+
 export interface ContextFill {
   tokens: number | null;
   window: number | null;
@@ -131,6 +146,8 @@ export interface AgentReport {
   context: ContextFill;
   tokens: TokenCounts;
   costUsdEst: number | null;
+  /** Tokens per model and prompt-size tier. Absent when the reporter is too old to send it. */
+  usageByModel?: ModelUsage[];
   skills: string[];
   lastTool: string | null;
   toolCalls: number;
@@ -192,6 +209,8 @@ export interface SessionReport {
   context: ContextFill;
   costUsd: number | null;
   tokens: TokenCounts;
+  /** Tokens per model and tier for the whole session, agents included. Absent when the reporter is too old to send it. */
+  usageByModel?: ModelUsage[];
   rateLimits: RateLimit[];
   blowouts: number;
   plan: Plan | null;
@@ -236,6 +255,37 @@ export function idleOnBackground<T extends { status: string; waitReason: string 
 }
 
 // <protocol:end>
+
+/** USD per million tokens for one model (issue #117). `cacheWrite` is the 5-minute rate, `cacheWrite1h` the 1-hour rate. */
+export interface ModelPriceSet {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheWrite1h: number;
+}
+
+/** One row of Admin > Settings > Model prices: the price in force, and the built-in one it can be reset to. */
+export interface ModelPriceRow {
+  /** The key the row is saved under: a built-in row's key, or an Admin-added model id. */
+  key: string;
+  label: string;
+  /** A row Podium ships a price for; an Admin-added model id is not. */
+  builtin: boolean;
+  /** The Admin changed something on this row. */
+  overridden: boolean;
+  std: ModelPriceSet;
+  /** Prices for a prompt over 100,000 tokens; only some models have a second set. */
+  long?: ModelPriceSet;
+  builtinStd?: ModelPriceSet;
+  builtinLong?: ModelPriceSet;
+}
+
+export interface ModelPricesView {
+  /** The date the built-in table was taken from Anthropic's pricing sheet. */
+  asOf: string;
+  models: ModelPriceRow[];
+}
 
 // ---------------------------------------------------------------------------------------------
 // View types (server -> UI). The UI imports these with `import type`.
@@ -440,6 +490,7 @@ export const LIMITS = {
   planSteps: 100,
   skills: 50,
   toolNames: 100,
+  usageModels: 40,
   backgroundTasks: 20,
   backgroundDescription: 120,
   rateLimits: 10,
@@ -576,6 +627,29 @@ function tokens(v: unknown, path: string): TokenCounts {
   };
 }
 
+/** Absent stays absent: an older reporter sends none, and the server falls back to the cost it was sent. */
+function usageByModel(v: unknown, path: string): { usageByModel?: ModelUsage[] } {
+  if (v === undefined || v === null) return {};
+  return {
+    usageByModel: arr(v, path, LIMITS.usageModels).map((r, i) => {
+      const p = `${path}[${i}]`;
+      const o = obj(r, p);
+      const t = obj(o.tokens, `${p}.tokens`);
+      return {
+        model: str(o.model, `${p}.model`, LIMITS.short),
+        tier: oneOf(o.tier, `${p}.tier`, ['std', 'long'] as const),
+        tokens: {
+          input: int(t.input, `${p}.tokens.input`),
+          output: int(t.output, `${p}.tokens.output`),
+          cacheRead: int(t.cacheRead, `${p}.tokens.cacheRead`),
+          cacheWrite: int(t.cacheWrite, `${p}.tokens.cacheWrite`),
+          cacheWrite1h: t.cacheWrite1h === undefined || t.cacheWrite1h === null ? 0 : int(t.cacheWrite1h, `${p}.tokens.cacheWrite1h`),
+        },
+      };
+    }),
+  };
+}
+
 function context(v: unknown, path: string): ContextFill {
   const o = obj(v, path);
   const percent = numOrNull(o.percent, `${path}.percent`);
@@ -673,6 +747,7 @@ function agent(v: unknown, path: string): AgentReport {
       const c = numOrNull(o.costUsdEst, `${path}.costUsdEst`);
       return c === null ? null : Math.max(0, c);
     })(),
+    ...usageByModel(o.usageByModel, `${path}.usageByModel`),
     skills: arr(o.skills, `${path}.skills`, LIMITS.skills).map((s, i) => str(s, `${path}.skills[${i}]`, LIMITS.short)),
     lastTool: strOrNull(o.lastTool, `${path}.lastTool`, LIMITS.short),
     toolCalls: int(o.toolCalls, `${path}.toolCalls`),
@@ -774,6 +849,7 @@ function session(v: unknown, path: string): SessionReport {
       return c === null ? null : Math.max(0, c);
     })(),
     tokens: tokens(o.tokens, `${path}.tokens`),
+    ...usageByModel(o.usageByModel, `${path}.usageByModel`),
     rateLimits: arr(o.rateLimits, `${path}.rateLimits`, LIMITS.rateLimits).map((r, i) => {
       const p = `${path}.rateLimits[${i}]`;
       const ro = obj(r, p);

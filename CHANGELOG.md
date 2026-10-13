@@ -14,10 +14,15 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- Admin > Settings has a **Model prices** group: one row per model with five prices in US dollars per million tokens (input, output, cache read, 5-minute cache write, 1-hour cache write), starting from Anthropic's pricing sheet of 2026-10-13, with Reset to built-in, models you add by id (so a local model can be priced), and a second set for Haiku 5.5 prompts over 100,000 tokens. A saved price changes every cost at once: the wall, orchestrator and agent costs, the facts bar, Est. cost today, the spend panel and History; it is stored on the server, validated, and written to the admin log. The reporter now sends tokens per model and prompt-size tier (`usageByModel`, session and each agent) and the server prices them, so the session figure is an estimate from your prices instead of Claude Code's ledger when the reporter is 0.12.0 or newer; older reporters keep the cost they send. Mod 0.12.0; the reporter's own fallback prices were refreshed (Sonnet 5.5 cache reads $0.10, Opus 4.1 and 4 at $15/$75, Haiku 3.5). The cost-per-minute sparkline still follows the ledger. (#117)
 - The model chip now shows the version as well as the family: `Sonnet 5.5`, `Opus 4.8`, `Haiku 4.5`, taken from the model id (`claude-sonnet-5-5`), on the wall, rail, history, orchestrator page, agent rows and panel. An alias such as `sonnet` or `opus[1m]` still shows the family alone, a non-Claude model keeps its raw name, and the color stays tied to the family. UI only; no protocol or mod change. (#116)
 - `/podium` now lists the background work the reporter holds, one line per entry (type, status and description), or `Background work: none`. Mod 0.11.2. (#128)
 - Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - The facts bar on the orchestrator page now shows the reporter's version in a **Reporter** cell just before Copy resume command, for example `0.11.0`. A session with no mod says "Settings hooks", and a reporter outside the range the server supports shows `0.3.0 · update` or `0.99.0 · upgrade server` in amber, with the same tooltip as the card's chip. No protocol or mod change. (#124)
+
+### Fixed
+
+- Admin > Settings content sat flush against the edge of its panel, and opening it moved the whole page about 7 px sideways compared with the other Admin tabs, because its long page brought a scrollbar the others did not have. Settings now has the same padding as the other tabs, and every Admin tab reserves the scrollbar's space. (#117)
 
 ### Documentation
 

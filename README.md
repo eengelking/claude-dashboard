@@ -13,9 +13,8 @@ Two dashboards for Claude Code on one machine, served by one local server:
 
 New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
 
-Cost in Podium is an estimate from token counts and a price table (see
-`mod/podium-reporter/hooks/models.ts`), except the orchestrator's own figure, which is the session's
-cost ledger. It is never a bill.
+Cost in Podium is an estimate from token counts and a price table. The table starts as Anthropic's list
+prices and you can change any price in Admin > Settings > Model prices. It is never a bill.
 
 ## Run it
 
@@ -189,7 +188,8 @@ instead. Everything except `token` also has a row in the `/config` menu.
 Only to the server URL above, and only this:
 
 - the session's id, working directory, repository name, git branch and counts (ahead, behind, modified),
-  model, effort, context fill, cost, token counts and rate-limit percentages;
+  model, effort, context fill, cost, token counts (also totalled per model, and per model for each agent, so
+  the server can price them) and rate-limit percentages;
 - the paths of the files the session changed in its repository, each with its status and its added and
   removed line counts (at most 200 files; never file contents or diff text);
 - the plan's step titles (from TaskCreate, TaskUpdate or TodoWrite);
