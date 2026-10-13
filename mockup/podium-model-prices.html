@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: Admin > Settings gets a third group below "The wall". One table, one row per model, five price columns in USD per million tokens. A row the Admin changed is marked and gets a Reset button; Haiku 5.5 carries a second row for prompts over 100,000 tokens. Adding a model that Podium has no price for sits under the table. Same tokens and controls as the people mockup. */
+/* Layout: Admin > Settings gets a third group below "The wall". One table, one row per model, five price columns in USD per million tokens. A row the Admin changed is marked and gets a Reset button; Haiku 5.5 is two peer rows, each named, one per prompt size, joined by a dashed divider. Adding a model that Podium has no price for sits under the table. Same tokens and controls as the people mockup. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
@@ -56,7 +56,7 @@ h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
 .ptab th.n, .ptab td.n { text-align: right; }
 .ptab td { padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
 .ptab tr:last-child td { border-bottom: 0; }
-.ptab tr.sub td.name { padding-left: 26px; color: var(--ink2); }
+.ptab tr.tier.first td { border-bottom: 1px dashed var(--grid); }
 .ptab .name b { font-weight: 600; }
 .ptab .name .hint { display: block; }
 .price { width: 72px; text-align: right; background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 4px 6px; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -109,9 +109,9 @@ h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
               <td><div class="acts"><button class="btn" type="button">Cancel</button><button class="btn pri" type="button">Save</button></div></td></tr>
             <tr><td colspan="7" class="err" role="alert">Output must be zero or more.</td></tr>
             <!-- a model with a second price set -->
-            <tr><td class="name"><b>Haiku 5.5</b><span class="hint">Prompts up to 100,000 tokens</span></td>
+            <tr class="tier first"><td class="name"><b>Haiku 5.5</b><span class="hint">Prompts up to 100,000 tokens</span></td>
               <td class="n"><input class="price" aria-label="Haiku 5.5 input" value="0.1"></td><td class="n"><input class="price" aria-label="Haiku 5.5 output" value="0.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache read" value="0.01"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache write 5 minutes" value="0.125"></td><td class="n"><input class="price" aria-label="Haiku 5.5 cache write 1 hour" value="0.2"></td><td></td></tr>
-            <tr class="sub"><td class="name">Prompts over 100,000 tokens</td>
+            <tr class="tier last"><td class="name"><b>Haiku 5.5</b><span class="hint">Prompts over 100,000 tokens</span></td>
               <td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 input" value="0.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 output" value="2.5"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache read" value="0.05"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache write 5 minutes" value="0.625"></td><td class="n"><input class="price" aria-label="Haiku 5.5 over 100,000 cache write 1 hour" value="1"></td><td></td></tr>
             <tr><td class="name"><b>Haiku 4.5</b></td>
               <td class="n"><input class="price" aria-label="Haiku 4.5 input" value="1"></td><td class="n"><input class="price" aria-label="Haiku 4.5 output" value="5"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache read" value="0.1"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache write 5 minutes" value="1.25"></td><td class="n"><input class="price" aria-label="Haiku 4.5 cache write 1 hour" value="2"></td><td></td></tr>

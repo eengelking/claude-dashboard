@@ -74,7 +74,7 @@
 .adminv .hint.wide { max-width: 72ch; }
 .adminv .pricebox { margin-top: 10px; }
 .adminv .ptab th.n, .adminv .ptab td.n { text-align: right; }
-.adminv .ptab tr.sub td.name { padding-left: 26px; color: var(--ink2); }
+.adminv .ptab tr.tier.first td { border-bottom: 1px dashed var(--grid); }
 .adminv .ptab td.name { min-width: 200px; }
 .adminv .ptab td.name .hint { display: block; }
 .adminv .ptab td.err { padding: 2px 14px 8px; border-bottom: 1px solid var(--grid); }

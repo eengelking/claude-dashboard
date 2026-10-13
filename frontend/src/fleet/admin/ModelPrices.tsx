@@ -112,7 +112,7 @@ function ModelRow({ row, actions, startDirty }: { row: ModelPriceRow; actions: P
   const builtinNote = row.builtin && row.overridden && row.builtinStd ? `Built-in input is ${row.builtinStd.input}` : null;
   return (
     <>
-      <tr>
+      <tr className={long ? "tier first" : undefined}>
         <td className="name">
           <b className={row.builtin ? undefined : "mono"}>{row.label}</b> {tag && <span className="tag">{tag}</span>}
           {builtinNote && <span className="hint">{builtinNote}</span>}
@@ -146,8 +146,11 @@ function ModelRow({ row, actions, startDirty }: { row: ModelPriceRow; actions: P
         </td>
       </tr>
       {long && savedLong && (
-        <tr className="sub">
-          <td className="name">Prompts over 100,000 tokens</td>
+        <tr className="tier last">
+          <td className="name">
+            <b>{row.label}</b>
+            <span className="hint">Prompts over 100,000 tokens</span>
+          </td>
           <PriceInputs label={`${row.label} over 100,000`} draft={long} set={(f, v) => setLong({ ...long, [f]: v })} bad={bad?.tier === "long" ? bad.field : null} changed={savedLong} />
           <td />
         </tr>

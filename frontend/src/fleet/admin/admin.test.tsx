@@ -295,6 +295,13 @@ describe("Model prices (#117)", () => {
     expect(screen.queryByLabelText("Sonnet 5.5 over 100,000 input")).toBeNull();
   });
 
+  it("names both of a model's price tiers the same way, each with its prompt size", async () => {
+    await open();
+    expect(screen.getAllByText("Haiku 5.5")).toHaveLength(2);
+    expect(screen.getByText("Prompts up to 100,000 tokens")).toBeInTheDocument();
+    expect(screen.getByText("Prompts over 100,000 tokens")).toBeInTheDocument();
+  });
+
   it("saves an edited row with all its prices, then marks it changed and offers a reset", async () => {
     const srv = await open();
     expect(screen.queryByRole("button", { name: /Save Sonnet 5.5/ })).toBeNull();
