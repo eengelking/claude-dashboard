@@ -77,15 +77,15 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
           )}
         </div>
       </div>
-      <div className="fact">
+      <div className="fact slim">
         <div className="k">Est. cost</div>
         <div className="v mono"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
       </div>
-      <div className="fact">
+      <div className="fact slim">
         <div className="k">Tokens</div>
         <div className="v mono">{fmtTok(s.tokensTotal)}</div>
       </div>
-      <div className="fact">
+      <div className="fact slim">
         <div className="k">Running for</div>
         <div className="v mono">{fmtDur(sessionElapsedSec(s, now))}</div>
       </div>

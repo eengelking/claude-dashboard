@@ -57,7 +57,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
-- The Agents tile on the orchestrator page no longer wraps "· 0 done" onto its own line and leaves the dot hanging. The tile now reads "N running / N done" on one line that never wraps (the done count in muted ink), with the "N failed" button after it. It sizes to its content, which at "9999 running / 9999 done" with a "9999 failed" button is about 320 px, so the facts bar still fits on one row at normal widths; when the bar is too narrow, whole tiles move to a second row instead of text wrapping inside one. No other tile had a separator inside a wrapping item. (#100)
+- The Agents tile on the orchestrator page no longer wraps "· 0 done" onto its own line and leaves the dot hanging. The tile now reads "N running / N done" on one line that never wraps (the done count in muted ink), with the "N failed" button after it. It sizes to its content (about 320 px at "9999 running / 9999 done" with a "9999 failed" button), and the Est. cost, Tokens and Running for tiles now start at their content width instead of 110 px to leave it room, so the facts bar stays on one row down to about 860 px wide (950 px with the failed button); when the bar is too narrow, whole tiles move to a second row instead of text wrapping inside one. No other tile had a separator inside a wrapping item. (#100)
 - The heartbeat-lost message on a card, and the same notice on the orchestrator page, now reads as one sentence.
   It used to show wide gaps around the time and a gap before the final period (`Last heartbeat 0:34 ago. Goes
   away in 41 s .`), because the alert box spaced every piece of text and every time as a separate item. The

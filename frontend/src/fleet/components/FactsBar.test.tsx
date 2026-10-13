@@ -27,6 +27,12 @@ describe("FactsBar Agents tile (#100)", () => {
     expect(agentsTile([])).toHaveClass("agents");
   });
 
+  it("starts the three short tiles at their content width so the Agents tile gets their spare room", () => {
+    const { container } = render(<FactsBar s={makeSession()} now={Date.now()} onAgent={() => {}} />);
+    const slim = [...container.querySelectorAll(".fact.slim .k")].map((k) => k.textContent);
+    expect(slim).toEqual(["Est. cost", "Tokens", "Running for"]);
+  });
+
   it("keeps the failed button on the same line after the counts", () => {
     const v = agentsTile([makeAgent({ id: "a", status: "running" }), makeAgent({ id: "f", status: "failed" })]).querySelector(".v")!;
     expect(v.textContent).toBe("1 running / 0 done1 failed");
