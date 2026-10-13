@@ -189,13 +189,22 @@ shows as stale. A session the mod reports uses the 15-second default.
 
 Cache warming pings only a session waiting for your next prompt. A permission prompt comes in the middle of a
 turn, after a tool call that has no answer yet, so a request then would not fit the conversation. The card
-still shows the cooling alert while warming is off.
+still shows the cooling alert, with warming off or on, and says that warming only works while a session waits
+for your prompt. That alert never carries the tip and does not count toward the two tips.
 
 ### A session that uses the 1-hour cache shows the 5-minute countdown
 
-The mod learns the cache lifetime only from Claude Code's `PostModelSwitch` hook, which fires when the model
-changes. Until then it assumes 5 minutes, so the alert comes early and a warming ping is sent sooner than
-needed (it still reads the cache).
+Claude Code names the cache lifetime only in its `PostModelSwitch` hook, which fires when the model changes, and
+its usage figures do not split 5-minute from 1-hour cache writes. A resumed session can reveal it: when the gap
+since its last response is between 5 minutes and an hour, whether Claude Code calls the cache expired tells the
+two apart. Otherwise the mod assumes 5 minutes, so the alert comes early and a warming ping is sent sooner than
+needed (it still reads the cache). `/podium` says "Prompt cache lifetime: 5 minutes, assumed" when it is a guess.
+
+### After `/model` the card says the cache is cold
+
+A cache belongs to one model, so switching models forfeits it, and the mod clears the last request time until the
+new model's first request. There is no alert and no warming ping until then. Switching to the same model while the
+cache is warm keeps it.
 
 ### Cache alerts stopped appearing
 

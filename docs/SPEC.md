@@ -269,12 +269,13 @@ claude --plugin-dir mod/podium-reporter -p "…"       # headless; always loads 
 | `session.end` | Session ends, including `/clear` | `reason` (the classic SessionEnd reason, includes `clear`), `sessionId`, `resume.id` | Send a final report with `status: "done"`, `endReason`, `resumeId`. After `reason: "clear"` **no `session.start` fires**: the process continues under a new session id (see 5.8). |
 | `agent.spawn` | An agent is about to start (`agent.spawn` hook also covers `$.agent.spawn`) | `tool_use_id`, `prompt`, `description`, `subagentType`, `model?`, `parentModel`, `parentAgentId?` (absent = main loop), `background`, `fork` (true for a fork), `isTeammate?`, `name?`, `cwd?`, `provider` | Create an agent record. Result of `next(e)` is `{ model, agentId, teammateId? }` or `{ deny }`: key the agent by `agentId`. Effort is **not** on this event. |
 | `tool.call` | Any tool call, main loop or agent | `tool`, `tool_use_id`, the tool's own arguments (`e.command` for Bash, etc.), `agentId?` (set inside an agent). Result: `{ result, text, isError? }` or `{ deny }` | (a) For `tool: "Agent"`, read the requested `effort`, `model`, `subagent_type`, `description`, `name` and key them by `tool_use_id` (this is where effort at spawn is visible). (b) For `tool: "Skill"`, read `skill` and attach to the loop (`agentId` or main). (c) For `TaskCreate`, `TaskUpdate`, `TodoWrite`: update the plan. (d) For every tool: if the result `isError` or is `{ deny }`, record a failure candidate on that loop (section 6.4). |
-| `turn.start` | Main loop turn starts (a subagent's run raises none) | `text`, `turnId` | Mark the orchestrator `running`; remember `turnId`. |
+| `turn.start` | Main loop turn starts (a subagent's run raises none) | `text`, `turnId` | Mark the orchestrator `running`; remember `turnId`; end the cache-warming idle period (6.9). |
 | `turn.step` | One model request of a turn, in any loop. **A streaming event: the hook must be an `async function*`** (`yield* next(e)` forwards and evaluates to the result). | Input: `turnId`, `index`, `model`, `effort?`, `messageCount`, `agentId?`. Result (after the stream): `answer`, `toolUses`, `stopReason`, `usage: { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, model } \| null` | Per loop: record model and **observed effort**; context tokens = `input + cache_read + cache_creation` of the latest step; accumulate token totals and cost; if `stopReason === "model_context_window_exceeded"` or `"compaction"`, record a blowout. |
 | `turn.complete` | A loop's turn ends | `answer`, `durationMs`, `isAborted`, `turnId`, `agentId?`, `usage?`, `reason` (`answer` \| `aborted` \| `refusal` \| `error`), `refusal?` when `reason` is `refusal` | Main loop: status `waiting` (waiting on the user). Agent: `answer` → `done`; `aborted` → `aborted`; `refusal`/`error` → `failed` with a failure record. |
 | `session.compact` | Compaction runs, main or in an agent's own transcript | `trigger` (`manual` \| `auto` \| `plugin` \| `precompute`), `agentId?`, `instructions?`, `messages`. Result: either `{ messages, tokensBefore?, tokensAfter?, usage? }` or `{ skip }` | Await `next(e)`. If the result has `messages` and `trigger === "auto"`: **blowout** with `tokensBefore`, `tokensAfter`, `agentId`. `manual`: log a `compact` event, not a blowout. Ignore `precompute` and `skip`. |
 | `session.attach`, `session.detach` | A client (terminal, phone) joins or leaves the session's roster | `surface`, `clientId`, on detach `reason` | Observe, then re-read `$.session.surfaces()` so `attached` follows at once. Await `next(e)` first and return its result unchanged. |
-| `classic.PostModelSwitch` | `/model` (or a fallback) switched the session's model | `cache_ttl` (`5m` \| `1h`) | The only place the session says which prompt cache lifetime it uses (6.9). Observe, then `next(e)`. |
+| `classic.PostModelSwitch` | `/model` (or a fallback) switched the session's model | `from_model`, `to_model`, `prompt_cache_warm` (whether the old model's cache was warm), `cache_ttl` (`5m` \| `1h`) | The prompt cache lifetime, and a cold cache for the new model (6.9). Observe, then `next(e)`. |
+| `classic.SessionStart` | A session starts, resumes or is forked | on a resume or fork: `seconds_since_last_response`, `prompt_cache_likely_expired` | A resume's gap names the prompt cache lifetime when it is between 5 minutes and an hour (6.9). May come before `session.start`. Observe, then `next(e)`. |
 | `session.measure` | The status line's figures changed | `context: { tokens?, window, percent? }`, `rateLimits: [{ kind, percentUsed, resetsAt? }]`, `cost?: { usd }`, `changed: ('context'\|'rateLimits'\|'cost')[]` | Cheap trigger for main-loop context, session cost and rate limits without polling. Mark state dirty. |
 | `classic.PermissionRequest` | A permission dialog is about to show (**Assumption:** hookable by that name; the doc says every settings-hook event is hookable as `classic.<Event>`) | `tool_name`, `tool_input` | Set orchestrator `status: "waiting"`, `waitReason: "permission"`, `waitNote: "<tool_name>(<short input>)"`. Cleared by the next `tool.call` of that loop or `turn.complete`. |
 | `classic.Notification` | Claude Code raises a notification (needs permission, idle for input) | `message`, `title?`, `notification_type` | Fallback signal for `waiting`. |
@@ -487,13 +488,13 @@ interface Report {
 
 interface CacheReport {                // times in the reporter's clock; the server moves them into its own (7.3)
   lastRequestAt: number | null;         // when the main thread's latest model request started, a warming ping included; null before the first response
-  ttlMs: number;                        // 300000, or 3600000 when the session uses the 1-hour lifetime
+  ttlMs: number;                        // 300000, or 3600000 when the session uses the 1-hour lifetime; 300000 is assumed until Claude Code names it (6.9)
   tokens: number | null;                // the tokens the next request re-sends (the main thread's context)
   coldCostUsd: number | null;           // estimated extra cost of writing them to the cache again instead of reading them; null for a model with no price
   warming: {
     on: boolean;                        // the cacheWarming option, or /podium warm for this session
-    state: 'off' | 'ready' | 'warming' | 'stopped';   // ready: on, the session runs; warming: on and idle; stopped: see stopReason
-    stopReason: 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired' | null;
+    state: 'off' | 'ready' | 'warming' | 'stopped';   // ready: on, the session runs or waits on a permission prompt; warming: on, waiting for a prompt; stopped: see stopReason
+    stopReason: 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired' | 'timeout' | null;
     pings: number; costUsdEst: number;  // pings sent this session, and their estimated cost from the usage each returned
     lastPingAt: number | null;
     untilAt: number | null;             // when warming stops on its own in this idle period; null unless warming
@@ -641,11 +642,23 @@ higher write price) from the start of the last request that read or wrote it. Wh
 expires, and the next request writes the whole conversation to the cache again: about 1.25 times the input
 price instead of the 0.1 times a read costs (0.05 on Opus 5.5, 0.025 on Fable 5.1).
 
-- **What the mod reports.** On every main-thread `turn.step` (no `agentId`) the mod reads `$.clock.now()`
-  before the request and, when a response arrives, records it as `cache.lastRequestAt`. Agents' requests use
-  their own caches and do not count. `ttlMs` is 300,000 unless `classic.PostModelSwitch` said `cache_ttl: '1h'`.
+- **What the mod reports.** On every main-thread `turn.step` (no `agentId`) the mod notes when the request
+  starts and, when a response arrives, records it as `cache.lastRequestAt`. The time is on the engine's clock
+  without a host call per request: `Date.now()` plus the engine clock's offset from it, which the flush reads
+  from `$.clock.now()` every second. Agents' requests use their own caches and do not count.
   `tokens` is the main thread's context; `coldCostUsd` is `tokens × (write − read) / 1e6` from the price table
   (6.5), the write at 2× input for the 1-hour lifetime.
+- **The lifetime.** Usage carries no 5-minute or 1-hour breakdown, on `turn.step` or a fork, and session start does
+  not name the lifetime. `classic.PostModelSwitch` names it (`cache_ttl`), and a resume hints at it:
+  `classic.SessionStart` gives `seconds_since_last_response` and `prompt_cache_likely_expired`, and when the gap is
+  between 5 minutes and an hour (10 seconds' margin at each end), expired means 5 minutes and not expired means
+  1 hour. Otherwise `ttlMs` is 300,000 as an assumption, which `/podium` says ("Prompt cache lifetime: 5 minutes,
+  assumed"). Five minutes is the safe side: assuming an hour for a session on 5 minutes would warn and ping only
+  after its cache was gone, while the other way warns early and pings more often than needed.
+- **A model switch.** A cache belongs to one model, so after `classic.PostModelSwitch` the new model's cache is
+  cold: `lastRequestAt` becomes null (no alert, no ping) until the next request. Claude Code's `prompt_cache_warm`
+  says whether the old model's cache was warm, and the switch forfeits it, so the cache is kept only when
+  `from_model` and `to_model` are the same and it was warm.
 - **Cache warming, off by default.** On with the `cacheWarming` option or `/podium warm on` (kept in `$.store`
   by session id, so it is per session; `/podium warm off` turns it off). The flush timer decides, on the
   engine's clock: while the session waits for a prompt (`waiting` with `waitReason: 'input'`; a permission wait
@@ -654,10 +667,16 @@ price instead of the 0.1 times a read costs (0.05 on Opus 5.5, 0.025 on Fable 5.
   its start becomes `lastRequestAt`, so the next ping is measured from it, and its cost is `costOf` of the usage
   it returned. Warming stops for the idle period, with an activity line (`note`, `data.kind: 'cache-stop'`), when
   the period reaches `cacheWarmingMinutes` (default 30), when a ping gets an API error or is aborted, when there
-  is nothing to fork, or when the cache has already expired. It never retries; the next idle period starts
-  afresh. It stops when the session runs again (its own requests keep the cache warm), when it ends, and after
-  `/clear` (a new id has no request yet). Each ping is an activity line (`note`, `data.kind: 'cache-ping'`, with
-  the tokens read and written and the cost).
+  is nothing to fork, when the cache has already expired, or when a ping has no answer 2 minutes after it went out
+  (`timeout`). It never retries; the next idle period starts afresh. It stops when the session runs again (its own
+  requests keep the cache warm; `turn.start` ends the idle period at once, with any stop and any ping in flight),
+  when it ends, and after `/clear` (a new id has no request yet). An answer to a ping no longer in flight (timed out,
+  or the session ran since) is ignored: it is not counted and its cost is not in the estimate. Each ping is an
+  activity line (`note`, `data.kind: 'cache-ping'`, with the tokens read and written and the cost).
+- **A fork's own step.** If the engine raises `turn.step` for a fork's request (not yet seen, ARCHITECTURE known
+  issue 14), a main-loop step while a ping is in flight and the main loop is idle is taken as the ping's and
+  accounted nowhere: no step, tokens, cost or `lastRequestAt`. The ping's result is the one place it counts. This
+  guard is defensive until the live check confirms the behavior.
 - **The break-even.** A ping costs the read price; a cold start costs about 1.15 times the prompt's input price
   more than a warm request. Pings pay for themselves for about 11 pings at the 0.1 read price (some 46 minutes
   at a ping every 4 minutes), 24 at 0.05 and 49 at 0.025. The 30-minute default stays inside the first.
@@ -823,13 +842,20 @@ A stale session that reports again immediately returns to its stored status. A d
 `SessionView.dropAt` is when a stale session leaves the live set by itself: `max(last_seen + staleAfter, server start if not heard since) + DROP_AFTER_MS` (`staleAfter` is `STALE_AFTER_MS`, or `HOOK_STALE_AFTER_MS` for a hook-only session). The sweep and the view use the same calculation, so a heartbeat-lost card shows a countdown that matches what happens, including after a restart.
 
 **Cooling alerts (issue #27).** A session that waits on the person (`waiting`), whose cache is `cooling` and that
-no warming keeps warm (`warming.on` false) gets an alert, as `SessionView.cache.alert`. The count is for the
+no warming keeps warm gets an alert, as `SessionView.cache.alert`. Warming keeps it warm only while the mod reports
+`warming.state: 'warming'`; warming that is off, has `stopped` (its limit, an API error, a ping with no answer and
+the other stop reasons, 6.9) or is `ready` (on, but the session waits on a permission prompt, which is never pinged)
+does not, so those get the alert. The count is for the
 person, across all sessions, and is kept in `settings.cache_alerts_shown` so a restart does not reset it. Each
 cooling period of a session is one alert, counted by the first sweep that finds an SSE client connected (a
 dashboard that is not open has seen nothing, and one that opens during the period counts it). `PODIUM_CACHE_ALERTS`
-picks the rule: `auto` (default) shows the first two with the tip about cache warming (`'tip'`) and no alert
-after that (`null`), on the reading that a person who saw the tip twice and did not turn warming on does not want
-it; `on` shows every alert, the tip with the first two (`'plain'` after); `off` shows none and counts none.
+picks the rule: `auto` (default) shows the first two with the tip (`'tip'`) and no alert
+after that (`null`), on the reading that a person who saw the tip twice and did nothing to keep the cache warm does
+not want it; `on` shows every alert, the tip with the first two (`'plain'` after); `off` shows none and counts none.
+An alert while warming is on and stopped counts like any other; its tip says that warming stopped and what to do
+instead of how to turn it on (8.1). An alert during a permission wait is never `'tip'` and is not counted: warming
+cannot help it, so ignoring it says nothing about wanting warming. It shows as `'plain'` whenever an alert would
+show at all (`auto` before two are counted, and `on`), and as `null` otherwise.
 `StateBody.cacheAlerts` and every `tick` carry `{ mode, shown, suppressed }`, where `suppressed` is `auto` with two
 shown. `POST /api/fleet/cache-alerts/reset` sets the count to 0 and decides any cooling session again.
 
@@ -881,11 +907,15 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 **Prompt cache (#27).** A card whose `cache.alert` is set while it is `waiting` and `cooling` shows an alert under the
 waiting callout: a clock icon, "Prompt cache expires in 0:42." counting down to `expiresAt` each second, then
 "About 410k tokens would be written to the cache again, roughly $1.97 more." (the cost left out without a price).
-With `alert: 'tip'` it adds how to keep it warm: `/podium warm on` in the session, or the `cacheWarming` option with
-`/plugin configure`. The rail row shows a short chip with the clock and the countdown. While warming is on the card
-has a chip instead: "cache kept warm", "cache warming on" or, in amber, "cache warming stopped", with the pings sent
+With `alert: 'tip'` and warming off it adds how to keep it warm: `/podium warm on` in the session, or the
+`cacheWarming` option with `/plugin configure`. With `alert: 'tip'` and warming on and stopped it says "Cache warming
+has stopped.", the stop reason in words, and that a prompt in that session before the expiry keeps the cache, with
+warming starting again the next time it waits. A session waiting on a permission prompt never gets the tip; its
+alert says "It is waiting on a permission prompt. Cache warming only works while a session waits for your prompt."
+The rail row shows a short chip with the clock and the countdown. While warming is on the card
+has a chip: "cache kept warm", "cache warming on" or, in amber, "cache warming stopped", with the pings sent
 and their estimated cost, and the reason as its tooltip. While `cacheAlerts.suppressed`, a line under the toolbar
-says "Prompt cache alerts are off. They were shown twice and cache warming was not turned on." with one button,
+says "Prompt cache alerts are off. Two were shown and nothing kept those caches warm." with one button,
 "Turn cache alerts back on", which posts the reset. Alerts are in the dashboard only, never a browser or desktop
 notification.
 

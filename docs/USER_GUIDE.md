@@ -271,7 +271,10 @@ cache expires, and your next prompt writes the whole conversation to the cache a
 reading it. About a minute before that happens to a session that is waiting on you, its card shows an alert
 with a countdown and what going cold costs ("About 410k tokens would be written to the cache again, roughly
 $1.97 more."), and its row in the left list shows the countdown too. A running session never alerts: its own
-requests keep the cache warm. When you come back the alert goes away.
+requests keep the cache warm. When you come back the alert goes away. After `/model` the new model starts with a
+cold cache, so there is nothing to warn about until its first request. The mod assumes the 5-minute lifetime
+unless Claude Code says the session uses the 1-hour one (on a model switch, or when you resume it); `/podium`
+shows which.
 
 To keep the cache warm while you are away, turn on cache warming. For one session, type `/podium warm on` in
 it (`/podium warm off` turns it off again). For every session, set the mod's `cacheWarming` option with
@@ -280,12 +283,19 @@ one small request about a minute before the cache would expire: "Reply with OK."
 conversation, read from the cache. The reply is thrown away. Nothing is added to the conversation and nothing
 is typed into your terminal. Each one costs about a tenth of the prompt's input price, so it is not free:
 warming stops after `cacheWarmingMinutes` of waiting (30 by default), when a request gets an API error such
-as a rate limit, and when the session runs, ends or is cleared. The card then shows "cache kept warm" or
-"cache warming stopped", with how many requests were sent and what they cost, and each one is a line in
-Activity. While warming is on there is no cooling alert.
+as a rate limit or no answer within 2 minutes, and when the session runs, ends or is cleared. The card then shows
+"cache kept warm" or "cache warming stopped", with how many requests were sent and what they cost, and each one
+is a line in Activity. While warming keeps the cache warm there is no cooling alert. Once it has stopped, nothing
+keeps the cache warm, so the alert comes back and says why warming stopped; to keep the cache, send that session
+a prompt before it expires.
 
-The first two alerts say how to turn warming on. If you have not turned it on by the third, Podium stops
-showing them, on the guess that you do not want it. The count is across all your sessions and survives a
+Warming works only while a session waits for your next prompt, not while it waits on a permission prompt (a
+request then would not fit the conversation). A session waiting on a permission prompt still gets the alert,
+which says so instead of telling you to turn warming on.
+
+The first two alerts carry a tip: how to turn warming on, or, if it is on and has stopped, what to do. If neither
+helped by the third, Podium stops showing them, on the guess that you do not want them. Alerts during a
+permission wait carry no tip and do not count. The count is across all your sessions and survives a
 restart, and a dashboard that is not open does not count. The wall then says "Prompt cache alerts are off"
 with a **Turn cache alerts back on** button that starts the count over. The server owner can set
 `PODIUM_CACHE_ALERTS=on` to always show them or `off` to never show them.

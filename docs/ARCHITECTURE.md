@@ -63,11 +63,16 @@ modal is portaled to `<body>` inside its own `.podium` wrapper (for the theme to
 capturing key listener keeps Esc and the shell shortcuts from reaching the page behind it.
 
 **The prompt cache** (`mod/podium-reporter/hooks/cache.ts`, `server/src/fleet/cache.ts`, `components/CacheNote.tsx`,
-issue #27, mod 0.11.0). The mod's `turn.step` hook reads `$.clock.now()` before a main-thread request and keeps it
-as `cache.lastRequestAt` once a response arrives; `classic.PostModelSwitch` gives the lifetime. Warming is decided
-on the flush timer by pure rules in `cache.ts` (`decide`, `pingDone`), so it runs on the engine's clock like the
-heartbeat and is testable with `mock.clock`; the ping itself is `$.model.fork`, fired without awaiting, like a
-failure explanation. The server stores the block in `sessions.cache_json` (migration 9) with its times moved by
+issue #27, mod 0.11.0). The mod's `turn.step` hook times a main-thread request as `Date.now()` plus the engine
+clock's offset (`Runtime.clockOffset`, read by each flush from `$.clock.now()`), so the cache runs on the flush
+timer's clock without a host call per request, and keeps it as `cache.lastRequestAt` once a response arrives.
+`classic.PostModelSwitch` gives the lifetime and clears `lastRequestAt` for a new model; `classic.SessionStart`
+on a resume can name the lifetime too (`ttlFromResume`), and may arrive before `session.start` (held in
+`earlyTtl`). Warming is decided on the flush timer by pure rules in `cache.ts` (`decide`, `pingDone`), so it runs
+on the engine's clock like the heartbeat and is testable with `mock.clock`; the ping itself is `$.model.fork`,
+fired without awaiting, like a failure explanation. `inFlightSince` is both the one-at-a-time lock and the ping's
+identity: `decide` gives up on it after `PING_TIMEOUT_MS`, `turn.start` clears it, and `pingDone` ignores an
+answer whose start no longer matches. The server stores the block in `sessions.cache_json` (migration 9) with its times moved by
 `serverTime − sentAt`, keeping the stored time while the reported one is unchanged. `derive.ts` turns it into
 `SessionView.cache`; `Fleet` keeps one episode per cooling period and the count of alerts shown in
 `settings.cache_alerts_shown`. The sweep counts an episode the first time it runs with an SSE client connected,
@@ -255,7 +260,9 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 43. **Cache warming and permission waits (#27).** The issue says a ping goes out while the session is idle. Reading
     chosen: only while it waits for a prompt (`waitReason: 'input'`). A permission wait is mid-turn, with a tool
     call that has no result yet, and a fork appended there would not fit the conversation. The cooling alert still
-    shows for any waiting session with warming off.
+    shows for a permission wait, with warming off or on, but without the tip (turning warming on would not help);
+    it says warming only works while a session waits for a prompt, and it does not count toward the two tips
+    (DECISIONS 22, amended).
 44. **Where an idle period starts (#27).** The flush timer notices the session went idle within a second of the
     turn ending, and the maximum duration counts from then, on the engine's clock. Using the hook's `Date.now()`
     would mix two clocks.
@@ -332,8 +339,11 @@ a reader of the spec would expect:
 13. *(Removed with the usage dashboard, #30. The number is kept so other references stay valid.)*
 14. **Cache warming has not run against the real model yet (#27).** It is tested in the kit with a stand-in for
     `$.model.fork`. Not yet seen for real: that a warmed session's next request reads the cache, whether a fork
-    raises `turn.step` (which would count as a main-thread request and its tokens), and whether its cost is in the
-    session's ledger. The issue's real check (12 minutes idle, warming on and off) records these.
+    raises `turn.step`, whether its cost is in the session's ledger, and how long a ping takes against the 2-minute
+    timeout. A main-loop `turn.step` while a ping is in flight and the main loop is idle is taken as the ping's and
+    not counted; that guard is defensive until the check shows whether the engine raises one. The resume reading of
+    `classic.SessionStart` (which lifetime, and whether it comes before or after `session.start`) is also unseen.
+    The issue's real check (12 minutes idle, warming on and off) records these.
 
 ## Browser checklist (T4.2)
 

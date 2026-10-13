@@ -213,7 +213,7 @@ export interface CacheWarming {
 export interface CacheReport {
   /** When the main thread's latest model request started, a warming ping included; null before the first response. */
   lastRequestAt: number | null;
-  /** How long a cache entry lives from the start of the request that read or wrote it: 300,000, or 3,600,000 when the session uses the 1-hour lifetime. */
+  /** How long a cache entry lives from the start of the request that read or wrote it: 300,000, or 3,600,000 when the session uses the 1-hour lifetime. 300,000 is assumed until Claude Code names it (SPEC 6.9). */
   ttlMs: number;
   /** The tokens the next request re-sends (the main thread's context); a cold cache writes them again. null when unknown. */
   tokens: number | null;
