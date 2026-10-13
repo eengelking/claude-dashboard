@@ -68,9 +68,8 @@ body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
 .wait.you { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .wait.bg { border-color: color-mix(in srgb, var(--deleg) 40%, transparent); background: color-mix(in srgb, var(--deleg) 10%, transparent); color: var(--ink); }
 .wait small { display: block; color: var(--ink2); font-size: 11.5px; margin-top: 2px; font-family: var(--font-mono); }
-/* Orchestrator callout: two lines at most, then an ellipsis. */
-.wait.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
-.wait.clamp small { display: inline; }
+/* Orchestrator callout: two rows. Row 1 is the line, row 2 the task description, which ends in an ellipsis when it runs out of room. */
+.wait.rows > span, .wait.rows > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run { color: var(--good); }
 
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
@@ -131,7 +130,7 @@ body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
     <li>With several kinds, the text lists the counts: "Waiting for 1 background shell and 1 background agent to finish". The tooltip lists each task with a short description.</li>
     <li>A scheduled wake-up reads "Waiting for a scheduled wake-up at 14:30".</li>
     <li>The card says only the short line. It never carries a task description, so a long one cannot wrap it.</li>
-    <li>The orchestrator callout adds the task description after the line, in two lines at most, and ends in an ellipsis when it runs out of room. The full text is in the tooltip.</li>
+    <li>The orchestrator callout adds the task description after the line, on its own row below it, and ends in an ellipsis when it runs out of room. The full text is in the tooltip.</li>
     <li>A shell's command is shortened and redacted before it leaves the machine, and is never sent whole.</li>
     <li>The blue ring pulses like the green running dot, on the same shared beat. It stops with reduced motion.</li>
     <li>The moment the work ends, the wording goes back to normal ("Waiting for your input", or running when a new turn starts).</li>
@@ -158,7 +157,7 @@ function render(key) {
   $("topwait").textContent = youCount + " waiting on you";
   $("shown").textContent = "2 shown";
   $("callout").innerHTML = quiet
-    ? '<div class="wait bg clamp" title="' + esc(c.line + ' ' + detail) + '">' + esc(c.line) + ' <small>' + esc(detail) + '</small></div>'
+    ? '<div class="wait bg rows" title="' + esc(c.line + ' ' + detail) + '"><span>' + esc(c.line) + '</span><small>' + esc(detail) + '</small></div>'
     : '<div class="wait you">Waiting for your input.</div>';
   $("tip").innerHTML = quiet ? esc(c.tip[0]) + '<small>' + esc(detail) + '</small>' : 'Waiting for your input.<small>Hover shows nothing extra for a wait on you.</small>';
   $("rail").innerHTML =
