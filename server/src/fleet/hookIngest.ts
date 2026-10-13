@@ -38,7 +38,8 @@ function backgroundOf(payload: Record<string, unknown>): BackgroundWait | null {
     const status = str(t.status, 40) ?? 'running';
     if (IN_FLIGHT_DONE.test(status)) continue;
     const type = BACKGROUND_TYPES[(str(t.type, 40) ?? '').toLowerCase()] ?? 'other';
-    const word = str(t.command, 400)?.split(/\s+/)[0]?.split('/').pop() ?? null;
+    // The first word that is not an NAME=value assignment, so an inline secret is never kept.
+    const word = str(t.command, 400)?.split(/\s+/).find((w) => w !== '' && !w.includes('='))?.split('/').pop() || null;
     tasks.push({ type, description: str(t.description, 120) ?? word ?? type, status });
   }
   for (const c of list(payload.session_crons).slice(0, Math.max(0, 20 - tasks.length))) {
@@ -162,8 +163,10 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
       session.waitNote = null;
       break;
     case 'Stop': {
+      const before = session.background ? backgroundSummary(session.background) : null;
       idle(backgroundOf(payload));
-      if (session.background) ev('wait', `waiting on background: ${backgroundSummary(session.background)}`);
+      // One row each time what it waits on changes, not one per Stop (as the mod does).
+      if (session.background && backgroundSummary(session.background) !== before) ev('wait', `waiting on background: ${backgroundSummary(session.background)}`);
       break;
     }
     case 'SubagentStart': {
@@ -221,6 +224,8 @@ export function hookToReport(payload: unknown, stored: { session?: SessionRow; a
       // are heartbeats.
       const reason: SessionReport['waitReason'] = /permission/i.test(type) ? 'permission' : /idle|elicitation|input/i.test(type) ? 'input' : null;
       if (!reason) break;
+      // The idle prompt while background work or a wake-up is in flight is not a wait on the person.
+      if (reason === 'input' && session.status === 'waiting' && session.background) break;
       session.status = 'waiting';
       session.waitReason = reason;
       session.waitNote = message;

@@ -373,6 +373,12 @@ describe('background work (#119)', () => {
     expect(r.session.background!.tasks[0]!.description.length).toBeLessThanOrEqual(120)
   })
 
+  test('a task with no description is never named by an inline NAME=value secret', () => {
+    const r = buildReport(setBackground(idle(), { tasks: [{ ...shell, description: '', command: 'API_KEY=sk-live-123 /usr/local/bin/node build.js' }], crons: [] }, T0 + 2), [], meta)
+    expect(r.session.background!.tasks[0]!.description).toBe('node')
+    expect(JSON.stringify(r.session.background)).not.toContain('sk-live-123')
+  })
+
   test('background agents, monitors and workflows are counted by their type', () => {
     const tasks = [shell, { id: 'b2', type: 'subagent', status: 'running', description: 'Survey adapters' }, { id: 'b3', type: 'monitor', status: 'running', description: 'tail the log' }, { id: 'b4', type: 'workflow', status: 'running', description: 'release' }]
     const r = buildReport(setBackground(idle(), { tasks, crons: [] }, T0 + 2), [], meta)

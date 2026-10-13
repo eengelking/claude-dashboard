@@ -34,9 +34,20 @@ export function nextCronAt(schedule: string, from: number): number | null {
   const t = new Date(from);
   t.setSeconds(0, 0);
   t.setMinutes(t.getMinutes() + 1);
+  // Bounded by a year of steps; each step is at most a minute, usually a day or an hour.
   for (let i = 0; i < 366 * 24 * 60; i++) {
     const dayOk = domAny && dowAny ? true : domAny ? dow.has(t.getDay()) : dowAny ? dom.has(t.getDate()) : dom.has(t.getDate()) || dow.has(t.getDay());
-    if (month.has(t.getMonth() + 1) && dayOk && hour.has(t.getHours()) && minute.has(t.getMinutes())) return t.getTime();
+    // Skip a whole day or hour that cannot match instead of walking it a minute at a time.
+    if (!month.has(t.getMonth() + 1) || !dayOk) {
+      t.setDate(t.getDate() + 1);
+      t.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!hour.has(t.getHours())) {
+      t.setHours(t.getHours() + 1, 0, 0, 0);
+      continue;
+    }
+    if (minute.has(t.getMinutes())) return t.getTime();
     t.setMinutes(t.getMinutes() + 1);
   }
   return null;

@@ -346,7 +346,7 @@ export function backgroundSummary(b: BackgroundWait): string {
 
 /**
  * The Stop hook's list of work still in flight. Finished tasks are dropped. A shell's command never leaves the
- * machine: a task with no description is named by the first word of its command, redacted, and no more.
+ * machine: a task with no description is named by the first word of its command (never an NAME=value assignment), and no more.
  */
 export function setBackground(s: SessionState, i: BackgroundInput, now: number): SessionState {
   const tasks: BackgroundTask[] = [];
@@ -354,7 +354,8 @@ export function setBackground(s: SessionState, i: BackgroundInput, now: number):
     const status = t.status || 'running';
     if (TASK_DONE.test(status) || tasks.length >= MAX_BACKGROUND_TASKS) continue;
     const type = TASK_KINDS[(t.type ?? '').toLowerCase()] ?? 'other';
-    const word = (t.command ?? '').trim().split(/\s+/)[0]?.split('/').pop() ?? '';
+    // The first word that is not an NAME=value assignment, so an inline secret (API_KEY=...) is never kept.
+    const word = (t.command ?? '').trim().split(/\s+/).find((w) => w !== '' && !w.includes('='))?.split('/').pop() ?? '';
     tasks.push({ type, description: clip((t.description ?? '').replace(/\s+/g, ' ').trim() || word || type, BACKGROUND_DESC), status: clip(status, 40) });
   }
   const times: number[] = [];

@@ -237,4 +237,28 @@ describe('POST /api/fleet/hook', () => {
     expect(v.waitReason).toBeNull();
     expect(v.background!.tasks).toMatchObject([{ type: 'wakeup', description: 'check the deploy' }]);
   });
+
+  it('never names a background task by an inline NAME=value secret, and does not repeat a feed row for an unchanged Stop', async () => {
+    const { app, fleet, tick } = setup();
+    const stop = { ...P.stop, background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: '', command: 'API_KEY=sk-live-123 /usr/bin/node build.js' }] };
+    for (const p of [P.start, P.prompt, stop, stop]) {
+      tick(1000);
+      await request(app).post('/api/fleet/hook').send(p);
+    }
+    const v = fleet.view('hk-1')!;
+    expect(v.background!.tasks[0]!.description).toBe('node');
+    expect(JSON.stringify(v)).not.toContain('sk-live-123');
+    expect(fleet.events({ sessionId: 'hk-1', limit: 50 }).filter((e) => e.text.startsWith('waiting on background')).length).toBe(1);
+  });
+
+  it('an idle-prompt Notification while background work is in flight is not a wait on the person', async () => {
+    const { app, fleet, tick } = setup();
+    const stop = { ...P.stop, background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'nightly build' }] };
+    for (const p of [P.start, P.prompt, stop, { ...base, hook_event_name: 'Notification', message: 'Claude is waiting for your input', notification_type: 'idle_prompt' }]) {
+      tick(1000);
+      await request(app).post('/api/fleet/hook').send(p);
+    }
+    expect(fleet.view('hk-1')).toMatchObject({ status: 'waiting', waitReason: null });
+    expect(fleet.view('hk-1')!.background).not.toBeNull();
+  });
 });
