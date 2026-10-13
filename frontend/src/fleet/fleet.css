@@ -120,13 +120,18 @@ body.podium-resizing .podium .cols { transition: none; }
 
 /* live dot + status */
 .podium .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; display: inline-block; }
-.podium .dot.running { background: var(--good); animation: podium-pulse 1.8s ease-out infinite; }
+.podium .dot.running { background: var(--good); position: relative; }
+/* Stepped on purpose: a smooth infinite animation makes the browser draw a frame on every display
+   refresh (120+ a second) for as long as the tab is open; a few steps a second costs far less GPU.
+   The pulse ring is a pseudo-element scaled and faded on the compositor. Animating box-shadow instead
+   repaints every running dot on every frame, which keeps the GPU busy for as long as the tab is open. */
+.podium .dot.running::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--good); opacity: 0; pointer-events: none; will-change: transform, opacity; animation: podium-pulse 1.8s steps(4) infinite; }
 .podium .dot.waiting { background: transparent; border: 2px solid var(--warn); }
 .podium .dot.stale { background: var(--serious); }
 .podium .dot.done { background: var(--axis); }
 .podium .dot.failed { background: var(--crit); }
 .podium .dot.bad { background: var(--crit); }
-@keyframes podium-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } 70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent); } }
+@keyframes podium-pulse { 0% { transform: scale(1); opacity: .55; } 70% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(1); opacity: 0; } }
 .podium .st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .podium .st.running { color: var(--good-text); } .podium .st.done { color: var(--muted); } .podium .st.failed, .podium .st.aborted { color: var(--crit-text); }
 .podium .st.aborted { color: var(--muted); }
@@ -175,7 +180,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .eff-max b:nth-child(4).on { background: var(--eff-r4); }
 .podium .eff-max b:nth-child(5).on { background: var(--eff-r5); }
 .podium .bar { height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
-.podium .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink2); transition: width .8s linear; }
+.podium .bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink2); }
 .podium .bar.ctx > i { background: var(--sonnet); }
 .podium .bar.hot > i { background: var(--warn); }
 .podium .bar.plan > i { background: var(--good); }
@@ -217,7 +222,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .crew .a.failed { outline: 2px solid var(--crit); outline-offset: -1px; }
 .podium .crew .a.queued { background: transparent; border: 1.5px dashed var(--c); }
 .podium .crew .a.fork { border-radius: 50%; }
-.podium .crew .a.running { animation: podium-blink 1.6s ease-in-out infinite; }
+.podium .crew .a.running { will-change: opacity; animation: podium-blink 1.6s steps(2) infinite; }
 .podium .crew .cnt { margin-left: 6px; color: var(--ink2); font-size: 12px; }
 @keyframes podium-blink { 50% { opacity: .55; } }
 .podium .card .foot { display: flex; justify-content: space-between; align-items: end; margin-top: 10px; color: var(--ink2); font-size: 12px; gap: 8px; }
@@ -266,7 +271,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .step.done .ic { background: var(--good); border-color: var(--good); color: var(--on-good); }
 .podium .step.done .tx { color: var(--muted); }
 .podium .step.active .ic { border-color: var(--good); }
-.podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); animation: podium-blink 1.4s ease-in-out infinite; }
+.podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); will-change: opacity; animation: podium-blink 1.4s steps(2) infinite; }
 .podium .step.blocked .ic { border-color: var(--warn); }
 .podium .step .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .podium .step .ow { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
@@ -436,6 +441,8 @@ body.podium-resizing .podium .cols { transition: none; }
   .podium .hc { flex: 1; width: auto; }
   .podium .top, .podium .banner, .podium .main { padding-inline: 16px; }
 }
+/* Nothing needs to move while the tab is hidden. */
+.podium.paused *, .podium.paused *::before, .podium.paused *::after { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   .podium *, .podium *::before, .podium *::after { animation: none !important; transition: none !important; }
 }

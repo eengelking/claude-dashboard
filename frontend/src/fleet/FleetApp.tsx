@@ -18,6 +18,7 @@ import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
 import { useHotkeys } from "./useHotkeys";
 import { useIdle } from "./useIdle";
+import { usePageVisible } from "./usePageVisible";
 import { usePanes } from "./usePanes";
 import { APP_NAME, type ActivityView } from "./types";
 import type { FleetState } from "./store";
@@ -75,6 +76,7 @@ export function FleetView({ state }: { state: FleetState }) {
   const resize = useResizable(container);
   const panes = usePanes();
   const idle = useIdle(panes.wall);
+  const visible = usePageVisible();
   const fullscreen = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -218,7 +220,7 @@ export function FleetView({ state }: { state: FleetState }) {
   });
 
   return (
-    <div className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}`}>
+    <div className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}${visible ? "" : " paused"}`}>
       {panes.collapsed.top && (
         <div className="wall-ctl" data-wall-control>
           {wallButton}

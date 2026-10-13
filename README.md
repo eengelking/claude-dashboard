@@ -207,6 +207,7 @@ npm run typecheck:mod  # the mod against Claude Code's plugin API declarations
 npm run build          # UI, server and scripts type-check and build
 npm run podium:smoke   # end to end: server, simulator, SSE directly and through Vite
 scripts/podium-soak.sh --help   # load and restart check
+scripts/gpu-sample.sh --help    # sample the Mac's GPU load while a tab is open (macOS)
 ```
 
 ## Docs and project files
