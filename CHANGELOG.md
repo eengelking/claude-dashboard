@@ -14,6 +14,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- The model chip now shows the version as well as the family: `Sonnet 5.5`, `Opus 4.8`, `Haiku 4.5`, taken from the model id (`claude-sonnet-5-5`), on the wall, rail, history, orchestrator page, agent rows and panel. An alias such as `sonnet` or `opus[1m]` still shows the family alone, a non-Claude model keeps its raw name, and the color stays tied to the family. UI only; no protocol or mod change. (#116)
 - `/podium` now lists the background work the reporter holds, one line per entry (type, status and description), or `Background work: none`. Mod 0.11.2. (#128)
 - Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - The facts bar on the orchestrator page now shows the reporter's version in a **Reporter** cell just before Copy resume command, for example `0.11.0`. A session with no mod says "Settings hooks", and a reporter outside the range the server supports shows `0.3.0 · update` or `0.99.0 · upgrade server` in amber, with the same tooltip as the card's chip. No protocol or mod change. (#124)

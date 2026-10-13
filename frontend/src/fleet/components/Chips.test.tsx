@@ -45,6 +45,19 @@ describe("EffortMeter", () => {
   });
 });
 
+describe("the model chip shows the version (#116)", () => {
+  it("says Sonnet 5.5 for a versioned id and keeps the full id in the tooltip and the family color", () => {
+    render(<ModelChip family="sonnet" model="claude-sonnet-5-5" />);
+    const chip = screen.getByText("Sonnet 5.5").closest(".chip")!;
+    expect(chip).toHaveAttribute("title", "claude-sonnet-5-5");
+  });
+
+  it("says only Sonnet for an alias", () => {
+    render(<ModelChip family="sonnet" model="sonnet" />);
+    expect(screen.getByText("Sonnet").closest(".chip")).toHaveAttribute("title", "sonnet");
+  });
+});
+
 describe("a model that is not a Claude model (#66)", () => {
   it("labels the chip with the raw model name and says it is not a Claude model", () => {
     render(<ModelChip family="other" model="llama3.1:8b" />);

@@ -32,7 +32,7 @@ describe("history page", () => {
     expect(await screen.findByRole("button", { name: "api-refactor" })).toBeInTheDocument();
     expect(calls[0]).toBe("/api/fleet/history?day=2026-10-10");
     const cells = [...document.querySelectorAll("tbody td")].map((td) => td.textContent);
-    expect(cells).toEqual(["api-refactor", "~/dev/billing", "Opus", expect.any(String), "1h 00m", "$12.84", "2", "3", "prompt_input_exit"]);
+    expect(cells).toEqual(["api-refactor", "~/dev/billing", "Opus 5.5", expect.any(String), "1h 00m", "$12.84", "2", "3", "prompt_input_exit"]);
     expect(screen.getByText("1 sessions ended")).toBeInTheDocument();
   });
 

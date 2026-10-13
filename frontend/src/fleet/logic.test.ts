@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, sessionCounts, orchestratorCostUsd, sessionAgentSec, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
+import { familyName, modelVersion, delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, sessionCounts, orchestratorCostUsd, sessionAgentSec, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -315,5 +315,43 @@ describe("agent time is the orchestrator's time plus every agent's (#109)", () =
   it("runs a running agent to now and freezes a done session at its last report", () => {
     const s = makeSession({ status: "done", startedAt: 0, lastSeenAt: 50_000, agents: [makeAgent({ startedAt: 10_000, endedAt: null })] });
     expect(sessionAgentSec(s, 60_000)).toBe(50 + 50);
+  });
+});
+
+describe("model version (issue #116)", () => {
+  it.each([
+    ["claude-sonnet-5-5", "5.5"],
+    ["claude-opus-5-5", "5.5"],
+    ["claude-haiku-5-5", "5.5"],
+    ["claude-fable-5-1", "5.1"],
+    ["claude-opus-4-8", "4.8"],
+    ["claude-sonnet-5", "5"],
+    ["claude-haiku-4-5", "4.5"],
+    ["claude-3-5-sonnet-20241022", "3.5"],
+    ["claude-sonnet-4-5-20250929", "4.5"],
+    ["claude-opus-4-20250514", "4"],
+    ["claude-sonnet-5-5[1m]", "5.5"],
+    ["us.anthropic.claude-sonnet-5-5-v1:0", "5.5"],
+    ["Claude-Opus-4-8", "4.8"],
+  ])("reads %s as version %s", (id, v) => expect(modelVersion(id)).toBe(v));
+
+  it.each(["sonnet", "opus[1m]", "opusplan", "haiku", "fable", "claude-sonnet", "claude", "", null, undefined])(
+    "never invents a version for %s",
+    (id) => expect(modelVersion(id)).toBeNull(),
+  );
+
+  it("gives no version to a non-Claude model, even one with a family word and digits", () => {
+    expect(modelVersion("my-sonnet-5-finetune:latest")).toBeNull();
+    expect(modelVersion("llama3.1:8b")).toBeNull();
+  });
+
+  it("labels family and version, family alone for an alias, the raw name for a non-Claude model", () => {
+    expect(familyName("sonnet", "claude-sonnet-5-5")).toBe("Sonnet 5.5");
+    expect(familyName("opus", "claude-opus-4-8")).toBe("Opus 4.8");
+    expect(familyName("sonnet", "sonnet")).toBe("Sonnet");
+    expect(familyName("opus", "opus[1m]")).toBe("Opus");
+    expect(familyName("sonnet", null)).toBe("Sonnet");
+    expect(familyName("other", "llama3.1:8b")).toBe("llama3.1:8b");
+    expect(familyName("other", null)).toBe("unknown");
   });
 });
