@@ -23,7 +23,8 @@ while getopts "u:m:h-" opt; do
   case "$opt" in
     u) url=$OPTARG ;;
     m) min=$OPTARG ;;
-    *) usage; exit 0 ;;
+    h|-) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
   esac
 done
 

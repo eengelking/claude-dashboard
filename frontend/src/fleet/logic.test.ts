@@ -217,7 +217,8 @@ describe("Tokens figure (issue #96)", () => {
   });
 
   it("is zero while an agent has not reported its context yet", () => {
-    expect(agentTokens(makeAgent({ context: { tokens: null, window: null, percent: null }, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }))).toBe(0);
+    // Output already written must not show on its own as a Tokens figure.
+    expect(agentTokens(makeAgent({ context: { tokens: null, window: null, percent: null }, tokens: { input: 0, output: 8_133, cacheRead: 0, cacheWrite: 0 } }))).toBe(0);
   });
 
   it("adds the orchestrator and its agents, so the rows add up", () => {

@@ -27,7 +27,8 @@ while getopts "s:u:n:ah-" opt; do
     u) url=$OPTARG ;;
     n) count=$OPTARG ;;
     a) all=1 ;;
-    *) usage; exit 0 ;;
+    h|-) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
   esac
 done
 

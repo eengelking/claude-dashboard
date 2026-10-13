@@ -249,7 +249,7 @@ const AGENT_STATUS_ORDER: Record<AgentView["status"], number> = { running: 0, fa
 
 /** What Claude Code's own agent line shows: the context at the agent's latest request plus every output token it has written so far. Not a running total of input, which would count every cache re-read again. */
 export function agentTokens(a: AgentView): number {
-  return (a.context.tokens ?? 0) + a.tokens.output;
+  return a.context.tokens === null ? 0 : a.context.tokens + a.tokens.output;
 }
 
 /** The orchestrator's context plus each agent's, so the rows of one session add up. */
