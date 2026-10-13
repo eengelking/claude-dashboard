@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { FactsBar } from "./FactsBar";
 import { makeAgent, makeSession } from "../fixtures";
+import { versionNote } from "./SessionCard";
 
 afterEach(cleanup);
 
@@ -27,10 +28,10 @@ describe("FactsBar Agents tile (#100, #109)", () => {
     expect(agentsTile([])).toHaveClass("agents");
   });
 
-  it("starts the three short tiles at their content width so the Agents tile gets their spare room", () => {
+  it("starts the short tiles at their content width so the Agents tile gets their spare room", () => {
     const { container } = render(<FactsBar s={makeSession()} now={Date.now()} onAgent={() => {}} />);
     const slim = [...container.querySelectorAll(".fact.slim .k")].map((k) => k.textContent);
-    expect(slim).toEqual(["Est. cost", "Tokens", "Running for", "Agent time"]);
+    expect(slim).toEqual(["Est. cost", "Tokens", "Running for", "Agent time", "Reporter"]);
   });
 
   it("keeps the failed button on the same line after the counts", () => {
@@ -76,5 +77,39 @@ describe("FactsBar cells (#109)", () => {
     const { container } = render(<FactsBar s={makeSession()} now={Date.now()} onAgent={() => {}} />);
     expect(cell(container, "Context")).toBeUndefined();
     expect(container.querySelector(".facts .bar")).toBeNull();
+  });
+});
+
+describe("FactsBar Reporter cell (#124)", () => {
+  const reporter = (over: Parameters<typeof makeSession>[0]) => {
+    const { container } = render(<FactsBar s={makeSession(over)} now={Date.now()} onAgent={() => {}} />);
+    const cells = [...container.querySelectorAll(".fact")];
+    return { cells, cell: cells.find((f) => f.querySelector(".k")?.textContent === "Reporter") as HTMLElement | undefined };
+  };
+
+  it("shows the reporter's version", () => {
+    const { cell } = reporter({ reporterVersion: "0.11.0", compat: "ok" });
+    expect(cell!.querySelector(".v")!.textContent).toBe("0.11.0");
+  });
+
+  it("says Settings hooks for a session with no mod", () => {
+    const { cell } = reporter({ reporterVersion: null });
+    expect(cell!.querySelector(".v")!.textContent).toBe("Settings hooks");
+    expect(cell!.getAttribute("title")).toMatch(/settings hooks/i);
+  });
+
+  it.each([["outdated", "0.3.0 · update"], ["newer", "0.99.0 · upgrade server"]] as const)("says so when the reporter is %s, in the card chip's words and tooltip", (compat, text) => {
+    const v = compat === "outdated" ? "0.3.0" : "0.99.0";
+    const s = makeSession({ reporterVersion: v, compat });
+    const { container } = render(<FactsBar s={s} now={Date.now()} onAgent={() => {}} />);
+    const cell = [...container.querySelectorAll(".fact")].find((f) => f.querySelector(".k")?.textContent === "Reporter")!;
+    expect(cell.querySelector(".v")!.textContent).toBe(text);
+    expect(cell.getAttribute("title")).toBe(versionNote(s)!.text);
+  });
+
+  it("sits just before Copy resume command, which stays the last cell", () => {
+    const { cells } = reporter({ reporterVersion: "0.11.0" });
+    expect(cells[cells.length - 1].querySelector("button")!.textContent).toBe("Copy resume command");
+    expect(cells[cells.length - 2].querySelector(".k")!.textContent).toBe("Reporter");
   });
 });

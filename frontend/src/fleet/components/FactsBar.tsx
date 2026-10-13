@@ -4,6 +4,7 @@ import { AGENT_TIME_HINT, AGENTS_HINT, COST_HINT_SESSION, sessionAgentSec, sessi
 import type { SessionView } from "../types";
 import { Cost } from "./Chips";
 import { IconX } from "./Icons";
+import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
 export const COPIED_MS = 1600;
 
@@ -44,6 +45,25 @@ export function CopyResume({ command }: { command: string }) {
   );
 }
 
+/** The reporter mod's version; "Settings hooks" when there is no mod; the card chip's wording and tooltip when the server places it out of range. */
+function ReporterFact({ s }: { s: SessionView }) {
+  const note = versionNote(s);
+  if (s.reporterVersion === null && !note) {
+    return (
+      <div className="fact slim" title={HOOKS_NOTE}>
+        <div className="k">Reporter</div>
+        <div className="v" style={{ color: "var(--muted)", fontWeight: 500 }}>Settings hooks</div>
+      </div>
+    );
+  }
+  return (
+    <div className="fact slim" title={note?.text ?? "The podium-reporter mod's version in this session"}>
+      <div className="k">Reporter</div>
+      <div className="v mono" style={note ? { color: "var(--warn)" } : undefined}>{note ? note.label : s.reporterVersion}</div>
+    </div>
+  );
+}
+
 export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onAgent: (id: string) => void }) {
   const c = sessionCounts(s);
   const firstFail = s.agents.find((a) => a.status === "failed");
@@ -78,6 +98,7 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
         <div className="k">Agent time</div>
         <div className="v mono">{fmtDur(sessionAgentSec(s, now))}</div>
       </div>
+      <ReporterFact s={s} />
       <CopyResume command={s.resumeCommand} />
     </div>
   );

@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Added
+
+- The facts bar on the orchestrator page now shows the reporter's version in a **Reporter** cell just before Copy resume command, for example `0.11.0`. A session with no mod says "Settings hooks", and a reporter outside the range the server supports shows `0.3.0 · update` or `0.99.0 · upgrade server` in amber, with the same tooltip as the card's chip. No protocol or mod change. (#124)
+
 ### Documentation
 
 - Mockup for a session that is idle on a background process or a scheduled wake-up (#119): it says what it is waiting on, in blue, and is not counted as waiting on you.

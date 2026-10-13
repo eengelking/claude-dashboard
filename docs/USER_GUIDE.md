@@ -191,7 +191,9 @@ Click a card or a rail item. You get the session's goal and working directory, t
 minute (tokens per second, the largest context fill in any loop with blowout markers, and agents running),
 and a bar of facts: agents (the orchestrator counts as one; a red "N failed" button opens the first
 failure), estimated cost for the whole session, tokens, running time, and agent time (the orchestrator's time
-plus every agent's, which is longer than running time when agents run at once).
+plus every agent's, which is longer than running time when agents run at once), and the reporter: the
+version of the podium-reporter mod the session runs, "Settings hooks" when it has no mod, or the version in
+amber with "update" or "upgrade server" when the server says it is outside the supported range.
 
 Below that, on the left, is the plan, as a checklist with the agent that owns each step, with a **Files** tab
 beside it. Files lists every file the session changed since it started, committed or not, each with how many

@@ -1,0 +1,98 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Podium Facts Bar Reporter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Issue #124: the orchestrator page's facts bar gains a slim "Reporter" cell just before the last cell,
+   Copy resume command. It shows the reporter mod's version, "Settings hooks" for a session with no mod,
+   or the card's out-of-range chip wording (versionNote) with the same tooltip. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --axis: #383835; --border: rgba(255,255,255,0.10); --sel: rgba(255,255,255,0.08);
+  --warn: #fab219; --crit: #d03b3b;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --sel: rgba(11,11,11,0.07); color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --sel: rgba(11,11,11,0.07); color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); }
+h1 { font-size: 16px; margin: 0 0 4px; }
+p.lede { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+h2 { font-size: 12px; font-weight: 600; color: var(--ink2); margin: 22px 0 8px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.btn { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); font: 500 12px var(--font-ui); }
+.frame { max-width: 1100px; }
+.frame.narrow { max-width: 560px; }
+.facts { display: flex; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
+.fact { background: var(--surface); padding: 8px 12px; flex: 1 1 110px; min-width: 0; }
+.fact .k { color: var(--muted); font-size: 11.5px; }
+.fact .v { font-size: 14px; font-weight: 600; margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.fact.agents { flex: 0 0 auto; padding: 8px 24px 8px 14px; min-width: 190px; }
+.fact.slim { flex: 1 1 auto; }
+.fact.agents .v { flex-wrap: nowrap; white-space: nowrap; gap: 10px; }
+.fact .n-done { color: var(--muted); font-weight: 500; }
+.fact.act { flex: 0 0 auto; display: flex; align-items: center; padding: 8px 12px; }
+.fact .v.warn { color: var(--warn); }
+.fact .v.quiet { color: var(--muted); font-weight: 500; }
+.hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 70ch; }
+</style>
+<h1>Facts bar: Reporter cell</h1>
+<p class="lede">A slim cell, label above and value below like Agent time, sits just before <b>Copy resume command</b>, which stays the last cell. Hover for the tooltip. Three states at 1440 px, then the narrow wrap.</p>
+
+<h2>1. Mod session, version in range</h2>
+<div class="frame"><div class="facts">
+  <div class="fact agents"><div class="k">Agents</div><div class="v mono"><span>3 running</span><span class="n-done">/ 5 done</span></div></div>
+  <div class="fact slim"><div class="k">Est. cost</div><div class="v mono">$4.12</div></div>
+  <div class="fact slim"><div class="k">Tokens</div><div class="v mono">3.8M</div></div>
+  <div class="fact slim"><div class="k">Running for</div><div class="v mono">42m 10s</div></div>
+  <div class="fact slim"><div class="k">Agent time</div><div class="v mono">1h 12m</div></div>
+  <div class="fact slim" title="The podium-reporter mod's version in this session"><div class="k">Reporter</div><div class="v mono">0.11.0</div></div>
+  <div class="fact act"><button type="button" class="btn">Copy resume command</button></div>
+</div></div>
+
+<h2>2. Settings-hooks session (no mod)</h2>
+<div class="frame"><div class="facts">
+  <div class="fact agents"><div class="k">Agents</div><div class="v mono"><span>1 running</span><span class="n-done">/ 0 done</span></div></div>
+  <div class="fact slim"><div class="k">Est. cost</div><div class="v mono">n/a</div></div>
+  <div class="fact slim"><div class="k">Tokens</div><div class="v mono">n/a</div></div>
+  <div class="fact slim"><div class="k">Running for</div><div class="v mono">8m 02s</div></div>
+  <div class="fact slim"><div class="k">Agent time</div><div class="v mono">8m 02s</div></div>
+  <div class="fact slim" title="Reported by Claude Code settings hooks, not the reporter mod"><div class="k">Reporter</div><div class="v quiet">Settings hooks</div></div>
+  <div class="fact act"><button type="button" class="btn">Copy resume command</button></div>
+</div></div>
+
+<h2>3. Reporter outside the supported range</h2>
+<div class="frame"><div class="facts">
+  <div class="fact agents"><div class="k">Agents</div><div class="v mono"><span>2 running</span><span class="n-done">/ 1 done</span></div></div>
+  <div class="fact slim"><div class="k">Est. cost</div><div class="v mono">$0.88</div></div>
+  <div class="fact slim"><div class="k">Tokens</div><div class="v mono">610k</div></div>
+  <div class="fact slim"><div class="k">Running for</div><div class="v mono">12m 40s</div></div>
+  <div class="fact slim"><div class="k">Agent time</div><div class="v mono">20m 05s</div></div>
+  <div class="fact slim" title="This session's reporter (0.3.0) is older than the server supports. Update the podium-reporter mod: run claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins in that session. Reports are still accepted, but newer fields may be missing."><div class="k">Reporter</div><div class="v mono warn">0.3.0 · update</div></div>
+  <div class="fact act"><button type="button" class="btn">Copy resume command</button></div>
+</div>
+<div class="hint">Newer than the server supports reads "0.99.0 · upgrade server". Both use the card chip's wording and its tooltip text, so the card and the bar never disagree.</div></div>
+
+<h2>4. Narrow width (wraps, Copy resume command stays last)</h2>
+<div class="frame narrow"><div class="facts">
+  <div class="fact agents"><div class="k">Agents</div><div class="v mono"><span>3 running</span><span class="n-done">/ 5 done</span></div></div>
+  <div class="fact slim"><div class="k">Est. cost</div><div class="v mono">$4.12</div></div>
+  <div class="fact slim"><div class="k">Tokens</div><div class="v mono">3.8M</div></div>
+  <div class="fact slim"><div class="k">Running for</div><div class="v mono">42m 10s</div></div>
+  <div class="fact slim"><div class="k">Agent time</div><div class="v mono">1h 12m</div></div>
+  <div class="fact slim"><div class="k">Reporter</div><div class="v mono">0.11.0</div></div>
+  <div class="fact act"><button type="button" class="btn">Copy resume command</button></div>
+</div></div>
