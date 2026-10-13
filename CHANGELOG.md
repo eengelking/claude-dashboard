@@ -57,6 +57,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- The Agents tile on the orchestrator page no longer wraps "· 0 done" onto its own line and leaves the dot hanging. The running count is now one line and the done count (in muted ink) sits under it with no separator, so the tile reads the same at every width. The "N failed" button stays beside the running count and drops under it when the tile is narrow. No other tile had a separator inside a wrapping item. (#100)
 - The heartbeat-lost message on a card, and the same notice on the orchestrator page, now reads as one sentence.
   It used to show wide gaps around the time and a gap before the final period (`Last heartbeat 0:34 ago. Goes
   away in 41 s .`), because the alert box spaced every piece of text and every time as a separate item. The
