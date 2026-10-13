@@ -7,8 +7,11 @@ limitations is under "Known issues" in `docs/ARCHITECTURE.md`; this file is the 
 
 ### `/podium` says "offline" and "Last error: HTTP 401"
 
-The server has a token and the mod is not sending it. Get it with `podiumctl token` and enter it with
-`/plugin configure podium-reporter@eengelking-marketplace`. Queued reports go out as soon as it is right.
+The server has a token and the mod is not sending a right one. Get it with `podiumctl token` (or, on a
+shared server, ask the owner for your own token) and enter it with
+`/plugin configure podium-reporter@eengelking-marketplace`. A person's token only works with the `userName`
+it was made for, and a revoked or rotated-away token is refused too. The mod logs the refusal once and
+tries again about once a minute, so queued reports go out within a minute of the settings being right.
 
 ### The status line says "update mod" or "upgrade server"
 
@@ -87,7 +90,7 @@ seconds. A session whose reporter never comes back is dropped about a minute aft
 
 ### Anyone on localhost can read the dashboard
 
-The token guards reports, hooks and deletes. Reads (`GET /api/fleet/*`) are open on localhost by design
+The token guards reports, hooks and deletes, and Admin has its own lock. Reads (`GET /api/fleet/*`) are open on localhost by design
 (`docs/SPEC.md`, 7.7). With `--bind` or `HOST` set to anything but `127.0.0.1`, other machines can read it
 too.
 

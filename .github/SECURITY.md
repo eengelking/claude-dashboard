@@ -15,8 +15,10 @@ problems that matter here are:
 - **Secrets leaving a session.** The mod cuts text to fixed limits and replaces things that look like
   secrets with `[redacted]` (see "What leaves the session" in the README). A real credential format that
   the redaction misses, or data the README says never leaves the session but does, is in scope.
-- **The token.** `PODIUM_TOKEN` is the only authentication. A way around it, a token that shows up in a log
-  or on a command line, or a config file with loose permissions.
+- **Tokens and Admin.** `PODIUM_TOKEN` (the admin secret) opens Admin, and each person's token is bound to
+  their name. A way around either, a token or the admin secret that shows up in a log, an error, the browser's
+  storage or a command line, a token stored in a readable form, a way to open Admin or call its API without
+  the secret or from another site, a way past the lockout, or a config file with loose permissions.
 - **`podiumctl` and the container.** Command injection through a config value, the server listening on
   more than the user asked for, the container running as root, or a boot service file that does more
   than it should.
@@ -24,7 +26,9 @@ problems that matter here are:
   to, stop, or change a session is a security bug.
 
 A few things are by design, so they are not vulnerabilities on their own. Reads (`GET /api/fleet/*`) are
-open on localhost; only reports, hooks and deletes need the token. Anyone with access to your user
+open on localhost; only reports, hooks and deletes need a token. Tokens travel in a header over plain HTTP, so a
+server reachable over a network needs a trusted network or a TLS proxy, and a person who holds a valid token can
+delete any session. Anyone with access to your user
 account or to `~/.podium` can read the token and the data, and `podman inspect podium` shows the token
 because it is part of the container's environment. And if you start the server with `--bind` or
 `HOST` set to something other than `127.0.0.1`, other machines can read the dashboard. The README and `docs/GOTCHAS.md` say all

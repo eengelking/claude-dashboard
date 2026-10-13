@@ -40,7 +40,7 @@ Commands:
   logs                Print the server log (-f to follow, --tail N for the last N lines)
   health              Exit 0 when the server answers, 1 when it does not
   url                 Print the dashboard URL
-  token               Print the auth token (--rotate makes a new one; restart to apply)
+  token               Print the admin secret (--rotate makes a new one; restart to apply)
   config              Show the settings; \`config set KEY=VALUE\` and \`config unset KEY\` change them
   enable              Start on boot / login (launchd on macOS, a systemd user unit on Linux)
   disable             Stop starting on boot
@@ -54,7 +54,7 @@ Options:
   --bind ADDR                   Address to listen on (saved; default 127.0.0.1)
   -f, --follow                  logs: follow
   --tail N                      logs: lines to show (default 100)
-  --rotate                      token: generate a new token
+  --rotate                      token: generate a new admin secret
   --show-token                  config: print the token instead of masking it
   -h, --help                    This help
 
@@ -63,9 +63,10 @@ Files (set PODIUMCTL_HOME to move them; default ~/.podium):
   data/          SQLite database (standalone mode); container mode uses the Podman volume "${VOLUME}".
   podium.log     Server log (standalone mode); container mode: \`podiumctl logs\`.
 
-Auth: the first \`start\` generates a token and saves it as PODIUM_TOKEN in config.env. Reporters send it
-as X-Podium-Token. Find it any time with \`podiumctl token\`. To run without auth:
-\`podiumctl config set PODIUM_TOKEN=\` (empty on purpose).
+Auth: the first \`start\` generates the admin secret and saves it as PODIUM_TOKEN in config.env. It opens
+the Admin section in the browser, where you make a token for each person. On your own machine a reporter can
+send the secret itself as X-Podium-Token. Find it any time with \`podiumctl token\`. To run without auth (and
+without Admin): \`podiumctl config set PODIUM_TOKEN=\` (empty on purpose).
 
 Config keys: ${ALL_KEYS.join(', ')}.
 `;

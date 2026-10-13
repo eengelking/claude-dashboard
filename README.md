@@ -68,8 +68,20 @@ publishes the port on `127.0.0.1` only.
 
 **Auth token.** The first `start` generates a random token and saves it as `PODIUM_TOKEN` in
 `~/.podium/config.env` (mode 0600). Find it any time with `podiumctl token`; `podiumctl token --rotate`
-makes a new one. Enter it in the mod's `token` option (see "Report a real session") and in the
-`X-Podium-Token` header of the settings hooks below. To run without auth, `podiumctl config set PODIUM_TOKEN=` (empty on purpose).
+makes a new one. This is the **admin secret**: it opens the Admin section (below) and, on a one-person
+setup, you can also enter it in the mod's `token` option (see "Report a real session") and in the
+`X-Podium-Token` header of the settings hooks below. To run without auth, `podiumctl config set PODIUM_TOKEN=`
+(empty on purpose). Admin is switched off then, because nothing would protect it.
+
+**Admin and per-person tokens.** When several people report to one Podium, open **Admin** (the button in the
+top bar's upper right, or `#/admin`) and enter the admin secret. Add a person and Podium makes a token for
+them, shown once with the settings to paste: their name and the token. A token only works with the name it
+was made for, so a leaked token alone cannot claim someone else's name. From Admin you can also rotate or
+revoke a token, put people in groups (a label for arranging the console, nothing more), turn off reporting
+with the admin secret, and read the admin log. Tokens are stored hashed, so Podium cannot show one again.
+Reporting with the admin secret keeps working, and those sessions show under the owner **Admin**. Admin
+locks after 10 idle minutes, and five wrong secrets lock it for 15 minutes. Tokens travel in a header as
+they do today, so a server reachable over a network needs a trusted network or a TLS proxy.
 
 Other settings (`STALE_AFTER_MS`, `RETAIN_*`, and so on, see the table below) are set with
 `podiumctl config set KEY=VALUE` and applied on `restart`. Set `PODIUMCTL_HOME` to keep the files
@@ -90,9 +102,12 @@ marketplace, in Claude Code:
 /plugin install podium-reporter@eengelking-marketplace
 ```
 
-If the server uses a token (`podiumctl start` generates one), get it with `podiumctl token` and enter it
-with `/plugin configure podium-reporter@eengelking-marketplace`. The token option is secret, so it has no
-row in the `/config` menu. Without it the reporter gets HTTP 401 and `/podium` says so.
+If the server uses a token (`podiumctl start` generates one), enter it with
+`/plugin configure podium-reporter@eengelking-marketplace`. On your own machine that is the admin secret
+(`podiumctl token`). If someone runs the server for a group, they make you a token in Admin: enter it as
+`token`, and your name as `userName`. The token option is secret, so it has no row in the `/config` menu.
+Without a token the server accepts, or with a token that does not belong to your name, the reporter gets
+HTTP 401, logs it once, and tries again about once a minute. `/podium` and the status line say so.
 
 To work on the mod itself, load it from a checkout for one session instead:
 
@@ -117,7 +132,8 @@ the `/config` menu.
 | Option | Default | Meaning |
 |---|---|---|
 | `serverUrl` | `http://127.0.0.1:4317` | Where reports go |
-| `token` | empty | Sent as `X-Podium-Token` when the server sets `PODIUM_TOKEN` |
+| `token` | empty | Sent as `X-Podium-Token`: a per-person token from Admin, or the admin secret (`PODIUM_TOKEN`) on a one-person setup |
+| `userName` | empty | The name your token was made for. The server accepts a report only when the token and this name match. Leave empty when you report with the admin secret |
 | `flushIntervalMs` | `1000` | Minimum time between reports while something changes |
 | `heartbeatMs` | `5000` | Report at least this often |
 | `sessionName` | empty | Display name override |
@@ -186,7 +202,7 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 | `HOST` | `127.0.0.1` | Bind address. Podium is for one machine; leave it on localhost |
 | `PODIUM_DB` | `data/podium.sqlite` | SQLite database file (`podiumctl` uses `/data/podium.sqlite` in the container and `~/.podium/data/podium.sqlite` standalone) |
 | `PODIUM_HOST_HOME` | the server's own home | Home directory to show as `~` in session paths. `podiumctl` sets it to your home in the container, where the server's own home is `/home/node`. Ignored unless it is an absolute path |
-| `PODIUM_TOKEN` | empty | When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` |
+| `PODIUM_TOKEN` | empty | The admin secret. When set, `POST /api/fleet/report`, `POST /api/fleet/hook` and `DELETE` require `X-Podium-Token` (this or a person's token), and it opens Admin |
 | `STALE_AFTER_MS` | `15000` | A session not heard from this long shows as stale |
 | `HOOK_STALE_AFTER_MS` | `600000` | Same as `STALE_AFTER_MS`, for sessions known only from settings hooks (they send no heartbeat) |
 | `DROP_AFTER_MS` | `60000` | A stale session leaves the fleet after this much more |

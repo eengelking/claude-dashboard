@@ -192,8 +192,10 @@ Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") rec
 - **Network.** In container mode the port is published on `127.0.0.1` unless `--bind` says otherwise. Inside
   the container the server listens on `0.0.0.0`; that is the only place the `127.0.0.1` default (7.7) is
   not what the server binds.
-- **Token.** The first `start` generates a random `PODIUM_TOKEN` and saves it in `config.env`. `podiumctl
-  token` prints it and `--rotate` replaces it. An empty value is the deliberate "auth off" setting and is
+- **Token.** The first `start` generates a random `PODIUM_TOKEN` and saves it in `config.env`. It is the admin
+  secret (7.7): it opens the Admin section and may be used to report. `podiumctl
+  token` prints it and `--rotate` replaces it (after a restart every open Admin session is over, and people's own
+  tokens, which are in the database, are unaffected). An empty value is the deliberate "auth off" setting and is
   passed through to the server as empty. Secrets reach the server through its environment, never a
   command line.
 - **Start on boot.** `enable` and `disable` write and remove a launchd agent (macOS) or a systemd user unit
@@ -385,7 +387,8 @@ Declare in `plugin.json` (**Assumption:** confirm the exact `userConfig` field s
 | Option | Type | Default | Meaning |
 |---|---|---|---|
 | `serverUrl` | string | `http://127.0.0.1:4317` | Where to POST. |
-| `token` | string (secret if supported) | empty | Sent as `X-Podium-Token` when non-empty. |
+| `token` | string (secret if supported) | empty | Sent as `X-Podium-Token` when non-empty: a person's token from Admin (7.7), or the admin secret. |
+| `userName` | string | empty | The person's name as the server owner entered it. Sent as `Report.userName`; the server accepts a report made with a person's token only when the name matches. |
 | `flushIntervalMs` | number | `1000` | Minimum time between reports while something changes. |
 | `heartbeatMs` | number | `5000` | Report at least this often even when nothing changed. |
 | `sessionName` | string | empty | Override display name for this machine's sessions (rare). |
@@ -413,7 +416,7 @@ Read via the `options` argument of `register`. A config change reloads the modul
 
 ### 6.1 Endpoint
 
-`POST /api/fleet/report` with `Content-Type: application/json`, optional `X-Podium-Token`. Body is one `Report`. Response `200 { "ok": true, "serverTime": <epoch ms>, "ackedEvents": <n>, "sessionId": "…", "liveSessions": <n>, "serverVersion": "…", "reporterSupport": { "min": "…", "max": "…" }, "reporterCompat": "ok" | "outdated" | "newer" | "unknown" }` (6.8 explains the last three), or `400 { "ok": false, "error": "…", "path": "…" }` for a body that fails validation (the mod drops that report and logs once to debug, it never retries a 400), or `413` above 512 KB.
+`POST /api/fleet/report` with `Content-Type: application/json`, optional `X-Podium-Token`. Body is one `Report`. The server decides who sent a report from the token (7.7) and answers `401` for a missing, wrong, revoked or mismatched credential and `409` when the session id already belongs to another owner; the mod logs a 401 once and retries about once a minute. Response `200 { "ok": true, "serverTime": <epoch ms>, "ackedEvents": <n>, "sessionId": "…", "liveSessions": <n>, "serverVersion": "…", "reporterSupport": { "min": "…", "max": "…" }, "reporterCompat": "ok" | "outdated" | "newer" | "unknown" }` (6.8 explains the last three), or `400 { "ok": false, "error": "…", "path": "…" }` for a body that fails validation (the mod drops that report and logs once to debug, it never retries a 400), or `413` above 512 KB.
 
 The mod sends a **full snapshot** every time (idempotent upsert) plus the **events not yet acknowledged**. The server never needs a previous report to understand a new one.
 
@@ -454,6 +457,7 @@ interface Report {
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
+  userName?: string;                    // the person this reporter is set up as (the `userName` option); omitted when empty. The server checks it against the token's owner (7.7)
 }
 
 interface FilesReport {
@@ -602,6 +606,7 @@ A mismatch is a warning, never an error. The server still accepts and shows ever
 | `DELETE /api/fleet/sessions/:id` | Remove a session and its rows (for stuck test data). Requires the token if one is configured. |
 | `GET /api/fleet/health` | `{ ok, dbPath, liveSessions, uptimeSec, reporterVersionsSeen, serverVersion, reporterSupport, sseClients, maxClockSkewMs }`. |
 | `POST /api/fleet/hook` | Phase 5: classic settings-hook payloads. |
+| `/api/admin/*` | The Admin API (7.7): `GET session`, `POST unlock`, `POST lock`, then with an unlocked session `GET/POST people`, `POST people/:id/rotate`, `POST people/:id/revoke`, `PUT people/:id/group`, `GET/POST groups`, `DELETE groups/:id`, `GET/PUT settings`, `GET log`. Lists take `page`, `pageSize` (default 50, at most 100) and, for people, `q`, and return `{ total, page, pageSize, rows }`. |
 
 ### 7.2 Database (SQLite)
 
@@ -622,7 +627,8 @@ CREATE TABLE sessions (
   loop_json TEXT,                                                          -- Report.session.loop; NULL from a reporter older than 0.4.0
   files_json TEXT,                                                         -- Report.session.files; NULL from a reporter older than 0.6.0
   attached INTEGER,                                                        -- Report.session.attached (1 or 0); NULL when unknown
-  detached_at INTEGER                                                      -- when the first report with attached = false arrived; NULL while attached or unknown
+  detached_at INTEGER,                                                     -- when the first report with attached = false arrived; NULL while attached or unknown
+  owner TEXT                                                               -- who the server decided the session belongs to from the token: a person's name, 'Admin', or NULL (auth off, or from before migration 6)
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -650,6 +656,21 @@ CREATE TABLE samples (                                                     -- on
   tokens_total INTEGER NOT NULL, tokens_delta INTEGER NOT NULL, peak_context REAL NOT NULL,
   running_agents INTEGER NOT NULL, cost_usd REAL, PRIMARY KEY (session_id, t)
 );
+```
+
+Migration 6 adds the tables for the Admin section (7.7). A token is never stored: only its SHA-256 and its last four characters.
+
+```sql
+CREATE TABLE groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_lower TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL);
+CREATE TABLE people (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_lower TEXT NOT NULL UNIQUE,
+  key_id TEXT NOT NULL UNIQUE, token_hash TEXT NOT NULL, token_last4 TEXT NOT NULL,
+  group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL, rotated_at INTEGER, revoked_at INTEGER, last_report_at INTEGER
+);
+CREATE TABLE person_machines (person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE, machine TEXT NOT NULL, last_seen_at INTEGER NOT NULL, PRIMARY KEY (person_id, machine));
+CREATE TABLE admin_log (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, source TEXT NOT NULL);
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);       -- allow_admin_secret_reporting: '1' (default) or '0'
 ```
 
 Retention (run by the sweeper hourly): samples older than 24 h deleted; events older than 30 days deleted; sessions ended more than 30 days ago deleted with their rows. All three thresholds are env-configurable.
@@ -729,6 +750,9 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 ### 7.7 Hardening
 
 - Bind `127.0.0.1` by default (the container image listens on `0.0.0.0` inside the container and `podiumctl` publishes it on the host's `127.0.0.1`, 4.4). If `PODIUM_TOKEN` is set, `POST /report`, `DELETE` and `POST /hook` require `X-Podium-Token`; reads and the `drop` route stay open on localhost.
+- **Who a report is from (issue #36).** `PODIUM_TOKEN` is the *admin secret*. A credential is either a person's token, `pdm_<12 hex key id>_<48 hex secret>` (192 bits of randomness, made by the server in Admin, shown once, stored only as a SHA-256 and the last four characters; random tokens of that length need no slow or keyed hash), or the admin secret. The server finds a person by the key id, compares hashes in constant time, and accepts a report when the token is live (not revoked, not rotated away) and `Report.userName` equals that person's name, compared case-insensitively. The token, not the name, decides identity: the name is visible in the console, so the match is a consistency check and the token's randomness protects the account. A hook has no body name, so a person's token alone identifies it. The admin secret is accepted as before and puts the session under the owner `Admin`, unless the owner turned that off in Admin. With no `PODIUM_TOKEN` and no person token, a report is accepted with no owner ("Unassigned"); a person token that is presented is still checked. A session id that already belongs to another owner is refused with `409`. Any valid credential may `DELETE` a session.
+- **The Admin API (`/api/admin`).** Off (403) when `PODIUM_TOKEN` is empty. `POST unlock` takes the admin secret and starts an in-memory session whose id is in an `HttpOnly; SameSite=Strict` cookie scoped to `/api/admin`; it ends after 10 idle minutes, on lock, and on restart, so rotating the admin secret (which needs a restart) ends every session. Five wrong secrets from one source address lock that source for 15 minutes. Every change needs the header `X-Podium-Admin: 1` and, when an `Origin` is sent, the server's own host; no CORS is enabled. Every response carries `Cache-Control: no-store`. The secret and tokens are never logged, never put in an error, the activity list or the admin log, and never stored by the page in `localStorage` or `sessionStorage`. The admin log records unlocks, failed unlocks, lockouts, people, rotations, revocations, group changes and the reporting switch, each with the source address. A name is 1 to 48 characters and a group name 1 to 24, with no control characters, both unique case-insensitively. A person sees no one's token, including their own; only the owner rotates it.
+- Tokens and the admin secret travel in a header over plain HTTP. A server reachable over a network needs a trusted network or a TLS proxy.
 - Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. `session.files` keeps the first 200 files (paths clipped to 300 characters and stripped of control characters, counts non-negative integers, `total` never below the listed count) rather than rejecting a longer list. Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).

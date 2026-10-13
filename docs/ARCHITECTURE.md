@@ -39,6 +39,19 @@ messages with a pure reducer (`store.ts`), treats 6 s of silence as disconnected
 functions in `logic.ts` and `chart.ts`. Styles are `fleet.css`, the mockup's tokens scoped under
 `.podium`. The UI computes nothing it could not recompute from one `SessionView`.
 
+**Who is reporting, and Admin** (`server/src/fleet/tokens.ts`, `people.ts`, `server/src/admin/adminRouter.ts`).
+`routes.ts` turns the `X-Podium-Token` header into an identity before it reads a body: a person's token
+(`pdm_<key id>_<secret>`, found by key id, checked against a stored SHA-256 in constant time), the admin secret
+(`PODIUM_TOKEN`), or open when auth is off. The identity gives the session its `owner`, written by `ingest.ts`
+into `sessions.owner`; for a person's token the report's `userName` must also match, so the token decides who
+and the name is only a consistency check. `people.ts` owns the migration-6 tables (people, groups,
+person_machines, admin_log, settings) and every paged query. The Admin API is a separate router mounted at
+`/api/admin`: an unlock exchanges the admin secret for a random session id held in a process-memory map and an
+`HttpOnly; SameSite=Strict` cookie, with idle expiry, a per-address lockout and a required `X-Podium-Admin`
+header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`) holds a new token in component
+state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
+admin secret ends them.
+
 **Shared contract.** The Report types live in `server/src/fleet/protocol.ts` and, byte for byte between
 markers, in `mod/podium-reporter/hooks/protocol.ts`; a test compares them. The UI imports the view types
 from the server's file. `docs/fixtures/report.sample.json` is the shared fixture.

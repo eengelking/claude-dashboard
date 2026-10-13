@@ -40,7 +40,8 @@ In Claude Code:
 ```
 
 Then give it the token. Print it with `podiumctl token`, and enter it with
-`/plugin configure podium-reporter@eengelking-marketplace`.
+`/plugin configure podium-reporter@eengelking-marketplace`. If someone else runs the server, ask them for
+your own token and enter it as `token`, with your name as `userName` (see "Admin" below).
 
 ### 3. Check that it works
 
@@ -189,6 +190,32 @@ The effort shown is read from each model request, so after `/effort` it updates 
 
 Effort is drawn as five bars with no text: more lit bars mean more effort, and the color changes with the level (low orange, medium green, high blue, xhigh purple, max rainbow). Hover the bars to read the level. Dimmed bars mean the level was not reported.
 
+## Admin
+
+Admin is for the person who runs the server. Open it with the **Admin** button in the top bar's upper right
+(or `#/admin`) and enter the admin secret, which `podiumctl token` prints. It locks again after 10 minutes
+without activity, and five wrong secrets lock it for 15 minutes. A server started without a token has no Admin,
+because there would be nothing to protect it.
+
+Admin has four tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
+
+- **People.** Type a name and choose Create token. Podium shows the token once, above the tabs, with the
+  settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
+  choose "I have saved it", because Podium keeps only a hash and cannot show the token again. The list shows
+  the last four characters, when each person last reported and from which machines. Rotate gives a person a
+  new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
+  stale and drop as usual. The search finds a person by name, group or machine.
+- **Groups.** Create groups such as Frontend or DevOps, and pick one for a person on the People tab. A group is
+  a label for arranging the console and grants nothing. Deleting a group moves its people to "No group".
+- **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
+  sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
+- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations and group changes, with the
+  address each came from. It never holds a token or the secret.
+
+A report is accepted when its token belongs to the person whose name it also sends. The server decides who a
+report is from by the token, so a valid token with someone else's name is refused. A person cannot see or
+rotate their own token; only the owner can.
+
 ## Everyday commands
 
 | Command | What it does |
@@ -197,7 +224,7 @@ Effort is drawn as five bars with no text: more lit bars mean more effort, and t
 | `podiumctl logs -f` | Follow the server log |
 | `podiumctl restart` | Apply a config change |
 | `podiumctl stop` | Stop it; your data is kept |
-| `podiumctl token` | Print the auth token (`--rotate` makes a new one) |
+| `podiumctl token` | Print the admin secret (`--rotate` makes a new one and ends every open Admin session after a restart; people's own tokens keep working) |
 | `podiumctl config` | Show the saved settings (`config set KEY=VALUE` changes one) |
 | `podiumctl enable` / `disable` | Start on boot or not |
 
@@ -237,7 +264,7 @@ with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull,
 
 | You see | Likely cause |
 |---|---|
-| `/podium` says offline, `HTTP 401` | The token is missing or wrong. `podiumctl token`, then `/plugin configure` |
+| `/podium` says offline, `HTTP 401` | The token is missing, wrong, or revoked, or it does not belong to the `userName` setting. `podiumctl token`, then `/plugin configure`. On a shared server, ask the owner for a new token |
 | `/podium` says offline, no 401 | The server is not running. `podiumctl status`, then `podiumctl start` |
 | The wall is empty | No session has the mod loaded yet, its token is wrong, or none has been sent a prompt |
 | A new session is not on the wall, or its status line says `podium ● 0 live` | It has not done anything yet. Send a prompt |
