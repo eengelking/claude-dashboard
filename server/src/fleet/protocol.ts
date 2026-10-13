@@ -188,6 +188,8 @@ export interface Report {
   session: SessionReport;
   agents: AgentReport[];
   events: ActivityEvent[];
+  /** The person this reporter is configured as. The server checks it against the token's owner and refuses a mismatch. Omitted or null when none is set. */
+  userName?: string | null;
 }
 // <protocol:end>
 
@@ -268,6 +270,8 @@ export interface SessionView {
   attached: boolean | null;
   /** When a session nobody is attached to leaves the wall: the first detached report plus DETACHED_HIDE_AFTER_MS. null while attached or unknown. */
   hideAt: number | null;
+  /** Who the server decided this session belongs to, from the token: a person's name, `Admin` for the admin secret, null when auth is off or the session predates tokens. */
+  owner: string | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -719,6 +723,8 @@ export function validateReport(body: unknown): ValidateResult {
       agents: arr(o.agents, '$.agents', LIMITS.agents).map((a, i) => agent(a, `$.agents[${i}]`)),
       events: arr(o.events, '$.events', LIMITS.events).map((e, i) => event(e, `$.events[${i}]`)),
     };
+    const userName = strOrNull(o.userName, '$.userName', LIMITS.name);
+    if (userName !== null) report.userName = userName;
     return { ok: true, report };
   } catch (err) {
     if (err instanceof Invalid) return { ok: false, error: err.message, path: err.path };

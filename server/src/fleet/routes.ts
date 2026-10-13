@@ -1,26 +1,43 @@
 // Express router for Podium, mounted at /api/fleet (SPEC 7.1, 7.7).
-import { timingSafeEqual } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Fleet } from './fleet.js';
 import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { validateReport } from './protocol.js';
+import { OwnerConflict } from './ingest.js';
+import type { PeopleStore, PersonRow } from './people.js';
+import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 
 export interface FleetRouterOptions {
-  /** When set, POST /report, DELETE and POST /hook require it as X-Podium-Token. */
+  /** The admin secret (PODIUM_TOKEN). When set, POST /report, DELETE and POST /hook need a credential in X-Podium-Token: this, or a person's token. */
   token?: string | null;
+  /** Per-person tokens. Without it only the admin secret works. */
+  people?: PeopleStore | null;
   /** One line per error; never a report body. */
   log?: (line: string) => void;
 }
 
 export const BODY_LIMIT = '512kb';
 
-function tokenOk(expected: string | null | undefined, given: unknown): boolean {
-  if (!expected) return true;
-  if (typeof given !== 'string') return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(given);
-  return a.length === b.length && timingSafeEqual(a, b);
+/** Who a request's X-Podium-Token says it is. */
+type Identity = { kind: 'person'; person: PersonRow } | { kind: 'admin' } | { kind: 'open' };
+
+function identify(opts: FleetRouterOptions, given: unknown): Identity | null {
+  const presented = typeof given === 'string' ? given : '';
+  const parsed = presented ? parsePersonToken(presented) : null;
+  if (parsed && opts.people) {
+    const person = opts.people.findByKeyId(parsed.keyId);
+    if (!person || person.revokedAt !== null || !tokenMatches(presented, person.tokenHash)) return null;
+    return { kind: 'person', person };
+  }
+  if (opts.token) {
+    if (!presented || !safeEqualStr(opts.token, presented)) return null;
+    return !opts.people || opts.people.adminReportingAllowed() ? { kind: 'admin' } : null;
+  }
+  // Authentication is off. A token that was presented but is not a person's is simply ignored.
+  return { kind: 'open' };
 }
+
+const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? 'Admin' : null);
 
 function intParam(v: unknown): number | null | 'bad' {
   if (v === undefined || v === '') return null;
@@ -34,9 +51,14 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   const json = express.json({ limit: BODY_LIMIT, type: ['application/json', 'application/*+json'] });
 
   const requireToken = (req: Request, res: Response, next: NextFunction) => {
-    if (tokenOk(opts.token, req.get('x-podium-token'))) return next();
+    const id = identify(opts, req.get('x-podium-token'));
+    if (id) {
+      res.locals.identity = id;
+      return next();
+    }
     res.status(401).json({ ok: false, error: 'missing or wrong X-Podium-Token', path: '$' });
   };
+  const identityOf = (res: Response): Identity => res.locals.identity as Identity;
 
   router.post('/report', requireToken, json, (req, res) => {
     const result = validateReport(req.body);
@@ -45,10 +67,21 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       res.status(400).json({ ok: false, error: result.error, path: result.path });
       return;
     }
+    const id = identityOf(res);
+    // The token decides who the sender is; the name it carries must agree (a consistency check, since names are visible).
+    if (id.kind === 'person' && (result.report.userName ?? '').trim().replace(/ +/g, ' ').toLowerCase() !== id.person.name.toLowerCase()) {
+      res.status(401).json({ ok: false, error: 'the token does not belong to that name', path: '$.userName' });
+      return;
+    }
     try {
-      const out = fleet.ingest(result.report);
+      if (id.kind === 'person') opts.people?.touch(id.person.id, req.ip ?? null, fleet.now());
+      const out = fleet.ingest(result.report, ownerOf(id));
       res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version) });
     } catch (err) {
+      if (err instanceof OwnerConflict) {
+        res.status(409).json({ ok: false, error: 'that session belongs to someone else', path: '$.session.id' });
+        return;
+      }
       log(`podium: ingest failed for a report: ${(err as Error).message}`);
       res.status(500).json({ ok: false, error: 'ingest failed', path: '$' });
     }
@@ -57,7 +90,9 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   // Classic settings hooks (T5.1): each hook POSTs its stdin payload here.
   router.post('/hook', requireToken, json, (req, res) => {
     try {
-      const out = fleet.ingestHook(req.body);
+      const id = identityOf(res);
+      if (id.kind === 'person') opts.people?.touch(id.person.id, req.ip ?? null, fleet.now());
+      const out = fleet.ingestHook(req.body, ownerOf(id));
       if (!out.ok) {
         log(`podium: rejected hook payload at ${out.path}: ${out.error}`);
         res.status(400).json(out);
@@ -65,6 +100,10 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       }
       res.json({ ok: true, sessionId: out.sessionId });
     } catch (err) {
+      if (err instanceof OwnerConflict) {
+        res.status(409).json({ ok: false, error: 'that session belongs to someone else', path: '$.session_id' });
+        return;
+      }
       log(`podium: hook ingest failed: ${(err as Error).message}`);
       res.status(500).json({ ok: false, error: 'ingest failed', path: '$' });
     }

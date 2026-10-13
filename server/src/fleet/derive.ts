@@ -231,6 +231,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     files: parse<FilesReport | null>(row.files_json, null),
     attached: row.attached === null ? null : row.attached === 1,
     hideAt: input.hideAt ?? null,
+    owner: row.owner,
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

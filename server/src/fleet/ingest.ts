@@ -44,7 +44,7 @@ function startedAt(claimed: number, prev: SessionRow | undefined, serverTime: nu
   return Math.abs(claimed - serverTime) <= START_TOLERANCE_MS ? claimed : serverTime;
 }
 
-function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number): SessionRow {
+function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number, owner: string | null): SessionRow {
   const s = r.session;
   const done = s.status === 'done';
   return {
@@ -83,7 +83,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number)
     attached: s.attached == null ? null : s.attached ? 1 : 0,
     // The clock starts at the first report with nobody attached and keeps running while that stays true.
     detached_at: s.attached === false ? (prev?.attached === 0 && prev.detached_at !== null ? prev.detached_at : serverTime) : null,
-    owner: prev?.owner ?? null,
+    owner: owner ?? prev?.owner ?? null,
   };
 }
 
@@ -128,11 +128,16 @@ function numOrNull(v: unknown): number | null {
 }
 
 /** Stores one validated report. `serverTime` (never the reporter's clock) sets last_seen_at. */
-export function ingestReport(f: FleetDb, report: Report, serverTime: number): IngestResult {
+/** A session already belongs to someone else: the token's owner may not take it over. */
+export class OwnerConflict extends Error {}
+
+/** `owner` is the name the server decided from the token; null (auth off) leaves a stored owner alone. */
+export function ingestReport(f: FleetDb, report: Report, serverTime: number, owner: string | null = null): IngestResult {
   return f.tx(() => {
     const sid = report.session.id;
     const prev = f.getSession(sid);
-    const row = sessionRow(report, prev, serverTime);
+    if (owner !== null && prev?.owner && prev.owner !== owner) throw new OwnerConflict('session belongs to another owner');
+    const row = sessionRow(report, prev, serverTime, owner);
     f.upsertSession(row);
     const ended = report.session.status === 'done';
     const revived = !!prev && !ended && (prev.ended_at !== null || prev.dropped_at !== null);

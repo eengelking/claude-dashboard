@@ -12,6 +12,7 @@ import { createRouter } from "./routes.js";
 import { FleetDb, openDb } from "./fleet/db.js";
 import { configFromEnv, Fleet } from "./fleet/fleet.js";
 import { createFleetRouter } from "./fleet/routes.js";
+import { PeopleStore } from "./fleet/people.js";
 import { startSweeper } from "./fleet/sweeper.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
@@ -20,11 +21,12 @@ const DB_PATH = process.env.PODIUM_DB || path.join(REPO_ROOT, "data", "podium.sq
 
 const fleetDb = new FleetDb(openDb(DB_PATH));
 const fleet = new Fleet(fleetDb, configFromEnv(process.env, { home: os.homedir(), dbPath: DB_PATH }));
+const people = new PeopleStore(fleetDb.db);
 const stopSweeper = startSweeper(fleet);
 
 const app = express();
 app.disable("x-powered-by");
-app.use("/api/fleet", createFleetRouter(fleet, { token: process.env.PODIUM_TOKEN || null }));
+app.use("/api/fleet", createFleetRouter(fleet, { token: process.env.PODIUM_TOKEN || null, people }));
 app.use(createRouter());
 
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");

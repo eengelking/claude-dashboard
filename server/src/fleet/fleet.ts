@@ -122,8 +122,8 @@ export class Fleet {
 
   // ---- ingest ---------------------------------------------------------------------------------
 
-  ingest(report: Report): IngestResult {
-    const res = ingestReport(this.db, report, this.now());
+  ingest(report: Report, owner: string | null = null): IngestResult {
+    const res = ingestReport(this.db, report, this.now(), owner);
     this.clockSkew.set(res.sessionId, res.clockSkewMs);
     const entry = this.live.get(res.sessionId);
     if (entry) {
@@ -144,7 +144,7 @@ export class Fleet {
   }
 
   /** A classic settings-hook payload (T5.1): merged with what is stored, then ingested as a report. */
-  ingestHook(payload: unknown): { ok: true; sessionId: string } | { ok: false; error: string; path: string } {
+  ingestHook(payload: unknown, owner: string | null = null): { ok: true; sessionId: string } | { ok: false; error: string; path: string } {
     const sid = typeof (payload as { session_id?: unknown })?.session_id === 'string' ? (payload as { session_id: string }).session_id : '';
     const stored = sid ? { session: this.db.getSession(sid), agents: this.db.getAgents(sid) } : { agents: [] };
     const res = hookToReport(payload, stored, this.now());
@@ -152,7 +152,7 @@ export class Fleet {
     if ('ignored' in res) return { ok: true, sessionId: res.sessionId };
     const v = validateReport(res.report);
     if (!v.ok) return v;
-    this.ingest(v.report);
+    this.ingest(v.report, owner);
     return { ok: true, sessionId: v.report.session.id };
   }
 

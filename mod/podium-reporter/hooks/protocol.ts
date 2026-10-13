@@ -185,5 +185,7 @@ export interface Report {
   session: SessionReport;
   agents: AgentReport[];
   events: ActivityEvent[];
+  /** The person this reporter is configured as. The server checks it against the token's owner and refuses a mismatch. Omitted or null when none is set. */
+  userName?: string | null;
 }
 // <protocol:end>
