@@ -31,8 +31,12 @@ server reachable over a network needs a trusted network or a TLS proxy, and a pe
 delete any session. Anyone with access to your user
 account or to `~/.podium` can read the token and the data, and `podman inspect podium` shows the token
 because it is part of the container's environment. And if you start the server with `--bind` or
-`HOST` set to something other than `127.0.0.1`, other machines can read the dashboard. The README and `docs/GOTCHAS.md` say all
-of this. A report that shows a way to do those things *without* the setting that allows them is in scope.
+`HOST` set to something other than `127.0.0.1`, other machines can read the dashboard, including every
+person's name and machine name. A reporter sends a name and its machine's host name only when its user set
+`userName`; who a session belongs to comes from the token, so a name with the shared admin secret, or with
+auth turned off, is not shown as a person at all. The README ("Several people on one Podium") and
+`docs/GOTCHAS.md` say all of this. A session shown under a person whose token did not send it, or a name or
+machine name sent while `userName` is empty, is in scope. A report that shows a way to do those things *without* the setting that allows them is in scope.
 
 If you think you have found something like this, please report it rather than opening a public issue.
 

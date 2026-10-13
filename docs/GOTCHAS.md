@@ -94,6 +94,18 @@ The token guards reports, hooks and deletes, and Admin has its own lock. Reads (
 (`docs/SPEC.md`, 7.7). With `--bind` or `HOST` set to anything but `127.0.0.1`, other machines can read it
 too.
 
+### A name set with the shared secret, or with no token, shows no person
+
+The people view groups sessions by who the server decided sent them, and that comes from the token. A
+reporter that sends `userName` with the admin secret shows under Admin, and one that sends it to a server
+with no `PODIUM_TOKEN` shows under Unassigned; neither turns the people view on. Give each person a token in
+Admin. The name and machine still travel in those reports and are stored, so they are not private either.
+
+### A group change shows a few seconds late
+
+Admin's groups are read when a session's view is built, so moving someone to another group shows on the wall
+with their next report (the heartbeat is five seconds), not at once. The spend chart updates on the next tick.
+
 ### The Linux start-on-boot unit has not run on Linux
 
 `podiumctl enable` generates a systemd user unit that has only been tested as text. Try it and tell us.

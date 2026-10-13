@@ -35,9 +35,14 @@ npm run podium:sim -- --sessions 5 --chaos
 ```
 
 `--chaos` adds sessions that go silent, more failures and more context blowouts. `--help` lists the
-other options (`--url`, `--speed`, `--seed`, `--duration`, `--agents`, `--token`, `--print`). Stop it
+other options (`--url`, `--speed`, `--seed`, `--duration`, `--agents`, `--token`, `--person`, `--unnamed`, `--print`). Stop it
 with Ctrl-C; it ends every session it started, and they leave the dashboard a few seconds later. If the
 server has a token (`podiumctl start` sets one), pass it: `--token "$(podiumctl token)"`.
+
+To see the people view, give the simulator people with a token each from Admin:
+`--person "Ed E.=<Ed's token>" --person "Priya N.=<Priya's token>" --unnamed`. Sessions go to the people in
+turn, each on a laptop and every third one on a build box; `--unnamed` keeps a share of sessions with no name,
+which show under Admin when they send the admin secret with `--token`.
 
 To serve the built UI and the API without a container, `npm run build` and then `npm run start -w server`
 (http://127.0.0.1:4317). `podiumctl`, below, does the same thing and manages it for you.
@@ -83,6 +88,25 @@ Reporting with the admin secret keeps working, and those sessions show under the
 locks after 10 idle minutes, and five wrong secrets lock it for 15 minutes. Tokens travel in a header as
 they do today, so a server reachable over a network needs a trusted network or a TLS proxy.
 
+**Several people on one Podium.** The server listens on `127.0.0.1` by default, so only your own machine
+can reach it. To let other people report to it:
+
+1. Restart it on an address the others can reach: `podiumctl restart --bind 0.0.0.0` (all interfaces), or
+   the one interface they use. The container then publishes the port on that address too. Allow the port
+   (4317 by default) in the firewall for the people who need it and no one else.
+2. Make each person a token in Admin. They set `serverUrl` to `http://<your host>:4317`, `token` to their
+   token and `userName` to the name you gave them (see "Report a real session").
+3. Once a session reports with a person's token, the console groups the wall by person (see "People" in
+   [docs/USER_GUIDE.md](docs/USER_GUIDE.md)).
+
+Know what that costs. Reading the console needs no token, so anyone who can reach the port sees every
+session: names, machines, paths, branches, plan steps, commands from failed calls and the excerpts listed
+under "What leaves the session". Tokens and reports cross the network in plain HTTP, so use a network you
+trust or put a TLS proxy in front. Anyone with a valid token can delete any session. The name shown on a
+session comes from the token that sent it: with the shared admin secret every session shows as Admin,
+and with the server's auth turned off every session is Unassigned, because then anyone could claim any
+name. Per-person read permissions are not part of Podium.
+
 Other settings (`STALE_AFTER_MS`, `RETAIN_*`, and so on, see the table below) are set with
 `podiumctl config set KEY=VALUE` and applied on `restart`. Set `PODIUMCTL_HOME` to keep the files
 somewhere other than `~/.podium`. `podiumctl --help` lists everything.
@@ -125,15 +149,16 @@ when it is back). When the mod and the server are on versions that do not match,
 mod's status line, not a Podium warning (see [docs/GOTCHAS.md](docs/GOTCHAS.md)). Effort is read from each model request, so a change made with `/effort` shows after
 the session's next prompt, not when you pick it.
 
-Set the mod's options with `/plugin configure podium-reporter@eengelking-marketplace`, or in Claude Code
-settings under `pluginConfigs`, `podium-reporter`, `options`. Everything except `token` also has a row in
-the `/config` menu.
+Set the mod's options with `/plugin configure podium-reporter@eengelking-marketplace`, or in
+`~/.claude/settings.json` under `pluginConfigs`, `podium-reporter@eengelking-marketplace`, `options`
+(`podium-reporter` for a copy loaded with `--plugin-dir`). Claude Code keeps `token` in its secure storage
+instead. Everything except `token` also has a row in the `/config` menu.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `serverUrl` | `http://127.0.0.1:4317` | Where reports go |
 | `token` | empty | Sent as `X-Podium-Token`: a per-person token from Admin, or the admin secret (`PODIUM_TOKEN`) on a one-person setup |
-| `userName` | empty | The name your token was made for. The server accepts a report only when the token and this name match. Leave empty when you report with the admin secret |
+| `userName` | empty | The name your token was made for. The server accepts a report only when the token and this name match. Leave empty when you report with the admin secret. Nothing that names you or your machine is sent until you set it; with it set, reports also carry this machine's name (see below) |
 | `flushIntervalMs` | `1000` | Minimum time between reports while something changes |
 | `heartbeatMs` | `5000` | Report at least this often |
 | `sessionName` | empty | Display name override |
@@ -155,7 +180,12 @@ Only to the server URL above, and only this:
   tool it used with how many times, the first 400 characters of its task prompt and of its final answer;
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file
   path), its exit code and the last 12 lines of its output;
-- short activity lines ("spawned Explore (Haiku low): Map call sites").
+- short activity lines ("spawned Explore (Haiku low): Map call sites");
+- only when you have set `userName`: that name, and which machine the session runs on: its short host name
+  (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
+  and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two
+  machines with the same host name stay apart. The id is random, not read from the hardware, and the
+  operating system user name and `git config` are never read.
 
 Before anything is sent, text is cut to those limits and anything that looks like a secret is replaced
 with `[redacted]`: `sk-ant-...` keys, `ghp_...` tokens, `AKIA...` keys, `Bearer ...` values, and the

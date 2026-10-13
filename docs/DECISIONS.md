@@ -232,3 +232,22 @@ works after upgrade with no change.
 person cannot see or rotate their own token. Tokens still travel over plain HTTP: a network-reachable server needs a
 trusted network or a TLS proxy. Any valid credential can delete any session. The lockout is per source address, so
 behind a proxy that hides addresses it is shared.
+
+## 21. People are shown from the token's owner, grouped in the browser, and machines carry a random id
+
+**Choice.** The people view (#34) groups sessions by `sessions.owner`, which the server sets from the token
+(decision 20), not by the `userName` a report carries. A named reporter also sends `machine`: the short host name
+and a random 12-hex id the mod makes once and keeps in its own store. Bands, ordering and the spend chart are
+computed in the browser from live sessions; the server adds only the machine, each owner's group and today's
+spend per owner. "Me" is picked in the browser and kept in `localStorage`. The view stays off until a session
+belongs to a person, so a one-person setup that reports with the admin secret looks as before.
+**Why.** A name is visible to everyone and can be typed by anyone, so trusting it would let one person appear as
+another; the token already decides identity. A host name alone cannot tell two machines with the same name apart,
+and a hardware or OS identifier says more about the machine than Podium needs, so the id is random and local to
+the mod. Deriving people from live sessions keeps the server free of a second, stale copy of who is around, and
+the server cannot know who is looking at a page, so only the browser can say "me".
+**Cost.** With the admin secret or with auth off, names are sent and stored but no person is shown (GOTCHAS). A
+person whose sessions have all ended has no band, though today's spend still lists them. The id is per mod store,
+so a copied `~/.claude` makes two machines share one id (the host name still differs in most cases). Group changes
+in Admin reach a live session's card with its next report rather than at once.
+

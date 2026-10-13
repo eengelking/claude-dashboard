@@ -52,6 +52,20 @@ header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`)
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them.
 
+**The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
+`usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
+`sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to
+`userName`; `SessionView.ownerGroup`, joined from the people and groups tables by the owner's exact name when the
+view is built; and `Kpis.costTodayByOwner`, the `costToday` sum split by owner with each owner's group. Bands,
+their counts, ordering, the people filter, machine labels and the spend rows are pure functions in `people.ts`,
+fed from the live sessions and the KPIs the UI already has, so people exist only while one of their sessions is
+live. The view switches on when any live session's owner is a person (not `Admin`, not null). Who is looking is
+a choice made in the browser and kept in `localStorage` (`podium.me`), with the other choices in
+`podium.people`; the server has no idea who reads it. Machine labels add the start of the machine id only when
+one owner has two machines with the same host name. In the mod, `machine.ts` cuts `hostname` output to the short
+name and makes the random id kept under `machineId` in `$.store`; `register.ts` reads both once per load and only
+when `userName` is set.
+
 **Shared contract.** The Report types live in `server/src/fleet/protocol.ts` and, byte for byte between
 markers, in `mod/podium-reporter/hooks/protocol.ts`; a test compares them. The UI imports the view types
 from the server's file. `docs/fixtures/report.sample.json` is the shared fixture.

@@ -41,7 +41,9 @@ In Claude Code:
 
 Then give it the token. Print it with `podiumctl token`, and enter it with
 `/plugin configure podium-reporter@eengelking-marketplace`. If someone else runs the server, ask them for
-your own token and enter it as `token`, with your name as `userName` (see "Admin" below).
+your own token and enter it as `token`, with your name as `userName` (see "Admin" below). To run one
+server for several people, see "Several people on one Podium" in the README: it covers the bind address,
+the firewall and what everyone who can reach the server can see.
 
 ### 3. Check that it works
 
@@ -89,6 +91,39 @@ your approval or your input. A **stale** card means it has
 stopped reporting. It says how long until it goes away by itself, and has a **Remove** button (also on its
 rail row, and **Remove now** on its page) to clear it at once. The session stays in History, and the card
 comes back if the session reports again.
+
+### People
+
+When several people report to one Podium with their own tokens (see "Admin" below), the console groups
+their sessions. Nothing changes until a session reports with a person's token: sessions sent with the admin
+secret, or to a server with no token, keep the plain wall.
+
+A row above the filters then holds:
+
+- **Group by**: People (a band per person), Group (a band per group from Admin) or None (the plain wall, with
+  the owner on each card).
+- **Order by**: Needs attention (your own band first, then whoever has the most sessions waiting or stale),
+  Spend, or Name.
+- **You are**: pick your own name. Podium cannot tell who is looking, so this browser remembers it. It marks
+  your band "you" (your group's band "your group"), puts it first under Needs attention, and makes
+  **Only me** show just your sessions.
+
+A person's band header shows their initials and name, their group, the machines their sessions run on, how
+many are live, how many are waiting or stale, and their share of today's estimated spend. Click the header
+to fold the band to that line; Podium remembers which bands you folded. Each card in the band says which
+machine it runs on. One person on two machines is one band, and when two of their machines have the same
+name, the card adds the start of the machine's id. Sessions reported with the admin secret are in an
+**Admin** band, and sessions with no owner (only possible on a server with no token) are under
+**Unassigned**, after everyone else. In Group, people without a group, Admin and Unassigned are under
+**No group**, and a group with no live sessions has no band.
+
+The left list groups the same way. Click a person or group there to show only theirs on the wall; click it
+again, **Show everyone**, or **All orchestrators** to see everyone again. On the right, **Spend today, by
+person** (or by group) shows today's estimated spend as bars, largest first, with a **Table** view that adds a
+total equal to the "Est. cost today" tile. It counts sessions that started today, so someone whose sessions
+have all ended still has a row there, but no band on the wall.
+
+A person is shown as initials and a name, never a color: color already means the model and the status.
 
 ### Sessions that have not done anything yet
 
@@ -206,7 +241,9 @@ Admin has four tabs. Every list is paged by the server, 50 rows at a time (25 an
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
   stale and drop as usual. The search finds a person by name, group or machine.
 - **Groups.** Create groups such as Frontend or DevOps, and pick one for a person on the People tab. A group is
-  a label for arranging the console and grants nothing. Deleting a group moves its people to "No group".
+  a label for arranging the console (Group by Group, see "People" above) and grants nothing. Deleting a group
+  moves its people to "No group". A change shows on the wall with each session's next report, within a few
+  seconds.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
 - **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations and group changes, with the
@@ -281,6 +318,12 @@ More in [GOTCHAS.md](GOTCHAS.md).
 Only to the server URL you set, and only the fields the README lists under "What leaves the session". Text
 is cut to fixed limits, and anything that looks like a secret is replaced with `[redacted]` before it is sent.
 Podium never reads whole messages, transcripts or files.
+
+Your name and your machine leave the session only once you set the mod's `userName` option, which is empty
+by default. Then each report carries that name, the machine's short host name and a random id the mod keeps
+for this machine. Everyone who can open the console sees them. Podium never reads your operating system user
+name or `git config` for this. The name shown on a session comes from the token that sent it, not from
+`userName`: the server checks that the two match, so nobody can report under your name without your token.
 
 ## Remove it
 
