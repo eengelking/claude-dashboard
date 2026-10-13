@@ -329,11 +329,10 @@ export function agentLabel(a: AgentView): string {
 export function modelVersion(model: string | null | undefined): string | null {
   const m = (model ?? "").toLowerCase();
   if (!m.includes("claude")) return null;
-  const parts = (digits: string | undefined) => (digits ? digits.split("-") : []).filter((d) => d.length <= 2);
-  const after = /(?:opus|sonnet|haiku|fable)-(\d{1,2}(?:-\d{1,2})?)(?![\d])/.exec(m)?.[1];
-  const before = /claude-(\d{1,2}(?:-\d{1,2})?)-(?:opus|sonnet|haiku|fable)/.exec(m)?.[1];
-  const v = parts(after ?? before);
-  return v.length ? v.join(".") : null;
+  const fam = "(?:opus|sonnet|haiku|fable)";
+  const ver = "(\\d{1,2}(?:-\\d{1,2})?)";
+  const v = new RegExp(`${fam}-${ver}(?!\\d)`).exec(m)?.[1] ?? new RegExp(`claude-${ver}-${fam}`).exec(m)?.[1];
+  return v ? v.replace("-", ".") : null;
 }
 
 /** "Sonnet 5.5": the family and, when the id carries one, the version. An alias is the family alone; a non-Claude model its raw name. */
