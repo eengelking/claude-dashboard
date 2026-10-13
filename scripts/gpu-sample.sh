@@ -20,20 +20,25 @@ EOF
 seconds=60 window=0 skip=0 csv=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --seconds) seconds="$2"; shift 2 ;;
-    --window) window="$2"; shift 2 ;;
-    --skip) skip="$2"; shift 2 ;;
-    --csv) csv="$2"; shift 2 ;;
+    --seconds|--window|--skip|--csv)
+      [ $# -ge 2 ] || { echo "$1 needs a value" >&2; usage >&2; exit 2; }
+      case "$1" in
+        --seconds) seconds="$2" ;; --window) window="$2" ;; --skip) skip="$2" ;; --csv) csv="$2" ;;
+      esac
+      shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
+done
+for n in "$seconds" "$window" "$skip"; do
+  case "$n" in ''|*[!0-9]*) echo "--seconds, --window and --skip take whole numbers" >&2; exit 2 ;; esac
 done
 [ "$window" -gt 0 ] || window="$seconds"
 
 start=$(date +%s)
 rows=""
 for _ in $(seq 1 "$seconds"); do
-  pct=$(ioreg -r -d 1 -w0 -c IOAccelerator | grep -o '"Device Utilization %"=[0-9]*' | head -1 | cut -d= -f2)
+  pct=$(ioreg -r -d 1 -w0 -c IOAccelerator | grep -o '"Device Utilization %"=[0-9]*' | head -1 | cut -d= -f2 || true)
   elapsed=$(( $(date +%s) - start ))
   rows+="${elapsed},${pct:-0}"$'\n'
   sleep 1
