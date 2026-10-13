@@ -79,8 +79,8 @@ describe("StatusChip delegating variant (#98)", () => {
     expect(st).not.toHaveClass("running");
     expect(st).not.toHaveClass("waiting");
     expect(st).toHaveAttribute("title", text);
-    expect(st).toHaveAttribute("aria-label", `delegating. ${text}`);
-    expect(st.textContent).toBe("delegating");
+    expect(st.textContent).toBe(`delegating. ${text}`);
+    expect(st.querySelector(".vh")!.textContent).toBe(`. ${text}`);
     expect(st.querySelector(".dot.ring")).toBeInTheDocument();
     expect(st.querySelector(".dot.waiting")).toBeNull();
   });

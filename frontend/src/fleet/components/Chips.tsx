@@ -76,9 +76,10 @@ export function StatusIcon({ status }: { status: StatusKind }) {
 export function StatusChip({ status, delegating }: { status: StatusKind; delegating?: string }) {
   if (delegating && status === "running") {
     return (
-      <span className="st deleg" title={delegating} aria-label={`delegating. ${delegating}`}>
+      <span className="st deleg" title={delegating}>
         <i className="dot ring" aria-hidden="true" />
         delegating
+        <span className="vh">. {delegating}</span>
       </span>
     );
   }

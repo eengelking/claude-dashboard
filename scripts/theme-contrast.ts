@@ -11,7 +11,7 @@ Checks, on --bg and --surface:
   text     ink, ink2, muted, good-text, crit-text,
            deleg-text                                      need 4.5:1
   marks    good, warn, serious, crit, deleg, opus,
-           sonnet, haiku, fable                                   need 3:1, or Podium's own ratio for the
+           sonnet, haiku, fable                                    need 3:1, or Podium's own ratio for the
                                                            same mode when that is lower (parity)
   models   the four model colors must differ from each other (OKLab distance, need 0.08)
 

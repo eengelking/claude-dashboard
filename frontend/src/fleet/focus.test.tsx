@@ -431,12 +431,12 @@ describe("delegating (#98)", () => {
 
   it("shows the orchestrator and a parent agent as delegating while their children run, and the leaf as running", () => {
     const { container } = openFocus({ agents: nested });
-    expect(chip(container, ".trow.root").textContent).toBe("delegating");
+    expect(chip(container, ".trow.root").textContent).toMatch(/^delegating\. Waiting on 1 agent/);
     expect(chip(container, ".trow.root")).toHaveAttribute("title", "Waiting on 1 agent: Parent agent. Not waiting on you.");
-    expect(chip(container, '[data-agent="p"]').textContent).toBe("delegating");
+    expect(chip(container, '[data-agent="p"]').textContent).toMatch(/^delegating\./);
     expect(chip(container, '[data-agent="p"]')).toHaveAttribute("title", "Waiting on 1 agent: Child agent. Not waiting on you.");
     expect(chip(container, '[data-agent="c"]').textContent).toBe("running");
-    expect(container.querySelector(".fh h1 .st")!.textContent).toBe("delegating");
+    expect(container.querySelector(".fh h1 .st")!.textContent).toMatch(/^delegating\./);
   });
 
   it("goes back to running when the agents finish", () => {

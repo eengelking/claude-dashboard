@@ -182,7 +182,7 @@ export function delegateText(children: readonly AgentView[]): string {
   return `Waiting on ${n} agent${n === 1 ? "" : "s"}: ${children.map((a) => a.description).join(", ")}. Not waiting on you.`;
 }
 
-export type AgentSortKey ="model" | "effort" | "ctx" | "tok" | "cost" | "time" | "status";
+export type AgentSortKey = "model" | "effort" | "ctx" | "tok" | "cost" | "time" | "status";
 
 const AGENT_STATUS_ORDER: Record<AgentView["status"], number> = { running: 0, failed: 1, queued: 2, aborted: 3, done: 4 };
 
