@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Fixed
+
+- An agent's Tokens no longer falls behind Claude Code's figure as the agent runs. Claude Code shows the context at the agent's latest request plus every output token it has written so far; Podium showed the context alone, so the gap grew with each reply (about 10k at 280k in a real run) and the final figure always ended lower. Podium now adds the output the agent has written, which the reporter already sent, so no reporter update is needed. The orchestrator row is unchanged. SPEC 6.5 records the definition. `scripts/agent-context-audit.sh` compares each agent's figure with its own transcript, and `scripts/agent-tokens-sample.sh` logs a running agent's figure over time. (#108)
+
 ### Added
 
 - The agent panel has a **Report** group with two buttons, Task prompt and Final answer, that open the text in a modal with markdown rendered as formatting. A button is dimmed and inert when there is nothing to show (and the answer says "not finished" while the agent runs). The modal blurs the page behind it, closes with the X, Esc or a click outside, keeps focus inside and gives it back, and has a Copy button. Raw HTML in the text is shown as text. The whole prompt and answer need the new opt-in `fullPrompts` reporter option (mod 0.10.0, off by default): they are redacted, cut at 20,000 characters, sent once, stored in a new `agent_texts` table and fetched when the modal opens from `GET /api/fleet/sessions/:id/agents/:agentId/text`. Without it, or with an older mod, the modal shows the 400-character excerpt and says why. The supported reporter range is now 0.2.0–0.10.0. (#97)
