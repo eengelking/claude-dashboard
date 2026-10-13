@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium background wait</title>
+<!-- Mockup for issue #119. A session that ended its turn but has background work in flight (a shell, a monitor, a background agent, a workflow) or a scheduled wake-up is not waiting on the person. It reads "Waiting for 1 background shell to finish" in the blue of Delegating (#98), not amber, and is not counted in "waiting on you". Tokens are copied from fleet.css (dark is the base). The switcher and the "rules" section are mockup scaffolding, not product UI. -->
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #151514; --raised: #1c1c1a; --border: #2b2b28; --axis: #3a3a36;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #8d8c84; --warn: #fab219; --good: #3fb27f; --info: #4c8dff;
+  --deleg: #2fa4e0; --deleg-text: #5cbcf0; --sel: #232321;
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --border: #dcdbd5; --axis: #c9c8c1;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --warn: #a96b00; --good: #1c7a54; --info: #1f5fd1;
+  --deleg: #0a7fb8; --deleg-text: #07608c; --sel: #ebeae5; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --border: #dcdbd5; --axis: #c9c8c1;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --warn: #a96b00; --good: #1c7a54; --info: #1f5fd1;
+  --deleg: #0a7fb8; --deleg-text: #07608c; --sel: #ebeae5; color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 13px/1.45 var(--font-ui); padding-inline: 16px; padding-block: 20px 40px; max-width: 1100px; margin-inline: auto; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 3px; }
+h1 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
+h2 { font-size: 13px; margin: 18px 0 8px; font-weight: 650; }
+.lede { color: var(--ink2); margin: 0 0 14px; max-width: 72ch; }
+.switcher { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { padding: 5px 12px; color: var(--ink2); border-right: 1px solid var(--border); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
+.frame { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; }
+.topbar { display: flex; gap: 14px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--raised); font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
+.topbar b { color: var(--ink); }
+.body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink2); }
+.toolbar .r { margin-left: auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.card .h { display: flex; justify-content: space-between; gap: 8px; }
+.card .h b { font-size: 14px; }
+.sub { color: var(--muted); font-size: 11.5px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; font-size: 11.5px; color: var(--ink2); }
+.foot { color: var(--ink2); font-size: 12px; font-family: var(--font-mono); }
+
+/* Amber: waiting on the person. Blue: waiting on something else, nobody needs to act. */
+.st { font-size: 12px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.st.you { color: var(--warn); }
+.st.bg { color: var(--deleg-text); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.you { background: var(--warn); }
+.dot.ring { border: 1.5px solid var(--deleg); }
+.wait { border-radius: 5px; padding: 5px 8px; font-size: 12px; border: 1px solid; }
+.wait.you { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.wait.bg { border-color: color-mix(in srgb, var(--deleg) 40%, transparent); background: color-mix(in srgb, var(--deleg) 10%, transparent); color: var(--ink); }
+.wait small { display: block; color: var(--ink2); font-size: 11.5px; margin-top: 2px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run { color: var(--good); }
+
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.panel { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.panel > .cap { color: var(--muted); font-size: 11.5px; }
+.rail { display: flex; flex-direction: column; }
+.rrow { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.rrow:last-child { border-bottom: 0; }
+.feed { display: flex; flex-direction: column; }
+.frow { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.frow:last-child { border-bottom: 0; }
+.frow time { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; flex: none; width: 44px; }
+.frow .bgt { color: var(--deleg-text); }
+.frow .w { color: var(--warn); }
+.tip { align-self: flex-start; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 9px; font-size: 12px; max-width: 360px; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+.tip small { display: block; color: var(--ink2); margin-top: 2px; }
+.rules { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--ink2); max-width: 80ch; }
+.rules h2 { color: var(--ink); margin-top: 0; }
+.rules ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Waiting on a background process</h1>
+<p class="lede">Mockup for the issue. A session that ends its turn with a shell, a monitor, a background agent or a workflow still running, or with a wake-up scheduled, is not waiting on you. It says what it is waiting on, in blue and without the amber alert. Pick a case below to see every place the wording appears. The first card always shows a session that really needs you, for contrast.</p>
+
+<div class="switcher">
+  <div class="seg" role="group" aria-label="Case">
+    <button type="button" data-case="shell" aria-pressed="true">1 background shell</button>
+    <button type="button" data-case="mixed" aria-pressed="false">Shell and a background agent</button>
+    <button type="button" data-case="wake" aria-pressed="false">Scheduled wake-up</button>
+    <button type="button" data-case="done" aria-pressed="false">Shell finished</button>
+  </div>
+</div>
+
+<div class="frame">
+  <div class="topbar"><b>Podium</b><span id="top">2 orchestrators live</span><span id="topwait" style="margin-left:auto"></span></div>
+  <div class="body">
+    <div class="toolbar">
+      <div class="seg" aria-hidden="true"><button type="button" aria-pressed="true">All</button><button type="button">Running</button><button type="button">Waiting</button><button type="button">Stale</button></div>
+      <span class="r" id="shown">2 shown</span>
+    </div>
+    <div class="grid" id="grid"></div>
+
+    <div class="two">
+      <div class="panel"><span class="cap">Orchestrator page callout</span><div id="callout"></div><span class="cap" style="margin-top:6px">Hover on the card status</span><div class="tip" id="tip"></div></div>
+      <div class="panel"><span class="cap">Rail</span><div class="rail" id="rail"></div><span class="cap" style="margin-top:6px">Activity feed</span><div class="feed" id="feed"></div></div>
+    </div>
+  </div>
+</div>
+
+<section class="rules" aria-labelledby="rules-h">
+  <h2 id="rules-h">The rules this mockup shows</h2>
+  <ol>
+    <li>"Waiting for your input" and "Waiting for your approval" stay amber and count in "waiting on you". Nothing about them changes.</li>
+    <li>A session idle on background work reads "Waiting for N background shell(s) to finish" (or monitor, agent, workflow), in blue with a ring, like Delegating. It keeps its place in the Waiting list, but is not amber and is not counted in "waiting on you".</li>
+    <li>With several kinds, the text lists the counts: "Waiting for 1 background shell and 1 background agent to finish". The tooltip lists each task with a short description.</li>
+    <li>A scheduled wake-up reads "Waiting for a scheduled wake-up at 14:30".</li>
+    <li>A shell's command is shortened and never sent whole. The tooltip shows the description, not the command.</li>
+    <li>The moment the work ends, the wording goes back to normal ("Waiting for your input", or running when a new turn starts).</li>
+  </ol>
+</section>
+
+<script>
+var CASES = {
+  shell: { n: 0, line: "Waiting for 1 background shell to finish.", tip: ["Waiting for 1 background shell. Not waiting on you.", "Shell: sleep 120 (nightly build)"], feed: "Waiting for 1 background shell to finish", rail: "waiting on shell" },
+  mixed: { n: 0, line: "Waiting for 1 background shell and 1 background agent to finish.", tip: ["Waiting for 1 background shell and 1 background agent. Not waiting on you.", "Shell: sleep 120 (nightly build) · Agent: Survey payment adapters"], feed: "Waiting for 1 background shell and 1 background agent to finish", rail: "waiting on 2 tasks" },
+  wake: { n: 0, line: "Waiting for a scheduled wake-up at 14:30.", tip: ["Waiting for a scheduled wake-up at 14:30. Not waiting on you.", "Loop: check the deploy every 5 minutes"], feed: "Waiting for a scheduled wake-up at 14:30", rail: "wakes at 14:30" },
+  done: { n: 1, line: "Waiting for your input.", tip: null, feed: "Waiting for your input", rail: "waiting on you" }
+};
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+function render(key) {
+  var c = CASES[key], quiet = !c.n;
+  var youCount = 1 + c.n;
+  var second = quiet
+    ? '<div class="card"><div class="h"><b>nightly-report</b><span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span></div><div class="wait bg">' + esc(c.line) + '<small>' + esc(c.tip[1]) + '</small></div><div class="foot">$0.21 · 62.8k tok · 8:58</div></div>'
+    : '<div class="card"><div class="h"><b>nightly-report</b><span class="st you"><span class="dot you"></span>waiting on you</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span></div><div class="wait you">Waiting for your input.</div><div class="foot">$0.23 · 64.0k tok · 11:02</div></div>';
+  $("grid").innerHTML =
+    '<div class="card"><div class="h"><b>claude-dashboard</b><span class="st you"><span class="dot you"></span>waiting on you</span></div><div class="sub">~/dev/claude-dashboard</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 15%</span></div><div class="wait you">Waiting for your input.</div><div class="foot">$28.27 · 1.21M tok · 1h 13m</div></div>' + second;
+  $("topwait").textContent = youCount + " waiting on you";
+  $("shown").textContent = "2 shown";
+  $("callout").innerHTML = quiet
+    ? '<div class="wait bg">' + esc(c.line) + '<small>' + esc(c.tip[1]) + '</small></div>'
+    : '<div class="wait you">Waiting for your input.</div>';
+  $("tip").innerHTML = quiet ? esc(c.tip[0]) + '<small>' + esc(c.tip[1]) + '</small>' : 'Waiting for your input.<small>Hover shows nothing extra for a wait on you.</small>';
+  $("rail").innerHTML =
+    '<div class="rrow"><span>claude-dashboard</span><span class="st you"><span class="dot you"></span>waiting on you</span></div>' +
+    '<div class="rrow"><span>nightly-report</span>' + (quiet ? '<span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span>' : '<span class="st you"><span class="dot you"></span>waiting on you</span>') + '</div>';
+  $("feed").innerHTML =
+    '<div class="frow"><time>14:07</time><span class="' + (quiet ? "bgt" : "w") + '">nightly-report: ' + esc(c.feed) + '</span></div>' +
+    '<div class="frow"><time>14:05</time><span>nightly-report: started a background shell</span></div>' +
+    '<div class="frow"><time>13:58</time><span class="w">claude-dashboard: Waiting for your input</span></div>';
+}
+document.querySelector(".switcher").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-case]"); if (!b) return;
+  document.querySelectorAll("[data-case]").forEach(function (x) { x.setAttribute("aria-pressed", x === b); });
+  render(b.dataset.case);
+});
+render("shell");
+</script>
+</body>
+</html>

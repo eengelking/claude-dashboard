@@ -14,6 +14,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Documentation
 
+- Mockup for a session that is idle on a background process or a scheduled wake-up (#119): it says what it is waiting on, in blue, and is not counted as waiting on you.
 - The README and the user guide now say that load grows with the number of sessions and agents reporting, what grows on the server and in each open tab, an example measurement from #81, how to measure your own with `scripts/gpu-sample.sh`, and what lowers it. (#107)
 
 ### Fixed
