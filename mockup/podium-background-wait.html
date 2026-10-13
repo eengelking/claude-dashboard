@@ -57,11 +57,20 @@ h2 { font-size: 13px; margin: 18px 0 8px; font-weight: 650; }
 .st.bg { color: var(--deleg-text); }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot.you { background: var(--warn); }
-.dot.ring { border: 1.5px solid var(--deleg); }
+.dot.ring { border: 1.5px solid var(--deleg); position: relative; }
+/* Same pulse as the running dot: a ring scaled and faded on one shared beat (data-beat), not an infinite animation of its own. */
+.dot.ring::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; background: var(--deleg); opacity: 0; pointer-events: none; }
+body[data-beat="0"] .dot.ring::after { transform: scale(1); opacity: .55; }
+body[data-beat="1"] .dot.ring::after { transform: scale(1.6); opacity: .35; }
+body[data-beat="2"] .dot.ring::after { transform: scale(2.3); opacity: .12; }
+body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
 .wait { border-radius: 5px; padding: 5px 8px; font-size: 12px; border: 1px solid; }
 .wait.you { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .wait.bg { border-color: color-mix(in srgb, var(--deleg) 40%, transparent); background: color-mix(in srgb, var(--deleg) 10%, transparent); color: var(--ink); }
-.wait small { display: block; color: var(--ink2); font-size: 11.5px; margin-top: 2px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wait small { display: block; color: var(--ink2); font-size: 11.5px; margin-top: 2px; font-family: var(--font-mono); }
+/* Orchestrator callout: two lines at most, then an ellipsis. */
+.wait.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.wait.clamp small { display: inline; }
 .run { color: var(--good); }
 
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
@@ -121,14 +130,17 @@ h2 { font-size: 13px; margin: 18px 0 8px; font-weight: 650; }
     <li>A session idle on background work reads "Waiting for N background shell(s) to finish" (or monitor, agent, workflow), in blue with a ring, like Delegating. It keeps its place in the Waiting list, but is not amber and is not counted in "waiting on you".</li>
     <li>With several kinds, the text lists the counts: "Waiting for 1 background shell and 1 background agent to finish". The tooltip lists each task with a short description.</li>
     <li>A scheduled wake-up reads "Waiting for a scheduled wake-up at 14:30".</li>
-    <li>A shell's command is shortened and never sent whole. The tooltip shows the description, not the command.</li>
+    <li>The card says only the short line. It never carries a task description, so a long one cannot wrap it.</li>
+    <li>The orchestrator callout adds the task description after the line, in two lines at most, and ends in an ellipsis when it runs out of room. The full text is in the tooltip.</li>
+    <li>A shell's command is shortened and redacted before it leaves the machine, and is never sent whole.</li>
+    <li>The blue ring pulses like the green running dot, on the same shared beat. It stops with reduced motion.</li>
     <li>The moment the work ends, the wording goes back to normal ("Waiting for your input", or running when a new turn starts).</li>
   </ol>
 </section>
 
 <script>
 var CASES = {
-  shell: { n: 0, line: "Waiting for 1 background shell to finish.", tip: ["Waiting for 1 background shell. Not waiting on you.", "Shell: sleep 120 (nightly build)"], feed: "Waiting for 1 background shell to finish", rail: "waiting on shell" },
+  shell: { n: 0, line: "Waiting for 1 background shell to finish.", tip: ["Waiting for 1 background shell. Not waiting on you.", "Shell: sleep 120 (nightly build)"], long: "Shell: npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default --reporters=jest-junit then publish the artifacts to the staging bucket and tag the release candidate (nightly build, step 4 of 9)", feed: "Waiting for 1 background shell to finish", rail: "waiting on shell" },
   mixed: { n: 0, line: "Waiting for 1 background shell and 1 background agent to finish.", tip: ["Waiting for 1 background shell and 1 background agent. Not waiting on you.", "Shell: sleep 120 (nightly build) · Agent: Survey payment adapters"], feed: "Waiting for 1 background shell and 1 background agent to finish", rail: "waiting on 2 tasks" },
   wake: { n: 0, line: "Waiting for a scheduled wake-up at 14:30.", tip: ["Waiting for a scheduled wake-up at 14:30. Not waiting on you.", "Loop: check the deploy every 5 minutes"], feed: "Waiting for a scheduled wake-up at 14:30", rail: "wakes at 14:30" },
   done: { n: 1, line: "Waiting for your input.", tip: null, feed: "Waiting for your input", rail: "waiting on you" }
@@ -136,19 +148,19 @@ var CASES = {
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 function render(key) {
-  var c = CASES[key], quiet = !c.n;
+  var c = CASES[key], quiet = !c.n; var detail = c.long || (c.tip && c.tip[1]);
   var youCount = 1 + c.n;
   var second = quiet
-    ? '<div class="card"><div class="h"><b>nightly-report</b><span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span></div><div class="wait bg">' + esc(c.line) + '<small>' + esc(c.tip[1]) + '</small></div><div class="foot">$0.21 · 62.8k tok · 8:58</div></div>'
+    ? '<div class="card"><div class="h"><b>nightly-report</b><span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span></div><div class="wait bg">' + esc(c.line) + '</div><div class="foot">$0.21 · 62.8k tok · 8:58</div></div>'
     : '<div class="card"><div class="h"><b>nightly-report</b><span class="st you"><span class="dot you"></span>waiting on you</span></div><div class="sub">~/dev/reports</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 7%</span></div><div class="wait you">Waiting for your input.</div><div class="foot">$0.23 · 64.0k tok · 11:02</div></div>';
   $("grid").innerHTML =
     '<div class="card"><div class="h"><b>claude-dashboard</b><span class="st you"><span class="dot you"></span>waiting on you</span></div><div class="sub">~/dev/claude-dashboard</div><div class="chips"><span class="chip">Sonnet</span><span class="chip">ctx 15%</span></div><div class="wait you">Waiting for your input.</div><div class="foot">$28.27 · 1.21M tok · 1h 13m</div></div>' + second;
   $("topwait").textContent = youCount + " waiting on you";
   $("shown").textContent = "2 shown";
   $("callout").innerHTML = quiet
-    ? '<div class="wait bg">' + esc(c.line) + '<small>' + esc(c.tip[1]) + '</small></div>'
+    ? '<div class="wait bg clamp" title="' + esc(c.line + ' ' + detail) + '">' + esc(c.line) + ' <small>' + esc(detail) + '</small></div>'
     : '<div class="wait you">Waiting for your input.</div>';
-  $("tip").innerHTML = quiet ? esc(c.tip[0]) + '<small>' + esc(c.tip[1]) + '</small>' : 'Waiting for your input.<small>Hover shows nothing extra for a wait on you.</small>';
+  $("tip").innerHTML = quiet ? esc(c.tip[0]) + '<small>' + esc(detail) + '</small>' : 'Waiting for your input.<small>Hover shows nothing extra for a wait on you.</small>';
   $("rail").innerHTML =
     '<div class="rrow"><span>claude-dashboard</span><span class="st you"><span class="dot you"></span>waiting on you</span></div>' +
     '<div class="rrow"><span>nightly-report</span>' + (quiet ? '<span class="st bg"><span class="dot ring"></span>' + esc(c.rail) + '</span>' : '<span class="st you"><span class="dot you"></span>waiting on you</span>') + '</div>';
@@ -163,6 +175,9 @@ document.querySelector(".switcher").addEventListener("click", function (e) {
   render(b.dataset.case);
 });
 render("shell");
+var beat = 0, rm = window.matchMedia("(prefers-reduced-motion: reduce)");
+document.body.setAttribute("data-beat", "0");
+setInterval(function () { if (rm.matches) { document.body.setAttribute("data-beat", "0"); return; } beat = (beat + 1) % 4; document.body.setAttribute("data-beat", String(beat)); }, 450);
 </script>
 </body>
 </html>
