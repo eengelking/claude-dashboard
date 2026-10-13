@@ -22,6 +22,8 @@ Options:
   --duration S      Stop after S real seconds and exit 0 (default: run until Ctrl-C)
   --chaos           Also make sessions go silent (stale), fail more and blow out more
   --agents N        Extra ad-hoc agents per session at start, for load tests (default 0)
+  --nested          Keep one session running the nested-agents scenario: a subagent under a subagent,
+                    a fork under a subagent, a subagent under a fork, four levels deep (#101)
   --reporter-version V  Version the reports claim (default 0.1.0-sim, which the server cannot read, so no warning); try 0.1.0 or 0.99.0 to see a mismatch
   --token T         Send X-Podium-Token: T
   --person NAME[=TOKEN]  Report some sessions as this person (repeat for more people). Sessions go to
@@ -119,6 +121,8 @@ interface Template {
   done?: number;
   waitNote?: string;
   ageSec?: number;
+  /** How many steps may run at once (default 2). A parent waiting on its children counts as running. */
+  parallel?: number;
 }
 
 const TEMPLATES: Template[] = [
@@ -154,6 +158,21 @@ const TEMPLATES: Template[] = [
   { name: 'release-notes', project: 'mobile-app', branch: 'release/4.12', worktree: false, ahead: 0, behind: 0, dirty: 0, fam: 'haiku', effort: 'low', plan: 'Draft 4.12 notes', steps: [
     S('Collect merged PRs', 'sub', 'Explore', 'haiku', 'low'), S('Group by area', 'sub', 'general-purpose', 'haiku', 'low'), S('Write notes', 'sub', 'general-purpose', 'sonnet', 'low')] },
 ];
+
+/**
+ * Agents that launch agents, in the shapes a real run on Claude Code 2.1.296 produced (#101): a subagent
+ * under a subagent (three and four levels deep), a fork under a subagent, and a subagent under a fork.
+ * `under` is the index of the step whose agent launches this one.
+ */
+const NESTED: Template = { name: 'payments-nested', project: 'payments', branch: 'feat/adapter-rewrite', worktree: true, ahead: 2, behind: 0, dirty: 4, fam: 'opus', effort: 'high', plan: 'Rewrite the payment adapters', ageSec: 420, parallel: 8, steps: [
+  S('Plan the adapter rewrite', 'sub', 'general-purpose', 'sonnet', 'high'),
+  S('Survey payment adapters', 'sub', 'Explore', 'haiku', 'low', ['repo-map'], 0),
+  S('Sketch the adapter interface', 'fork', '', '', '', [], 0),
+  S('Read the Stripe adapter', 'sub', 'Explore', 'haiku', 'low', [], 1),
+  S('Check the Adyen refund path', 'sub', 'Explore', 'haiku', 'low', [], 3),
+  S('Weigh the retry options', 'fork', '', '', ''),
+  S('Check refund edge cases', 'sub', 'general-purpose', 'sonnet', 'medium', [], 5),
+  S('Write the adapter tests', 'sub', 'general-purpose', 'sonnet', 'medium')] };
 
 interface FailSpec {
   cls: Failure['class'];
@@ -261,6 +280,8 @@ export interface SimOptions {
   people?: SimPerson[];
   /** With people, also keep a share of sessions with no name. */
   unnamed?: boolean;
+  /** Keep one session running the nested-agents scenario (NESTED). */
+  nested?: boolean;
 }
 
 /** A stable 12-hex machine id from a label, so a person's machine keeps its id across runs. */
@@ -329,7 +350,8 @@ export class Simulator {
   }
 
   private startSession(initial: boolean): SimSession {
-    const tpl = TEMPLATES[this.poolIdx++ % TEMPLATES.length]!;
+    const nestedLive = this.sessions.some((x) => x.tpl === NESTED && x.status !== 'done' && !x.silent);
+    const tpl = this.opts.nested && !nestedLive ? NESTED : TEMPLATES[this.poolIdx++ % TEMPLATES.length]!;
     const uses = (this.nameUse.get(tpl.name) ?? 0) + 1;
     this.nameUse.set(tpl.name, uses);
     const rng = this.rng;
@@ -393,10 +415,12 @@ export class Simulator {
     const rng = this.rng;
     const spec = stepIndex !== null ? s.steps![stepIndex]!.spec : adhoc!;
     const isFork = spec.kind === 'fork';
-    const model = isFork ? s.model : MODEL_ID[spec.fam];
-    const effort = isFork ? s.tpl.effort : spec.effort;
     let parentId: string | null = null;
     if (spec.under !== undefined && s.steps) parentId = s.steps[spec.under]?.agentId ?? null;
+    // A fork inherits from the loop that launched it: the parent agent's model and effort, else the orchestrator's.
+    const parent = parentId ? s.agents.find((x) => x.report.id === parentId) : undefined;
+    const model = isFork ? (parent?.report.model ?? s.model) : MODEL_ID[spec.fam];
+    const effort = isFork ? (parent?.report.effort ?? s.tpl.effort) : spec.effort;
     const id = `a${(this.agentSeq++).toString(16).padStart(6, '0')}${rng.hex(10)}`;
     const total = rng.int(4, 9);
     const window = windowOf(model) ?? 1_000_000;
@@ -474,7 +498,7 @@ export class Simulator {
       return;
     }
     const active = s.steps.filter((x) => x.state === 'active').length;
-    if (active >= 2) return;
+    if (active >= (s.tpl.parallel ?? 2)) return;
     const i = s.steps.findIndex((x, idx) => x.state === 'pending' && (x.spec.under === undefined || !!s.steps![x.spec.under]?.agentId) && idx >= 0);
     if (i < 0) return;
     this.spawn(s, i, 'running');
@@ -592,7 +616,9 @@ export class Simulator {
 
     for (const a of s.agents) {
       if (a.report.status !== 'running') continue;
-      const ready = (a.report.steps?.done ?? 0) >= a.progressTotal;
+      // An agent waits for the agents it launched before it answers.
+      const waiting = s.agents.some((k) => k.report.parentId === a.report.id && k.report.status === 'running');
+      const ready = !waiting && (a.report.steps?.done ?? 0) >= a.progressTotal;
       if (ready && rng.chance(0.35)) this.finish(s, a, true);
       else if (!ready && rng.chance(this.opts.chaos ? 0.012 : 0.004)) this.finish(s, a, false);
     }
@@ -790,10 +816,11 @@ interface Args {
   ticks: number;
   people: SimPerson[];
   unnamed: boolean;
+  nested: boolean;
 }
 
 export function parseArgs(argv: string[]): Args | 'help' {
-  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, reporterVersion: undefined, token: null, print: false, ticks: 0, people: [], unnamed: false };
+  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, reporterVersion: undefined, token: null, print: false, ticks: 0, people: [], unnamed: false, nested: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i]!;
     const val = () => {
@@ -826,6 +853,7 @@ export function parseArgs(argv: string[]): Args | 'help' {
         break;
       }
       case '--unnamed': a.unnamed = true; break;
+      case '--nested': a.nested = true; break;
       case '--print': a.print = true; break;
       case '--ticks': a.ticks = Math.round(num(0, 1e7)); break;
       default: throw new Error(`unknown option ${k} (see --help)`);
@@ -877,7 +905,7 @@ async function main() {
   const a = args;
   if (a.print) {
     let t = 1_800_000_000_000;
-    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: () => t, home: '/Users/sim', people: a.people, unnamed: a.unnamed });
+    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: () => t, home: '/Users/sim', people: a.people, unnamed: a.unnamed, nested: a.nested });
     const ticks = a.ticks || 60;
     for (let i = 0; i < ticks; i++) {
       t += 1000;
@@ -890,8 +918,8 @@ async function main() {
     return;
   }
 
-  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: Date.now, home: os.homedir(), people: a.people, unnamed: a.unnamed });
-  console.log(`podium-sim: ${a.sessions} sessions, seed ${a.seed}, speed ${a.speed}${a.chaos ? ', chaos' : ''} -> ${a.url}`);
+  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: Date.now, home: os.homedir(), people: a.people, unnamed: a.unnamed, nested: a.nested });
+  console.log(`podium-sim: ${a.sessions} sessions, seed ${a.seed}, speed ${a.speed}${a.chaos ? ', chaos' : ''}${a.nested ? ', nested' : ''} -> ${a.url}`);
   let stopping = false;
   let failures = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;

@@ -122,12 +122,14 @@ export interface TreeRow {
 }
 
 /**
- * Agents nested under their parent. Each row carries one guide per level: `last` for the final child
- * at its level (an elbow), `mid` for others (a tee), and above them `blank` where the ancestor at that
- * level was a last child (no line) or `mid` where it was not (a continuing line). An agent whose parent
- * is not in the list is shown at the top level.
+ * Agents nested under their parent, at any depth. Each row carries one guide per level: `last` for the
+ * final child at its level (an elbow), `mid` for others (a tee), and above them `blank` where the ancestor
+ * at that level was a last child (no line) or `mid` where it was not (a continuing line). An agent whose
+ * parent is not in the list is shown at the top level. With `order`, the children of each parent (and the
+ * top-level agents) are sorted by it, so a sorted table keeps every child under its parent (#101); without
+ * it they stay in launch order.
  */
-export function buildTree(agents: readonly AgentView[]): TreeRow[] {
+export function buildTree(agents: readonly AgentView[], order?: (a: AgentView, b: AgentView) => number): TreeRow[] {
   const ids = new Set(agents.map((a) => a.id));
   const kids = new Map<string | null, AgentView[]>();
   for (const a of agents) {
@@ -136,6 +138,7 @@ export function buildTree(agents: readonly AgentView[]): TreeRow[] {
     list.push(a);
     kids.set(p, list);
   }
+  if (order) for (const list of kids.values()) list.sort(order);
   const rows: TreeRow[] = [];
   const visited = new Set<string>();
   const walk = (pid: string | null, guides: Guide[]) => {
@@ -153,6 +156,64 @@ export function buildTree(agents: readonly AgentView[]): TreeRow[] {
   for (const a of agents) if (!visited.has(a.id)) rows.push({ agent: a, guides: ["last"] });
   return rows;
 }
+
+/** How many levels deep the tree goes: 1 when every agent was launched by the orchestrator. */
+export function treeDepth(rows: readonly TreeRow[]): number {
+  return rows.reduce((n, r) => Math.max(n, r.guides.length), 0);
+}
+
+/** Agents in tree order (a parent, then everything under it), for the card's agent strip. */
+export function treeOrder(agents: readonly AgentView[]): AgentView[] {
+  return buildTree(agents).map((r) => r.agent);
+}
+
+/** The agent that launched this one; null when the orchestrator did, or the parent is not in the list. */
+export function parentOf(agents: readonly AgentView[], a: AgentView): AgentView | null {
+  if (!a.parentId || a.parentId === a.id) return null;
+  return agents.find((x) => x.id === a.parentId) ?? null;
+}
+
+export interface BranchTotals {
+  /** Agents under this one, at every depth (not counting itself). */
+  agents: number;
+  /** Its own estimated cost plus each one's under it; unpriced agents add nothing and are counted in `unpriced`. */
+  costUsd: number;
+  unpriced: number;
+  /** Its own Tokens figure plus each one's under it (the context each holds now, as the rows show). */
+  tokens: number;
+}
+
+/** An agent's branch: itself and every agent under it, each counted once, a parent cycle included. */
+export function branchTotals(agents: readonly AgentView[], id: string): BranchTotals {
+  const kids = new Map<string, AgentView[]>();
+  for (const a of agents) {
+    if (!a.parentId || a.parentId === a.id) continue;
+    const list = kids.get(a.parentId) ?? [];
+    list.push(a);
+    kids.set(a.parentId, list);
+  }
+  const out: BranchTotals = { agents: 0, costUsd: 0, unpriced: 0, tokens: 0 };
+  const seen = new Set<string>([id]);
+  const self = agents.find((a) => a.id === id);
+  const queue: AgentView[] = self ? [self] : [];
+  while (queue.length) {
+    const a = queue.shift()!;
+    if (a.id !== id) out.agents++;
+    if (a.costUsdEst === null) out.unpriced++;
+    else out.costUsd += a.costUsdEst;
+    out.tokens += agentTokens(a);
+    for (const k of kids.get(a.id) ?? []) {
+      if (seen.has(k.id)) continue;
+      seen.add(k.id);
+      queue.push(k);
+    }
+  }
+  return out;
+}
+
+export const COST_HINT_SESSION = "The whole session: the orchestrator and every agent, nested ones included. Claude Code's own figure.";
+export const COST_HINT_AGENT = "This agent's own estimated cost. The agents it launched are not included; their total is in the side panel.";
+export const COST_HINT_HEADER = "An agent's row is its own estimated cost. The orchestrator's row is the whole session, every agent included.";
 
 /**
  * Rows that are waiting on agents they launched, keyed by agent id (`ORCHESTRATOR_ROW` for the
@@ -207,7 +268,8 @@ export function defaultAgentDir(key: AgentSortKey): 1 | -1 {
   return key === "model" || key === "effort" || key === "status" ? 1 : -1;
 }
 
-export function sortAgents(agents: readonly AgentView[], key: AgentSortKey, dir: 1 | -1, now: number): AgentView[] {
+/** Compares two agents by a column, ties by id; what `sortAgents` sorts with and `buildTree` orders siblings by. */
+export function agentOrder(key: AgentSortKey, dir: 1 | -1, now: number): (a: AgentView, b: AgentView) => number {
   const val: Record<AgentSortKey, (a: AgentView) => number> = {
     model: (a) => MODEL_ORDER.indexOf(a.modelFamily),
     effort: (a) => (a.effort ? EFFORTS.indexOf(a.effort) : -1),
@@ -218,7 +280,11 @@ export function sortAgents(agents: readonly AgentView[], key: AgentSortKey, dir:
     status: (a) => AGENT_STATUS_ORDER[a.status],
   };
   const f = val[key];
-  return agents.slice().sort((a, b) => (f(a) - f(b)) * dir || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return (a, b) => (f(a) - f(b)) * dir || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+
+export function sortAgents(agents: readonly AgentView[], key: AgentSortKey, dir: 1 | -1, now: number): AgentView[] {
+  return agents.slice().sort(agentOrder(key, dir, now));
 }
 
 /** Seconds since the session started, frozen once it is done. */

@@ -317,7 +317,7 @@ Run in Chrome (Claude in Chrome) against the dev server, Vite, and either `podiu
 | Orchestrator page: header, three charts with crosshair and readout, blowout marker and caption | yes | yes | yes | |
 | Facts bar with Copy resume command last ("Copied", then back) | yes | yes | yes | |
 | Blowout callout with agent links | yes | | | |
-| Plan checklist, agent tree, sort columns and "Show as tree", row flash | yes | yes | yes (tree scrolls inside) | |
+| Plan checklist, agent tree, sort columns and "Show as tree" (now "Launch order", and a sort keeps the tree, #101), row flash | yes | yes | yes (tree scrolls inside) | |
 | Activity: 12 rows, Show 12 more, Show fewer, counts, 150-event note | yes | yes | yes | |
 | Activity row selects session and agent, scrolls and flashes; failure row shows root cause | yes | yes | yes | |
 | Rows of ended sessions greyed, "Session ended", inert | yes | | | |

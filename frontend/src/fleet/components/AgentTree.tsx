@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { buildTree, delegateText, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, TOKENS_HINT, waitingOnByRow, type AgentSortKey } from "../logic";
+import { agentOrder, buildTree, COST_HINT_HEADER, COST_HINT_SESSION, delegateText, ORCHESTRATOR_ROW, sessionElapsedSec, TOKENS_HINT, treeDepth, waitingOnByRow, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
@@ -31,7 +31,12 @@ export function AgentTree(props: {
   onSelect: (id: string) => void;
 }) {
   const { s, now, sort } = props;
-  const rows = sort.key ? sortAgents(s.agents, sort.key, sort.dir, now).map((a) => ({ agent: a, guides: [] })) : buildTree(s.agents);
+  // A sort orders each parent's children and keeps the tree (#101); with none the rows are in launch order.
+  const rows = buildTree(s.agents, sort.key ? agentOrder(sort.key, sort.dir, now) : undefined);
+  // Each level past the second widens the Task column by one guide, so a deep row keeps as much room for its
+  // task as a second-level one; the table scrolls sideways inside its own box (#101).
+  const deep = Math.max(0, treeDepth(rows) - 2);
+  const nested = s.agents.filter((a) => a.parentId && a.parentId !== a.id && s.agents.some((x) => x.id === a.parentId)).length;
   const waiting = waitingOnByRow(s);
   const delegating = (id: string) => {
     const kids = waiting.get(id);
@@ -47,22 +52,22 @@ export function AgentTree(props: {
         <h2>Agents</h2>
         <span className="src">
           {sort.key ? (
-            <button type="button" className="btn" onClick={() => props.onSort(null)}>
-              Show as tree
+            <button type="button" className="btn" onClick={() => props.onSort(null)} title="Clear the sort and list the agents in the order they were launched">
+              Launch order
             </button>
           ) : (
-            `${s.agents.length} launched · click a header to sort`
+            `${s.agents.length} launched${nested ? `, ${nested} by other agents` : ""} · click a header to sort`
           )}
         </span>
       </div>
-      <div className="tw">
+      <div className="tw" style={{ "--deep": deep } as CSSProperties}>
         <div className="trow hd" role="row">
           <div>Task</div>
           {HEADERS.map((h) => {
             const on = sort.key === h.key;
             return (
               <div key={h.key} className={h.cls}>
-                <button type="button" aria-pressed={on} onClick={() => props.onSort(h.key)} title={h.key === "tok" ? `Sort by tokens. ${TOKENS_HINT}` : `Sort by ${h.label.toLowerCase()}`}>
+                <button type="button" aria-pressed={on} onClick={() => props.onSort(h.key)} title={h.key === "tok" ? `Sort by tokens. ${TOKENS_HINT}` : h.key === "cost" ? `Sort by cost. ${COST_HINT_HEADER}` : `Sort by ${h.label.toLowerCase()}`}>
                   {h.label}
                   {on ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
                 </button>
@@ -96,7 +101,7 @@ export function AgentTree(props: {
             <BlowBadge n={s.blowouts.orchestrator} />
           </div>
           <div className="num c-tok" title={TOKENS_HINT}>{fmtTok(s.context.tokens)}</div>
-          <div className="num"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
+          <div className="num" title={COST_HINT_SESSION}><Cost usd={s.costUsd} family={s.modelFamily} /></div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
           <div className="cell">
             <StatusChip status={s.status} delegating={delegating(ORCHESTRATOR_ROW)} />

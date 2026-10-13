@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
+import { agentCounts, COST_HINT_SESSION, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip } from "./Chips";
 import { IconX } from "./Icons";
@@ -64,7 +64,7 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
           <BlowBadge n={s.blowouts.orchestrator} />
         </div>
       </div>
-      <div className="fact agents">
+      <div className="fact agents" title="Every agent counted once, including those launched by other agents">
         <div className="k">Agents</div>
         <div className="v mono">
           <span className="n-running">{c.running} running</span>
@@ -77,7 +77,7 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
           )}
         </div>
       </div>
-      <div className="fact slim">
+      <div className="fact slim cost" title={COST_HINT_SESSION}>
         <div className="k">Est. cost</div>
         <div className="v mono"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
       </div>

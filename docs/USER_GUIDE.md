@@ -189,8 +189,15 @@ while Files is open. The list comes from `git diff` against the commit the sessi
 in the same checkout see the same changes; use a worktree to keep them apart. It needs podium-reporter 0.6.0
 or later, and says so when the reporter is older. On the right is the agent tree: every
 subagent and fork with its task, type, model, effort, context bar, tokens, cost, time and status. Click a
-column header to switch to a sorted flat list, and "Show as tree" to go back. **Copy resume command** copies
-the command that resumes the session.
+column header to sort: each agent's own agents stay under it, sorted among themselves. Click the header again
+to reverse, and **Launch order** to go back. **Copy resume command** copies the command that resumes the session.
+
+A subagent or a fork can launch agents of its own, and those can too. Each is indented under the agent that
+launched it, as deep as it goes; past two levels the Task column gets wider and the table scrolls sideways
+inside its box, so the task stays readable. Hover a row for its full task. The caption over the tree says how
+many agents were launched by other agents. On the wall card, the squares follow the same order, and hovering a
+nested one names the agent that launched it. In Activity, a launch by another agent ends with "launched by"
+and that agent's task.
 
 A row that is running but has agents of its own running, such as the orchestrator waiting on a subagent, reads
 "delegating" in blue with a hollow dot, and hovering it lists the agents it is waiting on. It is not asking
@@ -198,7 +205,9 @@ anything of you: amber and "waiting on you" are the ones that need a reply. The 
 filters still count the session as running. Podium cannot tell an agent launched in the background from one
 the row is really blocked on, so a row with a background agent running also reads "delegating".
 
-Click an agent to open its detail in the right panel. Its **Tokens** line is the context it holds now, and
+Click an agent to open its detail in the right panel. **Launched by** names the agent that launched it (click it
+to go there) or says "the orchestrator". **Est. cost** is the agent's own. For an agent that launched others,
+**With its agents** adds up the agent and every agent under it, each once. Its **Tokens** line is the context it holds now, and
 **Used so far** under it lists the running totals (input, output, cache read, cache write); cache read is large
 because the cached context is read again on every request. If it failed, you get the failing call, the last lines
 of its output, the evidence behind the likely cause and what happened next. If its context blew out, you get a
@@ -226,7 +235,9 @@ also read as plain sentences, such as "Session ended (cleared)."
 ### What the numbers mean
 
 Cost is an estimate from token counts and a price table, and it is never a bill. The session's own figure is
-the exact ledger from Claude Code; the figures for agents are estimates, and the dashboard labels them so.
+the exact ledger from Claude Code and covers the orchestrator and every agent, nested ones included; the
+figures for agents are estimates of each agent's own use, and the dashboard labels them so. The orchestrator's
+row in the agent tree shows the session figure.
 A session on a model that is not a Claude model (a local model served by Ollama, for example) has no price, so its cost reads "n/a" and the "Est. cost today" tile leaves it out and says how many sessions it skipped. Context fill is the share of the model's window in use; when Podium does not know a model's window the bar is empty and marked unknown rather than computed against a guessed size. A blowout is a loop that overflowed its window and was
 compacted or stopped.
 

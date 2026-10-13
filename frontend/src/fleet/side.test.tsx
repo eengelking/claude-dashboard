@@ -139,6 +139,81 @@ describe("FailureBox and agent detail", () => {
   });
 });
 
+describe("nested agents in the panel, the activity feed, the card strip and the plan (#101)", () => {
+  // A subagent that launched a subagent and a fork, with a grandchild under the subagent.
+  const nested = [
+    makeAgent({ id: "p", description: "Plan the rewrite", costUsdEst: 0.05, context: { tokens: 17_000, window: 1_000_000, percent: 2 } }),
+    makeAgent({ id: "c", parentId: "p", description: "Survey adapters", costUsdEst: 0.04, context: { tokens: 18_000, window: 1_000_000, percent: 2 } }),
+    makeAgent({ id: "g", parentId: "c", description: "Read Stripe adapter", costUsdEst: 0.01, status: "done", context: { tokens: 14_000, window: 1_000_000, percent: 1 } }),
+    makeAgent({ id: "pf", parentId: "p", kind: "fork", type: "fork", description: "Sketch interface", costUsdEst: 0.02, context: { tokens: 15_000, window: 1_000_000, percent: 2 } }),
+    makeAgent({ id: "top", description: "Weigh options", costUsdEst: 0.03 }),
+  ];
+  const openAgent = (id: string, over = {}) => {
+    const s = makeSession({ agents: nested, ...over });
+    const utils = render(<FleetView state={stateFrom({ sessions: [s] })} />);
+    fireEvent.click(utils.container.querySelector(".wall .card")!);
+    fireEvent.click(utils.container.querySelector(`button.trow[data-agent="${id}"]`)!);
+    const dl = utils.container.querySelector(".side dl")!;
+    const dd = (label: string) => [...dl.querySelectorAll("dt")].find((d) => d.textContent === label)?.nextElementSibling ?? null;
+    return { ...utils, dd };
+  };
+
+  it("names who launched an agent: the orchestrator at the top level, else its parent as a button that opens it", () => {
+    const top = openAgent("top");
+    expect(top.dd("Launched by")!.textContent).toBe("the orchestrator");
+    cleanup();
+    const { dd } = openAgent("g");
+    const by = within(dd("Launched by") as HTMLElement).getByRole("button", { name: "Survey adapters" });
+    fireEvent.click(by);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Survey adapters");
+  });
+
+  it("shows the agent's own cost, and the branch with every agent under it once", () => {
+    const { dd } = openAgent("p");
+    expect(dd("Est. cost")!.textContent).toContain("own");
+    const branch = dd("With its agents")!;
+    expect(branch.textContent).toContain("$0.12");
+    expect(branch.textContent).toContain("64.0k tok");
+    expect(branch.textContent).toContain("3 agents");
+    cleanup();
+    expect(openAgent("top").dd("With its agents")).toBeNull();
+  });
+
+  it("the card strip lists agents in tree order, each nested square naming its parent", () => {
+    const s = makeSession({ agents: [nested[4]!, ...nested.slice(0, 4)] });
+    const { container } = render(<FleetView state={stateFrom({ sessions: [s] })} />);
+    const squares = [...container.querySelectorAll(".wall .card .crew .a")];
+    expect(squares.map((x) => x.getAttribute("title"))).toEqual([
+      "Weigh options · running",
+      "Plan the rewrite · running",
+      "Survey adapters · running · launched by Plan the rewrite",
+      "Read Stripe adapter · done · launched by Survey adapters",
+      "Sketch interface · running · launched by Plan the rewrite",
+    ]);
+    expect(container.querySelector(".wall .card .crew")).toHaveAttribute("aria-label", "4 running, 1 done of 5 agents");
+  });
+
+  it("an activity row about a nested agent names its parent and opens that agent", () => {
+    const s = makeSession({ agents: nested });
+    const st = stateFrom({ sessions: [s], events: [makeEvent({ id: "sp", kind: "spawn", agentId: "g", text: "spawned Explore (Haiku low): Read Stripe adapter" })] });
+    const { container } = render(<FleetView state={st} />);
+    const row = screen.getByRole("button", { name: /Read Stripe adapter/ });
+    expect(row).toHaveTextContent("launched by Survey adapters");
+    expect(row).toHaveTextContent("Open agent");
+    fireEvent.click(row);
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Read Stripe adapter");
+    expect(container.querySelector('button.trow[data-agent="g"]')).toHaveAttribute("aria-current", "true");
+  });
+
+  it("a plan step owned by a nested agent shows that agent's label like any other", () => {
+    const plan = { title: "Rewrite", source: "TaskCreate" as const, steps: [{ id: "1", text: "Read Stripe adapter", state: "done" as const, activeText: null, ownerAgentId: "g", ownerLabel: "general-purpose · Sonnet medium" }] };
+    const s = makeSession({ agents: nested, plan });
+    const { container } = render(<FleetView state={stateFrom({ sessions: [s] })} />);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    expect(container.querySelector(".steps .ow")!.textContent).toBe("general-purpose · Sonnet medium");
+  });
+});
+
 describe("agent detail Kind row", () => {
   const cases = [
     { kind: "subagent", word: "Subagent", note: "Starts from a blank slate" },

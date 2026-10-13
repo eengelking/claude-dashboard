@@ -296,7 +296,8 @@ body.podium-resizing .podium .cols { transition: none; }
 
 /* agent tree */
 .podium .tw { overflow-x: auto; position: relative; }
-.podium .trow { display: grid; grid-template-columns: minmax(210px, 1fr) 92px 52px 142px 64px 64px 70px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: 892px; }
+/* --deep (set on .tw) is how many levels the agent tree goes past two: each widens the Task column by one 16px guide, and the table scrolls sideways in .tw, so a deep row keeps as much text as a second-level one (#101). */
+.podium .trow { display: grid; grid-template-columns: minmax(calc(210px + var(--deep, 0) * 16px), 1fr) 92px 52px 142px 64px 64px 70px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 36px; border-bottom: 1px solid var(--grid); width: 100%; min-width: calc(892px + var(--deep, 0) * 16px); }
 .podium .trow.hd { min-height: 28px; color: var(--muted); font-size: 11.5px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .podium button.trow:hover { background: var(--hover); }
 .podium button.trow[aria-current="true"] { background: var(--sel); }
@@ -328,12 +329,15 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .ev .ed { width: 7px; height: 7px; border-radius: 2px; background: var(--c); align-self: start; margin-top: 6px; display: block; }
 .podium .ev .tt { min-width: 0; overflow-wrap: anywhere; }
 .podium .ev .tt b { font-weight: 600; }
+.podium .ev .tt .by { color: var(--muted); }
 .podium .ev li.bad .tt { color: var(--crit-text); }
 .podium .det { padding: 0 14px 20px; }
 .podium .det h3 { margin: 0 0 2px; font-size: 15px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .podium .det .grid2 { display: grid; grid-template-columns: 92px 1fr; gap: 7px 10px; margin: 12px 0; align-items: center; }
 .podium .det .grid2 dt { color: var(--muted); font-size: 12px; line-height: 18px; }
 .podium .det .grid2 dd { margin: 0; line-height: 18px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.podium .det .linkbtn { font: inherit; color: var(--ink); text-align: start; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--axis); overflow-wrap: anywhere; }
+.podium .det .linkbtn:hover { text-decoration-color: currentColor; }
 .podium .det .pr { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px; font-size: 12.5px; color: var(--ink2); overflow-wrap: anywhere; }
 .podium .det .lab { font-size: 12px; color: var(--muted); margin: 14px 0 5px; display: block; }
 .podium .det .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
@@ -441,7 +445,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .trow.hd button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
 
 @media (max-width: 1280px) {
-  .podium .trow { grid-template-columns: minmax(200px, 1fr) 92px 52px 150px 64px 70px 104px; }
+  .podium .trow { grid-template-columns: minmax(calc(200px + var(--deep, 0) * 16px), 1fr) 92px 52px 150px 64px 70px 104px; }
   .podium .trow .c-tok { display: none; }
   .podium .cols { --rail-w: 224px; --side-w: 310px; }
 }

@@ -224,6 +224,61 @@ describe('computeKpis', () => {
   });
 });
 
+describe('agents launched by other agents (#101)', () => {
+  // The shape of a real nested run: a subagent that launched a subagent and a fork, a grandchild under
+  // that subagent, and a top-level fork that launched a subagent.
+  function nestedReport(): Report {
+    const base = fixtureReport();
+    const agent = base.agents[0]!;
+    const mk = (id: string, parentId: string | null, kind: 'subagent' | 'fork', status: 'running' | 'done', blowouts = 0) => ({
+      ...agent,
+      id,
+      parentId,
+      kind,
+      type: kind === 'fork' ? 'fork' : 'general-purpose',
+      description: id,
+      status,
+      endedAt: status === 'done' ? agent.startedAt + 1000 : null,
+      blowouts,
+      failure: null,
+      tokens: { input: 10, output: 20, cacheRead: 30, cacheWrite: 40 },
+    });
+    return {
+      ...base,
+      events: [],
+      session: { ...base.session, blowouts: 0, tokens: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } },
+      agents: [mk('p', null, 'subagent', 'running'), mk('f', null, 'fork', 'running'), mk('c', 'p', 'subagent', 'running', 1), mk('pf', 'p', 'fork', 'done'), mk('g', 'c', 'subagent', 'running', 1), mk('fc', 'f', 'subagent', 'done')],
+    };
+  }
+
+  it('keeps every parent through ingest and counts each agent once in the view and the KPIs', () => {
+    const now = 1_791_648_100_000;
+    const f = new FleetDb(openDb(':memory:'));
+    const r = nestedReport();
+    ingestReport(f, r, now - 1000);
+    const id = r.session.id;
+    const v = sessionView({ row: f.getSession(id)!, agents: f.getAgents(id), blowouts: f.getBlowouts(id), samples: f.samplesSince(id, 0), heard: true }, now, CFG);
+    expect(Object.fromEntries(v.agents.map((a) => [a.id, a.parentId]))).toEqual({ p: null, f: null, c: 'p', pf: 'p', g: 'c', fc: 'f' });
+    expect(v.tokensTotal).toBe(4 + 6 * 100);
+    expect(v.blowouts).toMatchObject({ orchestrator: 0, agents: 2, total: 2, loopsHit: 2, loopsTotal: 7 });
+    const k = computeKpis({ views: [v], costToday: f.costSince(startOfDay(now)), tokensPerSecond: f.fleetTokensPerSecond(0), costPerMinute: f.fleetCostPerMinute(0) }, now);
+    expect(k).toMatchObject({ agentsRunning: 4, agentsTotal: 6 });
+  });
+
+  it('keeps a finished nested agent the engine no longer lists, and aborts the running ones when the session ends', () => {
+    const now = 1_791_648_100_000;
+    const f = new FleetDb(openDb(':memory:'));
+    const r = nestedReport();
+    ingestReport(f, r, now - 2000);
+    // Claude Code's agent list drops finished nested agents; a report that leaves them out deletes nothing.
+    ingestReport(f, { ...r, session: { ...r.session, status: 'done', endReason: 'other' }, agents: r.agents.filter((a) => a.parentId === null) }, now - 1000);
+    const agents = f.getAgents(r.session.id);
+    expect(agents.map((a) => a.id).sort()).toEqual(['c', 'f', 'fc', 'g', 'p', 'pf']);
+    expect(agents.find((a) => a.id === 'g')!.status).toBe('aborted');
+    expect(agents.find((a) => a.id === 'g')!.parent_id).toBe('c');
+  });
+});
+
 describe('computeKpis with a model that has no price (#66)', () => {
   it('leaves the unpriced session out of cost today and counts it', () => {
     const now = 1_791_648_100_000;

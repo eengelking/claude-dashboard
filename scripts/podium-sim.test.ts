@@ -93,6 +93,44 @@ describe('podium-sim', () => {
     expect(sim.tokenFor(reports[2]!.session.id)).toBeNull();
   });
 
+  it('with --nested keeps a session whose agents launch agents, in every shape a real run produced (#101)', () => {
+    expect(parseArgs(['--nested'])).toMatchObject({ nested: true });
+    expect(parseArgs([])).toMatchObject({ nested: false });
+    let t = 1_800_000_000_000;
+    const sim = new Simulator({ sessions: 3, seed: 11, chaos: false, extraAgents: 0, now: () => t, home: '/Users/sim', nested: true });
+    const reports: Report[] = [];
+    for (let i = 0; i < 240; i++) {
+      t += 1000;
+      for (const r of sim.step()) {
+        reports.push(r);
+        sim.ack(r.session.id, r.events.length);
+      }
+    }
+    const nested = reports.filter((r) => r.session.git?.branch === 'feat/adapter-rewrite');
+    expect(nested.length).toBeGreaterThan(0);
+    let deepest = 0;
+    const shapes = new Set<string>();
+    for (const r of nested) {
+      const v = validateReport(JSON.parse(JSON.stringify(r)));
+      if (!v.ok) throw new Error(`${v.path}: ${v.error}`);
+      const byId = new Map(r.agents.map((a) => [a.id, a]));
+      for (const a of r.agents) {
+        if (!a.parentId) continue;
+        const p = byId.get(a.parentId);
+        // Every parent is in the same report, and a parent never finishes while a child it launched runs.
+        expect(p, `${a.description} has its parent`).toBeDefined();
+        if (a.status === 'running') expect(['running', 'failed']).toContain(p!.status);
+        shapes.add(`${a.kind} under ${p!.kind}`);
+        if (a.kind === 'fork') expect([a.model, a.effort]).toEqual([p!.model, p!.effort]);
+        let d = 1;
+        for (let q: typeof a | undefined = a; q?.parentId; q = byId.get(q.parentId)) d++;
+        deepest = Math.max(deepest, d);
+      }
+    }
+    expect([...shapes].sort()).toEqual(['fork under subagent', 'subagent under fork', 'subagent under subagent']);
+    expect(deepest).toBe(4);
+  });
+
   it('sends no name or machine without --person', () => {
     expect(run(4, 20).some((r) => 'userName' in r || 'machine' in r)).toBe(false);
   });

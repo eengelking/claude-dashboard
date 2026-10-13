@@ -36,7 +36,7 @@ p.note { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; max-width: 70c
 .src { color: var(--muted); font-size: 12px; }
 .btn { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); color: var(--ink); }
 .tw { overflow-x: auto; }
-/* --deep is how many levels the tree goes past four; each widens the Task column by one 16px guide. */
+/* --deep is how many levels the tree goes past two; each widens the Task column by one 16px guide. */
 .trow { display: grid; grid-template-columns: minmax(calc(210px + var(--deep, 0) * 16px), 1fr) 70px 64px 64px 104px; gap: 10px; align-items: center; padding: 0 12px; min-height: 34px; border-bottom: 1px solid var(--grid); min-width: calc(560px + var(--deep, 0) * 16px); }
 .trow.hd { min-height: 26px; color: var(--muted); font-size: 11.5px; }
 .trow.root { background: var(--raised); }
@@ -79,7 +79,7 @@ dd { margin: 0; }
 <h2>1. Agent tree, launch order: every level indented, rows that wait on a child read "delegating"</h2>
 <div class="sec">
   <div class="sh"><b>Agents</b><span class="src">6 launched, 4 by other agents · click a header to sort</span></div>
-  <div class="tw">
+  <div class="tw" style="--deep:2">
     <div class="trow hd"><div>Task</div><div class="num">Tokens</div><div class="num"><span class="hint" title="Each agent's row is its own estimated cost. The orchestrator's row is the whole session: the orchestrator and every agent, nested ones included.">Cost</span></div><div class="num">Time</div><div>Status</div></div>
     <div class="trow root"><div class="nm"><b>payments</b><em style="color:var(--muted)">orchestrator</em></div><div class="num mono">25.2k</div><div class="num mono" title="The whole session: the orchestrator and every agent, nested ones included">$0.21</div><div class="num mono">1m 12s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
     <div class="trow"><div class="nm"><span class="indent"><s class="tee"></s></span><span class="ic" style="--c:var(--sonnet)"></span><span class="tx" title="Plan the payments rewrite · general-purpose"><b>Plan the payments rewrite</b><em>general-purpose</em></span></div><div class="num mono">17.1k</div><div class="num mono" title="This agent's own estimated cost. The agents it launched are not included; their total is in the side panel.">$0.05</div><div class="num mono">58s</div><div><span class="chip deleg"><i></i>delegating</span></div></div>
@@ -90,12 +90,12 @@ dd { margin: 0; }
     <div class="trow"><div class="nm"><span class="indent"><s class="last"></s></span><span class="ic fork" style="--c:var(--opus)"></span><span class="tx"><b>Weigh the options</b><em>fork</em></span></div><div class="num mono">25.2k</div><div class="num mono">$0.02</div><div class="num mono">30s</div><div><span class="chip">done</span></div></div>
   </div>
 </div>
-<p class="note">Four levels fit the usual 210px Task column (64px of guides). A deeper tree widens the Task column by 16px per extra level and the table scrolls sideways inside its own box, as it already does at phone width, so a guide is never dropped and no row loses its place. The full task and type are each row's tooltip, since a deep row shows fewer characters.</p>
+<p class="note">Each level past the second widens the Task column by 16px (this four-level tree is drawn with <code>--deep: 2</code>), so a deep row keeps as much room for its task as a second-level one and the table scrolls sideways inside its own box, as it already does at phone width, so a guide is never dropped and no row loses its place. The full task and type are each row's tooltip, for a task too long to show whole.</p>
 
 <h2>2. Sorted by cost: the tree stays, siblings are ordered</h2>
 <div class="sec">
   <div class="sh"><b>Agents</b><span class="src"><button class="btn">Launch order</button></span></div>
-  <div class="tw" style="--deep:0">
+  <div class="tw" style="--deep:1">
     <div class="trow hd"><div>Task</div><div class="num">Tokens</div><div class="num"><b>Cost ▼</b></div><div class="num">Time</div><div>Status</div></div>
     <div class="trow"><div class="nm"><span class="indent"><s class="tee"></s></span><span class="ic" style="--c:var(--sonnet)"></span><span class="tx"><b>Plan the payments rewrite</b></span></div><div class="num mono">17.1k</div><div class="num mono">$0.05</div><div class="num mono">58s</div><div></div></div>
     <div class="trow"><div class="nm"><span class="indent"><s></s><s class="tee"></s></span><span class="ic" style="--c:var(--haiku)"></span><span class="tx"><b>Survey payment adapters</b></span></div><div class="num mono">17.8k</div><div class="num mono">$0.05</div><div class="num mono">41s</div><div></div></div>

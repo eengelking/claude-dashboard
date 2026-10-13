@@ -88,21 +88,42 @@ describe("orchestrator page", () => {
     expect(container.querySelector(".side .failbox")).toBeInTheDocument();
   });
 
-  it("builds the tree from parentId; header sort flattens and reverses; Show as tree restores", () => {
+  it("builds the tree from parentId; a header sort keeps the tree and orders siblings, and reverses; Launch order restores (#101)", () => {
     const { container } = openFocus();
     const rows = () => [...container.querySelectorAll("button.trow:not(.root)")].map((r) => r.getAttribute("data-agent"));
     const guides = () => [...container.querySelectorAll("button.trow:not(.root)")].map((r) => r.querySelectorAll(".indent s").length);
     expect(rows()).toEqual(["r1", "k1", "f1"]);
     expect(guides()).toEqual([1, 2, 1]);
     fireEvent.click(screen.getByRole("button", { name: "Cost" }));
-    expect(rows()).toEqual(["k1", "f1", "r1"]);
-    expect(guides()).toEqual([0, 0, 0]);
+    // f1 ($2) before r1 ($1); k1 ($3) stays under r1 rather than jumping to the top.
+    expect(rows()).toEqual(["f1", "r1", "k1"]);
+    expect(guides()).toEqual([1, 1, 2]);
     fireEvent.click(screen.getByRole("button", { name: /Cost/ }));
-    expect(rows()).toEqual(["r1", "f1", "k1"]);
-    fireEvent.click(screen.getByRole("button", { name: /^Model/ }));
-    expect(rows()).toEqual(["k1", "f1", "r1"]);
-    fireEvent.click(screen.getByRole("button", { name: "Show as tree" }));
     expect(rows()).toEqual(["r1", "k1", "f1"]);
+    fireEvent.click(screen.getByRole("button", { name: /^Model/ }));
+    expect(rows()).toEqual(["f1", "r1", "k1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Launch order" }));
+    expect(rows()).toEqual(["r1", "k1", "f1"]);
+  });
+
+  it("a deep tree widens the Task column rather than squeezing the task out (#101)", () => {
+    const chain = ["d1", "d2", "d3", "d4", "d5", "d6"].map((id, i) => makeAgent({ id, parentId: i ? `d${i}` : null, description: `Level ${i + 1}` }));
+    const st = stateFrom({ sessions: [makeSession({ agents: chain })] });
+    const { container } = render(<FleetView state={st} />);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    const tw = container.querySelector(".tw") as HTMLElement;
+    expect(tw.style.getPropertyValue("--deep")).toBe("4");
+    const deepest = container.querySelector('button.trow[data-agent="d6"]')!;
+    expect(deepest.querySelectorAll(".indent s")).toHaveLength(6);
+    expect(deepest.querySelector(".tx")).toHaveAttribute("title", "Level 6 · general-purpose");
+  });
+
+  it("says which cost each row shows: the orchestrator's is the whole session, an agent's its own (#101)", () => {
+    const { container } = openFocus();
+    const cost = (sel: string) => container.querySelector(sel)!.querySelectorAll(".num")[1]!;
+    expect(cost("button.trow.root")).toHaveAttribute("title", expect.stringMatching(/whole session.*every agent/i));
+    expect(cost('button.trow[data-agent="k1"]')).toHaveAttribute("title", expect.stringMatching(/own.*not included/i));
+    expect(container.querySelector(".facts .fact.cost")).toHaveAttribute("title", expect.stringMatching(/whole session/i));
   });
 
   it("centres the model, effort and status cells in every table row (#31)", () => {

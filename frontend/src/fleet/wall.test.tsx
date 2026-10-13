@@ -277,7 +277,7 @@ describe("sessions reported by settings hooks", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ reporter: "hooks", costUsd: null, plan: null, context: { tokens: null, window: null, percent: null } })] })} />);
     expect(container.querySelector(".wall .card")!.textContent).toContain("settings hooks");
     fireEvent.click(container.querySelector(".wall .card")!);
-    expect(screen.getByRole("note").textContent).toContain("context, cost, tokens and the plan are unavailable");
+    expect(screen.getByRole("note").textContent).toContain("context, cost, tokens, the plan and which agent launched which are unavailable, so every agent shows under the orchestrator");
   });
 });
 

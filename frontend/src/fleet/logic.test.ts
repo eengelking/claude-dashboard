@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, agentTokens, sessionTokens, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
+import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -88,6 +88,67 @@ describe("buildTree", () => {
   it("survives a parent cycle", () => {
     const rows = buildTree([makeAgent({ id: "x", parentId: "y" }), makeAgent({ id: "y", parentId: "x" })]);
     expect(rows.map((r) => r.agent.id).sort()).toEqual(["x", "y"]);
+  });
+});
+
+// The shape a real nested run produced (#101): a subagent that launched a subagent and a fork, a
+// grandchild under that subagent, and a fork at the top level that launched a subagent of its own.
+const NESTED = [
+  makeAgent({ id: "p", description: "level1 parent", costUsdEst: 0.05, context: { tokens: 17_000, window: 1, percent: 2 } }),
+  makeAgent({ id: "f", kind: "fork", type: "fork", description: "level1 fork", costUsdEst: 0.02, context: { tokens: 25_000, window: 1, percent: 3 } }),
+  makeAgent({ id: "c", parentId: "p", description: "level2 child", costUsdEst: 0.04, context: { tokens: 18_000, window: 1, percent: 2 } }),
+  makeAgent({ id: "pf", parentId: "p", kind: "fork", type: "fork", description: "level2 fork", costUsdEst: 0.01, context: { tokens: 15_000, window: 1, percent: 2 } }),
+  makeAgent({ id: "g", parentId: "c", description: "level3 grandchild", costUsdEst: 0.003, context: { tokens: 14_000, window: 1, percent: 1 } }),
+  makeAgent({ id: "fc", parentId: "f", description: "fork child", costUsdEst: null, modelFamily: "other", context: { tokens: 15_000, window: null, percent: null } }),
+];
+
+describe("nested agents (#101)", () => {
+  it("the tree puts each nested agent under its real parent, three levels deep", () => {
+    expect(buildTree(NESTED).map((r) => [r.agent.id, r.guides.length])).toEqual([
+      ["p", 1], ["c", 2], ["g", 3], ["pf", 2], ["f", 1], ["fc", 2],
+    ]);
+  });
+
+  it("a sorted tree keeps every child under its parent and orders the siblings", () => {
+    const byCost = buildTree(NESTED, agentOrder("cost", -1, 0)).map((r) => [r.agent.id, r.guides.join(",")]);
+    expect(byCost).toEqual([
+      ["p", "mid"], ["c", "mid,mid"], ["g", "mid,mid,last"], ["pf", "mid,last"], ["f", "last"], ["fc", "blank,last"],
+    ]);
+    const cheapFirst = buildTree(NESTED, agentOrder("cost", 1, 0)).map((r) => r.agent.id);
+    expect(cheapFirst).toEqual(["f", "fc", "p", "pf", "c", "g"]);
+  });
+
+  it("measures the depth of the tree", () => {
+    expect(treeDepth(buildTree(NESTED))).toBe(3);
+    expect(treeDepth([])).toBe(0);
+  });
+
+  it("names the parent of a nested agent and nothing for a top-level or orphaned one", () => {
+    expect(parentOf(NESTED, NESTED.find((a) => a.id === "g")!)?.id).toBe("c");
+    expect(parentOf(NESTED, NESTED[0]!)).toBeNull();
+    expect(parentOf(NESTED, makeAgent({ id: "o", parentId: "gone" }))).toBeNull();
+    expect(parentOf(NESTED, makeAgent({ id: "o", parentId: "o" }))).toBeNull();
+  });
+
+  it("adds a branch up once per agent: own figures plus every descendant, unpriced ones counted aside", () => {
+    expect(branchTotals(NESTED, "p")).toEqual({ agents: 3, costUsd: 0.05 + 0.04 + 0.01 + 0.003, unpriced: 0, tokens: 17_000 + 18_000 + 15_000 + 14_000 });
+    expect(branchTotals(NESTED, "f")).toEqual({ agents: 1, costUsd: 0.02, unpriced: 1, tokens: 25_000 + 15_000 });
+    expect(branchTotals(NESTED, "g")).toEqual({ agents: 0, costUsd: 0.003, unpriced: 0, tokens: 14_000 });
+  });
+
+  it("a parent cycle does not loop or count twice", () => {
+    const cyc = [makeAgent({ id: "x", parentId: "y", costUsdEst: 1 }), makeAgent({ id: "y", parentId: "x", costUsdEst: 2 })];
+    expect(branchTotals(cyc, "x")).toEqual({ agents: 1, costUsd: 3, unpriced: 0, tokens: 200_000 });
+  });
+
+  it("counts each nested agent once, and the session tokens add every level once", () => {
+    expect(agentCounts(NESTED)).toMatchObject({ running: 6, all: 6 });
+    const s = makeSession({ agents: NESTED, context: { tokens: 25_000, window: 1_000_000, percent: 3 } });
+    expect(sessionTokens(s)).toBe(25_000 + 17_000 + 25_000 + 18_000 + 15_000 + 14_000 + 15_000);
+  });
+
+  it("orders the card strip as the tree, so children follow their parent", () => {
+    expect(treeOrder(NESTED).map((a) => a.id)).toEqual(["p", "c", "g", "pf", "f", "fc"]);
   });
 });
 

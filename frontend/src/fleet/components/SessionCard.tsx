@@ -1,5 +1,5 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, currentStep, dropAtOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
+import { agentCounts, COST_HINT_SESSION, currentStep, dropAtOf, parentOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { toolOfNote, waitLead } from "../waiting";
@@ -7,7 +7,7 @@ import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
 
-export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens and the plan are unavailable.";
+export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens, the plan and which agent launched which are unavailable, so every agent shows under the orchestrator.";
 
 /** What to tell the user when the server places this session's reporter outside the range it supports; null when it does not. */
 export function versionNote(s: Pick<SessionView, "compat" | "reporterVersion">): { chip: string; text: string } | null {
@@ -117,14 +117,17 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         <div className="noplan">No plan reported. Agents were launched ad hoc.</div>
       )}
       <div className="crew" aria-label={`${c.running} running, ${c.done} done of ${c.all} agents`}>
-        {s.agents.map((a) => (
-          <span
-            key={a.id}
-            className={`a ${a.status === "aborted" ? "done" : a.status}${a.kind === "fork" ? " fork" : ""}`}
-            style={cssVar(FAMILY_COLOR[a.modelFamily])}
-            title={`${a.description} · ${a.status}`}
-          />
-        ))}
+        {treeOrder(s.agents).map((a) => {
+          const parent = parentOf(s.agents, a);
+          return (
+            <span
+              key={a.id}
+              className={`a ${a.status === "aborted" ? "done" : a.status}${a.kind === "fork" ? " fork" : ""}`}
+              style={cssVar(FAMILY_COLOR[a.modelFamily])}
+              title={`${a.description} · ${a.status}${parent ? ` · launched by ${parent.description}` : ""}`}
+            />
+          );
+        })}
         <span className="mono cnt">
           {c.running} running · {c.done} done{c.failed ? ` · ${c.failed} failed` : ""}
         </span>
@@ -142,7 +145,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       )}
       <div className="foot">
         <div className="mono">
-          <span className="v"><Cost usd={s.costUsd} family={s.modelFamily} /> ·</span>{" "}
+          <span className="v" title={COST_HINT_SESSION}><Cost usd={s.costUsd} family={s.modelFamily} /> ·</span>{" "}
           <span className="v" title={TOKENS_HINT}>{fmtTok(sessionTokens(s))} tok ·</span>{" "}
           <span className="v">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>

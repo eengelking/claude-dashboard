@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentElapsedSec, agentTokens, TOKENS_HINT, type Guide } from "../logic";
+import { agentElapsedSec, agentTokens, COST_HINT_AGENT, TOKENS_HINT, type Guide } from "../logic";
 import type { AgentView } from "../types";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
 import { IconFork, IconSub } from "./Icons";
@@ -40,7 +40,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
       <div className="nm">
         <Indent guides={guides} />
         {a.kind === "fork" ? <IconFork /> : <IconSub />}
-        <span className="tx">
+        <span className="tx" title={`${a.description} · ${a.kind === "fork" ? "fork" : a.type}`}>
           <b>{a.description}</b>
           <em>{a.kind === "fork" ? "fork" : a.type}</em>
           {a.failure && <em className="rowerr">{a.failure.class}</em>}
@@ -58,7 +58,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
         <BlowBadge n={a.blowouts} />
       </div>
       <div className="num c-tok" title={TOKENS_HINT}>{fmtTok(agentTokens(a))}</div>
-      <div className="num"><Cost usd={a.costUsdEst} family={a.modelFamily} /></div>
+      <div className="num" title={COST_HINT_AGENT}><Cost usd={a.costUsdEst} family={a.modelFamily} /></div>
       <div className="num">{fmtDur(agentElapsedSec(a, now))}</div>
       <div className="cell">
         <StatusChip status={a.status} delegating={delegating} />

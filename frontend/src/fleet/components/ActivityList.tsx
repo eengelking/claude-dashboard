@@ -4,6 +4,7 @@ import type { ActivityView, SessionView } from "../types";
 import { cssVar, FAMILY_COLOR } from "./Chips";
 import { IconJump } from "./Icons";
 import { readableEvent } from "../eventText";
+import { parentOf } from "../logic";
 import { parseWaitEvent, waitLead } from "../waiting";
 
 export const PAGE = 12;
@@ -14,6 +15,13 @@ export function hintFor(e: ActivityView, live: SessionView | undefined): string 
   if (e.kind === "blow") return "Show context history";
   if (e.agentId && live.agents.some((a) => a.id === e.agentId)) return "Open agent";
   return "Open orchestrator";
+}
+
+/** For a launch by another agent (not the orchestrator): that agent's task, so the feed names the real parent (#101). */
+export function launchedBy(e: ActivityView, live: SessionView | undefined): string | null {
+  if (e.kind !== "spawn" || !e.agentId || !live) return null;
+  const a = live.agents.find((x) => x.id === e.agentId);
+  return a ? (parentOf(live.agents, a)?.description ?? null) : null;
 }
 
 export function ActivityList(props: {
@@ -50,6 +58,7 @@ export function ActivityList(props: {
               .filter(Boolean)
               .join(" ");
             const hint = hintFor(e, live);
+            const by = launchedBy(e, live);
             const inner = (
               <>
                 <time className="mono">{fmtClock(e.t)}</time>
@@ -69,6 +78,7 @@ export function ActivityList(props: {
                   ) : (
                     e.text
                   )}
+                  {by && <span className="by"> · launched by {by}</span>}
                   <span className="go">
                     {live && <IconJump />}
                     {hint}

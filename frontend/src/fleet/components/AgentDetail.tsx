@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentElapsedSec, agentTokens, TOKENS_HINT } from "../logic";
+import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
+import { agentElapsedSec, agentTokens, branchTotals, COST_HINT_AGENT, parentOf, TOKENS_HINT } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { BlowoutBox } from "./BlowoutBox";
 import { BlowBadge, Cost, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
@@ -75,7 +75,9 @@ const reporterLacksToolCounts = (s: Pick<SessionView, "reporter" | "reporterVers
 
 export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; onBack: () => void; onAgent: (id: string) => void }) {
   const { s, a, now } = props;
-  const kids = s.agents.filter((x) => x.parentId === a.id);
+  const kids = s.agents.filter((x) => x.parentId === a.id && x.id !== a.id);
+  const parent = parentOf(s.agents, a);
+  const branch = kids.length ? branchTotals(s.agents, a.id) : null;
   const fork = a.kind === "fork";
   const [kindWord, kindNote] = fork
     ? ["Fork", "Keeps the parent’s context and memory."]
@@ -99,6 +101,16 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
         <dl className="grid2">
           <dt>Orchestrator</dt>
           <dd>{s.name}</dd>
+          <dt>Launched by</dt>
+          <dd>
+            {parent ? (
+              <button type="button" className="linkbtn" onClick={() => props.onAgent(parent.id)}>
+                {parent.description}
+              </button>
+            ) : (
+              "the orchestrator"
+            )}
+          </dd>
           <dt>Kind</dt>
           <dd>
             <span className="kind" style={cssVar(FAMILY_COLOR[a.modelFamily])} tabIndex={0} data-tip={kindNote} aria-describedby={`kind-${a.id}`}>
@@ -140,7 +152,21 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
             {fmtTok(a.tokens.input)} in · {fmtTok(a.tokens.output)} out · {fmtTok(a.tokens.cacheRead)} cache read · {fmtTok(a.tokens.cacheWrite)} cache write
           </dd>
           <dt>Est. cost</dt>
-          <dd className="mono"><Cost usd={a.costUsdEst} family={a.modelFamily} /></dd>
+          <dd className="mono" title={COST_HINT_AGENT}>
+            <Cost usd={a.costUsdEst} family={a.modelFamily} /> <span style={{ color: "var(--muted)" }}>own</span>
+          </dd>
+          {branch && (
+            <>
+              <dt>With its agents</dt>
+              <dd className="mono" title="This agent plus every agent under it, at every level, each counted once. Tokens are the context each holds now.">
+                {fmtUsd(branch.costUsd)} · {fmtTok(branch.tokens)} tok{" "}
+                <span style={{ color: "var(--muted)" }}>
+                  ({branch.agents} agent{branch.agents === 1 ? "" : "s"}
+                  {branch.unpriced ? `, ${branch.unpriced} not priced` : ""})
+                </span>
+              </dd>
+            </>
+          )}
           <dt>Time</dt>
           <dd className="mono">{fmtDur(agentElapsedSec(a, now))}</dd>
           <dt>Steps</dt>

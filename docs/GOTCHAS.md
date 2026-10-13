@@ -117,6 +117,20 @@ with their next report (the heartbeat is five seconds), not at once. The spend c
 Podium links an agent to a plan step by matching the agent's description to the step's title, and the match
 is literal. "Count .ts files under server" and "Count .ts files in server" do not match.
 
+### An agent's cost does not add up to the session's
+
+An agent's row shows its own estimated cost, not the agents it launched. The orchestrator's row, the facts bar
+and the card show the session's figure from Claude Code, which includes every agent at every depth once, plus
+the orchestrator itself. To see a branch, open the agent: **With its agents** adds it and everything under it.
+The session figure is Claude Code's ledger and an agent's is an estimate from a price table, so the rows will
+not sum to the session figure exactly.
+
+### Every agent sits under the orchestrator in a session started without the mod
+
+The settings hooks (`SubagentStart`, `SubagentStop`) say which agent started but not which agent launched it,
+so a hook-only session cannot nest. The mod reads the parent from `agent.spawn` and nests correctly at any
+depth (SPEC 5.3).
+
 ### Elapsed times freeze when the tab is in the background
 
 Browsers throttle timers in hidden tabs. The numbers catch up when you look at the tab again.
@@ -176,6 +190,20 @@ shows as stale. A session the mod reports uses the 15-second default.
 ### `npm run test:mod` and `npm run typecheck:mod` fail on a clean machine
 
 Both need Claude Code installed, and CI cannot run them. Run them locally when you change the mod.
+
+### A test run with `claude -p` cannot launch a fork
+
+Forks are off in a non-interactive run, and the Agent tool answers "Agent type 'fork' not found". Set
+`CLAUDE_CODE_FORK_SUBAGENT=1` for the run. Subagents launching subagents work without it. To watch a nested
+run without touching your own server, copy the mod, point its `serverUrl` default at a server on another port
+with its own `PODIUM_DB`, and pass `--settings '{"enabledPlugins":{"podium-reporter@eengelking-marketplace":false}}'`
+so the installed copy stays quiet. The simulator's `--nested` flag shows the same shapes with no run at all.
+
+### Finished nested agents are missing from `$.agent.list()`
+
+Once a parent agent finishes, the engine's list drops the finished agents it launched (SPEC 5.3). The mod keeps
+every agent it has seen, and the server never deletes an agent a later report leaves out, so the console keeps
+them. A hot reload after that point rebuilds only what the list still has.
 
 ### A mod fix did not reach anyone
 
