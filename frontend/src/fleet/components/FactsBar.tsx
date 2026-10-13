@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, COST_HINT_SESSION, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
+import { fmtDur, fmtTok } from "../format";
+import { AGENT_TIME_HINT, AGENTS_HINT, COST_HINT_SESSION, sessionAgentSec, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT } from "../logic";
 import type { SessionView } from "../types";
-import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip } from "./Chips";
+import { Cost } from "./Chips";
 import { IconX } from "./Icons";
 
 export const COPIED_MS = 1600;
@@ -45,26 +45,11 @@ export function CopyResume({ command }: { command: string }) {
 }
 
 export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onAgent: (id: string) => void }) {
-  const c = agentCounts(s.agents);
+  const c = sessionCounts(s);
   const firstFail = s.agents.find((a) => a.status === "failed");
   return (
     <div className="facts">
-      <div className="fact">
-        <div className="k">Orchestrator model</div>
-        <div className="v">
-          <ModelChip family={s.modelFamily} model={s.model} />
-          <EffortMeter effort={s.effort} />
-        </div>
-      </div>
-      <div className="fact">
-        <div className="k">Context</div>
-        <div className="v mono">
-          <ContextBar percent={s.context.percent} blowouts={s.blowouts.orchestrator} width={70} />
-          <span>{fmtPct(s.context.percent)}</span>
-          <BlowBadge n={s.blowouts.orchestrator} />
-        </div>
-      </div>
-      <div className="fact agents" title="Every agent counted once, including those launched by other agents">
+      <div className="fact agents" title={AGENTS_HINT}>
         <div className="k">Agents</div>
         <div className="v mono">
           <span className="n-running">{c.running} running</span>
@@ -88,6 +73,10 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
       <div className="fact slim">
         <div className="k">Running for</div>
         <div className="v mono">{fmtDur(sessionElapsedSec(s, now))}</div>
+      </div>
+      <div className="fact slim" title={AGENT_TIME_HINT}>
+        <div className="k">Agent time</div>
+        <div className="v mono">{fmtDur(sessionAgentSec(s, now))}</div>
       </div>
       <CopyResume command={s.resumeCommand} />
     </div>

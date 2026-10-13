@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
+import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, sessionCounts, orchestratorCostUsd, sessionAgentSec, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -278,5 +278,52 @@ describe("delegating (issue #98): a running row with running children is waiting
   it("words the tooltip for one and for several agents, and says it is not waiting on you", () => {
     expect(delegateText([makeAgent({ description: "Map call sites" })])).toBe("Waiting on 1 agent: Map call sites. Not waiting on you.");
     expect(delegateText([makeAgent({ description: "A" }), makeAgent({ description: "B" })])).toBe("Waiting on 2 agents: A, B. Not waiting on you.");
+  });
+});
+
+describe("the orchestrator counts as an agent (#109)", () => {
+  it("counts it as running while the session runs, so one done agent reads 1 running / 1 done", () => {
+    const c = sessionCounts(makeSession({ status: "running", agents: [makeAgent({ status: "done" })] }));
+    expect(c).toMatchObject({ running: 1, done: 1, all: 2 });
+  });
+  it("counts it as done once the session is done", () => {
+    const c = sessionCounts(makeSession({ status: "done", agents: [makeAgent({ status: "done" })] }));
+    expect(c).toMatchObject({ running: 0, done: 2, all: 2 });
+  });
+  it("counts it as neither running nor done while the session is stale", () => {
+    const c = sessionCounts(makeSession({ status: "stale", agents: [makeAgent({ status: "done" })] }));
+    expect(c).toMatchObject({ running: 0, done: 1, aborted: 1, all: 2 });
+  });
+  it("keeps failures and the other states as agentCounts has them", () => {
+    const c = sessionCounts(makeSession({ status: "waiting", agents: [makeAgent({ status: "failed" }), makeAgent({ status: "queued" })] }));
+    expect(c).toEqual({ running: 1, done: 0, failed: 1, queued: 1, aborted: 0, all: 3 });
+  });
+});
+
+describe("the orchestrator's cost is the session's ledger less its agents (#109)", () => {
+  const agents = [makeAgent({ id: "a", costUsdEst: 0.2 }), makeAgent({ id: "b", costUsdEst: 0.1 })];
+  it("is what is left, so the rows add up to the session figure", () => {
+    expect(orchestratorCostUsd(makeSession({ costUsd: 1, agents }))).toBeCloseTo(0.7);
+  });
+  it("is the whole figure when there are no agents", () => {
+    expect(orchestratorCostUsd(makeSession({ costUsd: 0.87, agents: [] }))).toBe(0.87);
+  });
+  it("never goes below zero when the estimates overshoot the ledger", () => {
+    expect(orchestratorCostUsd(makeSession({ costUsd: 0.1, agents }))).toBe(0);
+  });
+  it("is null with no session figure, and ignores agents with no price", () => {
+    expect(orchestratorCostUsd(makeSession({ costUsd: null, agents }))).toBeNull();
+    expect(orchestratorCostUsd(makeSession({ costUsd: 1, agents: [makeAgent({ costUsdEst: null }), agents[0]] }))).toBeCloseTo(0.8);
+  });
+});
+
+describe("agent time is the orchestrator's time plus every agent's (#109)", () => {
+  it("adds them, so parallel agents can pass wall-clock time", () => {
+    const s = makeSession({ status: "running", startedAt: 0, agents: [makeAgent({ startedAt: 0, endedAt: 30_000 }), makeAgent({ startedAt: 0, endedAt: 30_000 })] });
+    expect(sessionAgentSec(s, 40_000)).toBe(40 + 30 + 30);
+  });
+  it("runs a running agent to now and freezes a done session at its last report", () => {
+    const s = makeSession({ status: "done", startedAt: 0, lastSeenAt: 50_000, agents: [makeAgent({ startedAt: 10_000, endedAt: null })] });
+    expect(sessionAgentSec(s, 60_000)).toBe(50 + 50);
   });
 });

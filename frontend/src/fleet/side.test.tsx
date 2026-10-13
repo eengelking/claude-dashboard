@@ -200,7 +200,7 @@ describe("nested agents in the panel, the activity feed, the card strip and the 
       "Read Stripe adapter · done · launched by Survey adapters",
       "Sketch interface · running · launched by Plan the rewrite",
     ]);
-    expect(container.querySelector(".wall .card .crew")).toHaveAttribute("aria-label", "4 running, 1 done of 5 agents");
+    expect(container.querySelector(".wall .card .crew")).toHaveAttribute("aria-label", "5 running, 1 done of 6 agents, the orchestrator included");
   });
 
   it("an activity row about a nested agent names its parent and opens that agent", () => {

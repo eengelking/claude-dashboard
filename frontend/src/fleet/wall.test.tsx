@@ -142,7 +142,7 @@ describe("session card", () => {
     );
     const sq = [...container.querySelectorAll(".crew .a")].map((e) => e.className);
     expect(sq).toEqual(["a running fork", "a done", "a failed", "a queued"]);
-    expect(container.querySelector(".crew")!.getAttribute("aria-label")).toBe("1 running, 1 done of 4 agents");
+    expect(container.querySelector(".crew")!.getAttribute("aria-label")).toBe("2 running, 1 done of 5 agents, the orchestrator included");
     expect(container.textContent).toContain("1 failed");
   });
 

@@ -77,7 +77,7 @@ describe("orchestrator page", () => {
     const { container } = openFocus();
     const cells = [...container.querySelectorAll(".facts > .fact")];
     expect(cells.map((c) => c.querySelector(".k")?.textContent ?? c.textContent)).toEqual([
-      "Orchestrator model", "Context", "Agents", "Est. cost", "Tokens", "Running for", "Copy resume command",
+      "Agents", "Est. cost", "Tokens", "Running for", "Agent time", "Copy resume command",
     ]);
     expect(container.querySelector(".facts .blow.l2")?.textContent).toContain("1 failed");
   });
@@ -118,10 +118,10 @@ describe("orchestrator page", () => {
     expect(deepest.querySelector(".tx")).toHaveAttribute("title", "Level 6 · general-purpose");
   });
 
-  it("says which cost each row shows: the orchestrator's is the whole session, an agent's its own (#101)", () => {
+  it("says which cost each row shows: the orchestrator's is its share, an agent's its own, the facts bar the whole session (#101, #109)", () => {
     const { container } = openFocus();
     const cost = (sel: string) => container.querySelector(sel)!.querySelectorAll(".num")[1]!;
-    expect(cost("button.trow.root")).toHaveAttribute("title", expect.stringMatching(/whole session.*every agent/i));
+    expect(cost("button.trow.root")).toHaveAttribute("title", expect.stringMatching(/own share.*adds up to the session/i));
     expect(cost('button.trow[data-agent="k1"]')).toHaveAttribute("title", expect.stringMatching(/own.*not included/i));
     expect(container.querySelector(".facts .fact.cost")).toHaveAttribute("title", expect.stringMatching(/whole session/i));
   });
@@ -149,7 +149,7 @@ describe("orchestrator page", () => {
     const side = container.querySelector(".side") as HTMLElement;
     expect(side.querySelector("h3")).toHaveTextContent("api-refactor");
     expect(side.textContent).toContain("Opus");
-    expect(side.textContent).toContain("$12.84");
+    expect(side.textContent).toContain("$6.84");
     expect(side.querySelector(".det")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Back to activity" }));
     expect(row).toHaveAttribute("aria-current", "false");

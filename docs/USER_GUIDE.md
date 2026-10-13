@@ -179,8 +179,9 @@ accept part of the name, but `stop` and `rm` need the id. These are Claude Code'
 
 Click a card or a rail item. You get the session's goal and working directory, three charts for the last
 minute (tokens per second, the largest context fill in any loop with blowout markers, and agents running),
-and a bar of facts: model and effort, context, agents (with a red "N failed" button that opens the first
-failure), estimated cost, tokens and running time.
+and a bar of facts: agents (the orchestrator counts as one; a red "N failed" button opens the first
+failure), estimated cost for the whole session, tokens, running time, and agent time (the orchestrator's time
+plus every agent's, which is longer than running time when agents run at once).
 
 Below that, on the left, is the plan, as a checklist with the agent that owns each step, with a **Files** tab
 beside it. Files lists every file the session changed since it started, committed or not, each with how many
@@ -206,7 +207,7 @@ filters still count the session as running. Podium cannot tell an agent launched
 the row is really blocked on, so a row with a background agent running also reads "delegating".
 
 Click an agent to open its detail in the right panel. **Launched by** names the agent that launched it (click it
-to go there) or says "the orchestrator". **Est. cost** is the agent's own. For an agent that launched others,
+to go there) or says "the orchestrator". **Est. cost** is the agent's own. The orchestrator's row shows its own share, so the rows add up to the facts bar. For an agent that launched others,
 **With its agents** adds up the agent and every agent under it, each once. Its **Tokens** line is the context it holds now, and
 **Used so far** under it lists the running totals (input, output, cache read, cache write); cache read is large
 because the cached context is read again on every request. If it failed, you get the failing call, the last lines

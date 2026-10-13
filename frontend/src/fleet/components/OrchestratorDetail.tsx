@@ -1,5 +1,5 @@
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { sessionElapsedSec, TOKENS_HINT } from "../logic";
+import { COST_HINT_ORCHESTRATOR, orchestratorCostUsd, sessionElapsedSec, TOKENS_HINT } from "../logic";
 import type { SessionView } from "../types";
 import { reporterBelow, SkillChips, ToolChips } from "./AgentDetail";
 import { BlowBadge, Cost, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
@@ -41,8 +41,8 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
           </dd>
           <dt title={TOKENS_HINT}>Tokens</dt>
           <dd className="mono" title={TOKENS_HINT}>{fmtTok(s.context.tokens)}</dd>
-          <dt>Est. cost</dt>
-          <dd className="mono"><Cost usd={s.costUsd} family={s.modelFamily} /></dd>
+          <dt title={COST_HINT_ORCHESTRATOR}>Est. cost</dt>
+          <dd className="mono" title={COST_HINT_ORCHESTRATOR}><Cost usd={orchestratorCostUsd(s)} family={s.modelFamily} /></dd>
           <dt>Time</dt>
           <dd className="mono">{fmtDur(sessionElapsedSec(s, now))}</dd>
           {s.loop && (
@@ -61,7 +61,7 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
         {s.loop && <SkillChips skills={s.loop.skills} />}
         <GitLine git={s.git} />
         <div className="note">
-          Cost covers the whole session, subagents included. Tokens are the orchestrator’s own context; the facts bar adds its agents’.
+          Cost and Tokens are the orchestrator’s own share; the facts bar adds its agents’.
           {s.loop && " Steps, tools and skills are the orchestrator’s own, not its agents’."}
         </div>
       </div>

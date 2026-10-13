@@ -115,6 +115,16 @@ export function agentCounts(agents: readonly AgentView[]): AgentCounts {
   return c;
 }
 
+/** `agentCounts` with the orchestrator counted too: running while its session is, done once the session is, and neither while it has gone quiet (stale). */
+export function sessionCounts(s: SessionView): AgentCounts {
+  const c = agentCounts(s.agents);
+  if (s.status === "done") c.done++;
+  else if (s.status === "stale") c.aborted++;
+  else c.running++;
+  c.all++;
+  return c;
+}
+
 export type Guide = "mid" | "last" | "blank";
 export interface TreeRow {
   agent: AgentView;
@@ -211,9 +221,12 @@ export function branchTotals(agents: readonly AgentView[], id: string): BranchTo
   return out;
 }
 
-export const COST_HINT_SESSION = "The whole session: the orchestrator and every agent, nested ones included. Claude Code's own figure.";
+export const COST_HINT_SESSION = "The whole session: the orchestrator and every agent, nested ones included. Claude Code's own figure. The rows in the agent table add up to it, give or take the agents' estimates.";
+export const AGENTS_HINT = "Every agent counted once, including those launched by other agents, and the orchestrator itself: running while the session runs, done once it is done.";
+export const AGENT_TIME_HINT = "The orchestrator's time plus every agent's own. It can be longer than Running for when agents run at the same time.";
+export const COST_HINT_ORCHESTRATOR = "The orchestrator's own share: the session's cost less each agent's estimate. With the agents' rows it adds up to the session figure, unless the estimates overshoot it (then this is $0) or an agent has no price (it counts as $0, so its cost lands here).";
 export const COST_HINT_AGENT = "This agent's own estimated cost. The agents it launched are not included; their total is in the side panel.";
-export const COST_HINT_HEADER = "An agent's row is its own estimated cost. The orchestrator's row is the whole session, every agent included.";
+export const COST_HINT_HEADER = "An agent's row is its own estimated cost. The orchestrator's row is its own share, the session's cost less the agents', so the rows add up to the session figure.";
 
 /**
  * Rows that are waiting on agents they launched, keyed by agent id (`ORCHESTRATOR_ROW` for the
@@ -290,6 +303,17 @@ export function sortAgents(agents: readonly AgentView[], key: AgentSortKey, dir:
 /** Seconds since the session started, frozen once it is done. */
 export function sessionElapsedSec(s: SessionView, now: number): number {
   return Math.max(0, ((s.status === "done" ? s.lastSeenAt : now) - s.startedAt) / 1000);
+}
+
+/** The orchestrator's time plus every agent's own, so it can pass the wall-clock time when agents run in parallel. */
+export function sessionAgentSec(s: SessionView, now: number): number {
+  return sessionElapsedSec(s, now) + s.agents.reduce((n, a) => n + agentElapsedSec(a, now), 0);
+}
+
+/** The orchestrator's own share of the session's cost: the ledger less each agent's estimate, so the rows add up to it. Null with no ledger figure. */
+export function orchestratorCostUsd(s: SessionView): number | null {
+  if (s.costUsd === null) return null;
+  return Math.max(0, s.costUsd - s.agents.reduce((n, a) => n + (a.costUsdEst ?? 0), 0));
 }
 
 /** "fork" or the agent type, then the model's short name and the effort: "Explore · Haiku low". */

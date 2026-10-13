@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentOrder, buildTree, COST_HINT_HEADER, COST_HINT_SESSION, delegateText, ORCHESTRATOR_ROW, sessionElapsedSec, TOKENS_HINT, treeDepth, waitingOnByRow, type AgentSortKey } from "../logic";
+import { agentOrder, buildTree, COST_HINT_HEADER, COST_HINT_ORCHESTRATOR, delegateText, ORCHESTRATOR_ROW, orchestratorCostUsd, sessionElapsedSec, TOKENS_HINT, treeDepth, waitingOnByRow, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
@@ -101,7 +101,7 @@ export function AgentTree(props: {
             <BlowBadge n={s.blowouts.orchestrator} />
           </div>
           <div className="num c-tok" title={TOKENS_HINT}>{fmtTok(s.context.tokens)}</div>
-          <div className="num" title={COST_HINT_SESSION}><Cost usd={s.costUsd} family={s.modelFamily} /></div>
+          <div className="num" title={COST_HINT_ORCHESTRATOR}><Cost usd={orchestratorCostUsd(s)} family={s.modelFamily} /></div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
           <div className="cell">
             <StatusChip status={s.status} delegating={delegating(ORCHESTRATOR_ROW)} />

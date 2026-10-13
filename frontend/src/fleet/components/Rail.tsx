@@ -1,4 +1,4 @@
-import { agentCounts, planProgress } from "../logic";
+import { planProgress, sessionCounts } from "../logic";
 import type { SessionView } from "../types";
 import { BlowBadge, ModelChip, PlanBar } from "./Chips";
 import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
@@ -45,7 +45,7 @@ export function Rail(props: {
   const pv = props.people;
   const item = (s: SessionView, showOwner: boolean) => {
     const p = planProgress(s.plan);
-    const c = agentCounts(s.agents);
+    const c = sessionCounts(s);
     const cls = `ritem${props.entering(s.id) ? " enter" : ""}${props.leaving[s.id] ? " leave" : ""}${s.blowouts.level === 2 ? " risk" : ""}`;
     const removable = s.status === "stale" && !!props.onRemove;
     const owner = s.owner ?? "Unassigned";

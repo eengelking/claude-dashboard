@@ -1,5 +1,5 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
+import { COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { toolOfNote, waitLead } from "../waiting";
@@ -46,7 +46,7 @@ export interface CardOwner {
 export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void; onRemove?: () => void; owner?: CardOwner }) {
   const { s, now, config } = props;
   const p = planProgress(s.plan);
-  const c = agentCounts(s.agents);
+  const c = sessionCounts(s);
   const byId = new Map(s.agents.map((a) => [a.id, a]));
   const step = currentStep(s.plan);
   const risk = s.blowouts.level === 2;
@@ -117,7 +117,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       ) : (
         <div className="noplan">No plan reported. Agents were launched ad hoc.</div>
       )}
-      <div className="crew" aria-label={`${c.running} running, ${c.done} done of ${c.all} agents`}>
+      <div className="crew" aria-label={`${c.running} running, ${c.done} done of ${c.all} agents, the orchestrator included`}>
         {treeOrder(s.agents).map((a) => {
           const parent = a.parentId && a.parentId !== a.id ? byId.get(a.parentId) : undefined;
           return (
