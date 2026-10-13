@@ -122,6 +122,12 @@ Bug reports and proposals both go through GitHub issues, and the templates ask f
 for an existing issue first. If you are reporting several problems with one cause, one issue is more
 useful than one per symptom.
 
+For a bug report, paste the output of `/podium` along with `podiumctl status`. Run `/podium` inside the
+Claude Code session that shows the problem (it is a Claude Code command, not a shell one like `podiumctl`).
+It shows the connection state, the `Versions:` line and the report counts, so we can tell whether the mod is
+connected, refused (HTTP 401) or out of step with the server. It does not print your token, but check what you
+paste and remove any token or other secret before posting.
+
 **Security problems are different.** Please do not open a public issue for a suspected vulnerability.
 Follow [SECURITY.md](.github/SECURITY.md) and report it privately.
 

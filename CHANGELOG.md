@@ -27,6 +27,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Documentation
 
+- Bug reports now ask for the output of `/podium`, run inside the Claude Code session that shows the problem, next to `podiumctl status`. The bug report template, `CONTRIBUTING.md` and the user guide's troubleshooting say how to run it, what it tells us, and to remove any secret before posting (it never prints the token). (#132)
 - Mockup for a session that is idle on a background process or a scheduled wake-up (#119): it says what it is waiting on, in blue, and is not counted as waiting on you.
 - The README and the user guide now say that load grows with the number of sessions and agents reporting, what grows on the server and in each open tab, an example measurement from #81, how to measure your own with `scripts/gpu-sample.sh`, and what lowers it. (#107)
 

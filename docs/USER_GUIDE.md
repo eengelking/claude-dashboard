@@ -378,6 +378,11 @@ with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull,
 | The status line ends in `· update available` | Your mod works, but the server supports a newer one. See "Updating the mod" below |
 | A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (see "Updating the mod" below) |
 
+When you ask for help or file a bug, include the output of `/podium`. Type it inside the Claude Code session that
+shows the problem (it is not a shell command like `podiumctl`) and paste what it prints, with `podiumctl status`.
+The `Connection:` and `Versions:` lines say whether the mod is online, refused or out of step with the server. It
+does not print your token, but check what you paste and remove any token or other secret before posting.
+
 More in [GOTCHAS.md](GOTCHAS.md).
 
 ## What leaves a session
