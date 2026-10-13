@@ -291,6 +291,34 @@ export function simMachineId(label: string): string {
   return (h.toString(16).padStart(8, '0') + ((h ^ 0x5bd1e995) >>> 0).toString(16).padStart(8, '0')).slice(0, 12);
 }
 
+/** A long markdown task prompt, so the console's prompt modal has something to render (issue #97). */
+function fullPrompt(task: string): string {
+  return [
+    `# ${task}`,
+    '',
+    'You are working in the repository at `/work/app`. Read `docs/SPEC.md` first.',
+    '',
+    '## Steps',
+    '',
+    '1. Find every call site that touches the code in question.',
+    '2. Change only what the task needs, **no drive-by edits**.',
+    '3. Run the tests and report the result.',
+    '',
+    '> Do not push, open a pull request or merge.',
+    '',
+    '```',
+    'npm test',
+    '```',
+    '',
+    'Report findings as a short list. See [the spec](https://example.com/spec).',
+  ].join('\n');
+}
+
+/** A markdown final answer to go with it. */
+function fullAnswer(task: string): string {
+  return [`## Done: ${task.toLowerCase()}`, '', 'All checks pass. Nothing was pushed.', '', '### Notes', '', '- touched 3 files', '- `npm test` exits 0'].join('\n');
+}
+
 function splitTokens(rng: Rng, n: number) {
   const output = Math.round(n * rng.range(0.08, 0.18));
   const input = Math.round(n * rng.range(0.03, 0.07));
@@ -449,6 +477,7 @@ export class Simulator {
       steps: { done: 0, total: null },
       promptExcerpt: `${spec.d}. Report findings as a short list and do not edit files outside the working branch.`,
       answerExcerpt: null,
+      promptText: fullPrompt(spec.d),
       failure: null,
     };
     const a: SimAgent = { report, ctx, stepIndex, progressTotal: total };
@@ -465,6 +494,7 @@ export class Simulator {
       }
       a.ctx = rng.range(0.2, 0.7);
       report.answerExcerpt = `Done: ${spec.d.toLowerCase()}.`;
+      report.answerText = fullAnswer(spec.d);
       this.syncCtx(a);
     }
     s.agents.push(a);
@@ -536,6 +566,7 @@ export class Simulator {
     if (ok) {
       r.status = 'done';
       r.answerExcerpt = `Done: ${r.description.toLowerCase()}. No blockers.`;
+      r.answerText = fullAnswer(r.description);
       this.ev(s, 'done', r.id, `finished: ${r.description}`);
       if (st) st.state = 'done';
       return;

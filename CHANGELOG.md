@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Added
+
+- The agent panel has a **Report** group with two buttons, Task prompt and Final answer, that open the text in a modal with markdown rendered as formatting. A button is dimmed and inert when there is nothing to show (and the answer says "not finished" while the agent runs). The modal blurs the page behind it, closes with the X, Esc or a click outside, keeps focus inside and gives it back, and has a Copy button. Raw HTML in the text is shown as text. The whole prompt and answer need the new opt-in `fullPrompts` reporter option (mod 0.10.0, off by default): they are redacted, cut at 20,000 characters, sent once, stored in a new `agent_texts` table and fetched when the modal opens from `GET /api/fleet/sessions/:id/agents/:agentId/text`. Without it, or with an older mod, the modal shows the 400-character excerpt and says why. The supported reporter range is now 0.2.0–0.10.0. (#97)
+
 ### Changed
 
 - Agents that launch agents now show correctly everywhere. A real run on Claude Code 2.1.296 showed that a subagent can launch a subagent or a fork, and a fork a subagent, and that the mod already reports the real parent at every depth, so the mod is unchanged (SPEC 5.3 records what the engine gives). Sorting the agent tree by a column used to flatten it into one list; it now keeps every agent under the one that launched it and sorts each group of siblings, and "Show as tree" is now "Launch order". Past two levels the Task column widens and the table scrolls sideways, so a deep row keeps its text, and each row's full task is its tooltip. The agent panel says who launched the agent and, for an agent that launched others, adds its branch up ("With its agents"). Cost tooltips say that an agent's row is its own estimate and that the orchestrator's row, the facts bar and the card are the whole session. The card's squares follow the tree and name a nested agent's parent, and a nested launch in Activity says which agent launched it. The note on a settings-hooks session now says it cannot show who launched an agent. (#101)

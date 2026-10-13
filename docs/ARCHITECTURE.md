@@ -52,6 +52,16 @@ header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`)
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them.
 
+**The prompt and answer modal** (`components/ReportDocs.tsx`, `components/Markdown.tsx`, issue #97). The whole
+prompt and answer are kept out of the places that grow: the mod sends them (`promptText`, `answerText`, mod 0.10.0,
+`fullPrompts` option) once each, tracked by `promptSent`/`answerSent` on its agent state and cleared only by an
+accepted report (`markTextSent`); the server stores them in `agent_texts` (migration 8, a table of its own so
+`SELECT` on `agents` and the SSE state stay small) and the view carries only `promptChars`/`answerChars`. The
+modal fetches the text when it opens. `Markdown.tsx` builds React elements and never an HTML string, which
+keeps SPEC 7.7's rule that reported strings reach the page only as text nodes, and it needs no dependency. The
+modal is portaled to `<body>` inside its own `.podium` wrapper (for the theme tokens), and blurs `#root`; a
+capturing key listener keeps Esc and the shell shortcuts from reaching the page behind it.
+
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
 `sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to

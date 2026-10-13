@@ -163,6 +163,7 @@ instead. Everything except `token` also has a row in the `/config` menu.
 | `heartbeatMs` | `5000` | Report at least this often |
 | `sessionName` | empty | Display name override |
 | `showStatus` | `true` | Show the status line entry |
+| `fullPrompts` | `false` | Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can open them in a modal. Off by default: only the first 400 characters leave the session. Everyone who can open the console can read them |
 | `explainFailures` | `false` | Ask a small model (Haiku, low effort) for a two-sentence explanation of each failed agent, from the redacted failure record only. Costs a little; off by default |
 
 ### What leaves the session
@@ -177,7 +178,8 @@ Only to the server URL above, and only this:
 - for the orchestrator's own loop: how many model requests it made, the name of every tool it used with how
   many times, and the skills it loaded;
 - per agent: type, description, model, effort, status, token counts, skills it loaded, the name of every
-  tool it used with how many times, the first 400 characters of its task prompt and of its final answer;
+  tool it used with how many times, the first 400 characters of its task prompt and of its final answer, or the whole of each (up to 20,000
+  characters) only when you have turned on `fullPrompts`;
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file
   path), its exit code and the last 12 lines of its output;
 - short activity lines ("spawned Explore (Haiku low): Map call sites");
@@ -189,8 +191,8 @@ Only to the server URL above, and only this:
 
 Before anything is sent, text is cut to those limits and anything that looks like a secret is replaced
 with `[redacted]`: `sk-ant-...` keys, `ghp_...` tokens, `AKIA...` keys, `Bearer ...` values, and the
-values after `password=`, `token=`, `secret=`, `apikey=` and `api_key=`. Podium never reads whole
-messages, transcripts or files.
+values after `password=`, `token=`, `secret=`, `apikey=` and `api_key=`. Podium never reads transcripts or
+files, and sends a whole prompt or answer only for `fullPrompts`.
 
 ### Sessions without the mod
 

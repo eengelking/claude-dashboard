@@ -213,6 +213,13 @@ because the cached context is read again on every request. If it failed, you get
 of its output, the evidence behind the likely cause and what happened next. If its context blew out, you get a
 timeline of each overflow.
 
+The **Report** group has two buttons, **Task prompt** and **Final answer**. Click one to read the text in a window
+over the dashboard, with markdown shown as formatting (headings, lists, code, links). Esc, the X or a click outside
+closes it, and **Copy** copies the raw text. A button is dimmed until there is something to show; the answer stays
+dimmed while the agent runs. By default Podium only has the first 400 characters of each, and the window says so.
+To see the whole text, turn on the mod's `fullPrompts` option (podium-reporter 0.10.0 or later); the full text then
+goes to the server, and everyone who can open the console can read it.
+
 Click the orchestrator's own row, at the top of the tree, to open its detail. It shows the same facts as an agent's
 and, with podium-reporter 0.4.0 or later, its own steps, the tools it used and the skills it loaded. Calls made by
 the agents it launched are counted in those agents' panels, not here.
@@ -337,7 +344,8 @@ More in [GOTCHAS.md](GOTCHAS.md).
 
 Only to the server URL you set, and only the fields the README lists under "What leaves the session". Text
 is cut to fixed limits, and anything that looks like a secret is replaced with `[redacted]` before it is sent.
-Podium never reads whole messages, transcripts or files.
+Podium never reads transcripts or files. An agent's whole task prompt and final answer leave the session only
+if you turn on the mod's `fullPrompts` option, which is off by default.
 
 Your name and your machine leave the session only once you set the mod's `userName` option, which is empty
 by default. Then each report carries that name, the machine's short host name and a random id the mod keeps

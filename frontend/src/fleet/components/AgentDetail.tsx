@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { fmtDur, fmtPct, fmtTok, fmtUsd } from "../format";
-import { agentElapsedSec, agentTokens, branchTotals, COST_HINT_AGENT, parentOf, TOKENS_HINT } from "../logic";
+import { agentElapsedSec, agentTokens, branchTotals, COST_HINT_AGENT, parentOf, reporterBelow, TOKENS_HINT } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { BlowoutBox } from "./BlowoutBox";
 import { BlowBadge, Cost, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
 import { FailureBox } from "./FailureBox";
 import { IconBack, IconFork, IconSub } from "./Icons";
+import { ReportDocs } from "./ReportDocs";
 
 const TOOL_CHIPS_SHOWN = 5;
 
@@ -63,12 +64,7 @@ export function SkillChips(props: { skills: string[] }) {
   );
 }
 
-/** True for a mod older than 0.<minor>. A hooks session has no mod to update, and an unparsable version says nothing. */
-export function reporterBelow(s: Pick<SessionView, "reporter" | "reporterVersion">, minor: number): boolean {
-  if (s.reporter !== "mod" || !s.reporterVersion) return false;
-  const m = /^(\d+)\.(\d+)\.\d+$/.exec(s.reporterVersion);
-  return m !== null && m[1] === "0" && Number(m[2]) < minor;
-}
+export { reporterBelow } from "../logic";
 
 /** True for a mod older than 0.2.0, the first to send per-tool counts. */
 const reporterLacksToolCounts = (s: Pick<SessionView, "reporter" | "reporterVersion">) => reporterBelow(s, 2);
@@ -190,14 +186,7 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
         )}
         {a.toolCounts !== null && <ToolChips key={a.id} counts={a.toolCounts} calls={a.toolCalls} lastTool={a.lastTool} />}
         <SkillChips skills={a.skills} />
-        <span className="lab">Task prompt</span>
-        <div className="pr">{a.promptExcerpt || "Not reported."}</div>
-        {a.answerExcerpt && (
-          <>
-            <span className="lab">Final answer</span>
-            <div className="pr">{a.answerExcerpt}</div>
-          </>
-        )}
+        <ReportDocs s={s} a={a} />
         {kids.length > 0 && (
           <>
             <span className="lab">Launched by this agent</span>

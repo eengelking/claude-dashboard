@@ -26,6 +26,8 @@ export function makeAgent(over: Partial<AgentView> = {}): AgentView {
     steps: { done: 2, total: null },
     promptExcerpt: "Find every call site.",
     answerExcerpt: null,
+    promptChars: null,
+    answerChars: null,
     failure: null,
     modelFamily: "sonnet",
     ...over,

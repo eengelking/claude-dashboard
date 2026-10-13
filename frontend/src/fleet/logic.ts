@@ -306,3 +306,10 @@ export function familyName(f: ModelFamily, model: string | null): string {
 export function dropAtOf(s: Pick<SessionView, "dropAt" | "lastSeenAt">, config: { staleAfterMs: number; dropAfterMs: number }): number {
   return s.dropAt ?? s.lastSeenAt + config.staleAfterMs + config.dropAfterMs;
 }
+
+/** True for a mod older than 0.<minor>. A hooks session has no mod to update, and an unparsable version says nothing. */
+export function reporterBelow(s: Pick<SessionView, "reporter" | "reporterVersion">, minor: number): boolean {
+  if (s.reporter !== "mod" || !s.reporterVersion) return false;
+  const m = /^(\d+)\.(\d+)\.\d+$/.exec(s.reporterVersion);
+  return m !== null && m[1] === "0" && Number(m[2]) < minor;
+}
