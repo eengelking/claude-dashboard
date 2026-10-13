@@ -52,6 +52,9 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- In the activity list the colored square now sits level with the time and the first line of text. It used to
+  be centered in the row, so on a row that wrapped to two lines (the text and the `Open agent` link) it floated
+  between them. The square keeps its size and color; the yellow ring on a waiting row moves with it. (#88)
 - Clicking an agent row no longer flashes orange patches behind its cells. A clicked row now shows only the
   selected background. Opening an agent from an activity entry still flashes its row, now as one band across
   the whole row. (#70)
