@@ -110,10 +110,12 @@ Browsers throttle timers in hidden tabs. The numbers catch up when you look at t
 
 A CSS animation that repeats forever and uses a smooth timing function (`ease`, `linear`) makes the browser
 draw a frame on every display refresh, 120 or more a second, for as long as the tab is open, however small
-the element is. The pulse and blink animations in `fleet.css` use `steps()` for that reason, and the pulse
-animates `transform` and `opacity` on a pseudo-element instead of `box-shadow`. A progress bar that slides
-between values does the same after each update. `gpuLoad.test.tsx` fails on a smooth infinite animation and
-on a bar transition. To measure a change, close other tabs and windows that use the GPU, run the simulator
+the element is. Several of them at different phases are worse: together they change the screen on almost
+every refresh. The pulse and blink in `fleet.css` therefore read one shared `data-beat` that `useHeartbeat`
+steps four times every 1.8 seconds, and the pulse ring is a pseudo-element scaled and faded instead of a
+`box-shadow`. A progress bar that slides between values redraws after each update the same way.
+`gpuLoad.test.tsx` fails on any infinite CSS animation and on a bar transition. Applying incoming data on
+the same beat was tried and gained nothing you could measure, so it is not done. To measure a change, close other tabs and windows that use the GPU, run the simulator
 (`npm run podium:sim -- --sessions 10 --agents 10`) and run `scripts/gpu-sample.sh`.
 
 ### A resumed session's running time starts when Podium first saw it

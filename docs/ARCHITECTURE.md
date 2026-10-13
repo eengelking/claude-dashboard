@@ -225,7 +225,8 @@ a reader of the spec would expect:
    owner.
 5. **Elapsed times and the stale countdown pause in a background tab.** Browsers throttle timers in
    hidden tabs; the numbers catch up when the tab is visible. The console also adds a `paused` class
-   while the tab is hidden (`usePageVisible`), which pauses every CSS animation.
+   while the tab is hidden (`usePageVisible`), which pauses every CSS animation, and the heartbeat
+   (`useHeartbeat`, which drives the running-dot pulse and the blinks through `data-beat`) stops too.
 6. **Memory grows slowly under load.** The 5-minute soak (10 sessions x 20 extra agents, 3 SSE clients)
    went from 121.6 MB to 131.7 MB RSS, with growth slowing (+7.7 MB in the first 2 minutes, +2.4 MB in
    the last 2.5). Likely V8 warm-up and the SQLite page cache; a longer soak would tell.

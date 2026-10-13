@@ -19,6 +19,7 @@ import { useTheme } from "./useTheme";
 import { useHotkeys } from "./useHotkeys";
 import { useIdle } from "./useIdle";
 import { usePageVisible } from "./usePageVisible";
+import { useHeartbeat } from "./useHeartbeat";
 import { usePanes } from "./usePanes";
 import { APP_NAME, type ActivityView } from "./types";
 import type { FleetState } from "./store";
@@ -77,6 +78,8 @@ export function FleetView({ state }: { state: FleetState }) {
   const panes = usePanes();
   const idle = useIdle(panes.wall);
   const visible = usePageVisible();
+  const root = useRef<HTMLDivElement>(null);
+  useHeartbeat(root, visible);
   const fullscreen = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -220,7 +223,7 @@ export function FleetView({ state }: { state: FleetState }) {
   });
 
   return (
-    <div className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}${visible ? "" : " paused"}`}>
+    <div ref={root} className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}${visible ? "" : " paused"}`}>
       {panes.collapsed.top && (
         <div className="wall-ctl" data-wall-control>
           {wallButton}

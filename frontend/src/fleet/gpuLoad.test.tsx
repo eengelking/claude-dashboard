@@ -1,12 +1,13 @@
 // Guards for the GPU-load fixes (#81): continuous animations stay compositor-only, and they stop
 // while the tab is hidden.
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cleanup, render, renderHook, act } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
 import { stateFrom } from "./testState";
 import { usePageVisible } from "./usePageVisible";
+import { BEAT_MS, useHeartbeat } from "./useHeartbeat";
 
 afterEach(() => {
   cleanup();
@@ -26,19 +27,19 @@ function setVisibility(state: "visible" | "hidden") {
   document.dispatchEvent(new Event("visibilitychange"));
 }
 
-describe("continuous animations", () => {
-  it.each(["podium-pulse", "podium-blink"])("%s animates only transform and opacity", (name) => {
-    const body = keyframes(name);
-    const props = [...body.matchAll(/([a-z-]+)\s*:/g)].map((p) => p[1]);
-    expect(props.length).toBeGreaterThan(0);
-    for (const p of props) expect(["transform", "opacity"]).toContain(p);
+describe("continuous motion", () => {
+  it("never uses an infinite CSS animation: it moves on one shared beat instead", () => {
+    // Each infinite animation steps at its own phase, so together they change the screen on almost
+    // every display refresh. One beat for all of them keeps the page to a few frames a second.
+    expect(css).not.toMatch(/animation:[^;}]*infinite/);
   });
 
-  it("never runs an infinite animation on a smooth timing function", () => {
-    // A smooth infinite animation draws a frame every display refresh, forever (see fleet.css).
-    const infinite = [...css.matchAll(/animation:\s*[^;}]*infinite[^;}]*/g)].map((m) => m[0]);
-    expect(infinite.length).toBeGreaterThan(0);
-    for (const a of infinite) expect(a).toMatch(/steps\(/);
+  it("draws the pulse ring and the blinks from the beat", () => {
+    for (const n of [0, 1, 2, 3]) {
+      expect(css).toMatch(new RegExp(`\\.podium\\[data-beat="${n}"\\][^{]*\\.dot\\.running::after`));
+    }
+    expect(css).toMatch(/\.podium\[data-beat="2"\][^{]*\.crew \.a\.running/);
+    expect(css).toMatch(/\.podium\[data-beat="2"\][^{]*\.step\.active \.ic::after/);
   });
 
   it("does not slide the progress bars, which would redraw them every refresh after each update", () => {
@@ -46,9 +47,47 @@ describe("continuous animations", () => {
     expect(rule).not.toBeNull();
     expect(rule![0]).not.toMatch(/transition/);
   });
+});
 
-  it("hands blinking elements their own layer so they do not repaint", () => {
-    expect(css).toMatch(/\.crew \.a\.running\s*\{[^}]*will-change:\s*opacity/);
+describe("useHeartbeat", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function setup(enabled: boolean) {
+    const el = document.createElement("div");
+    const ref = { current: el };
+    const hook = renderHook(({ on }) => useHeartbeat(ref, on), { initialProps: { on: enabled } });
+    return { el, hook };
+  }
+
+  it("steps data-beat through 0..3 on one timer", () => {
+    const { el } = setup(true);
+    expect(el.dataset.beat).toBe("0");
+    const seen: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      act(() => void vi.advanceTimersByTime(BEAT_MS));
+      seen.push(el.dataset.beat!);
+    }
+    expect(seen).toEqual(["1", "2", "3", "0", "1"]);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it("removes the attribute and the timer when disabled, and resumes when enabled", () => {
+    const { el, hook } = setup(true);
+    hook.rerender({ on: false });
+    expect(el.dataset.beat).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    hook.rerender({ on: true });
+    expect(el.dataset.beat).toBe("0");
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it("stays still under prefers-reduced-motion", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), addEventListener() {}, removeEventListener() {} }));
+    const { el } = setup(true);
+    expect(el.dataset.beat).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.unstubAllGlobals();
   });
 });
 
@@ -73,5 +112,15 @@ describe("FleetView", () => {
     act(() => setVisibility("visible"));
     expect(root.classList.contains("paused")).toBe(false);
     expect(css).toMatch(/\.podium\.paused[^{]*\{[^}]*animation-play-state:\s*paused/);
+  });
+
+  it("runs the beat on the console root, and stops it while the tab is hidden", () => {
+    const { container } = render(<FleetView state={stateFrom({})} />);
+    const root = container.querySelector<HTMLElement>(".podium")!;
+    expect(root.dataset.beat).toBe("0");
+    act(() => setVisibility("hidden"));
+    expect(root.dataset.beat).toBeUndefined();
+    act(() => setVisibility("visible"));
+    expect(root.dataset.beat).toBe("0");
   });
 });

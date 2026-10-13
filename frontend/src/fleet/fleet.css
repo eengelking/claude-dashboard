@@ -121,17 +121,23 @@ body.podium-resizing .podium .cols { transition: none; }
 /* live dot + status */
 .podium .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; display: inline-block; }
 .podium .dot.running { background: var(--good); position: relative; }
-/* Stepped on purpose: a smooth infinite animation makes the browser draw a frame on every display
-   refresh (120+ a second) for as long as the tab is open; a few steps a second costs far less GPU.
-   The pulse ring is a pseudo-element scaled and faded on the compositor. Animating box-shadow instead
-   repaints every running dot on every frame, which keeps the GPU busy for as long as the tab is open. */
-.podium .dot.running::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--good); opacity: 0; pointer-events: none; will-change: transform, opacity; animation: podium-pulse 1.8s steps(4) infinite; }
+/* The pulse ring and the blinks below move on one shared beat (data-beat, set by useHeartbeat) instead of
+   an infinite animation each. Animations that repeat forever step at their own phases, so together they
+   change the screen on almost every display refresh, and every refresh costs GPU for the whole window
+   for as long as the tab is open. The ring is a pseudo-element scaled and faded, never a box-shadow. */
+.podium .dot.running::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--good); opacity: 0; pointer-events: none; }
+.podium[data-beat="0"] .dot.running::after { transform: scale(1); opacity: .55; }
+.podium[data-beat="1"] .dot.running::after { transform: scale(1.6); opacity: .35; }
+.podium[data-beat="2"] .dot.running::after { transform: scale(2.3); opacity: .12; }
+.podium[data-beat="3"] .dot.running::after { transform: scale(1); opacity: 0; }
+.podium[data-beat="1"] .crew .a.running, .podium[data-beat="3"] .crew .a.running,
+.podium[data-beat="1"] .step.active .ic::after, .podium[data-beat="3"] .step.active .ic::after { opacity: .775; }
+.podium[data-beat="2"] .crew .a.running, .podium[data-beat="2"] .step.active .ic::after { opacity: .55; }
 .podium .dot.waiting { background: transparent; border: 2px solid var(--warn); }
 .podium .dot.stale { background: var(--serious); }
 .podium .dot.done { background: var(--axis); }
 .podium .dot.failed { background: var(--crit); }
 .podium .dot.bad { background: var(--crit); }
-@keyframes podium-pulse { 0% { transform: scale(1); opacity: .55; } 70% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(1); opacity: 0; } }
 .podium .st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .podium .st.running { color: var(--good-text); } .podium .st.done { color: var(--muted); } .podium .st.failed, .podium .st.aborted { color: var(--crit-text); }
 .podium .st.aborted { color: var(--muted); }
@@ -222,9 +228,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .crew .a.failed { outline: 2px solid var(--crit); outline-offset: -1px; }
 .podium .crew .a.queued { background: transparent; border: 1.5px dashed var(--c); }
 .podium .crew .a.fork { border-radius: 50%; }
-.podium .crew .a.running { will-change: opacity; animation: podium-blink 1.6s steps(2) infinite; }
 .podium .crew .cnt { margin-left: 6px; color: var(--ink2); font-size: 12px; }
-@keyframes podium-blink { 50% { opacity: .55; } }
 .podium .card .foot { display: flex; justify-content: space-between; align-items: end; margin-top: 10px; color: var(--ink2); font-size: 12px; gap: 8px; }
 .podium .card .foot > .mono { display: flex; flex-wrap: wrap; column-gap: 0.5ch; min-width: 0; }
 .podium .card .foot .v { white-space: nowrap; }
@@ -271,7 +275,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .step.done .ic { background: var(--good); border-color: var(--good); color: var(--on-good); }
 .podium .step.done .tx { color: var(--muted); }
 .podium .step.active .ic { border-color: var(--good); }
-.podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); will-change: opacity; animation: podium-blink 1.4s steps(2) infinite; }
+.podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
 .podium .step.blocked .ic { border-color: var(--warn); }
 .podium .step .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .podium .step .ow { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
