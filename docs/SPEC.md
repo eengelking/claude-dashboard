@@ -273,6 +273,7 @@ claude --plugin-dir mod/podium-reporter -p "…"       # headless; always loads 
 | `session.measure` | The status line's figures changed | `context: { tokens?, window, percent? }`, `rateLimits: [{ kind, percentUsed, resetsAt? }]`, `cost?: { usd }`, `changed: ('context'\|'rateLimits'\|'cost')[]` | Cheap trigger for main-loop context, session cost and rate limits without polling. Mark state dirty. |
 | `classic.PermissionRequest` | A permission dialog is about to show (**Assumption:** hookable by that name; the doc says every settings-hook event is hookable as `classic.<Event>`) | `tool_name`, `tool_input` | Set orchestrator `status: "waiting"`, `waitReason: "permission"`, `waitNote: "<tool_name>(<short input>)"`. Cleared by the next `tool.call` of that loop or `turn.complete`. |
 | `classic.Notification` | Claude Code raises a notification (needs permission, idle for input) | `message`, `title?`, `notification_type` | Fallback signal for `waiting`. |
+| `classic.Stop` | The main loop stops and waits (#119) | `background_tasks?` (`{ id, type, status, description, command? }`), `session_crons?` (`{ id, schedule, recurring, prompt }`) | Record the work still in flight as `background`: tasks whose status is not finished, and wake-ups with their next fire time from the cron schedule in local time (null when the schedule cannot be read). A session idle on any of it is `waiting` with `waitReason: null`, not `input`. A new turn clears it. A shell's command is never kept: a task with no description is named by the command's first word. |
 | `classic.SubagentStart`, `classic.SubagentStop` | Subagent lifecycle | `agent_id`, `agent_type`, plus on stop `last_assistant_message?`, `agent_transcript_path` | Reconciliation only. `agent.spawn` + `turn.complete` are primary. |
 | `classic.PreCompact`, `classic.PostCompact` | Compaction | `trigger`, `compact_summary` (PostCompact) | Not needed if `session.compact` works. Fallback. |
 | `classic.TaskCreated`, `classic.TaskCompleted` | Task tool lifecycle | `task_id`, `task_subject`, `teammate_name?` | Fallback for plan tracking. |
@@ -358,7 +359,7 @@ For a fork the model sets `subagent_type: "fork"`; in `agent.spawn` that arrives
 | Cost, session | `$.session.usage().cost.usd` | Real ledger. Includes every agent, those launched by other agents too (verified with a three-level run, #101). |
 | Cost, agent | tokens × price table | Estimate only. `null` for a non-Claude model (no price). |
 | Plan | `tool.call` for Task*/TodoWrite | Built-in tools have no plan title or phase. |
-| Waiting on the user | `classic.PermissionRequest`, `classic.Notification`, `turn.complete` of the main loop | Best effort. If neither classic event is hookable, main-loop `turn.complete` ⇒ `waiting` with `waitReason: "input"`. |
+| Waiting on the user | `classic.PermissionRequest`, `classic.Notification`, `turn.complete` of the main loop | Best effort. If neither classic event is hookable, main-loop `turn.complete` ⇒ `waiting` with `waitReason: "input"`. With background work or a wake-up in flight (`classic.Stop`) it is `waiting` with `waitReason: null` and `background` set instead (#119). |
 | Git | `$.process.run(["git", …])` | Section 5.7. |
 | Failures | `tool.call` results with `isError`/`{deny}`, `turn.complete.reason`, `turn.step.stopReason` | The engine gives evidence, not a diagnosis. |
 
@@ -469,6 +470,10 @@ interface Report {
     loop: LoopReport | null;            // the main loop's own steps, tools and skills; null from a reporter older than 0.4.0
     files: FilesReport | null;          // the files the session changed (5.7); null from a reporter older than 0.6.0
     attached: boolean | null;           // whether any client is attached (5.3, 5.4); false for a background session after /exit; null from a reporter older than 0.7.0 or when the roster could not be read
+    background?: {                      // what an idle session waits on (#119), with waitReason null; absent from a reporter older than 0.11.0 and when there is none
+      tasks: { type: 'shell' | 'agent' | 'monitor' | 'workflow' | 'wakeup' | 'other'; description: string; status: string }[];  // at most 20; description ≤ 120 chars, never a whole shell command
+      wakeAt: number | null;            // epoch ms of the next scheduled wake-up; null when none or unknown
+    };
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
@@ -652,6 +657,7 @@ CREATE TABLE sessions (
   attached INTEGER,                                                        -- Report.session.attached (1 or 0); NULL when unknown
   detached_at INTEGER,                                                     -- when the first report with attached = false arrived; NULL while attached or unknown
   owner TEXT,                                                              -- who the server decided the session belongs to from the token: a person's name, 'Admin', or NULL (auth off, or from before migration 6)
+  background_json TEXT,                                                    -- Report.session.background (#119); NULL when the session waits on nothing in the background
   machine_json TEXT                                                        -- Report.machine ({ name, id }); kept when a later report or hook carries none; NULL when never sent (migration 7)
 );
 CREATE TABLE agents (
@@ -715,7 +721,7 @@ On a valid report, in one transaction:
 
 **Blowout level** (the signal, computed in `derive.ts` and tested): `total = session.blowouts + Σ agent.blowouts`. `level = 0` if total is 0; `2` if the orchestrator has ≥ 2 blowouts or any single agent has ≥ 2 or total ≥ 3; else `1`. Level 2 is the red "likely losing context" state. Level 1 is the amber "context exceeded" state.
 
-**KPIs:** live orchestrators; counts running/waiting/stale; agents running and agents total; plan steps done/total across live sessions; est. cost today (Σ session `cost_usd` for sessions that started today, live or ended), and the same sum split by owner with each owner's group (`costTodayByOwner`, largest first, an owner of `null` for sessions with none); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
+**KPIs:** live orchestrators; counts running/waiting/stale (a waiting session idle on background work, #119, is not in `waiting`); agents running and agents total; plan steps done/total across live sessions; est. cost today (Σ session `cost_usd` for sessions that started today, live or ended), and the same sum split by owner with each owner's group (`costTodayByOwner`, largest first, an owner of `null` for sessions with none); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
 
 ### 7.4 View types (server → UI; defined once in `protocol.ts`, imported by the UI)
 
@@ -736,6 +742,7 @@ interface SessionView {
   loop: LoopReport | null;              // the main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a settings-hooks session
   files: FilesReport | null;            // the files the session changed; null from a reporter older than 0.6.0 and for a settings-hooks session
   attached: boolean | null;             // whether any client is attached; null from a reporter older than 0.7.0 (counts as attached)
+  background: { tasks: { type: string; description: string; status: string }[]; wakeAt: number | null } | null;  // what the session is idle on (#119); not a wait on the person, so it is left out of the waiting count
   hideAt: number | null;                // epoch ms when a session nobody is attached to is set aside from the wall; null while attached or unknown (7.5)
   owner: string | null;                 // who the server decided the session belongs to from the token (7.7): a person's name, 'Admin', or null
   ownerGroup: string | null;            // that person's group from Admin; null for Admin, no owner, or no group
@@ -1131,7 +1138,7 @@ Allowed: at most **three** `claude -p` smoke runs total, each with `--model haik
 - Remote or multi-machine fleets beyond one shared server: a named reporter already sends `machine` (6.2), and the people view groups by person and machine (8.1).
 - Alerts and notifications (a blowout at level 2 pushes a desktop notification): `session.blowouts.level` and `$.ui.notify` are the hooks for it.
 - Budgets and forecasts, comparisons between runs, cost per plan step.
-- A scheduled-agent view (`CronCreate` tasks, `session_crons` on the Stop hook).
+- A scheduled-agent view (`CronCreate` tasks, `session_crons` on the Stop hook). A session waiting on a wake-up is only worded as such (#119); no list of schedules is shown.
 - Authentication beyond the shared token.
 
 ## 12. Open questions and flagged assumptions

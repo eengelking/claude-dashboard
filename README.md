@@ -200,6 +200,7 @@ Only to the server URL above, and only this:
   characters) only when you have turned on `fullPrompts`;
 - for a failed call: the tool, a one-line summary of the call (a Bash command, or a tool and a file
   path), its exit code and the last 12 lines of its output;
+- when a session is idle on background work or a scheduled wake-up: each task's type (shell, agent, monitor, workflow, wake-up), a short description of at most 120 characters, its status and when the wake-up fires. A shell's command is never sent;
 - short activity lines ("spawned Explore (Haiku low): Map call sites");
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
@@ -239,7 +240,7 @@ gets in the session's way. When the server sets `PODIUM_TOKEN`, add `-H 'X-Podiu
 A session that the mod reports is never changed by hooks: the server acknowledges a hook for it and drops
 it, so enabling both is harmless. Settings hooks send no heartbeat, so a hook-only session is allowed to
 stay silent for `HOOK_STALE_AFTER_MS` (10 minutes) before it shows as stale. A finishing subagent does not
-mark the session as waiting on you; the `Stop` hook does.
+mark the session as waiting on you; the `Stop` hook does, unless it lists background work or a scheduled wake-up still in flight, in which case the session shows what it is waiting on instead (Podium reads the hook's `background_tasks` and `session_crons`, never a shell's command).
 
 ## Server settings
 

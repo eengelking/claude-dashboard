@@ -235,13 +235,22 @@ Click the orchestrator's own row, at the top of the tree, to open its detail. It
 and, with podium-reporter 0.4.0 or later, its own steps, the tools it used and the skills it loaded. Calls made by
 the agents it launched are counted in those agents' panels, not here.
 
+A session that ended its turn but has a background shell, monitor, agent or workflow still running, or a
+scheduled wake-up, is not waiting on you. Its card says "Waiting for 1 background shell to finish." (or
+"Waiting for a scheduled wake-up at 14:30."), in blue with a pulsing ring instead of amber. It stays in the
+Waiting filter, but it is not counted in "waiting on you". The card shows only that sentence; the
+orchestrator page adds what it is waiting on below it, cut with " ..." when it is long, and hovering the status
+lists every task. The moment the work ends, the card goes back to "Waiting for your input." The reporter
+reads the work from the Stop hook; a shell's command is never sent.
+
 ### Activity
 
 The right panel lists what just happened, newest first, 12 at a time. Click a row to jump to the session and
 agent it is about. Rows for sessions that have ended are greyed out. A session that is waiting on you gets a
 yellow row that says "Waiting for your approval." or "Waiting for your input." (a question), with the tool
 name, such as `Bash` or `AskUserQuestion`, in a chip under it. Once the session moves on, the row turns plain
-and reads "Waited for your approval."
+and reads "Waited for your approval." A session idle on background work gets a blue row with the same shape
+("Waiting for 1 background shell to finish.") and a chip naming the kind of work (`shell`, `agent`, `wake-up`).
 A turn that ended after a failing call, a session ending or starting, and an agent seen only by settings hooks
 also read as plain sentences, such as "Session ended (cleared)."
 
