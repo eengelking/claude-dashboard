@@ -89,6 +89,23 @@ describe("useHeartbeat", () => {
     expect(vi.getTimerCount()).toBe(0);
     vi.unstubAllGlobals();
   });
+
+  it("follows prefers-reduced-motion when it changes while the page is open", () => {
+    const listeners: Array<() => void> = [];
+    const mq = { matches: false, addEventListener: (_: string, fn: () => void) => void listeners.push(fn), removeEventListener() {} };
+    vi.stubGlobal("matchMedia", () => mq);
+    const { el } = setup(true);
+    expect(el.dataset.beat).toBe("0");
+    mq.matches = true;
+    act(() => listeners.forEach((fn) => fn()));
+    expect(el.dataset.beat).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    mq.matches = false;
+    act(() => listeners.forEach((fn) => fn()));
+    expect(el.dataset.beat).toBe("0");
+    expect(vi.getTimerCount()).toBe(1);
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("usePageVisible", () => {

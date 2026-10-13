@@ -15,16 +15,27 @@ export function useHeartbeat(ref: RefObject<HTMLElement | null>, enabled: boolea
     const el = ref.current;
     if (!el || !enabled) return;
     const query = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-    if (query?.matches) return;
-    let beat = 0;
-    el.dataset.beat = "0";
-    const timer = setInterval(() => {
-      beat = (beat + 1) % 4;
-      el.dataset.beat = String(beat);
-    }, BEAT_MS);
-    return () => {
-      clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
       delete el.dataset.beat;
+    };
+    const start = () => {
+      stop();
+      if (query?.matches) return;
+      let beat = 0;
+      el.dataset.beat = "0";
+      timer = setInterval(() => {
+        beat = (beat + 1) % 4;
+        el.dataset.beat = String(beat);
+      }, BEAT_MS);
+    };
+    start();
+    query?.addEventListener?.("change", start);
+    return () => {
+      query?.removeEventListener?.("change", start);
+      stop();
     };
   }, [ref, enabled]);
 }
