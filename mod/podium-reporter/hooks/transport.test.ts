@@ -93,6 +93,15 @@ describe('transport', () => {
     expect(logs).toHaveLength(1)
   })
 
+  test('a 409 (the session belongs to someone else) is a rejection, not an outage', async () => {
+    const f = fake([{ status: 409, ok: false, text: '{"ok":false,"error":"that session belongs to someone else"}' }])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000 })
+    t.enqueue([ev(1)])
+    expect(await t.send(build, 0)).toBe('rejected')
+    expect(t.queue).toEqual([])
+    expect(t.failures).toBe(0)
+  })
+
   test('a rejected report backs off like a failure, so a persistently rejected snapshot is not re-posted every tick', async () => {
     const bad: HttpResult = { status: 400, ok: false, text: '{"ok":false}' }
     const f = fake([bad, bad, bad, ok()])

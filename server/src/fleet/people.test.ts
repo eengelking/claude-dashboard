@@ -37,6 +37,11 @@ describe('people', () => {
     expect(code(() => store.createPerson('bad\nname'))).toBe('invalid');
   });
 
+  it('reserves the name Admin, which is the owner of reports made with the admin secret', () => {
+    expect(code(() => store.createPerson('Admin'))).toBe('invalid');
+    expect(code(() => store.createPerson(' aDMIN '))).toBe('invalid');
+  });
+
   it('rotating replaces the token and the old one stops matching', () => {
     const a = store.createPerson('Dana');
     const r = store.rotate(a.person.id)!;

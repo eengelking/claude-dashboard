@@ -127,7 +127,8 @@ export class Transport {
         this.loggedRefusal = false;
         return 'ok';
       }
-      if (res.status === 400 || res.status === 413) {
+      // 409: the session id already belongs to another owner (server-side); it is as permanent as a 400, so it is not an outage.
+      if (res.status === 400 || res.status === 409 || res.status === 413) {
         this.ack(events, events.length);
         this.rejected++;
         // Back off like a failure: a snapshot the server keeps refusing (a mod/server version mismatch, say)

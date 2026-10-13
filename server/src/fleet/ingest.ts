@@ -127,11 +127,13 @@ function numOrNull(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null;
 }
 
-/** Stores one validated report. `serverTime` (never the reporter's clock) sets last_seen_at. */
 /** A session already belongs to someone else: the token's owner may not take it over. */
 export class OwnerConflict extends Error {}
 
-/** `owner` is the name the server decided from the token; null (auth off) leaves a stored owner alone. */
+/**
+ * Stores one validated report. `serverTime` (never the reporter's clock) sets last_seen_at.
+ * `owner` is the name the server decided from the token; null (auth off) leaves a stored owner alone.
+ */
 export function ingestReport(f: FleetDb, report: Report, serverTime: number, owner: string | null = null): IngestResult {
   return f.tx(() => {
     const sid = report.session.id;

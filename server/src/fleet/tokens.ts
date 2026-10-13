@@ -43,5 +43,5 @@ export function tokenMatches(presented: string, storedHash: string): boolean {
 export function safeEqualStr(a: string, b: string): boolean {
   const x = createHash('sha256').update(a, 'utf8').digest();
   const y = createHash('sha256').update(b, 'utf8').digest();
-  return timingSafeEqual(x, y) && a.length === b.length;
+  return timingSafeEqual(x, y);
 }

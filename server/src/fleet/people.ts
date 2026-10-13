@@ -12,6 +12,8 @@ export class PeopleError extends Error {
 
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 50;
+/** The owner of a session reported with the admin secret. */
+export const ADMIN_OWNER = 'Admin';
 const NAME_MAX = 48;
 const GROUP_MAX = 24;
 
@@ -64,6 +66,12 @@ export function clampPage(p: Partial<PageIn>): PageIn {
     pageSize: Number.isFinite(size) && size >= 1 ? Math.min(size, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE,
   };
 }
+
+/** A name as it is compared: spaces collapsed, case ignored. */
+export const nameKey = (raw: string): string => raw.trim().replace(/ +/g, ' ').toLowerCase();
+
+/** A request's source address without the IPv4-mapped IPv6 prefix. */
+export const sourceAddress = (ip: string | undefined): string => (ip ?? 'unknown').replace(/^::ffff:/, '');
 
 function cleanName(raw: string, max: number, what: string): string {
   const name = raw.trim().replace(/ +/g, ' ');
@@ -121,6 +129,8 @@ export class PeopleStore {
 
   createPerson(rawName: string, groupId: number | null = null, now = Date.now()): { person: PersonRow; token: string } {
     const name = cleanName(rawName, NAME_MAX, 'A name');
+    // 'Admin' is the owner the server gives a report made with the admin secret; a person of that name would share it.
+    if (name.toLowerCase() === ADMIN_OWNER.toLowerCase()) throw new PeopleError('invalid', `${ADMIN_OWNER} is reserved for the admin secret`);
     if (this.findByName(name)) throw new PeopleError('duplicate', 'That name is already taken');
     if (groupId !== null && !this.stmt('SELECT 1 AS x FROM groups WHERE id = ?').get(groupId)) {
       throw new PeopleError('not_found', 'That group does not exist');
@@ -144,7 +154,7 @@ export class PeopleStore {
   }
 
   findByName(name: string): PersonRow | undefined {
-    const r = this.stmt('SELECT * FROM people WHERE name_lower = ?').get(name.trim().replace(/ +/g, ' ').toLowerCase()) as
+    const r = this.stmt('SELECT * FROM people WHERE name_lower = ?').get(nameKey(name)) as
       | DbPerson
       | undefined;
     return r && toPerson(r);
@@ -197,6 +207,15 @@ export class PeopleStore {
       `SELECT p.*, g.name AS group_name FROM people p LEFT JOIN groups g ON g.id = p.group_id ${where}
        ORDER BY p.name_lower LIMIT :limit OFFSET :offset`,
     ).all({ ...params, limit: pageSize, offset: (page - 1) * pageSize }) as unknown as (DbPerson & { group_name: string | null })[];
+    // One query for the whole page's machines, not one per row.
+    const machines = new Map<number, string[]>();
+    if (rows.length) {
+      const ids = rows.map((r) => r.id);
+      const found = this.db
+        .prepare(`SELECT person_id, machine FROM person_machines WHERE person_id IN (${ids.map(() => '?').join(',')}) ORDER BY machine`)
+        .all(...ids) as { person_id: number; machine: string }[];
+      for (const m of found) (machines.get(m.person_id) ?? machines.set(m.person_id, []).get(m.person_id)!).push(m.machine);
+    }
     return {
       total,
       page,
@@ -205,10 +224,7 @@ export class PeopleStore {
         const { tokenHash: _h, keyId: _k, ...rest } = toPerson(r);
         void _h;
         void _k;
-        const machines = (
-          this.stmt('SELECT machine FROM person_machines WHERE person_id = ? ORDER BY machine').all(r.id) as { machine: string }[]
-        ).map((m) => m.machine);
-        return { ...rest, groupName: r.group_name, machines };
+        return { ...rest, groupName: r.group_name, machines: machines.get(r.id) ?? [] };
       }),
     };
   }
@@ -240,18 +256,19 @@ export class PeopleStore {
       pageSize,
       (page - 1) * pageSize,
     ) as unknown as { id: number; name: string; created_at: number }[];
+    const members = new Map<number, string[]>();
+    if (rows.length) {
+      const ids = rows.map((g) => g.id);
+      const found = this.db
+        .prepare(`SELECT group_id, name FROM people WHERE group_id IN (${ids.map(() => '?').join(',')}) ORDER BY name_lower`)
+        .all(...ids) as { group_id: number; name: string }[];
+      for (const m of found) (members.get(m.group_id) ?? members.set(m.group_id, []).get(m.group_id)!).push(m.name);
+    }
     return {
       total,
       page,
       pageSize,
-      rows: rows.map((g) => ({
-        id: g.id,
-        name: g.name,
-        createdAt: g.created_at,
-        members: (this.stmt('SELECT name FROM people WHERE group_id = ? ORDER BY name_lower').all(g.id) as { name: string }[]).map(
-          (m) => m.name,
-        ),
-      })),
+      rows: rows.map((g) => ({ id: g.id, name: g.name, createdAt: g.created_at, members: members.get(g.id) ?? [] })),
     };
   }
 

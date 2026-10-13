@@ -4,7 +4,7 @@ import type { Fleet } from './fleet.js';
 import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { validateReport } from './protocol.js';
 import { OwnerConflict } from './ingest.js';
-import type { PeopleStore, PersonRow } from './people.js';
+import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow } from './people.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 
 export interface FleetRouterOptions {
@@ -37,7 +37,10 @@ function identify(opts: FleetRouterOptions, given: unknown): Identity | null {
   return { kind: 'open' };
 }
 
-const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? 'Admin' : null);
+/** The address a report came from, as the Machines column shows it. */
+const machineOf = (req: Request): string | null => (req.ip ? sourceAddress(req.ip) : null);
+
+const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
 
 function intParam(v: unknown): number | null | 'bad' {
   if (v === undefined || v === '') return null;
@@ -69,13 +72,13 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     }
     const id = identityOf(res);
     // The token decides who the sender is; the name it carries must agree (a consistency check, since names are visible).
-    if (id.kind === 'person' && (result.report.userName ?? '').trim().replace(/ +/g, ' ').toLowerCase() !== id.person.name.toLowerCase()) {
+    if (id.kind === 'person' && nameKey(result.report.userName ?? '') !== nameKey(id.person.name)) {
       res.status(401).json({ ok: false, error: 'the token does not belong to that name', path: '$.userName' });
       return;
     }
     try {
-      if (id.kind === 'person') opts.people?.touch(id.person.id, req.ip ?? null, fleet.now());
       const out = fleet.ingest(result.report, ownerOf(id));
+      if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
       res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version) });
     } catch (err) {
       if (err instanceof OwnerConflict) {
@@ -91,13 +94,13 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   router.post('/hook', requireToken, json, (req, res) => {
     try {
       const id = identityOf(res);
-      if (id.kind === 'person') opts.people?.touch(id.person.id, req.ip ?? null, fleet.now());
       const out = fleet.ingestHook(req.body, ownerOf(id));
       if (!out.ok) {
         log(`podium: rejected hook payload at ${out.path}: ${out.error}`);
         res.status(400).json(out);
         return;
       }
+      if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now());
       res.json({ ok: true, sessionId: out.sessionId });
     } catch (err) {
       if (err instanceof OwnerConflict) {

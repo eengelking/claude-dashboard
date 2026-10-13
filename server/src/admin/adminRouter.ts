@@ -4,7 +4,7 @@
 // in the response that creates or rotates it.
 import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
-import { PeopleError, type PeopleStore, type PersonRow } from '../fleet/people.js';
+import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
 import { safeEqualStr } from '../fleet/tokens.js';
 
 export interface AdminRouterOptions {
@@ -24,7 +24,7 @@ const COOKIE = 'podium_admin';
 const MAX_SESSIONS = 20;
 const MAX_SOURCES = 1000;
 
-const sourceOf = (req: Request): string => (req.ip ?? 'unknown').replace(/^::ffff:/, '');
+const sourceOf = (req: Request): string => sourceAddress(req.ip);
 
 function readCookie(req: Request, name: string): string | null {
   for (const part of (req.get('cookie') ?? '').split(';')) {
@@ -112,6 +112,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       sessions.delete(sid);
       return false;
     }
+    sessions.delete(sid); // re-insert so the oldest entry is the least recently used, which is the one evicted at the cap
     sessions.set(sid, now());
     return true;
   }
@@ -203,8 +204,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (id === null) return void res.status(400).json({ ok: false, error: 'bad id' });
     const p = people.getPerson(id);
     if (!p) return void res.status(404).json({ ok: false, error: 'unknown person' });
-    people.revoke(id, now());
-    people.log('token_revoked', `Revoked the token of ${p.name}`, sourceOf(req), now());
+    if (people.revoke(id, now())) people.log('token_revoked', `Revoked the token of ${p.name}`, sourceOf(req), now());
     res.json({ ok: true });
   });
 
