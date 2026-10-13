@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ActivityView, SessionView } from "../types";
 import { ORCHESTRATOR_ROW } from "../logic";
 import { ActivityList } from "./ActivityList";
@@ -20,6 +21,8 @@ export function SidePanel(props: {
   now: number;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** The people view's spend chart, shown above the activity list on the wall. */
+  spend?: ReactNode;
 }) {
   const agent = props.selected && props.selectedAgent ? props.selected.agents.find((a) => a.id === props.selectedAgent) : undefined;
   return (
@@ -31,6 +34,8 @@ export function SidePanel(props: {
       ) : agent && props.selected ? (
         <AgentDetail s={props.selected} a={agent} now={props.now} onBack={props.onBack} onAgent={props.onAgent} />
       ) : (
+        <>
+        {props.spend}
         <ActivityList
           events={props.events}
           sessions={props.sessions}
@@ -42,6 +47,7 @@ export function SidePanel(props: {
           isNew={props.isNew}
           onOpen={props.onOpenEvent}
         />
+        </>
       )}
       </div>
     </aside>

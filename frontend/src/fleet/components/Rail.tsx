@@ -3,6 +3,19 @@ import type { SessionView } from "../types";
 import { BlowBadge, ModelChip, PlanBar } from "./Chips";
 import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
+import { Monogram, YouTag } from "./People";
+import { ADMIN, type GroupBy, type Unit } from "../people";
+
+/** The people view in the left list: the same grouping as the wall, and a band header that narrows the wall to it. */
+export interface RailPeople {
+  groupBy: GroupBy;
+  units: Unit[];
+  /** The band key the wall is narrowed to, if any. */
+  picked: string | null;
+  onPick: (u: Unit) => void;
+  /** The sessions the people filter lets through. */
+  visible: ReadonlySet<string>;
+}
 
 export interface Split {
   running: number;
@@ -27,7 +40,58 @@ export function Rail(props: {
   version?: string | null;
   collapsed?: boolean;
   onToggle?: () => void;
+  people?: RailPeople;
 }) {
+  const pv = props.people;
+  const item = (s: SessionView, showOwner: boolean) => {
+    const p = planProgress(s.plan);
+    const c = agentCounts(s.agents);
+    const cls = `ritem${props.entering(s.id) ? " enter" : ""}${props.leaving[s.id] ? " leave" : ""}${s.blowouts.level === 2 ? " risk" : ""}`;
+    const removable = s.status === "stale" && !!props.onRemove;
+    const owner = s.owner ?? "Unassigned";
+    return (
+      <div key={s.id} className={`ritem-slot${removable ? " has-remove" : ""}`}>
+        <button type="button" className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
+          <div className="l1">
+            <i className={`dot ${s.status}`} aria-hidden="true" />
+            <span className="nm">{s.name}</span>
+            <span className="vh">{s.status}</span>
+            {showOwner && (
+              <span title={owner}>
+                <Monogram name={owner} kind={s.owner === null ? "unassigned" : s.owner === ADMIN ? "admin" : "person"} size="sm" />
+                <span className="vh">, {owner}</span>
+              </span>
+            )}
+            <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
+            <ModelChip family={s.modelFamily} model={s.model} />
+          </div>
+          <div className="l2">
+            {p ? (
+              <>
+                <PlanBar pct={p.pct} />
+                <span className="mono">
+                  {p.done}/{p.total}
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: "var(--muted)" }}>no plan reported</span>
+                <span style={{ flex: 1 }} />
+              </>
+            )}
+            <span className="mono" title="running / total agents">
+              {c.running}/{c.all}
+            </span>
+          </div>
+        </button>
+        {removable && (
+          <button type="button" className="rx" onClick={() => props.onRemove?.(s.id)} disabled={!!props.leaving[s.id]} title="Remove from the fleet now" aria-label={`Remove ${s.name} from the fleet`}>
+            &times;
+          </button>
+        )}
+      </div>
+    );
+  };
   return (
     <nav className={`rail${props.collapsed ? " collapsed" : ""}`} aria-label="Orchestrators">
       {props.onToggle && <PaneTab side="left" collapsed={!!props.collapsed} controls="podium-rail-body" onToggle={props.onToggle} shortcut="[" />}
@@ -46,48 +110,11 @@ export function Rail(props: {
           <span>{splitText(props.split)}</span>
         </div>
       </button>
-      {props.sessions.map((s) => {
-        const p = planProgress(s.plan);
-        const c = agentCounts(s.agents);
-        const cls = `ritem${props.entering(s.id) ? " enter" : ""}${props.leaving[s.id] ? " leave" : ""}${s.blowouts.level === 2 ? " risk" : ""}`;
-        const removable = s.status === "stale" && !!props.onRemove;
-        return (
-          <div key={s.id} className={`ritem-slot${removable ? " has-remove" : ""}`}>
-          <button type="button" className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
-            <div className="l1">
-              <i className={`dot ${s.status}`} aria-hidden="true" />
-              <span className="nm">{s.name}</span>
-              <span className="vh">{s.status}</span>
-              <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
-              <ModelChip family={s.modelFamily} model={s.model} />
-            </div>
-            <div className="l2">
-              {p ? (
-                <>
-                  <PlanBar pct={p.pct} />
-                  <span className="mono">
-                    {p.done}/{p.total}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span style={{ color: "var(--muted)" }}>no plan reported</span>
-                  <span style={{ flex: 1 }} />
-                </>
-              )}
-              <span className="mono" title="running / total agents">
-                {c.running}/{c.all}
-              </span>
-            </div>
-          </button>
-          {removable && (
-            <button type="button" className="rx" onClick={() => props.onRemove?.(s.id)} disabled={!!props.leaving[s.id]} title="Remove from the fleet now" aria-label={`Remove ${s.name} from the fleet`}>
-              &times;
-            </button>
-          )}
-          </div>
-        );
-      })}
+      {pv && pv.groupBy !== "none" ? (
+        <RailBands sessions={props.sessions} people={pv} item={item} />
+      ) : (
+        props.sessions.filter((s) => !pv || pv.visible.has(s.id)).map((s) => item(s, !!pv))
+      )}
       <footer className="rail-foot">
         <span>
           <a href={NOTICES_URL} target="_blank" rel="noreferrer">
@@ -105,5 +132,48 @@ export function Rail(props: {
       </footer>
       </div>
     </nav>
+  );
+}
+
+function RailBands({ sessions, people, item }: { sessions: SessionView[]; people: RailPeople; item: (s: SessionView, showOwner: boolean) => JSX.Element }) {
+  const unitOf = new Map<string, string>();
+  for (const u of people.units) for (const s of u.sessions) unitOf.set(s.id, u.key);
+  return (
+    <>
+      {people.units.map((u) => {
+        const rows = sessions.filter((s) => unitOf.get(s.id) === u.key && people.visible.has(s.id));
+        if (!rows.length) return null;
+        const attn = u.waiting + u.stale;
+        const groupish = u.kind === "group" || u.kind === "nogroup";
+        return (
+          <div className="rgroup" key={u.key}>
+            <button type="button" className="rgh" aria-pressed={people.picked === u.key} onClick={() => people.onPick(u)} title={people.picked === u.key ? "Show everyone" : `Show only ${u.name}`}>
+              <Monogram name={u.name} kind={u.kind} />
+              <span className="nm">
+                {u.name}
+                {u.mine && (
+                  <>
+                    {" "}
+                    <YouTag kind={u.kind} />
+                  </>
+                )}
+              </span>
+              {attn > 0 && (
+                <span className="attn" title={`${u.waiting} waiting, ${u.stale} stale`}>
+                  <i className="dot waiting" aria-hidden="true" />
+                  {attn}
+                  <span className="vh"> need attention</span>
+                </span>
+              )}
+              <span className="cnt mono">
+                {u.sessions.length}
+                <span className="vh"> orchestrators</span>
+              </span>
+            </button>
+            {rows.map((s) => item(s, groupish))}
+          </div>
+        );
+      })}
+    </>
   );
 }

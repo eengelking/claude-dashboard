@@ -22,6 +22,11 @@ import { useIdle } from "./useIdle";
 import { usePageVisible } from "./usePageVisible";
 import { useHeartbeat } from "./useHeartbeat";
 import { usePanes } from "./usePanes";
+import { usePeoplePrefs } from "./usePeoplePrefs";
+import { buildUnits, filterByPeople, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, peopleNames, spendRows, type PeopleFilter, type Unit } from "./people";
+import { SpendPanel } from "./components/SpendPanel";
+import type { WallPeople } from "./components/Wall";
+import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
 import type { FleetState } from "./store";
 
@@ -89,7 +94,12 @@ export function FleetView({ state }: { state: FleetState }) {
   const sorted = useMemo(() => sortSessions(all, sort), [all, sort]);
   const [showDetached, setShowDetached] = useState(false);
   const sets = splitDetached(sorted, now, showDetached);
-  const shown = filterSessions(sets.shown, filter);
+  // The people view (#34) switches on once any live session belongs to a named person.
+  const people = usePeoplePrefs();
+  const [pf, setPf] = useState<PeopleFilter>(NO_FILTER);
+  const active = peopleActive(live);
+  const peopleShown = active ? filterByPeople(sets.shown, pf) : sets.shown;
+  const shown = filterSessions(peopleShown, filter);
   const split: Split = {
     running: live.filter((s) => s.status === "running").length,
     waiting: live.filter((s) => s.status === "waiting").length,
@@ -102,6 +112,55 @@ export function FleetView({ state }: { state: FleetState }) {
   const enteringSession = useEntering(all.map((s) => s.id), ready);
   const newEvent = useEntering(state.events.map((e) => e.id), ready);
   const selected = sel ? state.sessions[sel] ?? null : null;
+
+  const { prefs } = people;
+  const spendByOwner = state.kpis?.costTodayByOwner ?? [];
+  const units: Unit[] = active ? orderUnits(buildUnits(sorted, prefs.groupBy, spendByOwner, people.me), prefs.order) : [];
+  const myKey = active ? meKey(sorted, people.me) : null;
+  const pickUnit = (u: Unit) => {
+    const asGroup = u.kind === "group" || u.kind === "nogroup";
+    setPf((cur) => (asGroup ? { person: null, group: cur.group === u.key ? null : u.key } : { person: cur.person === u.key ? null : u.key, group: null }));
+  };
+  const pfLabel = !active ? null : [pf.person, pf.group].filter((k): k is string => !!k).map((k) => (k === "unassigned" ? "Unassigned" : k === "admin" ? "Admin" : k === "nogroup" ? "No group" : k.slice(2))).join(", ") || null;
+  const wallPeople: WallPeople | undefined = active
+    ? {
+        bar: {
+          groupBy: prefs.groupBy,
+          onGroupBy: (g) => {
+            people.setPrefs({ groupBy: g });
+            setPf(NO_FILTER);
+          },
+          order: prefs.order,
+          onOrder: (o) => people.setPrefs({ order: o }),
+          me: people.me,
+          names: peopleNames(live, people.me),
+          onMe: people.setMe,
+          onlyMe: !!myKey && pf.person === myKey,
+          onOnlyMe: () => setPf((cur) => (myKey && cur.person !== myKey ? { person: myKey, group: null } : NO_FILTER)),
+          filterLabel: pfLabel,
+          onClearFilter: () => setPf(NO_FILTER),
+        },
+        groupBy: prefs.groupBy,
+        units,
+        machines: machineLabels(sorted),
+        total: state.kpis?.costToday ?? 0,
+        collapsed: new Set(prefs.collapsed),
+        onToggleBand: people.toggleBand,
+      }
+    : undefined;
+  const railPeople: RailPeople | undefined = active
+    ? { groupBy: prefs.groupBy, units, picked: pf.person ?? pf.group, onPick: pickUnit, visible: new Set(filterByPeople(sorted, pf).map((s) => s.id)) }
+    : undefined;
+  const spendPanel =
+    active && !selected ? (
+      <SpendPanel
+        rows={spendRows(spendByOwner, live, prefs.groupBy === "group" ? "group" : "people")}
+        total={state.kpis?.costToday ?? 0}
+        groupBy={prefs.groupBy === "group" ? "group" : "people"}
+        view={prefs.spendView}
+        onView={(v) => people.setPrefs({ spendView: v })}
+      />
+    ) : undefined;
 
   // A selected session that leaves the live set clears the selection, with a message.
   useEffect(() => {
@@ -271,7 +330,11 @@ export function FleetView({ state }: { state: FleetState }) {
           <Rail
             sessions={sorted}
             selected={sel}
-            onSelect={selectSession}
+            onSelect={(id) => {
+              // "All orchestrators" also drops a person or group picked in the list.
+              if (id === null) setPf(NO_FILTER);
+              selectSession(id);
+            }}
             split={split}
             entering={enteringSession}
             leaving={state.leaving}
@@ -280,6 +343,7 @@ export function FleetView({ state }: { state: FleetState }) {
             version={state.server?.version ?? null}
             collapsed={panes.collapsed.left}
             onToggle={() => toggle("left")}
+            people={railPeople}
           />
           <div className="mid">
             <main className="main" id="podium-main">
@@ -325,6 +389,7 @@ export function FleetView({ state }: { state: FleetState }) {
                     show: showDetached,
                     onToggle: () => setShowDetached((v) => !v),
                   }}
+                  people={wallPeople}
                 />
               )}
             </main>
@@ -345,6 +410,7 @@ export function FleetView({ state }: { state: FleetState }) {
             now={now}
             collapsed={panes.collapsed.right}
             onToggle={() => toggle("right")}
+            spend={spendPanel}
           />
           {!panes.collapsed.left && <ResizeHandle panel="rail" r={resize} container={container} label="Resize orchestrator list" />}
           {!panes.collapsed.right && <ResizeHandle panel="side" r={resize} container={container} label="Resize activity panel" />}

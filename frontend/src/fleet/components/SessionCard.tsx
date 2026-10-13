@@ -5,6 +5,7 @@ import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip,
 import { toolOfNote, waitLead } from "../waiting";
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
+import { OwnerLine } from "./People";
 
 export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens and the plan are unavailable.";
 
@@ -36,7 +37,13 @@ export function riskText(s: SessionView): string {
   return `Context exceeded ${b.total}× (${b.loopsHit} of ${b.loopsTotal} loops). Likely losing context; check for invented details.`;
 }
 
-export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void; onRemove?: () => void }) {
+/** In the people view: the machine label, and whether the card names its owner (not in that owner's own band). */
+export interface CardOwner {
+  machine: string | null;
+  showName: boolean;
+}
+
+export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void; onRemove?: () => void; owner?: CardOwner }) {
   const { s, now, config } = props;
   const p = planProgress(s.plan);
   const c = agentCounts(s.agents);
@@ -59,6 +66,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         <bdi>{s.project}</bdi>
       </div>
       <GitLine git={s.git} />
+      {props.owner && <OwnerLine owner={s.owner} machine={props.owner.machine} showName={props.owner.showName} />}
       <div className="meta">
         <ModelChip family={s.modelFamily} model={s.model} />
         <EffortMeter effort={s.effort} />

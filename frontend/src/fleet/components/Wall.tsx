@@ -4,6 +4,9 @@ import type { Kpis, LifecycleConfig, SessionView } from "../types";
 import { NO_PRICE_TITLE } from "./Chips";
 import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
+import { Band, PeopleBar } from "./People";
+import type { GroupBy, Unit } from "../people";
+import type { ComponentProps } from "react";
 import { Sparkline } from "./Sparkline";
 
 export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
@@ -100,6 +103,21 @@ export function Toolbar(props: {
   );
 }
 
+/** What the wall needs for the people view; absent while no session reports a person (the plain wall). */
+export interface WallPeople {
+  bar: ComponentProps<typeof PeopleBar>;
+  groupBy: GroupBy;
+  /** Bands in order, built from every live session. */
+  units: Unit[];
+  /** Machine label per session id. */
+  machines: Map<string, string>;
+  /** Today's estimated spend, for each band's share. */
+  total: number;
+  /** Band keys collapsed to their header. */
+  collapsed: ReadonlySet<string>;
+  onToggleBand: (key: string) => void;
+}
+
 export function Wall(props: {
   sessions: SessionView[];
   totalLive: number;
@@ -118,26 +136,34 @@ export function Wall(props: {
   onRemove?: (id: string) => void;
   /** Sessions nobody is attached to that were set aside, and whether they are being shown anyway. */
   detached: { count: number; costUsd: number; show: boolean; onToggle: () => void };
+  people?: WallPeople;
 }) {
+  const pv = props.people;
+  const card = (s: SessionView, showName: boolean) => (
+    <SessionCard
+      key={s.id}
+      s={s}
+      now={props.now}
+      config={props.config}
+      entering={props.entering(s.id)}
+      leaving={!!props.leaving[s.id]}
+      onOpen={() => props.onOpen(s.id)}
+      onRemove={props.onRemove ? () => props.onRemove?.(s.id) : undefined}
+      owner={pv ? { machine: pv.machines.get(s.id) ?? null, showName } : undefined}
+    />
+  );
+  const banded = pv && pv.groupBy !== "none";
   return (
     <>
       <KpiStrip kpis={props.kpis} split={props.split} />
+      {pv && <PeopleBar {...pv.bar} />}
       <Toolbar filter={props.filter} onFilter={props.onFilter} sort={props.sort} onSort={props.onSort} shown={props.sessions.length} cleared={props.cleared} />
       {props.sessions.length ? (
-        <div className="wall">
-          {props.sessions.map((s) => (
-            <SessionCard
-              key={s.id}
-              s={s}
-              now={props.now}
-              config={props.config}
-              entering={props.entering(s.id)}
-              leaving={!!props.leaving[s.id]}
-              onOpen={() => props.onOpen(s.id)}
-              onRemove={props.onRemove ? () => props.onRemove?.(s.id) : undefined}
-            />
-          ))}
-        </div>
+        banded ? (
+          <Bands sessions={props.sessions} people={pv} card={card} />
+        ) : (
+          <div className="wall">{props.sessions.map((s) => card(s, !!pv))}</div>
+        )
       ) : props.totalLive > (props.detached.show ? 0 : props.detached.count) ? (
         <div className="none">No orchestrators match. Clear the filter to see all {props.totalLive}.</div>
       ) : props.detached.count ? null : (
@@ -160,5 +186,36 @@ export function Wall(props: {
         </div>
       )}
     </>
+  );
+}
+
+/** The wall as bands: each band holds its shown sessions in the wall's sort order; a band with none shown is left out. */
+function Bands({ sessions, people, card }: { sessions: SessionView[]; people: WallPeople; card: (s: SessionView, showName: boolean) => JSX.Element }) {
+  const unitOf = new Map<string, string>();
+  for (const u of people.units) for (const s of u.sessions) unitOf.set(s.id, u.key);
+  const shownBy = new Map<string, SessionView[]>();
+  for (const s of sessions) {
+    const k = unitOf.get(s.id);
+    if (!k) continue;
+    const list = shownBy.get(k) ?? [];
+    list.push(s);
+    shownBy.set(k, list);
+  }
+  return (
+    <div className="bands">
+      {people.units.map((u) => {
+        const shown = shownBy.get(u.key);
+        if (!shown?.length) return null;
+        const key = `${people.groupBy}:${u.key}`;
+        const machines = [...new Set(u.sessions.map((s) => people.machines.get(s.id)).filter((m): m is string => !!m))];
+        // A person's own band already names them; a group band names each card's owner.
+        const showName = u.kind !== "person" && u.kind !== "admin" && u.kind !== "unassigned";
+        return (
+          <Band key={u.key} unit={u} total={people.total} machines={machines} open={!people.collapsed.has(key)} onToggle={() => people.onToggleBand(key)} shown={shown.length}>
+            {shown.map((s) => card(s, showName))}
+          </Band>
+        );
+      })}
+    </div>
   );
 }

@@ -6,7 +6,7 @@
 // of reports (timestamps aside). The Simulator class is pure apart from its injected clock; main()
 // does the HTTP.
 import os from 'node:os';
-import type { ActivityEvent, AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, Plan, Report } from '../server/src/fleet/protocol.ts';
+import type { ActivityEvent, AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, MachineInfo, Plan, Report } from '../server/src/fleet/protocol.ts';
 import { costOf, shortName, windowOf, type Family } from '../mod/podium-reporter/hooks/models.ts';
 
 const HELP = `podium-sim: POST simulated Claude Code session reports to a Podium server.
@@ -24,6 +24,11 @@ Options:
   --agents N        Extra ad-hoc agents per session at start, for load tests (default 0)
   --reporter-version V  Version the reports claim (default 0.1.0-sim, which the server cannot read, so no warning); try 0.1.0 or 0.99.0 to see a mismatch
   --token T         Send X-Podium-Token: T
+  --person NAME[=TOKEN]  Report some sessions as this person (repeat for more people). Sessions go to
+                    the people in turn. With TOKEN they send that person's token from Admin; without
+                    it they send --token. Each person reports from two machines.
+  --unnamed         With --person, also keep a share of sessions with no name (they send --token:
+                    with the admin secret they show under Admin, with no token under Unassigned)
   --print           Print each report as one JSON line instead of POSTing (no server needed)
   --ticks N         With --print: stop after N ticks
   -h, --help        Show this help
@@ -204,8 +209,20 @@ interface SimStep {
   agentId: string | null;
 }
 
+/** A person the simulator reports as, with the token their sessions send (null: the --token one). */
+export interface SimPerson {
+  name: string;
+  token: string | null;
+}
+
+interface SimOwner extends SimPerson {
+  machine: MachineInfo;
+}
+
 interface SimSession {
   id: string;
+  /** Who this session reports as; null for a session with no name. */
+  owner: SimOwner | null;
   name: string;
   tpl: Template;
   cwd: string;
@@ -240,6 +257,17 @@ export interface SimOptions {
   reporterVersion?: string;
   now: () => number;
   home: string;
+  /** People to spread sessions over; none keeps every session unnamed. */
+  people?: SimPerson[];
+  /** With people, also keep a share of sessions with no name. */
+  unnamed?: boolean;
+}
+
+/** A stable 12-hex machine id from a label, so a person's machine keeps its id across runs. */
+export function simMachineId(label: string): string {
+  let h = 2166136261;
+  for (const c of label) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  return (h.toString(16).padStart(8, '0') + ((h ^ 0x5bd1e995) >>> 0).toString(16).padStart(8, '0')).slice(0, 12);
 }
 
 function splitTokens(rng: Rng, n: number) {
@@ -263,6 +291,8 @@ export class Simulator {
   private poolIdx = 0;
   private agentSeq = 1;
   private nameUse = new Map<string, number>();
+  private ownerIdx = 0;
+  private ownerUse = new Map<string, number>();
 
   constructor(private readonly opts: SimOptions) {
     this.rng = new Rng(opts.seed);
@@ -271,6 +301,25 @@ export class Simulator {
 
   private now(): number {
     return this.opts.now();
+  }
+
+  /** The next owner in turn. A person's sessions run on their laptop, and every third one on a build box. */
+  private nextOwner(): SimOwner | null {
+    const people = this.opts.people ?? [];
+    if (!people.length) return null;
+    const slots: (SimPerson | null)[] = this.opts.unnamed ? [...people, null] : people;
+    const p = slots[this.ownerIdx++ % slots.length]!;
+    if (!p) return null;
+    const n = this.ownerUse.get(p.name) ?? 0;
+    this.ownerUse.set(p.name, n + 1);
+    const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'person';
+    const box = n % 3 === 2 ? 'build' : 'laptop';
+    return { ...p, machine: { name: `${slug}-${box}`, id: simMachineId(`${p.name}:${box}`) } };
+  }
+
+  /** The token a session's reports send: its person's, else the --token one. */
+  tokenFor(sessionId: string): string | null {
+    return this.sessions.find((x) => x.id === sessionId)?.owner?.token ?? null;
   }
 
   private ev(s: SimSession, kind: ActivityEvent['kind'], agentId: string | null, text: string, data: Record<string, unknown> | null = null) {
@@ -291,6 +340,7 @@ export class Simulator {
     const age = initial ? (tpl.ageSec ?? rng.int(5, 120)) : rng.int(1, 5);
     const s: SimSession = {
       id,
+      owner: this.nextOwner(),
       name: (tpl.worktree ? leaf : tpl.name) + (uses > 1 ? `-${uses}` : ''),
       tpl,
       cwd: tpl.worktree ? `${projectRoot}/.claude/worktrees/${leaf}` : projectRoot,
@@ -669,6 +719,7 @@ export class Simulator {
       },
       agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
       events: s.events.slice(0, 100),
+      ...(s.owner ? { userName: s.owner.name, machine: { ...s.owner.machine } } : {}),
     };
   }
 
@@ -737,10 +788,12 @@ interface Args {
   token: string | null;
   print: boolean;
   ticks: number;
+  people: SimPerson[];
+  unnamed: boolean;
 }
 
 export function parseArgs(argv: string[]): Args | 'help' {
-  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, reporterVersion: undefined, token: null, print: false, ticks: 0 };
+  const a: Args = { url: 'http://127.0.0.1:4317', sessions: 5, speed: 1, seed: 1, duration: 0, chaos: false, agents: 0, reporterVersion: undefined, token: null, print: false, ticks: 0, people: [], unnamed: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i]!;
     const val = () => {
@@ -764,6 +817,15 @@ export function parseArgs(argv: string[]): Args | 'help' {
       case '--agents': a.agents = Math.round(num(0, 190)); break;
       case '--reporter-version': a.reporterVersion = val(); break;
       case '--token': a.token = val(); break;
+      case '--person': {
+        const v = val();
+        const eq = v.indexOf('=');
+        const name = (eq < 0 ? v : v.slice(0, eq)).trim();
+        if (!name) throw new Error('--person needs a name');
+        a.people.push({ name, token: eq < 0 ? null : v.slice(eq + 1) || null });
+        break;
+      }
+      case '--unnamed': a.unnamed = true; break;
       case '--print': a.print = true; break;
       case '--ticks': a.ticks = Math.round(num(0, 1e7)); break;
       default: throw new Error(`unknown option ${k} (see --help)`);
@@ -772,11 +834,21 @@ export function parseArgs(argv: string[]): Args | 'help' {
   return a;
 }
 
-async function post(args: Args, report: Report): Promise<number | null> {
+/** Refusals already printed, so a wrong token is reported once and not every second. */
+const refused = new Set<string>();
+
+async function post(args: Args, report: Report, token: string | null = null): Promise<number | null> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (args.token) headers['X-Podium-Token'] = args.token;
+  if (token ?? args.token) headers['X-Podium-Token'] = (token ?? args.token)!;
   try {
     const res = await fetch(`${args.url}/api/fleet/report`, { method: 'POST', headers, body: JSON.stringify(report), signal: AbortSignal.timeout(3000) });
+    if (res.status === 401 || res.status === 409) {
+      const who = `${res.status}:${report.userName ?? ''}`;
+      if (refused.has(who)) return null;
+      refused.add(who);
+      console.error(`podium-sim: report refused (${res.status}) for ${report.userName ?? 'a session with no name'}: ${(await res.text()).slice(0, 200)}`);
+      return null;
+    }
     if (res.status === 400) {
       const body = await res.text();
       console.error(`podium-sim: report rejected: ${body.slice(0, 200)}`);
@@ -805,7 +877,7 @@ async function main() {
   const a = args;
   if (a.print) {
     let t = 1_800_000_000_000;
-    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: () => t, home: '/Users/sim' });
+    const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: () => t, home: '/Users/sim', people: a.people, unnamed: a.unnamed });
     const ticks = a.ticks || 60;
     for (let i = 0; i < ticks; i++) {
       t += 1000;
@@ -818,7 +890,7 @@ async function main() {
     return;
   }
 
-  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: Date.now, home: os.homedir() });
+  const sim = new Simulator({ sessions: a.sessions, seed: a.seed, chaos: a.chaos, extraAgents: a.agents, reporterVersion: a.reporterVersion, now: Date.now, home: os.homedir(), people: a.people, unnamed: a.unnamed });
   console.log(`podium-sim: ${a.sessions} sessions, seed ${a.seed}, speed ${a.speed}${a.chaos ? ', chaos' : ''} -> ${a.url}`);
   let stopping = false;
   let failures = 0;
@@ -827,7 +899,7 @@ async function main() {
   const tick = async () => {
     if (stopping) return;
     const reports = sim.step();
-    const acks = await Promise.all(reports.map((r) => post(a, r)));
+    const acks = await Promise.all(reports.map((r) => post(a, r, sim.tokenFor(r.session.id))));
     reports.forEach((r, i) => {
       const n = acks[i];
       if (n !== null && n !== undefined) sim.ack(r.session.id, n);
@@ -842,7 +914,7 @@ async function main() {
     stopping = true;
     if (timer) clearTimeout(timer);
     const finals = sim.endAll();
-    await Promise.all(finals.map((r) => post(a, r)));
+    await Promise.all(finals.map((r) => post(a, r, sim.tokenFor(r.session.id))));
     console.log(`podium-sim: ${why}; ended ${finals.length} sessions`);
     process.exit(0);
   };

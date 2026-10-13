@@ -60,4 +60,40 @@ describe('podium-sim', () => {
     expect(() => parseArgs(['--sessions', 'many'])).toThrow();
     expect(() => parseArgs(['--bogus'])).toThrow();
   });
+
+  it('parses people and the unnamed share', () => {
+    expect(parseArgs(['--person', 'Ed E.=pdm_a_b', '--person', 'Priya N.', '--unnamed'])).toMatchObject({
+      people: [{ name: 'Ed E.', token: 'pdm_a_b' }, { name: 'Priya N.', token: null }],
+      unnamed: true,
+    });
+    expect(parseArgs([])).toMatchObject({ people: [], unnamed: false });
+    expect(() => parseArgs(['--person', '=tok'])).toThrow();
+  });
+
+  it('reports as people in turn, each on a laptop and a build box, with their own token, plus unnamed sessions', () => {
+    let t = 1_800_000_000_000;
+    const sim = new Simulator({
+      sessions: 9, seed: 2, chaos: false, extraAgents: 0, now: () => t, home: '/Users/sim',
+      people: [{ name: 'Ed E.', token: 'tok-ed' }, { name: 'Priya N.', token: null }], unnamed: true,
+    });
+    t += 1000;
+    const reports = sim.step();
+    for (const r of reports) {
+      const v = validateReport(JSON.parse(JSON.stringify(r)));
+      if (!v.ok) throw new Error(`${v.path}: ${v.error}`);
+    }
+    expect(reports.map((r) => r.userName ?? null)).toEqual(['Ed E.', 'Priya N.', null, 'Ed E.', 'Priya N.', null, 'Ed E.', 'Priya N.', null]);
+    const ed = reports.filter((r) => r.userName === 'Ed E.');
+    expect(ed.map((r) => r.machine!.name)).toEqual(['ed-e-laptop', 'ed-e-laptop', 'ed-e-build']);
+    expect(new Set(ed.map((r) => r.machine!.id)).size).toBe(2);
+    for (const r of reports) if (r.machine) expect(r.machine.id).toMatch(/^[0-9a-f]{12}$/);
+    expect(reports.find((r) => !r.userName)!.machine).toBeUndefined();
+    expect(sim.tokenFor(ed[0]!.session.id)).toBe('tok-ed');
+    expect(sim.tokenFor(reports[1]!.session.id)).toBeNull();
+    expect(sim.tokenFor(reports[2]!.session.id)).toBeNull();
+  });
+
+  it('sends no name or machine without --person', () => {
+    expect(run(4, 20).some((r) => 'userName' in r || 'machine' in r)).toBe(false);
+  });
 });
