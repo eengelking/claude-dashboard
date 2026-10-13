@@ -9,13 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- Mockup for two changes to the orchestrator screen. Uses Podium's own tokens and the .sec / .sh / dl patterns from podium.html, so nothing here is a new visual language.
      Part 1: the side panel's Task prompt and Final answer become two buttons that open a modal. Click them, press Esc, click the X or the dimmed area to close.
-     Part 2: the orchestrator's own row says "waiting on 1 agent" while an agent it launched is running. The fleet card keeps saying "running".
+     Part 2: the orchestrator's own row says "delegating" while an agent it launched is running. The fleet card keeps saying "running".
      The markdown renderer below is a stand-in for the real one (see the issue's open questions). -->
 <style>
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
-  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --crit: #d03b3b;
+  --good: #0ca30c; --good-text: #3dbb3d; --deleg: #2fa4e0; --deleg-text: #5cbcf0; --warn: #fab219; --crit: #d03b3b;
   --scrim: rgba(8,8,8,0.55); --code: #141413; --shadow: 0 24px 60px rgba(0,0,0,.55);
   --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -25,13 +25,13 @@
   :root:not([data-theme="dark"]) {
     --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
-    --good: #1f9d55; --good-text: #006300; --scrim: rgba(249,249,247,0.55); --code: #f1f0ec; --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
+    --good: #1f9d55; --good-text: #006300; --deleg: #0a7fb8; --deleg-text: #07608c; --scrim: rgba(249,249,247,0.55); --code: #f1f0ec; --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
   --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
-  --good: #1f9d55; --good-text: #006300; --scrim: rgba(249,249,247,0.55); --code: #f1f0ec; --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
+  --good: #1f9d55; --good-text: #006300; --deleg: #0a7fb8; --deleg-text: #07608c; --scrim: rgba(249,249,247,0.55); --code: #f1f0ec; --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.45 var(--font-ui); padding: 20px 16px 60px; }
@@ -66,9 +66,9 @@ td.r, th.r { text-align: right; }
 .sub { color: var(--muted); }
 .st { display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
-.dot.ring { background: none; border: 1.5px solid var(--ink2); }
+.dot.ring { background: none; border: 1.5px solid var(--deleg); }
 .st.run { color: var(--good-text); }
-.st.wait { color: var(--ink2); }
+.st.deleg { color: var(--deleg-text); }
 .st.done { color: var(--muted); }
 .dot.done { background: var(--muted); }
 
@@ -128,7 +128,7 @@ dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; }
   </div>
 
   <h2>1. The orchestrator screen</h2>
-  <p class="note">The orchestrator row reads "waiting on 1 agent" while the agent runs. The agent row reads "running". When the agent finishes, the orchestrator goes back to "running".</p>
+  <p class="note">The orchestrator row reads "delegating" in blue while the agent runs; hover it for "Waiting on 1 agent: ...". The word is not "waiting" and the color is not amber, because those mean "waiting on you". An agent that launched its own agents reads the same way. The agent row reads "running". When the agent finishes, the orchestrator goes back to "running".</p>
   <div class="two">
     <div class="sec">
       <div class="sh"><h3>Agents</h3><span class="src">1 launched · click a header to sort</span></div>
@@ -136,7 +136,7 @@ dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; }
       <table>
         <thead><tr><th>Task</th><th>Model</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Time</th><th>Status</th></tr></thead>
         <tbody>
-          <tr><td><b>claude-dashboard</b> <span class="sub">orchestrator</span></td><td>Sonnet</td><td class="r mono">2.17M</td><td class="r mono">$1.48</td><td class="r mono">2:31</td><td><span class="st wait" id="orchStatus"><span class="dot ring"></span>waiting on 1 agent</span></td></tr>
+          <tr><td><b>claude-dashboard</b> <span class="sub">orchestrator</span></td><td>Sonnet</td><td class="r mono">2.17M</td><td class="r mono">$1.48</td><td class="r mono">2:31</td><td><span class="st deleg" id="orchStatus" title="Waiting on 1 agent: Implement issue #34. Not waiting on you."><span class="dot ring"></span>delegating</span></td></tr>
           <tr id="agentRow"><td><b>Implement issue #34</b> <span class="sub">general-purpose</span></td><td>Opus</td><td class="r mono">1.83M</td><td class="r mono">$1.21</td><td class="r mono">1:32</td><td><span class="st run" id="agentStatus"><span class="dot"></span>running</span></td></tr>
         </tbody>
       </table>

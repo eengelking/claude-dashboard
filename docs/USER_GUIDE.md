@@ -192,6 +192,12 @@ subagent and fork with its task, type, model, effort, context bar, tokens, cost,
 column header to switch to a sorted flat list, and "Show as tree" to go back. **Copy resume command** copies
 the command that resumes the session.
 
+A row that is running but has agents of its own running, such as the orchestrator waiting on a subagent, reads
+"delegating" in blue with a hollow dot, and hovering it lists the agents it is waiting on. It is not asking
+anything of you: amber and "waiting on you" are the ones that need a reply. The fleet wall and the status
+filters still count the session as running. Podium cannot tell an agent launched in the background from one
+the row is really blocked on, so a row with a background agent running also reads "delegating".
+
 Click an agent to open its detail in the right panel. Its **Tokens** line is the context it holds now, and
 **Used so far** under it lists the running totals (input, output, cache read, cache write); cache read is large
 because the cached context is read again on every request. If it failed, you get the failing call, the last lines
