@@ -594,6 +594,13 @@ export class Simulator {
     };
   }
 
+  /** Whether a window is attached. Every fourth session loses its window for a spell (ticks 30 to 120), so the dimmed and hidden cards show up. Null for a simulated reporter older than 0.7.0. */
+  private attachedOf(s: SimSession): boolean | null {
+    if (this.opts.reporterVersion && /^0\.[0-6]\./.test(this.opts.reporterVersion)) return null;
+    const n = [...s.id].reduce((a, c) => a + c.charCodeAt(0), 0);
+    return !(n % 4 === 0 && this.tickN >= 30 && this.tickN < 120);
+  }
+
   /** A made-up changed-files list sized by the template's git counts: the uncommitted files twice over, plus some committed ones. Null for a simulated reporter older than 0.6.0. */
   private filesOf(s: SimSession): FilesReport | null {
     if (this.opts.reporterVersion && /^0\.[0-5]\./.test(this.opts.reporterVersion)) return null;
@@ -658,6 +665,7 @@ export class Simulator {
         plan: this.planOf(s),
         loop: { ...s.loop, skills: [...s.loop.skills], toolCounts: { ...s.loop.toolCounts }, steps: { ...s.loop.steps } },
         files: this.filesOf(s),
+        attached: this.attachedOf(s),
       },
       agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
       events: s.events.slice(0, 100),

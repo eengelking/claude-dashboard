@@ -65,6 +65,16 @@ export function filterSessions(list: readonly SessionView[], filter: { status: S
   });
 }
 
+/**
+ * Sessions nobody is attached to stay on the wall, dimmed, until their `hideAt`; after that they are set
+ * aside (still live, still counted) unless the person asked to see them. A session that never said whether
+ * a client is attached has no `hideAt` and is always shown.
+ */
+export function splitDetached(list: readonly SessionView[], now: number, showHidden: boolean): { shown: SessionView[]; hidden: SessionView[] } {
+  const hidden = list.filter((s) => s.attached === false && s.hideAt !== null && now >= s.hideAt);
+  return { shown: showHidden ? list.slice() : list.filter((s) => !hidden.includes(s)), hidden };
+}
+
 export interface PlanProgress {
   done: number;
   total: number;

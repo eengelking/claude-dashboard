@@ -55,6 +55,8 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     lastSeenAt: 2_000_000,
     secondsSinceSeen: 0,
     dropAt: null,
+    attached: true,
+    hideAt: null,
     context: { tokens: 410_000, window: 1_000_000, percent: 41 },
     costUsd: 12.84,
     tokensTotal: 2_500_000,
@@ -102,7 +104,7 @@ export function makeEvent(over: Partial<ActivityView> = {}): ActivityView {
 export function makeState(over: Partial<StateBody> = {}): StateBody {
   return {
     serverTime: 2_000_000,
-    config: { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000 },
+    config: { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 },
     sessions: [makeSession()],
     kpis: makeKpis(),
     clearedToday: 0,

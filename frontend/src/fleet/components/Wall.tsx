@@ -146,6 +146,8 @@ export function Wall(props: {
   leaving: Record<string, number>;
   onOpen: (id: string) => void;
   onRemove?: (id: string) => void;
+  /** Sessions nobody is attached to that were set aside, and whether they are being shown anyway. */
+  detached: { count: number; costUsd: number; show: boolean; onToggle: () => void };
 }) {
   return (
     <>
@@ -166,14 +168,25 @@ export function Wall(props: {
             />
           ))}
         </div>
-      ) : props.totalLive ? (
+      ) : props.totalLive > (props.detached.show ? 0 : props.detached.count) ? (
         <div className="none">No orchestrators match. Clear the filter to see all {props.totalLive}.</div>
-      ) : (
+      ) : props.detached.count ? null : (
         <div className="none">
           <b>No Claude Code sessions are reporting.</b>
           <br />
           Start one with the reporter mod: <code>claude --plugin-dir mod/podium-reporter</code>, or run the simulator:{" "}
           <code>npm run podium:sim</code>.
+        </div>
+      )}
+      {props.detached.count > 0 && (
+        <div className="fold">
+          <b>
+            {props.detached.count} background {props.detached.count === 1 ? "session" : "sessions"} {props.detached.show ? "shown" : "hidden"}
+          </b>
+          <span>nobody is attached{props.detached.costUsd > 0 ? `, ${fmtUsd(props.detached.costUsd)} so far` : ""}</span>
+          <button type="button" className="link" onClick={props.detached.onToggle}>
+            {props.detached.show ? "Hide them" : "Show them"}
+          </button>
         </div>
       )}
       <Legend />

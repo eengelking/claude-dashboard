@@ -45,7 +45,7 @@ export const initialState: FleetState = {
   error: null,
   serverTime: 0,
   lastMessageAt: 0,
-  config: { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000 },
+  config: { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 },
   sessions: {},
   leaving: {},
   gone: {},

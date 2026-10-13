@@ -9,7 +9,7 @@ import { stateFrom } from "./testState";
 
 afterEach(cleanup);
 
-const CFG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000 };
+const CFG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 };
 const blow = (orch: number, agents: number, level: 0 | 1 | 2) => ({ orchestrator: orch, agents, total: orch + agents, level, loopsHit: 1, loopsTotal: 3, log: [] });
 
 describe("rail and wall", () => {
@@ -350,3 +350,37 @@ describe("fleet cost with an unpriced session (#66)", () => {
   });
 });
 
+
+describe("sessions nobody is attached to (#45)", () => {
+  it("shows a dashed card with a chip and countdown, then sets it aside behind a fold line that can bring it back", () => {
+    const now = Date.now();
+    const st = stateFrom({
+      sessions: [
+        makeSession({ id: "a", name: "attached-one" }),
+        makeSession({ id: "soon", name: "soon-gone", attached: false, hideAt: now + 30_000 }),
+        makeSession({ id: "gone", name: "long-gone", attached: false, hideAt: now - 1_000, costUsd: 2.5 }),
+      ],
+    });
+    const { container } = render(<FleetView state={st} />);
+    const names = [...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent);
+    expect(names).toContain("attached-one");
+    expect(names).toContain("soon-gone");
+    expect(names).not.toContain("long-gone");
+    const soon = [...container.querySelectorAll(".wall .card")].find((c) => c.textContent?.includes("soon-gone"))!;
+    expect(soon.className).toContain("detached");
+    expect(soon.textContent).toContain("nobody attached");
+    expect(soon.textContent).toMatch(/hides in/);
+    expect(screen.getByText("1 background session hidden")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show them" }));
+    expect([...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent)).toContain("long-gone");
+    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
+    expect([...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent)).not.toContain("long-gone");
+  });
+
+  it("looks the same as before for a session whose reporter does not say", () => {
+    const st = stateFrom({ sessions: [makeSession({ attached: null, hideAt: null })] });
+    const { container } = render(<FleetView state={st} />);
+    expect(container.querySelector(".wall .card.detached")).toBeNull();
+    expect(container.querySelector(".fold")).toBeNull();
+  });
+});

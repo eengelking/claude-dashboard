@@ -16,6 +16,8 @@ export interface FleetConfig {
   hookStaleAfterMs: number;
   dropAfterMs: number;
   lingerMs: number;
+  /** How long a session nobody is attached to stays on the wall, dimmed, before it is set aside. */
+  detachedHideAfterMs: number;
   retention: RetentionPolicy;
   home: string;
   /** Minimum gap between two `session` messages for one session. */
@@ -28,6 +30,7 @@ export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   hookStaleAfterMs: 600_000,
   dropAfterMs: 60_000,
   lingerMs: 8_000,
+  detachedHideAfterMs: 60_000,
   retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
   throttleMs: 500,
 };
@@ -52,6 +55,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
     hookStaleAfterMs: envMs(env, 'HOOK_STALE_AFTER_MS', d.hookStaleAfterMs),
     dropAfterMs: envMs(env, 'DROP_AFTER_MS', d.dropAfterMs),
     lingerMs: envMs(env, 'LINGER_MS', d.lingerMs),
+    detachedHideAfterMs: envMs(env, 'DETACHED_HIDE_AFTER_MS', d.detachedHideAfterMs),
     throttleMs: d.throttleMs,
     retention: {
       samplesMs: envMs(env, 'RETAIN_SAMPLES_MS', d.retention.samplesMs),
@@ -188,6 +192,7 @@ export class Fleet {
         samples: this.db.samplesSince(row.id, Math.floor(now / 1000) - 61),
         heard: entry ? entry.heard : true,
         dropAt: entry ? this.dropAtFor(row, entry.heard, now) : null,
+        hideAt: row.attached === 0 && row.detached_at !== null ? row.detached_at + this.cfg.detachedHideAfterMs : null,
       },
       now,
       this.derive,
@@ -274,7 +279,7 @@ export class Fleet {
     const sessions = this.liveViews();
     return {
       serverTime: this.now(),
-      config: { staleAfterMs: this.cfg.staleAfterMs, dropAfterMs: this.cfg.dropAfterMs, lingerMs: this.cfg.lingerMs },
+      config: { staleAfterMs: this.cfg.staleAfterMs, dropAfterMs: this.cfg.dropAfterMs, lingerMs: this.cfg.lingerMs, detachedHideAfterMs: this.cfg.detachedHideAfterMs },
       sessions,
       kpis: this.kpis(sessions),
       clearedToday: this.clearedToday(),

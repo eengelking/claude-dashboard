@@ -287,4 +287,28 @@ describe('protocol', () => {
       expect(validateReport(f)).toMatchObject({ ok: false, path: at });
     });
   });
+  describe('session.attached', () => {
+    const sess = (f: unknown) => (f as { session: Record<string, unknown> }).session;
+    const attachedOf = (r: ReturnType<typeof validateReport>) => (r.ok ? (r.report.session as unknown as { attached: boolean | null }).attached : 'rejected');
+
+    it('keeps true and false as sent', () => {
+      const f = loadFixture();
+      sess(f).attached = false;
+      expect(attachedOf(validateReport(f))).toBe(false);
+      sess(f).attached = true;
+      expect(attachedOf(validateReport(f))).toBe(true);
+    });
+
+    it('treats a missing field, from an older reporter, as null', () => {
+      const f = loadFixture();
+      delete sess(f).attached;
+      expect(attachedOf(validateReport(f))).toBeNull();
+    });
+
+    it('rejects a value that is not a boolean, with a path', () => {
+      const f = loadFixture();
+      sess(f).attached = 'yes';
+      expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.attached' });
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agentCounts, buildTree, currentStep, filterSessions, planProgress, sortAgents, sortSessions, type SortKey } from "./logic";
+import { agentCounts, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -108,5 +108,34 @@ describe("sortAgents", () => {
     expect(ids("cost", -1)).toBe("213");
     expect(ids("time", -1)).toBe("321");
     expect(ids("status", 1)).toBe("231");
+  });
+});
+
+describe("splitDetached (sessions nobody is attached to leave the wall after their delay)", () => {
+  const NOW = 1_000_000;
+  const list = [
+    makeSession({ id: "on", attached: true, hideAt: null }),
+    makeSession({ id: "old", attached: null, hideAt: null }),
+    makeSession({ id: "soon", attached: false, hideAt: NOW + 5_000 }),
+    makeSession({ id: "gone", attached: false, hideAt: NOW - 1 }),
+    makeSession({ id: "now", attached: false, hideAt: NOW }),
+  ];
+  const ids = (xs: readonly SessionView[]) => xs.map((s) => s.id);
+
+  it("keeps attached, unknown and still-counting-down sessions on the wall, and sets the rest aside", () => {
+    const r = splitDetached(list, NOW, false);
+    expect(ids(r.shown)).toEqual(["on", "old", "soon"]);
+    expect(ids(r.hidden)).toEqual(["gone", "now"]);
+  });
+
+  it("shows everything when asked, still reporting which ones were hidden", () => {
+    const r = splitDetached(list, NOW, true);
+    expect(ids(r.shown)).toEqual(["on", "old", "soon", "gone", "now"]);
+    expect(ids(r.hidden)).toEqual(["gone", "now"]);
+  });
+
+  it("brings a session back as soon as it is attached again", () => {
+    const back = list.map((s) => (s.id === "gone" ? { ...s, attached: true, hideAt: null } : s));
+    expect(ids(splitDetached(back, NOW, false).hidden)).toEqual(["now"]);
   });
 });

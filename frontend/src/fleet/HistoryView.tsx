@@ -29,7 +29,7 @@ async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-const CONFIG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000 };
+const CONFIG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 };
 
 export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string; initialDay?: string }) {
   const theme = useTheme();

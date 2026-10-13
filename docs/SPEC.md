@@ -264,6 +264,7 @@ claude --plugin-dir mod/podium-reporter -p "…"       # headless; always loads 
 | `turn.step` | One model request of a turn, in any loop. **A streaming event: the hook must be an `async function*`** (`yield* next(e)` forwards and evaluates to the result). | Input: `turnId`, `index`, `model`, `effort?`, `messageCount`, `agentId?`. Result (after the stream): `answer`, `toolUses`, `stopReason`, `usage: { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, model } \| null` | Per loop: record model and **observed effort**; context tokens = `input + cache_read + cache_creation` of the latest step; accumulate token totals and cost; if `stopReason === "model_context_window_exceeded"` or `"compaction"`, record a blowout. |
 | `turn.complete` | A loop's turn ends | `answer`, `durationMs`, `isAborted`, `turnId`, `agentId?`, `usage?`, `reason` (`answer` \| `aborted` \| `refusal` \| `error`), `refusal?` when `reason` is `refusal` | Main loop: status `waiting` (waiting on the user). Agent: `answer` → `done`; `aborted` → `aborted`; `refusal`/`error` → `failed` with a failure record. |
 | `session.compact` | Compaction runs, main or in an agent's own transcript | `trigger` (`manual` \| `auto` \| `plugin` \| `precompute`), `agentId?`, `instructions?`, `messages`. Result: either `{ messages, tokensBefore?, tokensAfter?, usage? }` or `{ skip }` | Await `next(e)`. If the result has `messages` and `trigger === "auto"`: **blowout** with `tokensBefore`, `tokensAfter`, `agentId`. `manual`: log a `compact` event, not a blowout. Ignore `precompute` and `skip`. |
+| `session.attach`, `session.detach` | A client (terminal, phone) joins or leaves the session's roster | `surface`, `clientId`, on detach `reason` | Observe, then re-read `$.session.surfaces()` so `attached` follows at once. Await `next(e)` first and return its result unchanged. |
 | `session.measure` | The status line's figures changed | `context: { tokens?, window, percent? }`, `rateLimits: [{ kind, percentUsed, resetsAt? }]`, `cost?: { usd }`, `changed: ('context'\|'rateLimits'\|'cost')[]` | Cheap trigger for main-loop context, session cost and rate limits without polling. Mark state dirty. |
 | `classic.PermissionRequest` | A permission dialog is about to show (**Assumption:** hookable by that name; the doc says every settings-hook event is hookable as `classic.<Event>`) | `tool_name`, `tool_input` | Set orchestrator `status: "waiting"`, `waitReason: "permission"`, `waitNote: "<tool_name>(<short input>)"`. Cleared by the next `tool.call` of that loop or `turn.complete`. |
 | `classic.Notification` | Claude Code raises a notification (needs permission, idle for input) | `message`, `title?`, `notification_type` | Fallback signal for `waiting`. |
@@ -286,6 +287,7 @@ All calls are async unless noted. Read each one's doc comment in the types file 
 | `$.session.model()` | main loop model as `/model` shows it | Orchestrator model. |
 | `$.session.repo()` | `{ root, remote, internal, name } \| null` | Repository name (`name` may be null; fall back to the remote's `owner/name` parsed from `remote`, else directory name). |
 | `$.session.usage(args?)` | `{ startedAt, context: { tokens?, window, percent? }, rateLimits, cost?: { usd } }` | Main-loop context, **real session cost**, start time, rate limits. Plain call is free. Do **not** pass `breakdown`. |
+| `$.session.surfaces()` | the clients attached to the session (`terminal`, `desktop`, `vscode`, `mobile`); empty in a plain `-p` run and for a background job nobody has attached to | `attached` is `surfaces().length > 0`. Read on every flush; a failed read leaves `attached` as it was (null at first). A non-interactive `-p` run therefore reads as nobody attached. |
 | `$.session.turns()`, `$.session.version()`, `$.session.messages()` | counts, engine version, transcript | `version()` goes in the report for debugging. **Never call `messages()` for reporting** (privacy, cost). |
 | `$.agent.list()` | `AgentInfo[]`: `{ id, teammateId?, description, type, status, parentId?, spawnedBy?, name? }`, `status` ∈ `pending` `running` `waiting` `idle` `completed` `failed` `killed` | Reconcile agent existence and status on every flush. Authority for "which agents exist now". |
 | `$.process.run(argv, { cwd, timeoutMs, env, stdin })` | `{ exitCode, stdout, stderr, isStdoutTruncated, isStderrTruncated }`, **no shell**, git runs with repo hooks off, default timeout 30 s | All git queries (section 5.7). CLI only. |
@@ -448,6 +450,7 @@ interface Report {
     plan: Plan | null;
     loop: LoopReport | null;            // the main loop's own steps, tools and skills; null from a reporter older than 0.4.0
     files: FilesReport | null;          // the files the session changed (5.7); null from a reporter older than 0.6.0
+    attached: boolean | null;           // whether any client is attached (5.3, 5.4); false for a background session after /exit; null from a reporter older than 0.7.0 or when the roster could not be read
   };
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
@@ -617,7 +620,9 @@ CREATE TABLE sessions (
   rate_limits_json TEXT, blowouts INTEGER NOT NULL DEFAULT 0,
   plan_json TEXT, reporter_version TEXT, engine_version TEXT,
   loop_json TEXT,                                                          -- Report.session.loop; NULL from a reporter older than 0.4.0
-  files_json TEXT                                                          -- Report.session.files; NULL from a reporter older than 0.6.0
+  files_json TEXT,                                                         -- Report.session.files; NULL from a reporter older than 0.6.0
+  attached INTEGER,                                                        -- Report.session.attached (1 or 0); NULL when unknown
+  detached_at INTEGER                                                      -- when the first report with attached = false arrived; NULL while attached or unknown
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -681,6 +686,8 @@ interface SessionView {
   plan: Plan | null;
   loop: LoopReport | null;              // the main loop's steps, tools and skills; null from a reporter older than 0.4.0 and for a settings-hooks session
   files: FilesReport | null;            // the files the session changed; null from a reporter older than 0.6.0 and for a settings-hooks session
+  attached: boolean | null;             // whether any client is attached; null from a reporter older than 0.7.0 (counts as attached)
+  hideAt: number | null;                // epoch ms when a session nobody is attached to is set aside from the wall; null while attached or unknown (7.5)
   agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
 }
@@ -695,6 +702,7 @@ interface SessionView {
 | `status ≠ done` and no report for `STALE_AFTER_MS` | Shown as `stale` (derived, not stored) | 15,000 |
 | `stale` for `DROP_AFTER_MS` more | `dropped_at` set, removed from the live set, event `end` "heartbeat lost" | 60,000 |
 | `status = done` for `LINGER_MS` | Removed from the live set, event `end` "session ended" | 8,000 |
+| `attached = false` for `DETACHED_HIDE_AFTER_MS` | The wall sets the card aside behind a "N background sessions hidden" line (client-side; the session stays live, in History and in the totals). A client attaching again clears it at once | 60,000 |
 
 A stale session that reports again immediately returns to its stored status. A dropped session that reports again is revived (clear `dropped_at`, `ended_at`). On server start the sweeper treats every stored non-done session as stale until it reports. SSE broadcasts `removed` when a session leaves the live set.
 

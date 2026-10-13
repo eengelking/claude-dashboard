@@ -43,7 +43,8 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const step = currentStep(s.plan);
   const risk = s.blowouts.level === 2;
   const vNote = versionNote(s);
-  const cls = `card${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}`;
+  const detached = s.attached === false;
+  const cls = `card${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}${detached ? " detached" : ""}`;
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
   // The card is one big button, so Remove sits beside it in a slot rather than inside it.
   return (
@@ -65,6 +66,16 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           ctx <span className="mono">{fmtPct(s.context.percent)}</span>
         </span>
         <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
+        {detached && (
+          <span className="chip detached" title="No window is attached to this session. Run claude attach to reopen it.">
+            nobody attached
+          </span>
+        )}
+        {detached && s.hideAt !== null && s.hideAt > now && (
+          <span className="chip">
+            hides in <span className="mono">{fmtCountdown((s.hideAt - now) / 1000)}</span>
+          </span>
+        )}
         {s.reporter === "hooks" && (
           <span className="chip" title={HOOKS_NOTE}>
             settings hooks

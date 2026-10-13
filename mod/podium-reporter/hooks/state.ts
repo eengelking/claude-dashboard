@@ -98,6 +98,8 @@ export interface SessionState {
   /** The commit HEAD was at when the session began; the files list is the diff against it. */
   gitBase: string | null;
   files: FilesReport;
+  /** Whether any client is attached; null until the roster has been read. */
+  attached: boolean | null;
   status: 'running' | 'waiting' | 'done';
   /** The main loop is between turns (waiting for the person). */
   mainIdle: boolean;
@@ -154,6 +156,7 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
     git: null,
     gitBase: null,
     files: NO_FILES,
+    attached: null,
     status: 'waiting',
     mainIdle: true,
     waitReason: 'input',
@@ -292,6 +295,12 @@ export function setFiles(s: SessionState, files: FilesReport, base: string | nul
   const same = JSON.stringify(files) === JSON.stringify(s.files);
   if (same && base === s.gitBase) return s;
   return { ...s, files, gitBase: base, dirty: s.dirty || !same };
+}
+
+/** Whether any client is attached; a report is due only when it changes. */
+export function setAttached(s: SessionState, attached: boolean): SessionState {
+  if (attached === s.attached) return s;
+  return { ...s, attached, dirty: true };
 }
 
 // ---- turns --------------------------------------------------------------------------------------

@@ -356,6 +356,14 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .blow svg { width: 12px; height: 12px; }
 .podium .bar.bx > i { background: var(--warn); }
 .podium .bar.bx2 > i { background: repeating-linear-gradient(135deg, var(--crit) 0 4px, color-mix(in srgb, var(--crit) 55%, var(--surface)) 4px 8px); }
+/* A session nobody is attached to: dashed and quiet until it is set aside (#45). */
+.podium .card.detached { background: transparent; border-style: dashed; }
+.podium .card.detached .nm, .podium .card.detached .path, .podium .card.detached .foot { color: var(--muted); }
+.podium .chip.detached { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.podium .fold { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding: 9px 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--ink2); font-size: 12.5px; }
+.podium .fold b { color: var(--ink); font-weight: 600; }
+.podium .fold .link { margin-left: auto; color: var(--ink2); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+.podium .fold .link:hover { color: var(--ink); }
 .podium .card.risk { border-color: var(--crit); box-shadow: inset 0 3px 0 var(--crit); }
 .podium .ritem.risk { border-left-color: var(--crit); }
 .podium .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: 12.5px; }

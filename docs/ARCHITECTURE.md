@@ -188,6 +188,16 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     before any token is counted goes from running back to idle, and an open browser keeps its card until
     the next reload. `/events` filters hidden sessions after the page limit is applied, so a page can come
     back short. `visibleCount` reads each live session once per report.
+42. **A session nobody is attached to is dimmed, then set aside (#45).** After `/exit` under the daemon the
+    conversation keeps running as a background job. The mod reads the roster from `$.session.surfaces()` on
+    every flush and again on `session.attach` and `session.detach`, and reports `attached` (null until the
+    first read, and when a read fails). The server stores `attached` and `detached_at`, the time of the
+    first report with nobody attached, and serves `hideAt = detached_at + DETACHED_HIDE_AFTER_MS`. The hide
+    itself is the wall's: `splitDetached` in `frontend/src/fleet/logic.ts` sets those cards aside once
+    `now >= hideAt`, so the session stays live, in the totals and in History, and a client attaching again
+    clears `hideAt` on the next report. Unlike #42 this is not an `isUnused`-style server filter, because a
+    hidden session is still spending. Known limit: a non-interactive `claude -p` run has no client and reads
+    as nobody attached.
 
 ## Deviations from the spec
 
@@ -342,7 +352,7 @@ Validating plugin manifest: ~/dev/podium/mod/podium-reporter/.claude-plugin/plug
 
 Validating hooks: ~/dev/podium/mod/podium-reporter/hooks/hooks.json
 
-  ❯ ./register.ts hooks: session.start, session.end, turn.start, turn.step, turn.complete, session.compact, session.measure, agent.spawn, tool.call, tool.call{tool=mcp__podium-reporter__plan}, skill.prompt, classic.PermissionRequest, classic.Notification, command.run{command=podium}
+  ❯ ./register.ts hooks: session.start, session.end, turn.start, turn.step, turn.complete, session.compact, session.measure, session.attach, session.detach, agent.spawn, tool.call, tool.call{tool=mcp__podium-reporter__plan}, skill.prompt, classic.PermissionRequest, classic.Notification, command.run{command=podium}
   ❯ ./register.ts answers its own command: command.run{command=podium}
   ❯ ./register.ts gating hook with .catch: session.compact
   ❯ ./register.ts gating hook with .catch: agent.spawn

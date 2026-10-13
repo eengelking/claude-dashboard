@@ -68,6 +68,11 @@ CREATE TABLE samples (
     // The files the session changed, as JSON; NULL for rows and reporters from before it existed.
     sql: 'ALTER TABLE sessions ADD COLUMN files_json TEXT;',
   },
+  {
+    version: 5,
+    // Whether any client is attached (1 or 0; NULL when the reporter does not say), and when it first reported nobody attached.
+    sql: 'ALTER TABLE sessions ADD COLUMN attached INTEGER; ALTER TABLE sessions ADD COLUMN detached_at INTEGER;',
+  },
 ];
 
 export interface SessionRow {
@@ -103,6 +108,8 @@ export interface SessionRow {
   engine_version: string | null;
   loop_json: string | null;
   files_json: string | null;
+  attached: number | null;
+  detached_at: number | null;
 }
 
 export interface AgentRow {

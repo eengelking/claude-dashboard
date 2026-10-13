@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, newSession, reconcile, resetForNewId, sessionEnd, step, toolResult, turnComplete } from './state.ts'
+import { agentRequested, agentSpawned, blowout, compaction, newSession, reconcile, resetForNewId, sessionEnd, setAttached, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
-const SESSION_KEYS = ['blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
+const SESSION_KEYS = ['attached', 'blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'waitNote', 'waitReason']
 const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type']
 const FAILURE_KEYS = ['at', 'call', 'class', 'evidence', 'exitCode', 'explanation', 'outputTail', 'retriedAs', 'tool']
 const STEP_KEYS = ['activeText', 'id', 'ownerAgentId', 'ownerLabel', 'state', 'text']
@@ -212,5 +212,29 @@ describe('per-tool counts', () => {
   test('the report carries the counts', () => {
     const s = call(call(spawn(), 'Bash', 'a'), 'Bash', 'a')
     expect(agentReport(s.agents.a!).toolCounts).toEqual({ Bash: 2 })
+  })
+})
+
+describe('attached', () => {
+  const base = () => newSession({ id: 's', cwd: '/x', startedAt: T0, model: 'claude-opus-5-5' })
+
+  test('is unknown until the roster has been read', () => {
+    expect(base().attached).toBeNull()
+  })
+
+  test('a change marks the session dirty; the same value does not', () => {
+    const detached = setAttached({ ...base(), dirty: false }, false)
+    expect(detached.attached).toBe(false)
+    expect(detached.dirty).toBe(true)
+    const again = setAttached({ ...detached, dirty: false }, false)
+    expect(again.dirty).toBe(false)
+    expect(setAttached({ ...again, dirty: false }, true).dirty).toBe(true)
+  })
+
+  test('does not mutate its input', () => {
+    const s = base()
+    const frozen = JSON.stringify(s)
+    setAttached(s, false)
+    expect(JSON.stringify(s)).toBe(frozen)
   })
 })

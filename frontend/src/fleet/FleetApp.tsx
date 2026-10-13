@@ -2,7 +2,7 @@
 // the activity / agent panel. Data comes from useFleet; everything here is presentation state.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./fleet.css";
-import { filterSessions, defaultAgentDir, sortSessions, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
+import { filterSessions, defaultAgentDir, sortSessions, splitDetached, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
 import { PAGE } from "./components/ActivityList";
 import type { AgentSort } from "./components/AgentTree";
 import { FocusView } from "./components/FocusView";
@@ -86,7 +86,9 @@ export function FleetView({ state }: { state: FleetState }) {
   const all = useMemo(() => Object.values(state.sessions), [state.sessions]);
   const live = all.filter((s) => !state.leaving[s.id]);
   const sorted = useMemo(() => sortSessions(all, sort), [all, sort]);
-  const shown = filterSessions(sorted, filter);
+  const [showDetached, setShowDetached] = useState(false);
+  const sets = splitDetached(sorted, now, showDetached);
+  const shown = filterSessions(sets.shown, filter);
   const split: Split = {
     running: live.filter((s) => s.status === "running").length,
     waiting: live.filter((s) => s.status === "waiting").length,
@@ -315,6 +317,12 @@ export function FleetView({ state }: { state: FleetState }) {
                 leaving={state.leaving}
                 onOpen={selectSession}
                 onRemove={onRemove}
+                detached={{
+                  count: sets.hidden.length,
+                  costUsd: sets.hidden.reduce((n, s) => n + (s.costUsd ?? 0), 0),
+                  show: showDetached,
+                  onToggle: () => setShowDetached((v) => !v),
+                }}
               />
             )}
           </main>

@@ -17,6 +17,8 @@ interface World {
   lastToolUseId: () => string
   sessionId: { value: string }
   fetchMode: { mode: 'ok' | 'down' | 'hang' }
+  /** The clients attached to the session, as `$.session.surfaces()` answers. */
+  surfaces: { value: ('terminal' | 'desktop' | 'vscode' | 'mobile')[]; fail: boolean }
 }
 
 const GIT: Record<string, string> = {
@@ -33,6 +35,7 @@ function world(on: On): World {
   const headers: Record<string, string>[] = []
   const sessionId = { value: SID }
   const fetchMode: World['fetchMode'] = { mode: 'ok' }
+  const surfaces: World['surfaces'] = { value: ['terminal'], fail: false }
   let toolUseId = ''
   const clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on)
@@ -42,6 +45,12 @@ function world(on: On): World {
   on('session.repo', () => ({ value: { root: '/Users/dev/app', remote: 'git@github.com:acme/app.git', internal: false, name: null } }))
   on('session.version', () => ({ value: { version: '2.1.296' } }))
   on('session.usage', () => ({ value: { startedAt: 1_800_000_000_000, context: { tokens: 120_000, window: 1_000_000, percent: 12 }, rateLimits: [], cost: { usd: 1.25 } } }))
+  on('session.surfaces', () => {
+    if (surfaces.fail) throw new Error('no roster')
+    return { value: surfaces.value }
+  })
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('session.detach', (_$, e) => ({ clientId: e.clientId }))
   on('agent.list', () => ({ value: [] }))
   on('command.register', () => ({ value: { command: 'podium' } }))
   on('tool.register', () => ({ value: { tool: 'mcp__podium-reporter__plan' } }))
@@ -84,7 +93,7 @@ function world(on: On): World {
   })
   on('classic.PermissionRequest', () => ({}))
   on('classic.Notification', () => ({}))
-  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode }
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces }
 }
 
 type StepArgs = Parameters<Engine['turn']['step']>[0]
@@ -373,6 +382,41 @@ describe('podium-reporter end to end', () => {
     await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
     await w.clock.advance(1000)
     expect(w.posts.at(-1)!.session.name).toBe('invoice work')
+  })
+
+  test('reports whether any client is attached, from the roster', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBe(true)
+    w.surfaces.value = []
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBe(false)
+    w.surfaces.value = ['terminal']
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBe(true)
+  })
+
+  test('session.detach and session.attach pass through and the next report follows the roster', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    w.surfaces.value = []
+    expect(await $.session.detach({ surface: 'terminal', clientId: 'terminal:default', reason: 'detach' })).toEqual({ clientId: 'terminal:default' })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBe(false)
+    w.surfaces.value = ['terminal']
+    expect(await $.session.attach({ surface: 'terminal', clientId: 'terminal:default' })).toEqual({ clientId: 'terminal:default' })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBe(true)
+  })
+
+  test('a failing roster read leaves the flag unknown rather than detached', async ($, on) => {
+    const w = world(on)
+    w.surfaces.fail = true
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.attached).toBeNull()
   })
 
   test('a /clear: the old id gets a final done report and reporting continues under the new id', async ($, on) => {

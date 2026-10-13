@@ -25,6 +25,7 @@ import {
   resetForNewId,
   sessionEnd,
   NO_FILES,
+  setAttached,
   setFiles,
   setGit,
   setExplanation,
@@ -41,7 +42,7 @@ import {
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -225,6 +226,16 @@ async function readUsage($: Engine, r: Runtime): Promise<void> {
   }
 }
 
+/** The roster of attached clients. An empty one is a background session with nobody on it; a failed read says nothing. */
+async function readSurfaces($: Engine, r: Runtime): Promise<void> {
+  try {
+    const clients = await $.session.surfaces();
+    r.state = setAttached(r.state, clients.length > 0);
+  } catch (err) {
+    record($, 'session.surfaces', err);
+  }
+}
+
 async function readAgents($: Engine, r: Runtime, now: number): Promise<void> {
   try {
     const list = (await $.agent.list()) as ListedAgent[];
@@ -315,6 +326,7 @@ async function flush($: Engine): Promise<void> {
     if (id && id !== r.state.id) await switchSession($, r, id, now);
     if (r.state.ended) return;
     await readUsage($, r);
+    await readSurfaces($, r);
     await readAgents($, r, now);
     if (opts.explainFailures) requestExplanations($, r);
     await flushOnce($, r, now, false);
@@ -541,6 +553,19 @@ export const register: Register = (on, rawOptions) => {
       if (e.trigger === 'precompute' || !res || res.skip !== undefined || !res.messages) return;
       r.state = compaction(r.state, { agentId: e.agentId, trigger: e.trigger, tokensBefore: res.tokensBefore, tokensAfter: res.tokensAfter }, nowMs());
     });
+    return res;
+  }).catch(($, e, next) => next(e));
+
+  // A client joining or leaving is a prompt to look at the roster now; the flush timer reads it too.
+  on('session.attach', async ($, e, next) => {
+    const res = await next(e);
+    if (rt) await readSurfaces($, rt);
+    return res;
+  }).catch(($, e, next) => next(e));
+
+  on('session.detach', async ($, e, next) => {
+    const res = await next(e);
+    if (rt) await readSurfaces($, rt);
     return res;
   }).catch(($, e, next) => next(e));
 

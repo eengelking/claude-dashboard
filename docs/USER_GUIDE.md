@@ -110,6 +110,7 @@ What that means in practice:
 - A card can stay on the wall after you close the window. Closing Claude Code can leave the conversation
   running in the background (the window says "Your conversation moved to the background"). That is a real
   session and it stays until it ends. See "Closing a background session" below for how to list and end it.
+- A session with no window on it is marked. After `/exit` the card turns dashed and muted with a "nobody attached" chip and a countdown. After `DETACHED_HIDE_AFTER_MS` (a minute by default) it leaves the wall and a line under the wall says how many background sessions are hidden and what they cost, with a Show them button. It still counts in the totals and in History. Run `claude attach` and the card comes back as a normal card at once. A one-off `claude -p` run reads the same way, because it never has a window. This needs the mod at 0.7.0 or later; an older mod's sessions are never marked.
 - Sessions you started without the mod, reported through settings hooks, are never hidden this way, because
   hooks carry no token or cost figures to judge them by.
 

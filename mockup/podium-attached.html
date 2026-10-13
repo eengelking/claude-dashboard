@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Podium detached sessions mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600&display=swap">
+<style>
+/* Mockup for #45: how the wall shows sessions nobody is attached to. Tokens copied from frontend/src/fleet/fleet.css. */
+:root {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --sel: rgba(11,11,11,.07);
+  --opus: #6250d6; --sonnet: #2a78d6; --good: #0ca30c; --good-text: #006300; --warn: #a86d00;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08);
+    --opus: #9085e9; --sonnet: #3987e5; --good-text: #3dbb3d; --warn: #fab219; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08);
+  --opus: #9085e9; --sonnet: #3987e5; --good-text: #3dbb3d; --warn: #fab219; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-ui); padding-inline: 16px; padding-block: 24px 48px; }
+main { max-width: 1040px; margin-inline: auto; display: flex; flex-direction: column; gap: 36px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0 0 4px; }
+p.note { margin: 0 0 12px; color: var(--ink2); max-width: 68ch; }
+.mono { font-family: var(--font-mono); }
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg span { padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--ink2); border-right: 1px solid var(--border); }
+.seg span:last-child { border-right: 0; }
+.seg span.on { background: var(--sel); color: var(--ink); }
+.switch { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
+.switch i { width: 26px; height: 15px; border-radius: 8px; background: var(--axis); position: relative; }
+.switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); }
+.switch.on i { background: var(--good-text); }
+.switch.on i::after { left: 13px; }
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+.card .h { display: flex; align-items: center; gap: 8px; }
+.card .nm { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.dot.idle { background: var(--axis); }
+.path { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.meta { display: flex; gap: 8px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); color: var(--ink2); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 2px; background: var(--c); }
+.chip.detached { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.chip.detached svg { width: 11px; height: 11px; flex: none; }
+.foot { margin-top: 10px; color: var(--ink2); font-size: 12px; display: flex; justify-content: space-between; }
+.card.dim { background: transparent; border-style: dashed; }
+.card.dim .nm, .card.dim .path, .card.dim .foot { color: var(--muted); }
+.fold { border: 1px dashed var(--border); border-radius: 8px; padding: 9px 12px; color: var(--ink2); font-size: 12.5px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.fold b { font-weight: 600; color: var(--ink); }
+.fold .link { margin-left: auto; text-decoration: underline; text-underline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Sessions nobody is attached to</h1>
+    <p class="note">After <span class="mono">/exit</span> the conversation keeps running in the background, with no window on it. Three ways for the wall to show that. Each shows the same fleet: two attached sessions and two background ones. A session from an older reporter has no attach data and looks attached.</p>
+  </header>
+
+  <section>
+    <h2>A. Mark the card, keep it in place</h2>
+    <p class="note">A "nobody attached" chip joins the other chips on the card. The status dot goes grey. Nothing is hidden and no setting is needed.</p>
+    <div class="toolbar"><div class="seg"><span class="on">All 4</span><span>Running 1</span><span>Idle 3</span></div></div>
+    <div class="wall">
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">checkout-api</span></div><div class="path mono">~/dev/checkout-api</div><div class="meta"><span class="chip" style="--c:var(--opus)"><i></i>Opus</span><span class="chip">ctx <span class="mono">38%</span></span></div><div class="foot"><span>2 running · 3 done</span><span class="mono">$4.12</span></div></div>
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">docs-refresh</span></div><div class="path mono">~/dev/site</div><div class="meta"><span class="chip" style="--c:var(--sonnet)"><i></i>Sonnet</span><span class="chip">ctx <span class="mono">12%</span></span></div><div class="foot"><span>1 running · 0 done</span><span class="mono">$0.64</span></div></div>
+      <div class="card"><div class="h"><i class="dot idle"></i><span class="nm">migrate-billing</span></div><div class="path mono">~/dev/billing</div><div class="meta"><span class="chip" style="--c:var(--opus)"><i></i>Opus</span><span class="chip">ctx <span class="mono">71%</span></span><span class="chip detached" title="No window is attached. Run claude attach to reopen it."><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="9" height="7" rx="1"/><path d="M1.5 2.5l9 7"/></svg>nobody attached</span></div><div class="foot"><span>0 running · 4 done</span><span class="mono">$9.80</span></div></div>
+      <div class="card"><div class="h"><i class="dot idle"></i><span class="nm">flaky-test-hunt</span></div><div class="path mono">~/dev/checkout-api</div><div class="meta"><span class="chip" style="--c:var(--sonnet)"><i></i>Sonnet</span><span class="chip">ctx <span class="mono">24%</span></span><span class="chip detached"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="9" height="7" rx="1"/><path d="M1.5 2.5l9 7"/></svg>nobody attached</span></div><div class="foot"><span>0 running · 2 done</span><span class="mono">$1.37</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>B. Mark it and quiet the card</h2>
+    <p class="note">Same chip, plus a dashed outline and muted text so attached sessions stand out and the leftovers recede. Still visible, still clickable.</p>
+    <div class="wall">
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">checkout-api</span></div><div class="path mono">~/dev/checkout-api</div><div class="meta"><span class="chip" style="--c:var(--opus)"><i></i>Opus</span><span class="chip">ctx <span class="mono">38%</span></span></div><div class="foot"><span>2 running · 3 done</span><span class="mono">$4.12</span></div></div>
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">docs-refresh</span></div><div class="path mono">~/dev/site</div><div class="meta"><span class="chip" style="--c:var(--sonnet)"><i></i>Sonnet</span><span class="chip">ctx <span class="mono">12%</span></span></div><div class="foot"><span>1 running · 0 done</span><span class="mono">$0.64</span></div></div>
+      <div class="card dim"><div class="h"><i class="dot idle"></i><span class="nm">migrate-billing</span></div><div class="path mono">~/dev/billing</div><div class="meta"><span class="chip detached">nobody attached</span></div><div class="foot"><span>0 running · 4 done</span><span class="mono">$9.80</span></div></div>
+      <div class="card dim"><div class="h"><i class="dot idle"></i><span class="nm">flaky-test-hunt</span></div><div class="path mono">~/dev/checkout-api</div><div class="meta"><span class="chip detached">nobody attached</span></div><div class="foot"><span>0 running · 2 done</span><span class="mono">$1.37</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>C. A switch that hides them</h2>
+    <p class="note">A toolbar switch, "Hide background sessions", remembered in this browser. When on, they leave the wall and a single line says how many are hidden and lets you show them. Cost totals still count them.</p>
+    <div class="toolbar"><div class="seg"><span class="on">All 4</span><span>Running 1</span><span>Idle 3</span></div><span class="switch on"><i></i>Hide background sessions</span></div>
+    <div class="wall">
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">checkout-api</span></div><div class="path mono">~/dev/checkout-api</div><div class="meta"><span class="chip" style="--c:var(--opus)"><i></i>Opus</span><span class="chip">ctx <span class="mono">38%</span></span></div><div class="foot"><span>2 running · 3 done</span><span class="mono">$4.12</span></div></div>
+      <div class="card"><div class="h"><i class="dot"></i><span class="nm">docs-refresh</span></div><div class="path mono">~/dev/site</div><div class="meta"><span class="chip" style="--c:var(--sonnet)"><i></i>Sonnet</span><span class="chip">ctx <span class="mono">12%</span></span></div><div class="foot"><span>1 running · 0 done</span><span class="mono">$0.64</span></div></div>
+    </div>
+    <div class="fold" style="margin-top:12px"><b>2 background sessions hidden</b> nobody is attached, $11.17 so far <span class="link">Show them</span></div>
+  </section>
+  <section>
+    <h2>Chosen: B, then C after a delay</h2>
+    <p class="note">When the last client detaches, the card turns dashed and muted (B). If nobody re-attaches within the delay (default 60 s, configurable), it leaves the wall and the fold line below takes its place (C). When someone runs <span class="mono">claude attach</span>, the card returns as a normal card at once.</p>
+    <p class="note"><b>1. Just detached</b>, inside the delay</p>
+    <div class="wall"><div class="card dim"><div class="h"><i class="dot idle"></i><span class="nm">migrate-billing</span></div><div class="path mono">~/dev/billing</div><div class="meta"><span class="chip detached">nobody attached</span><span class="chip">hides in 0:42</span></div><div class="foot"><span>0 running · 4 done</span><span class="mono">$9.80</span></div></div></div>
+    <p class="note" style="margin-top:14px"><b>2. Hidden</b>, after the delay</p>
+    <div class="fold"><b>2 background sessions hidden</b> nobody is attached, $11.17 so far <span class="link">Show them</span></div>
+    <p class="note" style="margin-top:14px"><b>3. Attached again</b></p>
+    <div class="wall"><div class="card"><div class="h"><i class="dot"></i><span class="nm">migrate-billing</span></div><div class="path mono">~/dev/billing</div><div class="meta"><span class="chip" style="--c:var(--opus)"><i></i>Opus</span><span class="chip">ctx <span class="mono">71%</span></span></div><div class="foot"><span>1 running · 4 done</span><span class="mono">$9.80</span></div></div></div>
+  </section>
+</main>
+</body>
+</html>

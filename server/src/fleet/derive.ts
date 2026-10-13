@@ -171,6 +171,8 @@ export interface SessionInput {
   heard: boolean;
   /** From the fleet, which knows the drop window and when the server started. Null when not stale. */
   dropAt?: number | null;
+  /** From the fleet, which knows the delay. Null while a client is attached or the reporter does not say. */
+  hideAt?: number | null;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -227,6 +229,8 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     plan: parse<Plan | null>(row.plan_json, null),
     loop: parse<LoopReport | null>(row.loop_json, null),
     files: parse<FilesReport | null>(row.files_json, null),
+    attached: row.attached === null ? null : row.attached === 1,
+    hideAt: input.hideAt ?? null,
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

@@ -177,6 +177,8 @@ export interface SessionReport {
   loop: LoopReport | null;
   /** The files the session changed. null when the reporter is too old to send it. */
   files: FilesReport | null;
+  /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
+  attached: boolean | null;
 }
 
 export interface Report {
@@ -262,6 +264,10 @@ export interface SessionView {
   loop: LoopReport | null;
   /** The files the session changed; null from a reporter older than 0.6.0 and for a hooks-only session. */
   files: FilesReport | null;
+  /** Whether any client is attached; null from a reporter older than 0.7.0 and for a hooks-only session, which counts as attached. */
+  attached: boolean | null;
+  /** When a session nobody is attached to leaves the wall: the first detached report plus DETACHED_HIDE_AFTER_MS. null while attached or unknown. */
+  hideAt: number | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -305,6 +311,7 @@ export interface LifecycleConfig {
   staleAfterMs: number;
   dropAfterMs: number;
   lingerMs: number;
+  detachedHideAfterMs: number;
 }
 
 export interface StateBody {
@@ -684,6 +691,7 @@ function session(v: unknown, path: string): SessionReport {
     plan: plan(o.plan, `${path}.plan`),
     loop: loop(o.loop, `${path}.loop`),
     files: filesReport(o.files, `${path}.files`),
+    attached: o.attached === undefined || o.attached === null ? null : bool(o.attached, `${path}.attached`),
   };
 }
 

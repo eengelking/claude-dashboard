@@ -191,6 +191,7 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 | `HOOK_STALE_AFTER_MS` | `600000` | Same as `STALE_AFTER_MS`, for sessions known only from settings hooks (they send no heartbeat) |
 | `DROP_AFTER_MS` | `60000` | A stale session leaves the fleet after this much more |
 | `LINGER_MS` | `8000` | An ended session stays on screen this long |
+| `DETACHED_HIDE_AFTER_MS` | `60000` | A session nobody is attached to (a background job left running after `/exit`) shows dimmed this long, then is set aside behind a "background sessions hidden" line |
 | `RETAIN_SAMPLES_MS` | 24 hours | Per-second chart samples kept |
 | `RETAIN_EVENTS_MS` | 30 days | Activity events kept |
 | `RETAIN_SESSIONS_MS` | 30 days | Ended sessions kept |

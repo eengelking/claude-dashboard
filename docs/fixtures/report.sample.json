@@ -37,6 +37,7 @@
       "toolCounts": {"Agent": 4, "Read": 8, "Edit": 5, "TaskUpdate": 2},
       "steps": { "done": 23, "total": null }
     },
+    "attached": true,
     "files": {
       "files": [
         { "path": "src/invoice/export.ts", "status": "modified", "added": 24, "removed": 6, "from": null },

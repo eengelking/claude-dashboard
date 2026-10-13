@@ -174,6 +174,8 @@ export interface SessionReport {
   loop: LoopReport | null;
   /** The files the session changed. null when the reporter is too old to send it. */
   files: FilesReport | null;
+  /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
+  attached: boolean | null;
 }
 
 export interface Report {
