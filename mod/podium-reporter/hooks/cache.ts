@@ -125,6 +125,9 @@ export function coldCost(tokens: number | null, model: string | null | undefined
   return (tokens * (write - p.cacheRead)) / 1e6;
 }
 
+/** Dollars to the 6 decimals the report carries. */
+const usd6 = (n: number): number => Math.round(n * 1e6) / 1e6;
+
 export function warmingReport(c: CacheState, maxMs: number): CacheWarming {
   const state: CacheWarming['state'] = !c.on ? 'off' : c.stopped ? 'stopped' : c.idleSince !== null ? 'warming' : 'ready';
   return {
@@ -132,7 +135,7 @@ export function warmingReport(c: CacheState, maxMs: number): CacheWarming {
     state,
     stopReason: c.on ? c.stopped : null,
     pings: c.pings,
-    costUsdEst: Math.round(c.costUsd * 1e6) / 1e6,
+    costUsdEst: usd6(c.costUsd),
     lastPingAt: c.lastPingAt,
     untilAt: state === 'warming' && c.idleSince !== null ? c.idleSince + maxMs : null,
   };
@@ -144,7 +147,7 @@ export function cacheReport(c: CacheState, tokens: number | null, model: string 
     lastRequestAt: c.lastRequestAt,
     ttlMs: c.ttlMs,
     tokens,
-    coldCostUsd: cold === null ? null : Math.round(cold * 1e6) / 1e6,
+    coldCostUsd: cold === null ? null : usd6(cold),
     warming: warmingReport(c, maxMs),
   };
 }
