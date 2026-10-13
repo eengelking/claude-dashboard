@@ -12,6 +12,7 @@ import { createRouter } from "./routes.js";
 import { FleetDb, openDb } from "./fleet/db.js";
 import { configFromEnv, Fleet } from "./fleet/fleet.js";
 import { createFleetRouter } from "./fleet/routes.js";
+import { createAdminRouter } from "./admin/adminRouter.js";
 import { PeopleStore } from "./fleet/people.js";
 import { startSweeper } from "./fleet/sweeper.js";
 
@@ -27,6 +28,7 @@ const stopSweeper = startSweeper(fleet);
 const app = express();
 app.disable("x-powered-by");
 app.use("/api/fleet", createFleetRouter(fleet, { token: process.env.PODIUM_TOKEN || null, people }));
+app.use("/api/admin", createAdminRouter({ secret: process.env.PODIUM_TOKEN || null, people }));
 app.use(createRouter());
 
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");
