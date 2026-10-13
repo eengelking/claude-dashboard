@@ -158,6 +158,8 @@ describe("people view logic", () => {
     expect(parsePrefs(null)).toEqual(DEFAULT_PREFS);
     expect(parsePrefs({ groupBy: "group", order: "spend", spendView: "table", collapsed: ["people:admin", 4] })).toEqual({ groupBy: "group", order: "spend", spendView: "table", collapsed: ["people:admin"] });
     expect(parsePrefs({ groupBy: "teams", order: "random", spendView: "pie", collapsed: "x" })).toEqual(DEFAULT_PREFS);
+    // Inherited Object properties are not valid choices.
+    expect(parsePrefs({ groupBy: "constructor", order: "toString" })).toEqual(DEFAULT_PREFS);
     expect(parseMe("  Ed E.  ")).toBe("Ed E.");
     expect(parseMe("")).toBeNull();
     expect(parseMe(5)).toBeNull();

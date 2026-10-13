@@ -21,7 +21,7 @@ export const DEFAULT_PREFS: PeoplePrefs = { groupBy: "people", order: "attention
 /** Stored prefs, with anything unreadable or unknown replaced by its default. */
 export function parsePrefs(v: unknown): PeoplePrefs {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  const pick = <T extends string>(x: unknown, allowed: Record<T, string>, d: T): T => (typeof x === "string" && x in allowed ? (x as T) : d);
+  const pick = <T extends string>(x: unknown, allowed: Record<T, string>, d: T): T => (typeof x === "string" && Object.prototype.hasOwnProperty.call(allowed, x) ? (x as T) : d);
   return {
     groupBy: pick(o.groupBy, GROUP_BYS, DEFAULT_PREFS.groupBy),
     order: pick(o.order, UNIT_ORDERS, DEFAULT_PREFS.order),
