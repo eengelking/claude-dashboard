@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { fmtClock } from "../format";
 import type { Phase } from "../store";
 import { APP_NAME } from "../types";
 import { Logo } from "./Icons";
@@ -13,6 +12,9 @@ export function TopBar(props: { phase: Phase; reporters: number; outdated?: numb
         <Logo />
         {APP_NAME}
       </div>
+      <span className="pill">Fleet</span>
+      {/* Do not add anything to the right of the connection pill below. Its text changes width as "synced 0.0s
+          ago" ticks, so everything after it would shift. Leave that space empty for now. */}
       {phase === "disconnected" ? (
         <span className="pill bad" role="status">
           <span className="dot bad" aria-hidden="true" />
@@ -41,9 +43,6 @@ export function TopBar(props: { phase: Phase; reporters: number; outdated?: numb
           {props.newer} reporter{props.newer === 1 ? "" : "s"} newer than the server
         </span>
       )}
-      <span className="pill mono" aria-label="Local time">
-        {fmtClock(now)}
-      </span>
       <span className="spacer" />
       <a className="btn" href="#/history">
         History
