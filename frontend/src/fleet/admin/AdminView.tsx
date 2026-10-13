@@ -42,6 +42,12 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   useEffect(() => {
     document.title = `${APP_NAME} admin`;
   }, []);
+  // Following #/admin/settings while Admin is already open (the link in the wall's confirmation) switches the tab.
+  useEffect(() => {
+    const onHash = () => window.location.hash === "#/admin/settings" && setTab("settings");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   useEffect(() => {
     let live = true;
     api<{ enabled: boolean; unlocked: boolean }>("GET", "/session")
