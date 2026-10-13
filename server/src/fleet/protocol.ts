@@ -189,8 +189,11 @@ export interface SessionReport {
   cache: CacheReport | null;
 }
 
-/** Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an aborted ping, or a cache that had already expired. */
-export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired';
+/**
+ * Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an
+ * aborted ping, a cache that had already expired, or a ping with no answer within PING_TIMEOUT_MS (2 minutes).
+ */
+export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired' | 'timeout';
 
 /**
  * Cache warming (the `cacheWarming` option or `/podium warm on`): while the session waits on the person, one
@@ -198,7 +201,7 @@ export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'abort
  */
 export interface CacheWarming {
   on: boolean;
-  /** `off`; `ready`: on, the session is running; `warming`: on, idle, pinging; `stopped`: stopped for this idle period (stopReason). */
+  /** `off`; `ready`: on, the session is running or waits on a permission prompt (never pinged); `warming`: on, waiting for a prompt, pinging; `stopped`: stopped for this idle period (stopReason). */
   state: 'off' | 'ready' | 'warming' | 'stopped';
   stopReason: WarmStop | null;
   /** Pings sent this session, and their estimated cost from the usage each returned. */
@@ -268,7 +271,10 @@ export interface BlowoutLogEntry {
 /** Where the main thread's prompt cache stands: kept warm by requests, inside the warning window before it expires, or expired. */
 export type CacheStateName = 'warm' | 'cooling' | 'cold';
 
-/** The cooling alert a card and a rail row show: with the tip about cache warming, without it, or none. */
+/**
+ * The cooling alert a card and a rail row show: with the tip (how to turn warming on, or, when it is on and has
+ * stopped, what to do), without it, or none. A permission wait's alert is never `tip`.
+ */
 export type CacheAlert = 'tip' | 'plain' | null;
 
 /** The main thread's prompt cache as the dashboard sees it (issue #27). Times are the server's clock. */
@@ -281,7 +287,7 @@ export interface CacheView {
   tokens: number | null;
   coldCostUsd: number | null;
   warming: CacheWarming;
-  /** Only for a session waiting on the person, cooling, with warming off; decided by the counter (CacheAlertsView). */
+  /** Only for a session waiting on the person, cooling, and not kept warm by warming (off, stopped, or a permission wait); decided by the counter (CacheAlertsView). */
   alert: CacheAlert;
 }
 
@@ -292,7 +298,7 @@ export type CacheAlertMode = 'auto' | 'on' | 'off';
 export interface CacheAlertsView {
   mode: CacheAlertMode;
   shown: number;
-  /** Alerts are off because they were shown twice and cache warming was not turned on; the dashboard offers to turn them back on. */
+  /** Alerts are off because two were shown and nothing kept those caches warm; the dashboard offers to turn them back on. */
   suppressed: boolean;
 }
 
@@ -820,7 +826,7 @@ function session(v: unknown, path: string): SessionReport {
 }
 
 const WARM_STATES = ['off', 'ready', 'warming', 'stopped'] as const;
-const WARM_STOPS: readonly WarmStop[] = ['max-duration', 'api-error', 'nothing-to-fork', 'aborted', 'expired'];
+const WARM_STOPS: readonly WarmStop[] = ['max-duration', 'api-error', 'nothing-to-fork', 'aborted', 'expired', 'timeout'];
 /** The longest prompt cache lifetime there is (1 hour). */
 const MAX_TTL_MS = 3_600_000;
 

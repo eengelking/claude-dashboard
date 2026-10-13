@@ -52,15 +52,31 @@ export function cacheStateOf(c: StoredCache, status: SessionStatusView, now: num
   return { state: now >= expiresAt - warnMs ? 'cooling' : 'warm', expiresAt };
 }
 
-/** Whether a cooling alert applies at all: the session waits on the person, its cache is cooling, and nothing keeps it warm. */
+/**
+ * Whether a cooling alert applies at all: the session waits on the person, its cache is cooling, and nothing keeps
+ * it warm. Warming keeps it warm only while the mod says `warming`: off, stopped (its limit, an API error, a ping
+ * with no answer...) or `ready` (on, but the session waits on a permission prompt, which is never pinged) does not.
+ */
 export function alertEligible(c: StoredCache, status: SessionStatusView, now: number, warnMs: number): boolean {
-  return status === 'waiting' && !c.warming.on && cacheStateOf(c, status, now, warnMs).state === 'cooling';
+  const keptWarm = c.warming.on && c.warming.state === 'warming';
+  return status === 'waiting' && !keptWarm && cacheStateOf(c, status, now, warnMs).state === 'cooling';
 }
 
-/** The alert the next one would be, given the mode and how many were shown: the tip twice, then none (auto) or no tip (on). */
-export function nextAlert(mode: CacheAlertMode, shown: number): CacheAlert {
+/**
+ * Whether a shown alert counts toward the two tips. A permission wait's alert does not: warming never pings a
+ * permission wait, so it carries no tip and ignoring it says nothing about wanting warming.
+ */
+export function alertCounts(waitReason: string | null | undefined): boolean {
+  return waitReason !== 'permission';
+}
+
+/**
+ * The alert the next one would be, given the mode and how many were shown: the tip twice, then none (auto) or no
+ * tip (on). A permission wait never gets the tip, and shows only while an alert would show at all.
+ */
+export function nextAlert(mode: CacheAlertMode, shown: number, waitReason?: string | null): CacheAlert {
   if (mode === 'off') return null;
-  if (shown < CACHE_TIP_ALERTS) return 'tip';
+  if (shown < CACHE_TIP_ALERTS) return alertCounts(waitReason) ? 'tip' : 'plain';
   return mode === 'on' ? 'plain' : null;
 }
 

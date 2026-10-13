@@ -47,6 +47,27 @@ describe("the cooling alert on a card (#27)", () => {
     expect(card(idle({ cache: cache({ state: "warm", alert: null }) })).querySelector(".alert.cache")).toBeNull();
   });
 
+  it("warming on but stopped: the tip says it stopped, why, and what to do, not how to turn it on", () => {
+    const warming = { ...OFF, on: true, state: "stopped" as const, stopReason: "max-duration" as const, pings: 7, costUsdEst: 0.05 };
+    const alert = card(idle({ cache: cache({ warming }) })).querySelector(".alert.cache")!;
+    expect(alert.textContent).toContain("Prompt cache expires in 42 s");
+    expect(alert.textContent).toContain("Cache warming has stopped");
+    expect(alert.textContent).toContain("reached its time limit");
+    expect(alert.textContent).toContain("send that session a prompt");
+    expect(alert.textContent).not.toContain("/podium warm on");
+    const timeout = card(idle({ cache: cache({ warming: { ...warming, stopReason: "timeout" } }) })).querySelector(".alert.cache")!;
+    expect(timeout.textContent).toContain("no answer");
+  });
+
+  it("a permission wait: says the cache will expire and that warming only works while it waits for a prompt", () => {
+    for (const warming of [OFF, { ...OFF, on: true, state: "ready" as const }]) {
+      const alert = card(idle({ waitReason: "permission", cache: cache({ alert: "plain", warming }) })).querySelector(".alert.cache")!;
+      expect(alert.textContent).toContain("Prompt cache expires in 42 s");
+      expect(alert.textContent).toContain("Cache warming only works while a session waits for your prompt");
+      expect(alert.textContent).not.toContain("/podium warm on");
+    }
+  });
+
   it("leaves out the cost when the model has no price", () => {
     const alert = card(idle({ cache: cache({ coldCostUsd: null }) })).querySelector(".alert.cache")!;
     expect(alert.textContent).toContain("About 410k tokens would be written to the cache again.");

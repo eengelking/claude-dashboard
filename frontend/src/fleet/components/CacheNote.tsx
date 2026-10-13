@@ -24,9 +24,35 @@ const STOP_TEXT: Record<NonNullable<CacheView["warming"]["stopReason"]>, string>
   "nothing-to-fork": "There was nothing to keep warm: the conversation was cleared.",
   aborted: "A ping was cut short, so warming stopped until the session runs again.",
   expired: "The cache had already expired, so there was nothing left to keep warm.",
+  timeout: "A ping got no answer within 2 minutes, so warming stopped until the session runs again.",
 };
 
-/** The card's alert: a countdown, what going cold costs, and for the first two the way to keep it warm. */
+/**
+ * What the alert adds under the countdown. A permission wait says why warming cannot help (it never pings then),
+ * whatever the alert; the tip says how to turn warming on, or, when it is on and has stopped, why and what to do.
+ */
+function AlertDetail({ s, c }: { s: SessionView; c: CacheView }) {
+  if (s.waitReason === "permission") {
+    return <div className="wait-detail">It is waiting on a permission prompt. Cache warming only works while a session waits for your prompt.</div>;
+  }
+  if (c.alert !== "tip") return null;
+  const w = c.warming;
+  if (w.on && w.state === "stopped") {
+    return (
+      <div className="wait-detail">
+        Cache warming has stopped. {w.stopReason ? STOP_TEXT[w.stopReason] : ""} To keep the cache, send that session a prompt before it expires; warming starts again the next time it waits.
+      </div>
+    );
+  }
+  if (w.on) return null;
+  return (
+    <div className="wait-detail">
+      Keep it warm: run <code>/podium warm on</code> in that session, or turn on <code>cacheWarming</code> with <code>/plugin configure</code>.
+    </div>
+  );
+}
+
+/** The card's alert: a countdown, what going cold costs, and for the first two what to do about it. */
 export function CacheAlertBox({ s, now }: { s: SessionView; now: number }) {
   const c = coolingCache(s);
   if (!c) return null;
@@ -36,11 +62,7 @@ export function CacheAlertBox({ s, now }: { s: SessionView; now: number }) {
       <IconClock />
       <div>
         Prompt cache expires in <span className="mono">{fmtCountdown((c.expiresAt - now) / 1000)}</span>.{cost ? ` ${cost}` : ""}
-        {c.alert === "tip" && (
-          <div className="wait-detail">
-            Keep it warm: run <code>/podium warm on</code> in that session, or turn on <code>cacheWarming</code> with <code>/plugin configure</code>.
-          </div>
-        )}
+        <AlertDetail s={s} c={c} />
       </div>
     </div>
   );
@@ -83,7 +105,7 @@ export function CacheAlertsOff({ view, onReset }: { view: CacheAlertsView | null
   return (
     <div className="fold cache-off">
       <b>Prompt cache alerts are off.</b>
-      <span>They were shown twice and cache warming was not turned on.</span>
+      <span>Two were shown and nothing kept those caches warm.</span>
       <button type="button" className="link" onClick={onReset}>
         Turn cache alerts back on
       </button>

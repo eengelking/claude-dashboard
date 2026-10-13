@@ -51,16 +51,21 @@ interface Opts {
   /** How far the reporter's clock runs ahead of the server's. */
   skewMs?: number;
   warming?: boolean;
+  /** With warming on: what the mod says it is doing (default `warming`). */
+  warmState?: 'warming' | 'stopped' | 'ready';
   status?: 'running' | 'waiting';
+  /** What a waiting session waits for (default `input`). */
+  waitReason?: 'input' | 'permission';
 }
 
 function cacheOf(o: Opts): CacheReport {
+  const state = o.warming ? (o.warmState ?? 'warming') : 'off';
   return {
     lastRequestAt: o.last,
     ttlMs: 300_000,
     tokens: 410_000,
     coldCostUsd: 1.968,
-    warming: { on: !!o.warming, state: o.warming ? 'warming' : 'off', stopReason: null, pings: 0, costUsdEst: 0, lastPingAt: null, untilAt: null },
+    warming: { on: !!o.warming, state, stopReason: state === 'stopped' ? 'max-duration' : null, pings: 0, costUsdEst: 0, lastPingAt: null, untilAt: null },
   };
 }
 
@@ -72,7 +77,7 @@ function report(o: Opts): Report {
     sentAt: clock + (o.skewMs ?? 0),
     agents: [],
     events: [],
-    session: { ...r.session, id: o.id ?? r.session.id, status, waitReason: status === 'waiting' ? 'input' : null, cache: cacheOf(o) },
+    session: { ...r.session, id: o.id ?? r.session.id, status, waitReason: status === 'waiting' ? (o.waitReason ?? 'input') : null, cache: cacheOf(o) },
   };
 }
 
@@ -141,9 +146,9 @@ describe('warm, cooling and cold', () => {
 
 describe('the cooling alert and its counter', () => {
   /** One idle period that cools: a fresh request now, then 4 minutes of waiting. */
-  function coolOnce(fleet: Fleet, id = SID, warming = false) {
+  function coolOnce(fleet: Fleet, id = SID, warming = false, more: Pick<Opts, 'warmState' | 'waitReason'> = {}) {
     const last = clock;
-    const beat = () => report({ id, last, warming });
+    const beat = () => report({ id, last, warming, ...more });
     fleet.ingest(report({ id, last, status: 'running', warming }));
     fleet.ingest(beat());
     run(fleet, 4 * MIN + 2000, beat);
@@ -191,6 +196,56 @@ describe('the cooling alert and its counter', () => {
     coolOnce(fleet, SID, true);
     expect(cache(fleet)).toMatchObject({ state: 'cooling', alert: null, warming: { on: true, state: 'warming' } });
     expect(fleet.cacheAlerts().shown).toBe(0);
+  });
+
+  it('warming on but stopped: nothing keeps the cache warm, so the alert shows and counts like any other', () => {
+    const fleet = makeFleet();
+    viewer(fleet);
+    coolOnce(fleet, SID, true, { warmState: 'stopped' });
+    expect(cache(fleet)).toMatchObject({ state: 'cooling', alert: 'tip', warming: { on: true, state: 'stopped', stopReason: 'max-duration' } });
+    expect(fleet.cacheAlerts().shown).toBe(1);
+    coolOnce(fleet, SID, true, { warmState: 'stopped' });
+    coolOnce(fleet, SID, true, { warmState: 'stopped' });
+    expect(cache(fleet)!.alert).toBeNull();
+    expect(fleet.cacheAlerts()).toEqual({ mode: 'auto', shown: 2, suppressed: true });
+  });
+
+  it('a permission wait: the alert shows without the tip and does not use up the two tips', () => {
+    const fleet = makeFleet();
+    viewer(fleet);
+    coolOnce(fleet, SID, false, { waitReason: 'permission' });
+    expect(cache(fleet)).toMatchObject({ state: 'cooling', alert: 'plain' });
+    expect(fleet.cacheAlerts().shown).toBe(0);
+    // warming on does not help a permission wait (the mod never pings then), so it still shows
+    coolOnce(fleet, SID, true, { waitReason: 'permission', warmState: 'ready' });
+    expect(cache(fleet)).toMatchObject({ state: 'cooling', alert: 'plain' });
+    expect(fleet.cacheAlerts().shown).toBe(0);
+    // the next prompt wait still gets the tip
+    coolOnce(fleet);
+    expect(cache(fleet)!.alert).toBe('tip');
+    expect(fleet.cacheAlerts().shown).toBe(1);
+  });
+
+  it('a permission wait shows no alert once alerts are off (auto, after two) or with PODIUM_CACHE_ALERTS=off', () => {
+    const fleet = makeFleet();
+    viewer(fleet);
+    coolOnce(fleet);
+    coolOnce(fleet);
+    coolOnce(fleet, SID, false, { waitReason: 'permission' });
+    expect(cache(fleet)).toMatchObject({ state: 'cooling', alert: null });
+    db = new FleetDb(openDb(':memory:'));
+    const off = makeFleet({ cacheAlerts: 'off' });
+    viewer(off);
+    coolOnce(off, SID, false, { waitReason: 'permission' });
+    expect(cache(off)).toMatchObject({ state: 'cooling', alert: null });
+    db = new FleetDb(openDb(':memory:'));
+    const on = makeFleet({ cacheAlerts: 'on' });
+    viewer(on);
+    coolOnce(on);
+    coolOnce(on);
+    coolOnce(on, SID, false, { waitReason: 'permission' });
+    expect(cache(on)).toMatchObject({ state: 'cooling', alert: 'plain' });
+    expect(on.cacheAlerts().shown).toBe(2);
   });
 
   it('turning them back on resets the counter and shows the tip again', () => {
@@ -280,6 +335,8 @@ describe('validation', () => {
     expect(bad((c) => ((c.warming as Record<string, unknown>).state = 'boiling'))).toMatchObject({ ok: false, path: '$.session.cache.warming.state' });
     expect(bad((c) => ((c.warming as Record<string, unknown>).stopReason = 'bored'))).toMatchObject({ ok: false, path: '$.session.cache.warming.stopReason' });
     expect(bad((c) => (c.ttlMs = 0))).toMatchObject({ ok: false, path: '$.session.cache.ttlMs' });
+    // a ping that never answered (mod 0.11.0's timeout) is a known reason
+    expect(bad((c) => Object.assign(c.warming as Record<string, unknown>, { on: true, state: 'stopped', stopReason: 'timeout' }))).toMatchObject({ ok: true });
     expect(bad((c) => (c.lastRequestAt = 'soon'))).toMatchObject({ ok: false, path: '$.session.cache.lastRequestAt' });
   });
 

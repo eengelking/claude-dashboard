@@ -8,7 +8,7 @@ import { ingestReport, type IngestResult } from './ingest.js';
 import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
 import type { ActivityView, CacheAlert, CacheAlertMode, CacheAlertsView, HistoryRow, Kpis, RemovedReason, Report, ReporterSupport, SessionStatusView, SessionView, StateBody } from './protocol.js';
-import { alertEligible, CACHE_ALERTS_KEY, CACHE_TIP_ALERTS, cacheStateOf, DEFAULT_CACHE_WARN_MS, nextAlert, parseStoredCache } from './cache.js';
+import { alertCounts, alertEligible, CACHE_ALERTS_KEY, CACHE_TIP_ALERTS, cacheStateOf, DEFAULT_CACHE_WARN_MS, nextAlert, parseStoredCache } from './cache.js';
 import { formatSse, SseHub } from './sse.js';
 
 export interface FleetConfig {
@@ -255,7 +255,7 @@ export class Fleet {
     const expiresAt = c && c.lastRequestAt !== null ? c.lastRequestAt + c.ttlMs : null;
     const ep = this.cacheEpisodes.get(row.id);
     if (ep && ep.counted && ep.expiresAt === expiresAt) return ep.alert;
-    return nextAlert(this.cfg.cacheAlerts, this.cacheShown);
+    return nextAlert(this.cfg.cacheAlerts, this.cacheShown, row.wait_reason);
   }
 
   /**
@@ -280,9 +280,9 @@ export class Fleet {
       this.cacheEpisodes.set(row.id, ep);
     }
     if (!ep.counted && this.hub.size > 0) {
-      ep.alert = nextAlert(this.cfg.cacheAlerts, this.cacheShown);
+      ep.alert = nextAlert(this.cfg.cacheAlerts, this.cacheShown, row.wait_reason);
       ep.counted = true;
-      if (ep.alert !== null) this.setCacheShown(this.cacheShown + 1);
+      if (ep.alert !== null && alertCounts(row.wait_reason)) this.setCacheShown(this.cacheShown + 1);
     }
     return `${state}:${this.cacheAlertOf(row)}`;
   }
