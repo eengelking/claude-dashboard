@@ -1,6 +1,6 @@
 {
   "name": "podium-reporter",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
   "author": { "name": "Ed Engelking" },
   "userConfig": {

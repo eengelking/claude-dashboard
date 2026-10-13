@@ -23,6 +23,7 @@ import {
   PLAN_TOOL,
   reconcile,
   resetForNewId,
+  setBackground,
   sessionEnd,
   NO_FILES,
   setAttached,
@@ -41,12 +42,13 @@ import {
   type ListedAgent,
   type SessionState,
 } from './state.ts';
+import { nextCronAt } from './cron.ts';
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.10.0';
+export const VERSION = '0.11.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -717,6 +719,17 @@ export const register: Register = (on, rawOptions) => {
   on('classic.Notification', async ($, e, next) => {
     safe('classic.Notification', (r) => {
       r.state = notification(r.state, e.notification_type, e.message, nowMs());
+    });
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
+  // The Stop hook lists the background work and scheduled wake-ups still in flight (#119): a session idle on
+  // them is not waiting on the person.
+  on('classic.Stop', async ($, e, next) => {
+    safe('classic.Stop', (r) => {
+      const now = nowMs();
+      const crons = (e.session_crons ?? []).map((c) => ({ ...c, nextAt: nextCronAt(c.schedule, now) }));
+      r.state = setBackground(r.state, { tasks: e.background_tasks ?? [], crons }, now);
     });
     return next(e);
   }).catch(($, e, next) => next(e));

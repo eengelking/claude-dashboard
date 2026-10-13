@@ -14,7 +14,7 @@ import {
 } from './failures.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
-import type { ActivityEvent, AgentStatus, Effort, Failure, FilesReport, GitInfo, RateLimit } from './protocol.ts';
+import type { ActivityEvent, AgentStatus, BackgroundKind, BackgroundTask, BackgroundWait, Effort, Failure, FilesReport, GitInfo, RateLimit } from './protocol.ts';
 
 export const BLOWOUT_DEDUP_MS = 2000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -112,6 +112,8 @@ export interface SessionState {
   mainIdle: boolean;
   waitReason: 'permission' | 'input' | null;
   waitNote: string | null;
+  /** Background work or a scheduled wake-up the idle main loop is waiting on (#119); null when none. */
+  background: BackgroundWait | null;
   endReason: string | null;
   resumeId: string | null;
   ended: boolean;
@@ -168,6 +170,7 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
     mainIdle: true,
     waitReason: 'input',
     waitNote: null,
+    background: null,
     endReason: null,
     resumeId: null,
     ended: false,
@@ -211,7 +214,8 @@ function withStatus(s: SessionState): SessionState {
   } else if (s.waitReason === 'permission') status = 'waiting';
   else if (s.mainIdle && !Object.values(s.agents).some((a) => a.status === 'running' || a.status === 'queued')) {
     status = 'waiting';
-    waitReason = 'input';
+    // Idle on background work or a wake-up is not a wait on the person (#119).
+    waitReason = s.background ? null : 'input';
   } else {
     status = 'running';
     waitReason = null;
@@ -317,7 +321,54 @@ export function setAttached(s: SessionState, attached: boolean): SessionState {
 // ---- turns --------------------------------------------------------------------------------------
 
 export function turnStart(s: SessionState): SessionState {
-  return withStatus({ ...s, mainIdle: false, waitReason: s.waitReason === 'permission' ? 'permission' : null });
+  // A new turn means the background work (or the wake-up) that woke it is no longer what the session waits on.
+  return withStatus({ ...s, mainIdle: false, background: null, waitReason: s.waitReason === 'permission' ? 'permission' : null });
+}
+
+export interface BackgroundInput {
+  /** The Stop hook's background_tasks. */
+  tasks: { id?: string; type?: string; status?: string; description?: string; command?: string }[];
+  /** The Stop hook's session_crons; `nextAt` is when the schedule next fires, worked out by the caller. */
+  crons: { id?: string; schedule?: string; recurring?: boolean; prompt?: string; nextAt?: number | null }[];
+}
+
+const TASK_DONE = /^(completed|complete|done|failed|killed|stopped|cancelled|canceled|error)$/i;
+const TASK_KINDS: Record<string, BackgroundKind> = { shell: 'shell', bash: 'shell', subagent: 'agent', agent: 'agent', monitor: 'monitor', workflow: 'workflow' };
+const MAX_BACKGROUND_TASKS = 20;
+const BACKGROUND_DESC = 120;
+
+/** "1 shell, 1 agent": the counts the activity feed's wait row is read from. */
+export function backgroundSummary(b: BackgroundWait): string {
+  const n = new Map<string, number>();
+  for (const t of b.tasks) n.set(t.type, (n.get(t.type) ?? 0) + 1);
+  return [...n].map(([k, c]) => `${c} ${k}`).join(', ');
+}
+
+/**
+ * The Stop hook's list of work still in flight. Finished tasks are dropped. A shell's command never leaves the
+ * machine: a task with no description is named by the first word of its command, redacted, and no more.
+ */
+export function setBackground(s: SessionState, i: BackgroundInput, now: number): SessionState {
+  const tasks: BackgroundTask[] = [];
+  for (const t of i.tasks) {
+    const status = t.status || 'running';
+    if (TASK_DONE.test(status) || tasks.length >= MAX_BACKGROUND_TASKS) continue;
+    const type = TASK_KINDS[(t.type ?? '').toLowerCase()] ?? 'other';
+    const word = (t.command ?? '').trim().split(/\s+/)[0]?.split('/').pop() ?? '';
+    tasks.push({ type, description: clip((t.description ?? '').replace(/\s+/g, ' ').trim() || word || type, BACKGROUND_DESC), status: clip(status, 40) });
+  }
+  const times: number[] = [];
+  for (const c of i.crons) {
+    if (tasks.length >= MAX_BACKGROUND_TASKS) break;
+    tasks.push({ type: 'wakeup', description: clip((c.prompt ?? '').replace(/\s+/g, ' ').trim() || 'scheduled wake-up', BACKGROUND_DESC), status: 'scheduled' });
+    if (typeof c.nextAt === 'number') times.push(c.nextAt);
+  }
+  const background: BackgroundWait | null = tasks.length ? { tasks, wakeAt: times.length ? Math.min(...times) : null } : null;
+  if (JSON.stringify(background) === JSON.stringify(s.background)) return s;
+  let next: SessionState = { ...s, background };
+  // The feed gets one row each time what it waits on changes, not one per Stop.
+  if (background && (!s.background || backgroundSummary(background) !== backgroundSummary(s.background))) next = addEvent(next, 'wait', null, `waiting on background: ${backgroundSummary(background)}`, now);
+  return withStatus(next);
 }
 
 export interface StepInput {
