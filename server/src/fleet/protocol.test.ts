@@ -380,4 +380,38 @@ describe('protocol', () => {
       expect(validateReport(f)).toMatchObject({ ok: false, path: '$.userName' });
     });
   });
+
+  describe('background wait (#119)', () => {
+    const bg = { tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null };
+    const withBg = (background: unknown) => {
+      const f = loadFixture();
+      return { ...f, session: { ...f.session, background } };
+    };
+    it('accepts a report that says what the session waits on', () => {
+      const r = validateReport(withBg(bg));
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.report.session.background).toEqual(bg);
+    });
+    it('treats a report without the field, or with null, as no background work', () => {
+      expect(validateReport(loadFixture()).ok).toBe(true);
+      const r = validateReport(withBg(null));
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.report.session.background ?? null).toBeNull();
+    });
+    it('rejects an unknown task type', () => {
+      expect(validateReport(withBg({ ...bg, tasks: [{ ...bg.tasks[0], type: 'cron' }] }))).toMatchObject({ ok: false, path: '$.session.background.tasks[0].type' });
+    });
+    it('rejects more tasks than the limit', () => {
+      const tasks = Array.from({ length: LIMITS.backgroundTasks + 1 }, () => bg.tasks[0]);
+      expect(validateReport(withBg({ ...bg, tasks }))).toMatchObject({ ok: false, path: '$.session.background.tasks' });
+    });
+    it('clamps a long description instead of rejecting it', () => {
+      const r = validateReport(withBg({ ...bg, tasks: [{ ...bg.tasks[0], description: 'x'.repeat(500) }] }));
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.report.session.background!.tasks[0]!.description.length).toBeLessThanOrEqual(LIMITS.backgroundDescription);
+    });
+    it('rejects a wake-up time that is not a number', () => {
+      expect(validateReport(withBg({ ...bg, wakeAt: 'soon' }))).toMatchObject({ ok: false, path: '$.session.background.wakeAt' });
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport, buildReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, step, toolResult, turnComplete } from './state.ts'
+import { agentRequested, agentSpawned, blowout, compaction, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
@@ -343,5 +343,68 @@ describe('full prompt and answer text (opt-in)', () => {
     s = markTextSent(s)
     s = turnComplete(s, { agentId: 'a1', reason: 'answer', answer: 'two' }, T0 + 6)
     expect(agentReport(s.agents.a1!, true).answerText).toBe('two')
+  })
+})
+
+// A session idle on a background process is not waiting on the person (#119). The Stop hook input lists the
+// background tasks and scheduled wake-ups still in flight; the report says what the session waits on.
+describe('background work (#119)', () => {
+  const meta = { version: '0.0.0', engineVersion: null, hostSurface: null, now: T0 + 10, storedName: null, optionName: null }
+  const idle = () => turnComplete(newSession({ id: 's', cwd: '/x', startedAt: T0, model: 'claude-opus-5-5' }), { reason: 'answer' }, T0 + 1)
+  const shell = { id: 'b1', type: 'shell', status: 'running', description: 'nightly build', command: 'npm run build && curl -H "Authorization: Bearer sk-live-123" https://example.com/upload' }
+
+  test('a turn that ends with a shell running does not say waiting for input', () => {
+    expect(idle()).toMatchObject({ status: 'waiting', waitReason: 'input' })
+    const s = setBackground(idle(), { tasks: [shell], crons: [] }, T0 + 2)
+    expect(s.status).toBe('waiting')
+    expect(s.waitReason).toBeNull()
+    const r = buildReport(s, [], meta)
+    expect(r.session.status).toBe('waiting')
+    expect(r.session.waitReason).toBeNull()
+    expect(r.session.background).toEqual({ tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null })
+  })
+
+  test('a shell command is never sent whole', () => {
+    const r = buildReport(setBackground(idle(), { tasks: [{ ...shell, description: '' }], crons: [] }, T0 + 2), [], meta)
+    const text = JSON.stringify(r.session.background)
+    expect(text).not.toContain('sk-live-123')
+    expect(text).not.toContain('Authorization')
+    // with no description, the task is named by its type only
+    expect(r.session.background!.tasks[0]!.description.length).toBeLessThanOrEqual(120)
+  })
+
+  test('background agents, monitors and workflows are counted by their type', () => {
+    const tasks = [shell, { id: 'b2', type: 'subagent', status: 'running', description: 'Survey adapters' }, { id: 'b3', type: 'monitor', status: 'running', description: 'tail the log' }, { id: 'b4', type: 'workflow', status: 'running', description: 'release' }]
+    const r = buildReport(setBackground(idle(), { tasks, crons: [] }, T0 + 2), [], meta)
+    expect(r.session.background!.tasks.map((t) => t.type)).toEqual(['shell', 'agent', 'monitor', 'workflow'])
+  })
+
+  test('a scheduled wake-up alone is a background wait that says when it wakes', () => {
+    const s = setBackground(idle(), { tasks: [], crons: [{ id: 'c1', schedule: '30 14 * * *', recurring: false, prompt: 'check the deploy', nextAt: T0 + 3_600_000 }] }, T0 + 2)
+    expect(s.waitReason).toBeNull()
+    const r = buildReport(s, [], meta)
+    expect(r.session.background).toMatchObject({ tasks: [{ type: 'wakeup', description: 'check the deploy' }], wakeAt: T0 + 3_600_000 })
+  })
+
+  test('when the work finishes the session goes back to waiting for input at once', () => {
+    let s = setBackground(idle(), { tasks: [shell], crons: [] }, T0 + 2)
+    s = setBackground(s, { tasks: [], crons: [] }, T0 + 3)
+    expect(s).toMatchObject({ status: 'waiting', waitReason: 'input' })
+    const r = buildReport(s, [], meta)
+    expect(r.session.background).toBeUndefined()
+    expect(keys(r.session)).toEqual(SESSION_KEYS)
+  })
+
+  test('a finished task in the list is not work in flight', () => {
+    const s = setBackground(idle(), { tasks: [{ ...shell, status: 'completed' }], crons: [] }, T0 + 2)
+    expect(s).toMatchObject({ status: 'waiting', waitReason: 'input' })
+  })
+
+  test('a permission wait stays a permission wait while a shell runs', () => {
+    let s = setBackground(idle(), { tasks: [shell], crons: [] }, T0 + 2)
+    s = { ...s, waitReason: 'permission' as const, waitNote: 'Bash(rm x)' }
+    s = setBackground(s, { tasks: [shell], crons: [] }, T0 + 3)
+    expect(s.waitReason).toBe('permission')
+    expect(buildReport(s, [], meta).session.waitReason).toBe('permission')
   })
 })

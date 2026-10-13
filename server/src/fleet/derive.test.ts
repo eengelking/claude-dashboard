@@ -303,4 +303,24 @@ describe('computeKpis with a model that has no price (#66)', () => {
     expect(k.costToday).toBeCloseTo(12.84);
     expect(k.unpricedSessions).toBe(1);
   });
+
+  it('does not count a session idle on background work as waiting on you (#119)', () => {
+    const now = 1_791_648_100_000;
+    const f = new FleetDb(openDb(':memory:'));
+    const base = fixtureReport();
+    const idle = (id: string, background?: { tasks: { type: 'shell'; description: string; status: string }[]; wakeAt: number | null }): Report => ({
+      ...base,
+      agents: [],
+      events: [],
+      session: { ...base.session, id, status: 'waiting', waitReason: background ? null : 'input', plan: null, ...(background ? { background } : {}) },
+    });
+    ingestReport(f, idle('you'), now - 1000);
+    ingestReport(f, idle('bg', { tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null }), now - 1000);
+    const views = ['you', 'bg'].map((id) => sessionView({ row: f.getSession(id)!, agents: f.getAgents(id), blowouts: f.getBlowouts(id), samples: f.samplesSince(id, 0), heard: true }, now, CFG));
+    expect(views[1]).toMatchObject({ status: 'waiting', waitReason: null, background: { tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null } });
+    expect(views[0]!.background ?? null).toBeNull();
+    const k = computeKpis({ views, costToday: 0, tokensPerSecond: [], costPerMinute: [] }, now);
+    expect(k.waiting).toBe(1);
+    expect(k.live).toBe(2);
+  });
 });

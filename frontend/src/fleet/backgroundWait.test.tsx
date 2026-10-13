@@ -1,0 +1,116 @@
+import { describe, it, expect, afterEach } from "vitest";
+import { render, cleanup, fireEvent } from "@testing-library/react";
+import { FleetView } from "./FleetApp";
+import { SessionCard } from "./components/SessionCard";
+import { makeEvent, makeSession } from "./fixtures";
+import { stateFrom } from "./testState";
+import { backgroundLead } from "./waiting";
+
+afterEach(cleanup);
+
+// A session idle on background work is not waiting on the person (#119, mockup/podium-background-wait.html).
+const CFG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 };
+const task = (type: "shell" | "agent" | "monitor" | "workflow" | "wakeup", description = "nightly build") => ({ type, description, status: "running" });
+const idleOn = (tasks: ReturnType<typeof task>[], wakeAt: number | null = null) =>
+  makeSession({ status: "waiting", waitReason: null, background: { tasks, wakeAt } });
+const renderCard = (s = idleOn([task("shell")])) => render(<SessionCard s={s} now={2_000_000} config={CFG} entering={false} leaving={false} onOpen={() => {}} />);
+
+describe("backgroundLead", () => {
+  it("counts by kind", () => {
+    expect(backgroundLead({ tasks: [task("shell")], wakeAt: null })).toBe("Waiting for 1 background shell to finish.");
+    expect(backgroundLead({ tasks: [task("shell"), task("shell")], wakeAt: null })).toBe("Waiting for 2 background shells to finish.");
+    expect(backgroundLead({ tasks: [task("agent")], wakeAt: null })).toBe("Waiting for 1 background agent to finish.");
+    expect(backgroundLead({ tasks: [task("monitor")], wakeAt: null })).toBe("Waiting for 1 background monitor to finish.");
+    expect(backgroundLead({ tasks: [task("workflow")], wakeAt: null })).toBe("Waiting for 1 background workflow to finish.");
+  });
+  it("lists several kinds in one sentence", () => {
+    expect(backgroundLead({ tasks: [task("shell"), task("agent")], wakeAt: null })).toBe("Waiting for 1 background shell and 1 background agent to finish.");
+  });
+  it("says when a scheduled wake-up will wake, or that one is scheduled", () => {
+    expect(backgroundLead({ tasks: [task("wakeup", "check the deploy")], wakeAt: Date.UTC(2026, 9, 13, 14, 30) })).toMatch(/^Waiting for a scheduled wake-up at \d{1,2}:\d{2}\.$/);
+    expect(backgroundLead({ tasks: [task("wakeup", "check the deploy")], wakeAt: null })).toBe("Waiting for a scheduled wake-up.");
+  });
+});
+
+describe("the card", () => {
+  it("says what it waits on, never \"your input\", and carries no task description", () => {
+    const { container } = renderCard(idleOn([task("shell", "npm run build:all && npm run test:integration -- --runInBand --coverage")]));
+    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for 1 background shell to finish.");
+    expect(container.textContent).not.toContain("your input");
+    expect(container.textContent).not.toContain("npm run build");
+  });
+
+  it("is blue and quiet: a ring dot, not the waiting-on-you chip, and no amber alert", () => {
+    const { container } = renderCard();
+    expect(container.querySelector(".st")!.textContent).not.toContain("waiting on you");
+    expect(container.querySelector(".st .dot.ring")).not.toBeNull();
+    expect(container.querySelector(".st .dot.waiting")).toBeNull();
+    expect(container.querySelector(".alert")!.className).toContain("bg");
+  });
+
+  it("a session that waits on the person still reads as before", () => {
+    const { container } = renderCard(makeSession({ status: "waiting", waitReason: "input" }));
+    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
+    expect(container.querySelector(".st")!.textContent).toContain("waiting on you");
+    expect(container.querySelector(".st .dot.waiting")).not.toBeNull();
+  });
+
+  it("a permission wait wins over background work", () => {
+    const { container } = renderCard(makeSession({ status: "waiting", waitReason: "permission", waitNote: "Bash(rm x)", background: { tasks: [task("shell")], wakeAt: null } }));
+    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for your approval.");
+  });
+});
+
+describe("the orchestrator page", () => {
+  it("leads with the sentence and puts the task description on its own row", () => {
+    const description = "npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default";
+    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", description)])] })} />);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    const callout = container.querySelector(".card.notice .alert")!;
+    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for 1 background shell to finish.");
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe(description);
+    expect(callout.textContent).not.toContain("Answer in its terminal");
+  });
+
+  it("cuts a long description at a character limit and ends it with a space and three dots", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", "npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default --reporters=jest-junit")])] })} />);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    const detail = container.querySelector(".card.notice .alert .wait-detail")!.textContent!;
+    expect(detail.length).toBeLessThanOrEqual(64 + 4);
+    expect(detail).toMatch(/\S \.\.\.$/);
+  });
+});
+
+describe("the counts", () => {
+  it("do not count a session idle on background work as waiting on you", () => {
+    const sessions = [makeSession({ id: "a", name: "needs-you", status: "waiting", waitReason: "input" }), { ...idleOn([task("shell")]), id: "b", name: "on-shell" }];
+    const { container } = render(<FleetView state={stateFrom({ sessions })} />);
+    expect(container.textContent).toContain("0 running · 1 waiting · 0 stale");
+  });
+
+  it("the rail row says what it waits on", () => {
+    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell")])] })} />);
+    const row = container.querySelector(".rail .ritem")!;
+    expect(row.textContent).toContain("waiting on shell");
+    expect(row.querySelector(".dot.ring")).not.toBeNull();
+  });
+});
+
+describe("the activity feed", () => {
+  it("the newest wait row is blue with a kind pill, like a wait on you is amber", () => {
+    const events = [makeEvent({ id: "bg", t: 1_000_000, kind: "wait", text: "waiting on background: 1 shell" })];
+    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell")])], events })} />);
+    const li = [...container.querySelectorAll(".side .ev li")].find((l) => l.querySelector(".lead"))!;
+    expect(li.querySelector(".lead")!.textContent).toBe("Waiting for 1 background shell to finish.");
+    expect(li.querySelector(".tool")!.textContent).toBe("shell");
+    expect(li.className).toContain("bgw");
+    expect(li.className).not.toMatch(/(^| )w( |$)/);
+  });
+
+  it("goes plain once the session is no longer waiting on that work", () => {
+    const events = [makeEvent({ id: "bg", t: 1_000_000, kind: "wait", text: "waiting on background: 1 shell" })];
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ status: "running" })], events })} />);
+    const li = [...container.querySelectorAll(".side .ev li")].find((l) => l.textContent?.includes("background shell"))!;
+    expect(li.className).not.toContain("bgw");
+  });
+});
