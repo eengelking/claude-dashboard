@@ -155,6 +155,17 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     res.json(view);
   });
 
+  // The whole prompt and answer, fetched when the console opens them (issue #97). Not in the state or
+  // the stream: they can be tens of kilobytes per agent.
+  router.get('/sessions/:id/agents/:agentId/text', (req, res) => {
+    const t = fleet.db.getAgentTexts(req.params.id, req.params.agentId);
+    if (!t) {
+      res.status(404).json({ ok: false, error: 'no full text for this agent', path: '$.agentId' });
+      return;
+    }
+    res.json(t);
+  });
+
   router.delete('/sessions/:id', requireToken, (req, res) => {
     if (!fleet.deleteSession(req.params.id)) {
       res.status(404).json({ ok: false, error: 'unknown session', path: '$.id' });

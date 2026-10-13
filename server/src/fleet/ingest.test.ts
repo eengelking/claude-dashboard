@@ -29,6 +29,29 @@ describe('ingestReport', () => {
     expect(blows[0]).toMatchObject({ agent_id: 'a4', kind: 'auto-compact', tokens_before: 1004000, tokens_after: 300000 });
   });
 
+  it('stores the full prompt and answer apart from the agent, and keeps them when a later report leaves them out', () => {
+    const r = fixtureReport();
+    r.agents[0]!.promptText = '# Task\n\nDo it.';
+    ingestReport(f, r, T0);
+    expect(f.getAgentTexts(r.session.id, r.agents[0]!.id)).toEqual({ prompt: '# Task\n\nDo it.', answer: null });
+    const later = fixtureReport();
+    later.agents[0]!.answerText = '## Done';
+    ingestReport(f, later, T0 + 1000);
+    expect(f.getAgentTexts(r.session.id, r.agents[0]!.id)).toEqual({ prompt: '# Task\n\nDo it.', answer: '## Done' });
+    expect(f.getAgentTexts(r.session.id, 'nope')).toBeNull();
+    const rows = f.getAgents(r.session.id);
+    expect(rows.find((a) => a.id === r.agents[0]!.id)).toMatchObject({ prompt_chars: 14, answer_chars: 7 });
+    expect(rows.find((a) => a.id === r.agents[1]!.id)).toMatchObject({ prompt_chars: null, answer_chars: null });
+  });
+
+  it('deleting the session deletes its texts', () => {
+    const r = fixtureReport();
+    r.agents[0]!.promptText = 'x';
+    ingestReport(f, r, T0);
+    f.deleteSession(r.session.id);
+    expect(f.getAgentTexts(r.session.id, r.agents[0]!.id)).toBeNull();
+  });
+
   it('stores the per-tool counts, and null for a reporter that sends none', () => {
     const r = fixtureReport();
     delete (r.agents[1] as { toolCounts?: unknown }).toolCounts;

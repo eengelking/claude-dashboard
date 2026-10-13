@@ -97,6 +97,8 @@ export function agentView(a: AgentRow): AgentView {
     steps: a.steps_done === null ? null : { done: a.steps_done, total: a.steps_total },
     promptExcerpt: a.prompt_excerpt ?? '',
     answerExcerpt: a.answer_excerpt,
+    promptChars: a.prompt_chars ?? null,
+    answerChars: a.answer_chars ?? null,
     failure: parse<Failure | null>(a.failure_json, null),
     modelFamily: family(a.model),
   };

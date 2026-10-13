@@ -104,6 +104,18 @@ ALTER TABLE sessions ADD COLUMN owner TEXT;
     // The machine a session runs on ({ name, id } as JSON, issue #34); NULL when the reporter sent none.
     sql: 'ALTER TABLE sessions ADD COLUMN machine_json TEXT;',
   },
+  {
+    version: 8,
+    // The full task prompt and final answer of an agent (issue #97), kept apart so the agents table and
+    // the state sent every tick stay small. Rows exist only for reporters with fullPrompts on.
+    sql: `CREATE TABLE agent_texts (
+  session_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  prompt_text TEXT,
+  answer_text TEXT,
+  PRIMARY KEY (session_id, agent_id)
+);`,
+  },
 ];
 
 export interface SessionRow {
@@ -177,6 +189,9 @@ export interface AgentRow {
   prompt_excerpt: string | null;
   answer_excerpt: string | null;
   failure_json: string | null;
+  /** Read side only (getAgents): the length of the stored full text, null when there is none. */
+  prompt_chars?: number | null;
+  answer_chars?: number | null;
 }
 
 export interface EventRow {
@@ -306,6 +321,7 @@ export class FleetDb {
       this.stmt('DELETE FROM blowouts WHERE session_id = ?').run(id);
       this.stmt('DELETE FROM samples WHERE session_id = ?').run(id);
       this.stmt('DELETE FROM agents WHERE session_id = ?').run(id);
+      this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
       return Number(this.stmt('DELETE FROM sessions WHERE id = ?').run(id).changes) > 0;
     });
   }
@@ -365,9 +381,28 @@ export class FleetDb {
   }
 
   getAgents(sessionId: string): AgentRow[] {
-    return this.stmt('SELECT * FROM agents WHERE session_id = ? ORDER BY started_at, id').all(
+    return this.stmt(
+      'SELECT a.*, length(t.prompt_text) AS prompt_chars, length(t.answer_text) AS answer_chars FROM agents a ' +
+        'LEFT JOIN agent_texts t ON t.session_id = a.session_id AND t.agent_id = a.id ' +
+        'WHERE a.session_id = ? ORDER BY a.started_at, a.id',
+    ).all(sessionId) as unknown as AgentRow[];
+  }
+
+  /** Keeps the full texts a report carried; a text the report leaves out is left as it was. */
+  upsertAgentTexts(sessionId: string, agentId: string, t: { prompt?: string; answer?: string }): void {
+    this.stmt(
+      'INSERT INTO agent_texts (session_id, agent_id, prompt_text, answer_text) VALUES (?, ?, ?, ?) ' +
+        'ON CONFLICT(session_id, agent_id) DO UPDATE SET ' +
+        'prompt_text = COALESCE(excluded.prompt_text, prompt_text), answer_text = COALESCE(excluded.answer_text, answer_text)',
+    ).run(sessionId, agentId, t.prompt ?? null, t.answer ?? null);
+  }
+
+  getAgentTexts(sessionId: string, agentId: string): { prompt: string | null; answer: string | null } | null {
+    const r = this.stmt('SELECT prompt_text, answer_text FROM agent_texts WHERE session_id = ? AND agent_id = ?').get(
       sessionId,
-    ) as unknown as AgentRow[];
+      agentId,
+    ) as { prompt_text: string | null; answer_text: string | null } | undefined;
+    return r ? { prompt: r.prompt_text, answer: r.answer_text } : null;
   }
 
   /** Marks every running or queued agent of a session aborted. */
@@ -510,6 +545,7 @@ export class FleetDb {
         this.stmt('DELETE FROM blowouts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM samples WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM agents WHERE session_id = ?').run(id);
+      this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM sessions WHERE id = ?').run(id);
       }
       return { samples, events, sessions: old.length };

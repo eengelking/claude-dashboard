@@ -107,6 +107,30 @@ describe('reads', () => {
     expect((await request(app).get('/api/fleet/sessions/nope')).status).toBe(404);
   });
 
+  it('GET /sessions/:id/agents/:agentId/text serves the full text, 404 when there is none', async () => {
+    const { app } = setup();
+    const r = fixtureReport();
+    r.agents[0]!.promptText = '# Task\n\nDo it.';
+    await request(app).post('/api/fleet/report').send(r);
+    const ok = await request(app).get(`/api/fleet/sessions/${r.session.id}/agents/${r.agents[0]!.id}/text`);
+    expect(ok.status).toBe(200);
+    expect(ok.body).toEqual({ prompt: '# Task\n\nDo it.', answer: null });
+    expect((await request(app).get(`/api/fleet/sessions/${r.session.id}/agents/${r.agents[1]!.id}/text`)).status).toBe(404);
+    expect((await request(app).get('/api/fleet/sessions/nope/agents/x/text')).status).toBe(404);
+  });
+
+  it('the session view carries the text lengths, never the text', async () => {
+    const { app } = setup();
+    const r = fixtureReport();
+    r.agents[0]!.promptText = '# Task\n\nDo it.';
+    await request(app).post('/api/fleet/report').send(r);
+    const v = (await request(app).get(`/api/fleet/sessions/${r.session.id}`)).body;
+    const a = v.agents.find((x: { id: string }) => x.id === r.agents[0]!.id);
+    expect(a).toMatchObject({ promptChars: 14, answerChars: null });
+    expect('promptText' in a).toBe(false);
+    expect(JSON.stringify(v)).not.toContain('Do it.');
+  });
+
   it('GET /events pages newest first with before and limit', async () => {
     const { app } = setup();
     const r = fixtureReport();

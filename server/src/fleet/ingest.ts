@@ -147,7 +147,15 @@ export function ingestReport(f: FleetDb, report: Report, serverTime: number, own
     const revived = !!prev && !ended && (prev.ended_at !== null || prev.dropped_at !== null);
 
     // 2. Agents: upsert what was reported; never delete one that is missing (a reload may lose it).
-    for (const a of report.agents) f.upsertAgent(agentRow(sid, a));
+    for (const a of report.agents) {
+      f.upsertAgent(agentRow(sid, a));
+      if (a.promptText || a.answerText) {
+        f.upsertAgentTexts(sid, a.id, {
+          ...(a.promptText ? { prompt: a.promptText } : {}),
+          ...(a.answerText ? { answer: a.answerText } : {}),
+        });
+      }
+    }
     if (ended) f.abortOpenAgents(sid, serverTime);
 
     // 3. Events, idempotent by id. A blow event that is new adds a blowouts row.
