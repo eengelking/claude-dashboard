@@ -311,4 +311,55 @@ describe('protocol', () => {
       expect(validateReport(f)).toMatchObject({ ok: false, path: '$.session.attached' });
     });
   });
+  describe('owner and machine', () => {
+    const top = (f: unknown) => f as Record<string, unknown>;
+    const ok = (r: ReturnType<typeof validateReport>) => {
+      if (!r.ok) throw new Error(`rejected at ${r.path}: ${r.error}`);
+      return r.report;
+    };
+
+    it('leaves both out for an older or unnamed reporter', () => {
+      const r = ok(validateReport(loadFixture()));
+      expect(r.userName).toBeUndefined();
+      expect(r.machine).toBeUndefined();
+    });
+
+    it('keeps a name and a machine, clamped and stripped of control characters', () => {
+      const f = top(loadFixture());
+      f.userName = `Ed\u0007 E.${'x'.repeat(200)}`;
+      f.machine = { name: `  eds-mbp\n${'y'.repeat(100)}`, id: 'a1b2c3d4' };
+      const r = ok(validateReport(f));
+      expect(r.userName).toHaveLength(LIMITS.name);
+      expect(r.userName?.startsWith('Ed  E.')).toBe(true);
+      expect(r.machine?.name).toHaveLength(LIMITS.machineName - 2);
+      expect(r.machine?.name.startsWith('eds-mbp ')).toBe(true);
+      expect(r.machine?.id).toBe('a1b2c3d4');
+    });
+
+    it('treats a null machine as none', () => {
+      const f = top(loadFixture());
+      f.machine = null;
+      expect(ok(validateReport(f)).machine).toBeUndefined();
+    });
+
+    it.each([
+      ['a string', 'eds-mbp', '$.machine'],
+      ['a missing name', { id: 'abcd' }, '$.machine.name'],
+      ['a blank name', { name: '   ', id: 'abcd' }, '$.machine.name'],
+      ['a missing id', { name: 'eds-mbp' }, '$.machine.id'],
+      ['an id with markup', { name: 'eds-mbp', id: '<b>x</b>' }, '$.machine.id'],
+      ['an id over 32 characters', { name: 'eds-mbp', id: 'a'.repeat(33) }, '$.machine.id'],
+      ['a non-string name', { name: 7, id: 'abcd' }, '$.machine.name'],
+    ])('rejects %s, with a path', (_label, machine, at) => {
+      const f = top(loadFixture());
+      f.machine = machine;
+      expect(validateReport(f)).toMatchObject({ ok: false, path: at });
+    });
+
+    it('rejects a userName that is not a string', () => {
+      const f = top(loadFixture());
+      f.userName = 42;
+      expect(validateReport(f)).toMatchObject({ ok: false, path: '$.userName' });
+    });
+  });
 });

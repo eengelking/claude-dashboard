@@ -152,7 +152,7 @@ describe('sessionView', () => {
     };
     expect(at('0.1.0')).toEqual(['0.1.0', 'outdated']);
     expect(at('0.3.1')).toEqual(['0.3.1', 'ok']);
-    expect(at('0.9.0')).toEqual(['0.9.0', 'newer']);
+    expect(at('0.99.0')).toEqual(['0.99.0', 'newer']);
     expect(at('0.1.0-sim')).toEqual(['0.1.0-sim', 'unknown']);
   });
 

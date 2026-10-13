@@ -58,6 +58,8 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     attached: true,
     hideAt: null,
     owner: null,
+    ownerGroup: null,
+    machine: null,
     context: { tokens: 410_000, window: 1_000_000, percent: 41 },
     costUsd: 12.84,
     tokensTotal: 2_500_000,
@@ -94,7 +96,7 @@ export function makeKpis(over: Partial<Kpis> = {}): Kpis {
   return {
     live: 1, running: 1, waiting: 0, stale: 0, agentsRunning: 0, agentsTotal: 0, planDone: 1, planTotal: 4,
     costToday: 12.84, unpricedSessions: 0, tokensLastMinute: 1000, blowoutsTotal: 0, sessionsAtLevel2: 0,
-    costPerMinute: new Array(60).fill(0), tokensPerSec: new Array(60).fill(0), ...over,
+    costPerMinute: new Array(60).fill(0), tokensPerSec: new Array(60).fill(0), costTodayByOwner: [], ...over,
   };
 }
 

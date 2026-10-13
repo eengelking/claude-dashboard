@@ -84,6 +84,8 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number,
     // The clock starts at the first report with nobody attached and keeps running while that stays true.
     detached_at: s.attached === false ? (prev?.attached === 0 && prev.detached_at !== null ? prev.detached_at : serverTime) : null,
     owner: owner ?? prev?.owner ?? null,
+    // A settings hook carries no machine, so a session keeps the one its reporter last sent.
+    machine_json: r.machine ? JSON.stringify(r.machine) : prev?.machine_json ?? null,
   };
 }
 

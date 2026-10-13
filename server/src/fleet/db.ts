@@ -99,6 +99,11 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ALTER TABLE sessions ADD COLUMN owner TEXT;
 `,
   },
+  {
+    version: 7,
+    // The machine a session runs on ({ name, id } as JSON, issue #34); NULL when the reporter sent none.
+    sql: 'ALTER TABLE sessions ADD COLUMN machine_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -137,6 +142,7 @@ export interface SessionRow {
   attached: number | null;
   detached_at: number | null;
   owner: string | null;
+  machine_json: string | null;
 }
 
 export interface AgentRow {
@@ -318,6 +324,23 @@ export class FleetDb {
       c: number;
     };
     return r.c;
+  }
+
+  /** `costSince` split by owner, with the group each owner is in (Admin, no owner and no group give null), largest first. */
+  costByOwnerSince(since: number): { owner: string | null; group: string | null; costUsd: number }[] {
+    const rows = this.stmt(
+      `SELECT s.owner AS owner, g.name AS grp, COALESCE(SUM(s.cost_usd), 0) AS c
+       FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
+       WHERE s.started_at >= ? GROUP BY s.owner, g.name ORDER BY c DESC, s.owner`,
+    ).all(since) as { owner: string | null; grp: string | null; c: number }[];
+    return rows.map((r) => ({ owner: r.owner, group: r.grp, costUsd: r.c }));
+  }
+
+  /** The group a session owner is in; null for Admin, an unknown name or a person with no group. */
+  groupOfOwner(owner: string | null): string | null {
+    if (owner === null) return null;
+    const r = this.stmt('SELECT g.name AS grp FROM people p JOIN groups g ON g.id = p.group_id WHERE p.name = ?').get(owner) as { grp: string } | undefined;
+    return r?.grp ?? null;
   }
 
   distinctReporterVersions(): string[] {

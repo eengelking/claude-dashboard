@@ -22,7 +22,7 @@ Options:
   --duration S      Stop after S real seconds and exit 0 (default: run until Ctrl-C)
   --chaos           Also make sessions go silent (stale), fail more and blow out more
   --agents N        Extra ad-hoc agents per session at start, for load tests (default 0)
-  --reporter-version V  Version the reports claim (default 0.1.0-sim, which the server cannot read, so no warning); try 0.1.0 or 0.9.0 to see a mismatch
+  --reporter-version V  Version the reports claim (default 0.1.0-sim, which the server cannot read, so no warning); try 0.1.0 or 0.99.0 to see a mismatch
   --token T         Send X-Podium-Token: T
   --print           Print each report as one JSON line instead of POSTing (no server needed)
   --ticks N         With --print: stop after N ticks

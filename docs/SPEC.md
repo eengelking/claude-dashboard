@@ -390,7 +390,7 @@ Declare in `plugin.json` (**Assumption:** confirm the exact `userConfig` field s
 |---|---|---|---|
 | `serverUrl` | string | `http://127.0.0.1:4317` | Where to POST. |
 | `token` | string (secret if supported) | empty | Sent as `X-Podium-Token` when non-empty: a person's token from Admin (7.7), or the admin secret. |
-| `userName` | string | empty | The person's name as the server owner entered it. Sent as `Report.userName`; the server accepts a report made with a person's token only when the name matches. |
+| `userName` | string | empty | The person's name as the server owner entered it. Sent as `Report.userName`, with `Report.machine`; the server accepts a report made with a person's token only when the name matches. Empty sends neither. Claude Code keeps it in `~/.claude/settings.json` under `pluginConfigs["podium-reporter@eengelking-marketplace"].options` (the key is `podium-reporter` for a `--plugin-dir` load). |
 | `flushIntervalMs` | number | `1000` | Minimum time between reports while something changes. |
 | `heartbeatMs` | number | `5000` | Report at least this often even when nothing changed. |
 | `sessionName` | string | empty | Override display name for this machine's sessions (rare). |
@@ -460,6 +460,7 @@ interface Report {
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
   userName?: string;                    // the person this reporter is set up as (the `userName` option); omitted when empty. The server checks it against the token's owner (7.7)
+  machine?: { name: string; id: string };  // sent only with userName (0.9.0 and later): the short host name (`hostname` up to the first dot, ≤ 64) and a random 12-hex id the mod keeps in its own store under `machineId`, made on first use, so two machines with one host name stay apart
 }
 
 interface FilesReport {
@@ -552,6 +553,7 @@ interface ActivityEvent {
 - A loop with a failure candidate that later ends `done` is `done`; the candidate is discarded.
 - **Redaction.** Before anything leaves the machine, truncate to the limits above and replace anything that looks like a secret (`sk-ant-[A-Za-z0-9_-]{10,}`, `ghp_[A-Za-z0-9]{20,}`, `AKIA[0-9A-Z]{16}`, `Bearer [A-Za-z0-9._-]{20,}`, values after `password=`, `token=`, `secret=`, `apikey=`, `api_key=`) with `[redacted]`. The reporter unit-tests this.
 - Excerpts are the first 400 characters, whitespace collapsed.
+- **Who and where.** A report names a person only when the user has set the `userName` option, which is empty by default; it then also carries `machine` (the short host name and the mod's own random id, never a hardware id). Nothing else that identifies the person or the machine is sent, and the operating system user name and `git config` are never read for it. Everyone who can open the console sees both. Without a person's token (7.7) the name is a label anyone can claim, so the server records an owner only from a token.
 
 ### 6.5 Models, windows, prices (`models.ts`, pure)
 
@@ -630,7 +632,8 @@ CREATE TABLE sessions (
   files_json TEXT,                                                         -- Report.session.files; NULL from a reporter older than 0.6.0
   attached INTEGER,                                                        -- Report.session.attached (1 or 0); NULL when unknown
   detached_at INTEGER,                                                     -- when the first report with attached = false arrived; NULL while attached or unknown
-  owner TEXT                                                               -- who the server decided the session belongs to from the token: a person's name, 'Admin', or NULL (auth off, or from before migration 6)
+  owner TEXT,                                                              -- who the server decided the session belongs to from the token: a person's name, 'Admin', or NULL (auth off, or from before migration 6)
+  machine_json TEXT                                                        -- Report.machine ({ name, id }); kept when a later report or hook carries none; NULL when never sent (migration 7)
 );
 CREATE TABLE agents (
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE, id TEXT NOT NULL,
@@ -689,7 +692,7 @@ On a valid report, in one transaction:
 
 **Blowout level** (the signal, computed in `derive.ts` and tested): `total = session.blowouts + Σ agent.blowouts`. `level = 0` if total is 0; `2` if the orchestrator has ≥ 2 blowouts or any single agent has ≥ 2 or total ≥ 3; else `1`. Level 2 is the red "likely losing context" state. Level 1 is the amber "context exceeded" state.
 
-**KPIs:** live orchestrators; counts running/waiting/stale; agents running and agents total; plan steps done/total across live sessions; est. cost today (Σ session `cost_usd` for sessions that started today, live or ended); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
+**KPIs:** live orchestrators; counts running/waiting/stale; agents running and agents total; plan steps done/total across live sessions; est. cost today (Σ session `cost_usd` for sessions that started today, live or ended), and the same sum split by owner with each owner's group (`costTodayByOwner`, largest first, an owner of `null` for sessions with none); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
 
 ### 7.4 View types (server → UI; defined once in `protocol.ts`, imported by the UI)
 
@@ -711,6 +714,9 @@ interface SessionView {
   files: FilesReport | null;            // the files the session changed; null from a reporter older than 0.6.0 and for a settings-hooks session
   attached: boolean | null;             // whether any client is attached; null from a reporter older than 0.7.0 (counts as attached)
   hideAt: number | null;                // epoch ms when a session nobody is attached to is set aside from the wall; null while attached or unknown (7.5)
+  owner: string | null;                 // who the server decided the session belongs to from the token (7.7): a person's name, 'Admin', or null
+  ownerGroup: string | null;            // that person's group from Admin; null for Admin, no owner, or no group
+  machine: { name: string; id: string } | null;  // Report.machine as last sent; null when none was
   agents: AgentView[];                  // AgentReport + modelFamily + costUsdEst
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };  // 60 points, oldest first; peakContext in 0..1; missing seconds zero-filled
 }
@@ -755,7 +761,7 @@ The registry removes a client on `close`/`error`, and a write that throws never 
 - **Who a report is from (issue #36).** `PODIUM_TOKEN` is the *admin secret*. A credential is either a person's token, `pdm_<12 hex key id>_<48 hex secret>` (192 bits of randomness, made by the server in Admin, shown once, stored only as a SHA-256 and the last four characters; random tokens of that length need no slow or keyed hash), or the admin secret. The server finds a person by the key id, compares hashes in constant time, and accepts a report when the token is live (not revoked, not rotated away) and `Report.userName` equals that person's name, compared case-insensitively. The token, not the name, decides identity: the name is visible in the console, so the match is a consistency check and the token's randomness protects the account. A hook has no body name, so a person's token alone identifies it. The admin secret is accepted as before and puts the session under the owner `Admin`, unless the owner turned that off in Admin. With no `PODIUM_TOKEN` and no person token, a report is accepted with no owner ("Unassigned"); a person token that is presented is still checked. A session id that already belongs to another owner is refused with `409`. Any valid credential may `DELETE` a session.
 - **The Admin API (`/api/admin`).** Off (403) when `PODIUM_TOKEN` is empty. `POST unlock` takes the admin secret and starts an in-memory session whose id is in an `HttpOnly; SameSite=Strict` cookie scoped to `/api/admin`; it ends after 10 idle minutes, on lock, and on restart, so rotating the admin secret (which needs a restart) ends every session. Five wrong secrets from one source address lock that source for 15 minutes. Every change needs the header `X-Podium-Admin: 1` and, when an `Origin` is sent, the server's own host; no CORS is enabled. Every response carries `Cache-Control: no-store`. The secret and tokens are never logged, never put in an error, the activity list or the admin log, and never stored by the page in `localStorage` or `sessionStorage`. The admin log records unlocks, failed unlocks, lockouts, people, rotations, revocations, group changes and the reporting switch, each with the source address. A name is 1 to 48 characters and a group name 1 to 24, with no control characters, both unique case-insensitively. The name `Admin` is reserved: it is the owner of a report made with the admin secret. A person sees no one's token, including their own; only the owner rotates it.
 - Tokens and the admin secret travel in a header over plain HTTP. A server reachable over a network needs a trusted network or a TLS proxy.
-- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. `session.files` keeps the first 200 files (paths clipped to 300 characters and stripped of control characters, counts non-negative integers, `total` never below the listed count) rather than rejecting a longer list. Reject, never crash, on junk.
+- Body limit 512 KB. Validate every field's type and length; clamp strings (name ≤ 80, text ≤ 240, excerpt ≤ 400, arrays ≤ 200 agents and ≤ 100 events and ≤ 100 plan steps per report). `toolCounts` takes at most 100 distinct tool names per agent, and per `session.loop`: the mod stops adding new names past 100 (they still count in `toolCalls`), and the server keeps the 100 most used (ties by name) instead of rejecting the report, so the counts then add up to less than `toolCalls`. `session.files` keeps the first 200 files (paths clipped to 300 characters and stripped of control characters, counts non-negative integers, `total` never below the listed count) rather than rejecting a longer list. `userName` is clipped to 80; `machine.name` is clipped to 64, trimmed and must not be empty, and `machine.id` must be 1 to 32 letters, digits, `-` or `_`. Reject, never crash, on junk.
 - Never log report bodies. Log one line per error with the path.
 - Never execute, `eval`, or interpolate reported strings into SQL (parameterized statements only) or into HTML (the UI uses React text nodes only).
 - CORS: none needed (same origin). Do not enable `*`.
@@ -1088,7 +1094,7 @@ Allowed: at most **three** `claude -p` smoke runs total, each with `--model haik
 ## 11. Explicitly out of scope / deferred (the design must not preclude these)
 
 - A terminal pane or band inside Claude Code that shows the same fleet (the mod's `$.ui.open` and `ui.render` can draw it later; keep `state.ts` UI-free so a pane can read it).
-- Remote or multi-machine fleets: the `Report` already carries a session id and `reporter` info; a future `hostId` field fits without breaking v1.
+- Remote or multi-machine fleets beyond one shared server: a named reporter already sends `machine` (6.2), and the people view groups by person and machine (8.1).
 - Alerts and notifications (a blowout at level 2 pushes a desktop notification): `session.blowouts.level` and `$.ui.notify` are the hooks for it.
 - Budgets and forecasts, comparisons between runs, cost per plan step.
 - A scheduled-agent view (`CronCreate` tasks, `session_crons` on the Stop hook).

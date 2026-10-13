@@ -154,3 +154,41 @@ describe('reporting with authentication off', () => {
     expect((await request(app).post('/api/fleet/report').set('X-Podium-Token', a.token).send(report('Dana'))).status).toBe(200);
   });
 });
+
+describe('the people view fields (issue #34)', () => {
+  it('shows each session’s owner, its group and its machine, and splits today’s spend by owner', async () => {
+    const { app, people } = setup();
+    const backend = people.createGroup('Backend');
+    const priya = people.createPerson('Priya N.', backend.id);
+    const dana = people.createPerson('Dana K.');
+    const withMachine = (r: ReturnType<typeof report>, name: string, id: string) => ({ ...r, machine: { name, id } });
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', priya.token).send(withMachine(report('Priya N.', 'p1'), 'priya-mbp', 'aaaa1111'));
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', priya.token).send(withMachine(report('Priya N.', 'p2'), 'build-01', 'bbbb2222'));
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', dana.token).send(report('Dana K.', 'd1'));
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report(null, 'x1'));
+    const body = (await request(app).get('/api/fleet/state')).body as {
+      sessions: { id: string; owner: string | null; ownerGroup: string | null; machine: { name: string; id: string } | null; costUsd: number }[];
+      kpis: { costToday: number; costTodayByOwner: { owner: string | null; group: string | null; costUsd: number }[] };
+    };
+    const byId = Object.fromEntries(body.sessions.map((s) => [s.id, s]));
+    expect(byId.p1).toMatchObject({ owner: 'Priya N.', ownerGroup: 'Backend', machine: { name: 'priya-mbp', id: 'aaaa1111' } });
+    expect(byId.p2).toMatchObject({ owner: 'Priya N.', ownerGroup: 'Backend', machine: { name: 'build-01', id: 'bbbb2222' } });
+    expect(byId.d1).toMatchObject({ owner: 'Dana K.', ownerGroup: null, machine: null });
+    expect(byId.x1).toMatchObject({ owner: 'Admin', ownerGroup: null, machine: null });
+    const cost = byId.p1!.costUsd;
+    expect(body.kpis.costTodayByOwner).toEqual([
+      { owner: 'Priya N.', group: 'Backend', costUsd: cost * 2 },
+      { owner: 'Admin', group: null, costUsd: cost },
+      { owner: 'Dana K.', group: null, costUsd: cost },
+    ]);
+    expect(body.kpis.costTodayByOwner.reduce((n, r) => n + r.costUsd, 0)).toBeCloseTo(body.kpis.costToday);
+  });
+
+  it('keeps a session’s machine when a later settings-hook payload carries none', async () => {
+    const { app, people, fleet } = setup();
+    const priya = people.createPerson('Priya N.');
+    await request(app).post('/api/fleet/report').set('X-Podium-Token', priya.token).send({ ...report('Priya N.', 'p1'), machine: { name: 'priya-mbp', id: 'aaaa1111' } });
+    fleet.ingestHook({ session_id: 'p1', hook_event_name: 'Notification', cwd: '/tmp', message: 'Claude needs your permission' }, 'Priya N.');
+    expect(fleet.view('p1')?.machine).toEqual({ name: 'priya-mbp', id: 'aaaa1111' });
+  });
+});

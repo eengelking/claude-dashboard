@@ -41,7 +41,7 @@ describe('POST /api/fleet/report', () => {
     };
     const older = await send('0.1.0');
     const matching = await send('0.3.2');
-    const newer = await send('0.9.0');
+    const newer = await send('0.99.0');
     expect([older.status, matching.status, newer.status]).toEqual([200, 200, 200]);
     expect(older.body.reporterCompat).toBe('outdated');
     expect(matching.body.reporterCompat).toBe('ok');

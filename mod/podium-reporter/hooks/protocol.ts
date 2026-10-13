@@ -187,5 +187,13 @@ export interface Report {
   events: ActivityEvent[];
   /** The person this reporter is configured as. The server checks it against the token's owner and refuses a mismatch. Omitted or null when none is set. */
   userName?: string | null;
+  /** The machine the session runs on. Sent only with a userName, so nothing identifying leaves an unnamed reporter. Omitted or null from a reporter older than 0.9.0. */
+  machine?: MachineInfo | null;
+}
+
+/** Which machine a session runs on: its host name, and a random id the reporter keeps so two machines with one host name stay apart. */
+export interface MachineInfo {
+  name: string;
+  id: string;
 }
 // <protocol:end>

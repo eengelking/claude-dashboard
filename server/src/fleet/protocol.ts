@@ -190,6 +190,14 @@ export interface Report {
   events: ActivityEvent[];
   /** The person this reporter is configured as. The server checks it against the token's owner and refuses a mismatch. Omitted or null when none is set. */
   userName?: string | null;
+  /** The machine the session runs on. Sent only with a userName, so nothing identifying leaves an unnamed reporter. Omitted or null from a reporter older than 0.9.0. */
+  machine?: MachineInfo | null;
+}
+
+/** Which machine a session runs on: its host name, and a random id the reporter keeps so two machines with one host name stay apart. */
+export interface MachineInfo {
+  name: string;
+  id: string;
 }
 // <protocol:end>
 
@@ -272,6 +280,10 @@ export interface SessionView {
   hideAt: number | null;
   /** Who the server decided this session belongs to, from the token: a person's name, `Admin` for the admin secret, null when auth is off or the session predates tokens. */
   owner: string | null;
+  /** The group the owner is in, from Admin; null for Admin, no owner, or a person with no group. */
+  ownerGroup: string | null;
+  /** The machine the session runs on, as the reporter sent it; null when it sent none (no userName, or older than 0.9.0). */
+  machine: MachineInfo | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -308,6 +320,15 @@ export interface Kpis {
   costPerMinute: number[];
   /** Fleet tokens per second for the last 60 seconds, oldest first. */
   tokensPerSec: number[];
+  /** `costToday` split by owner (null for sessions with no owner), with each owner's group, largest first. */
+  costTodayByOwner: OwnerSpend[];
+}
+
+/** One owner's share of today's estimated spend. */
+export interface OwnerSpend {
+  owner: string | null;
+  group: string | null;
+  costUsd: number;
 }
 
 /** The server's lifecycle timings, so the UI can say when a stale session will be dropped. */
@@ -372,6 +393,7 @@ export const LIMITS = {
   blowoutLog: 50,
   files: 200,
   filePath: 300,
+  machineName: 64,
 } as const;
 
 export type ValidateResult = { ok: true; report: Report } | { ok: false; error: string; path: string };
@@ -699,6 +721,17 @@ function session(v: unknown, path: string): SessionReport {
   };
 }
 
+/** A reporter's machine: a host name (clamped) and its own random id (letters, digits, `-` and `_`, at most 32). */
+function machine(v: unknown, path: string): MachineInfo | null {
+  if (v === null || v === undefined) return null;
+  const o = obj(v, path);
+  const name = str(o.name, `${path}.name`, LIMITS.machineName).trim();
+  if (!name) throw new Invalid(`${path}.name`, 'expected a host name');
+  const id = str(o.id, `${path}.id`, 64);
+  if (!/^[A-Za-z0-9_-]{1,32}$/.test(id)) throw new Invalid(`${path}.id`, 'expected 1 to 32 letters, digits, - or _');
+  return { name, id };
+}
+
 /**
  * Validates an untrusted body as a Report. Never throws. Strings are clamped to their limits and
  * stripped of control characters; arrays over their limit, wrong types and unknown enum values are
@@ -725,6 +758,8 @@ export function validateReport(body: unknown): ValidateResult {
     };
     const userName = strOrNull(o.userName, '$.userName', LIMITS.name);
     if (userName !== null) report.userName = userName;
+    const m = machine(o.machine, '$.machine');
+    if (m !== null) report.machine = m;
     return { ok: true, report };
   } catch (err) {
     if (err instanceof Invalid) return { ok: false, error: err.message, path: err.path };

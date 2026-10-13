@@ -19,6 +19,8 @@ interface World {
   fetchMode: { mode: 'ok' | 'down' | 'hang' }
   /** The clients attached to the session, as `$.session.surfaces()` answers. */
   surfaces: { value: ('terminal' | 'desktop' | 'vscode' | 'mobile')[]; fail: boolean }
+  /** Every command the plugin ran, as its argument vector. */
+  ran: string[][]
 }
 
 const GIT: Record<string, string> = {
@@ -30,7 +32,7 @@ const GIT: Record<string, string> = {
 }
 
 /** Everything beneath the plugin: the engine's answers, from memory. */
-function world(on: On): World {
+function world(on: On, store: Record<string, unknown> = {}): World {
   const posts: Report[] = []
   const headers: Record<string, string>[] = []
   const sessionId = { value: SID }
@@ -38,7 +40,8 @@ function world(on: On): World {
   const surfaces: World['surfaces'] = { value: ['terminal'], fail: false }
   let toolUseId = ''
   const clock = mock.clock(on, { now: 1_800_000_000_000 })
-  mock.store(on)
+  mock.store(on, store)
+  const ran: string[][] = []
   on('session.id', () => ({ value: sessionId.value }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.root', () => ({ value: CWD }))
@@ -57,7 +60,11 @@ function world(on: On): World {
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.log', () => ({ value: undefined }))
-  on('process.run', (_$, e) => ({ value: { exitCode: e.argv[1] === 'rev-parse' || e.argv[1] === 'status' ? 0 : 1, stdout: GIT[e.argv.slice(1).join(' ')] ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('process.run', (_$, e) => {
+    ran.push([...e.argv])
+    if (e.argv[0] === 'hostname') return { value: { exitCode: 0, stdout: 'Devs-MBP.local\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    return { value: { exitCode: e.argv[1] === 'rev-parse' || e.argv[1] === 'status' ? 0 : 1, stdout: GIT[e.argv.slice(1).join(' ')] ?? '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('http.fetch', (_$, e) => {
     if (fetchMode.mode === 'down') throw new Error('ECONNREFUSED')
     const body = JSON.parse(e.init?.body ?? '{}') as Report
@@ -93,7 +100,7 @@ function world(on: On): World {
   })
   on('classic.PermissionRequest', () => ({}))
   on('classic.Notification', () => ({}))
-  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces }
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran }
 }
 
 type StepArgs = Parameters<Engine['turn']['step']>[0]
@@ -457,6 +464,39 @@ describe('podium-reporter end to end', () => {
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
     await w.clock.advance(1000)
     expect('userName' in w.posts[0]!).toBe(false)
+  })
+
+  test('with a userName the report names the machine: its short host name and a random id that stays', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    const m = w.posts[0]!.machine!
+    expect(m.name).toBe('Devs-MBP')
+    expect(m.id).toMatch(/^[0-9a-f]{12}$/)
+    await w.clock.advance(5000)
+    expect(w.posts.at(-1)!.machine).toEqual(m)
+  })
+
+  test('a machine id already kept in the store is reused', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: 'abcdef012345' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine).toEqual({ name: 'Devs-MBP', id: 'abcdef012345' })
+  })
+
+  test('a kept id that is not one the mod made is replaced', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: '<b>not-mine</b>' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine!.id).toMatch(/^[0-9a-f]{12}$/)
+  })
+
+  test('without a userName nothing about the machine is read or sent', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect('machine' in w.posts[0]!).toBe(false)
+    expect(w.ran.some((argv) => argv[0] === 'hostname')).toBe(false)
   })
 
   test('the sessionName option names the session', { options: { sessionName: 'from-option' } }, async ($, on) => {

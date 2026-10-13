@@ -41,8 +41,10 @@ import {
 } from './state.ts';
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
+import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
+import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -84,6 +86,8 @@ interface Runtime {
   toastedVersion: string | null;
   /** Skill tool calls in flight: a skill.prompt during one belongs to that call's loop. */
   skillCalls: number;
+  /** This machine, read only when a userName is set; null otherwise, so nothing identifying is sent. */
+  machine: MachineInfo | null;
 }
 
 export function readOptions(o: Record<string, unknown>): Options {
@@ -160,6 +164,7 @@ function metaOf(r: Runtime, now: number) {
     storedName: r.storedName,
     optionName: opts.sessionName || null,
     userName: opts.userName || null,
+    machine: r.machine,
   };
 }
 
@@ -390,6 +395,36 @@ async function explain($: Engine, sessionId: string, agentId: string, prompt: st
   }
 }
 
+/** A random number in [0, 1): the platform's generator where the sandbox has one. */
+function random(): number {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint32Array) => Uint32Array } }).crypto;
+  if (c?.getRandomValues) return c.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
+  return Math.random();
+}
+
+/**
+ * This machine's short host name and the random id the mod keeps for it in its own store (made on first
+ * use). Read only when a userName is set: an unnamed reporter sends nothing that identifies the machine.
+ */
+async function readMachine($: Engine): Promise<MachineInfo | null> {
+  if (!opts.userName.trim()) return null;
+  try {
+    let id = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
+    if (!isMachineId(id)) {
+      id = newMachineId(random);
+      await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
+    }
+    const host = await attempt(async () => {
+      const res = await $.process.run(['hostname'], { timeoutMs: 2000 });
+      return res.exitCode === 0 ? hostOf(res.stdout) : null;
+    }, null);
+    return machineInfo(host, id as string);
+  } catch (err) {
+    record($, 'machine', err);
+    return null;
+  }
+}
+
 async function attempt<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
@@ -432,6 +467,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     toastedRefusal: rt?.toastedRefusal ?? null,
     toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,
+    machine: rt?.machine ?? (await readMachine($)),
   };
   const r = rt;
   await readAgents($, r, now);

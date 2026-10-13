@@ -12,7 +12,9 @@ import type {
   GitInfo,
   Kpis,
   LoopReport,
+  MachineInfo,
   ModelFamily,
+  OwnerSpend,
   Plan,
   SessionStatusView,
   SessionView,
@@ -173,6 +175,8 @@ export interface SessionInput {
   dropAt?: number | null;
   /** From the fleet, which knows the delay. Null while a client is attached or the reporter does not say. */
   hideAt?: number | null;
+  /** From the people table: the group the session's owner is in. */
+  ownerGroup?: string | null;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -232,6 +236,8 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     attached: row.attached === null ? null : row.attached === 1,
     hideAt: input.hideAt ?? null,
     owner: row.owner,
+    ownerGroup: input.ownerGroup ?? null,
+    machine: parse<MachineInfo | null>(row.machine_json, null),
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };
@@ -266,6 +272,8 @@ export interface KpiInput {
   tokensPerSecond: readonly { t: number; v: number }[];
   /** Fleet cost added per minute (minute = floor(seconds / 60)). */
   costPerMinute: readonly { m: number; v: number }[];
+  /** `costToday` split by owner, largest first. */
+  costTodayByOwner?: readonly OwnerSpend[];
 }
 
 export function computeKpis(input: KpiInput, now: number): Kpis {
@@ -285,6 +293,7 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
     sessionsAtLevel2: 0,
     costPerMinute: new Array<number>(SERIES_POINTS).fill(0),
     tokensPerSec: new Array<number>(SERIES_POINTS).fill(0),
+    costTodayByOwner: (input.costTodayByOwner ?? []).map((r) => ({ ...r })),
   };
   for (const v of input.views) {
     if (v.status === 'running') k.running++;

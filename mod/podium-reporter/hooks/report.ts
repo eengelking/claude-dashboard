@@ -4,7 +4,7 @@ import { clip, excerpt } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { family, windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
-import type { ActivityEvent, AgentReport, Failure, LoopReport, Report } from './protocol.ts';
+import type { ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, Report } from './protocol.ts';
 import { resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
 
 export const REPORTER_NAME = 'podium-reporter';
@@ -22,6 +22,8 @@ export interface ReportMeta {
   optionName: string | null;
   /** The `userName` option: the person this reporter is configured as. The server checks it against the token. */
   userName?: string | null;
+  /** This machine; sent only together with a userName. */
+  machine?: MachineInfo | null;
 }
 
 /** Display name (SPEC 6.6): /podium name, the option, a worktree's branch or folder, the repo folder, the id. */
@@ -109,7 +111,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
     v: 1,
     sentAt: meta.now,
     reporter: { name: REPORTER_NAME, version: meta.version, engineVersion: meta.engineVersion, hostSurface: meta.hostSurface },
-    ...(meta.userName && meta.userName.trim() ? { userName: clip(meta.userName.trim(), 80) } : {}),
+    ...(meta.userName && meta.userName.trim() ? { userName: clip(meta.userName.trim(), 80), ...(meta.machine ? { machine: { ...meta.machine } } : {}) } : {}),
     session: {
       id: s.id,
       name: displayName(s, meta.storedName, meta.optionName),

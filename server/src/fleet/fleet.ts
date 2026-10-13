@@ -193,6 +193,7 @@ export class Fleet {
         heard: entry ? entry.heard : true,
         dropAt: entry ? this.dropAtFor(row, entry.heard, now) : null,
         hideAt: row.attached === 0 && row.detached_at !== null ? row.detached_at + this.cfg.detachedHideAfterMs : null,
+        ownerGroup: this.db.groupOfOwner(row.owner),
       },
       now,
       this.derive,
@@ -230,6 +231,7 @@ export class Fleet {
       {
         views,
         costToday: this.db.costSince(startOfDay(now)),
+        costTodayByOwner: this.db.costByOwnerSince(startOfDay(now)),
         tokensPerSecond: this.db.fleetTokensPerSecond(nowSec - 61),
         costPerMinute: this.costMinuteCache.rows,
       },
