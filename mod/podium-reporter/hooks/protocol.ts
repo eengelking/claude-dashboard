@@ -186,8 +186,11 @@ export interface SessionReport {
   cache: CacheReport | null;
 }
 
-/** Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an aborted ping, or a cache that had already expired. */
-export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired';
+/**
+ * Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an
+ * aborted ping, a cache that had already expired, or a ping with no answer within PING_TIMEOUT_MS (2 minutes).
+ */
+export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired' | 'timeout';
 
 /**
  * Cache warming (the `cacheWarming` option or `/podium warm on`): while the session waits on the person, one
@@ -195,7 +198,7 @@ export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'abort
  */
 export interface CacheWarming {
   on: boolean;
-  /** `off`; `ready`: on, the session is running; `warming`: on, idle, pinging; `stopped`: stopped for this idle period (stopReason). */
+  /** `off`; `ready`: on, the session is running or waits on a permission prompt (never pinged); `warming`: on, waiting for a prompt, pinging; `stopped`: stopped for this idle period (stopReason). */
   state: 'off' | 'ready' | 'warming' | 'stopped';
   stopReason: WarmStop | null;
   /** Pings sent this session, and their estimated cost from the usage each returned. */

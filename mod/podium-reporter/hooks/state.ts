@@ -192,7 +192,7 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
 /** A fresh session under a new id (after /clear), keeping where it runs. Its cache starts empty: there is nothing to keep warm. */
 export function resetForNewId(s: SessionState, id: string, startedAt: number): SessionState {
   const n = newSession({ id, cwd: s.cwd, startedAt, model: s.main.model });
-  return { ...n, projectRoot: s.projectRoot, repoName: s.repoName, git: s.git, main: { ...n.main, effort: s.main.effort }, cache: { ...newCache(s.cache.on), ttlMs: s.cache.ttlMs } };
+  return { ...n, projectRoot: s.projectRoot, repoName: s.repoName, git: s.git, main: { ...n.main, effort: s.main.effort }, cache: { ...newCache(s.cache.on), ttlMs: s.cache.ttlMs, ttlKnown: s.cache.ttlKnown } };
 }
 
 /** The cache's state changed; a report is due only when it did. */

@@ -43,7 +43,7 @@ import {
   type SessionState,
 } from './state.ts';
 import { Transport, type FetchLike } from './transport.ts';
-import { decide, idle, pingDone, pingStarted, pingText, PING_PROMPT, requestStarted, setTtl, setWarming, stop, stopText, WARM_MINUTES_DEFAULT, type ForkOutcome } from './cache.ts';
+import { decide, idle, modelSwitched, pingDone, pingStarted, pingText, PING_PROMPT, requestStarted, setTtl, setWarming, stop, stopText, TTL_LONG_MS, ttlFromResume, WARM_MINUTES_DEFAULT, type ForkOutcome } from './cache.ts';
 import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
@@ -99,6 +99,11 @@ interface Runtime {
   machine: MachineInfo | null;
   /** `/podium warm on|off` for this session id (kept in $.store); null follows the cacheWarming option. */
   warmOverride: boolean | null;
+  /**
+   * The engine's clock less Date.now(), read on each flush. A main-loop request is timed with Date.now() plus this,
+   * so the cache runs on the engine's clock (the flush timer's) without a `$.clock.now()` round trip per request.
+   */
+  clockOffset: number;
 }
 
 export function readOptions(o: Record<string, unknown>): Options {
@@ -127,6 +132,8 @@ let errors: { at: number; where: string; message: string }[] = [];
 let stats: Record<string, HookStat> = {};
 /** Agents whose failure was sent for an explanation: at most one call per failure, never retried. */
 let explained = new Set<string>();
+/** A lifetime a resume revealed before session.start built the runtime; start applies it. */
+let earlyTtl: '5m' | '1h' | null = null;
 const EXPLAIN_MODEL = 'haiku';
 
 const perf = typeof performance !== 'undefined' && typeof performance.now === 'function' ? () => performance.now() : () => Date.now();
@@ -386,6 +393,7 @@ async function flush($: Engine): Promise<void> {
   try {
     // Scheduling (heartbeat, backoff) runs on the engine's clock; hooks stamp events with Date.now().
     const now = await engineNow($);
+    r.clockOffset = now - nowMs();
     let id: string | null = null;
     try {
       id = await $.session.id();
@@ -447,6 +455,7 @@ async function warmPing($: Engine, sessionId: string, start: number, model: stri
   const r = rt;
   if (!r || r.state.id !== sessionId) return;
   const out = pingDone(r.state.cache, start, res, model);
+  if (out.late) return; // given up on (timeout) or the session ran since: changes nothing
   const s = withCache(r.state, out.cache);
   r.state = out.stop
     ? addEvent(s, 'note', null, stopText(out.stop, warmMaxMs()), start, { kind: 'cache-stop', reason: out.stop, ...(res.isAnswered ? {} : { status: res.status ?? null, error: res.error ?? null }) })
@@ -554,8 +563,12 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     skillCalls: 0,
     machine: rt?.machine ?? (await readMachine($)),
     warmOverride: await loadWarm($, id),
+    clockOffset: (await engineNow($)) - nowMs(),
   };
   const r = rt;
+  // A resume's SessionStart may have come before this runtime existed, even while start awaited.
+  if (earlyTtl) r.state = withCache(r.state, setTtl(r.state.cache, earlyTtl));
+  earlyTtl = null;
   await readAgents($, r, now);
   try {
     await $.command.register({ name: 'podium', description: 'Podium fleet console: link, connection state, naming this session, and keeping its prompt cache warm', argumentHint: '[name <text> | warm on|off]' });
@@ -634,11 +647,18 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,
     hooks.length ? `Reporter time per hook: ${hooks.join('; ')}` : '',
+    ttlLine(r),
     warmLine(r),
     'Name this session: /podium name <text>',
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function ttlLine(r: Runtime): string {
+  const c = r.state.cache;
+  const ttl = c.ttlMs >= TTL_LONG_MS ? '1 hour' : '5 minutes';
+  return c.ttlKnown ? `Prompt cache lifetime: ${ttl}` : `Prompt cache lifetime: ${ttl}, assumed (Claude Code names it only on a model switch or a resume)`;
 }
 
 function warmLine(r: Runtime): string {
@@ -673,6 +693,7 @@ export const register: Register = (on, rawOptions) => {
   errors = [];
   stats = {};
   explained = new Set();
+  earlyTtl = null;
 
   on('session.start', async ($, e, next) => {
     const res = await next(e);
@@ -697,14 +718,23 @@ export const register: Register = (on, rawOptions) => {
   on('turn.start', async ($, e, next) => {
     safe('turn.start', (r) => {
       r.state = turnStart(r.state);
+      // Running again ends the idle period now, with any stop and any ping in flight, even for a turn shorter than a flush.
+      r.state = withCache(r.state, idle(r.state.cache, false, nowMs()));
     });
     return next(e);
   }).catch(($, e, next) => next(e));
 
   on('turn.step', async function* ($, e, next) {
-    // A cache entry lives from the start of the request that read or wrote it: note when a main-thread one starts.
-    const startedAt = !e.agentId && rt ? await engineNow($) : null;
+    const r0 = rt;
+    // A cache entry lives from the start of the request that read or wrote it: note when a main-thread one starts,
+    // on the engine's clock (Date.now() plus the offset the flush last read: no host call before the request).
+    const startedAt = !e.agentId && r0 ? nowMs() + r0.clockOffset : null;
+    // Defensive until the live check (#27) shows whether a $.model.fork raises turn.step: a main-loop step while a
+    // warming ping is in flight and the main loop is idle is the ping's own request. Its result (warmPing) is the
+    // one place a ping is counted, so this step moves no step count, tokens, cost or lastRequestAt.
+    const isPing = startedAt !== null && r0!.state.cache.inFlightSince !== null && r0!.state.mainIdle;
     const res = yield* next(e);
+    if (isPing) return res;
     safe('turn.step', (r) => {
       r.state = step(r.state, { agentId: e.agentId, model: e.model, effort: e.effort, usage: res?.usage ?? null, stopReason: res?.stopReason ?? null }, nowMs());
       if (startedAt !== null && res?.usage) r.state = withCache(r.state, requestStarted(r.state.cache, startedAt));
@@ -826,11 +856,24 @@ export const register: Register = (on, rawOptions) => {
     return next(e);
   }).catch(($, e, next) => next(e));
 
-  // The only place the session says which cache lifetime it uses (`5m` or `1h`).
+  // Where the session says which cache lifetime it uses (`5m` or `1h`); the new model's cache starts cold.
   on('classic.PostModelSwitch', async ($, e, next) => {
     safe('classic.PostModelSwitch', (r) => {
-      r.state = withCache(r.state, setTtl(r.state.cache, e.cache_ttl));
+      r.state = withCache(r.state, modelSwitched(r.state.cache, { from: e.from_model, to: e.to_model, warm: e.prompt_cache_warm, ttl: e.cache_ttl }));
     });
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
+  // A resume says how long ago the last response was and whether the cache likely expired: between 5 minutes
+  // and an hour that names the lifetime. It may come before session.start has built the runtime.
+  on('classic.SessionStart', async ($, e, next) => {
+    try {
+      const ttl = ttlFromResume(e.seconds_since_last_response, e.prompt_cache_likely_expired);
+      if (ttl && rt) rt.state = withCache(rt.state, setTtl(rt.state.cache, ttl));
+      else if (ttl) earlyTtl = ttl;
+    } catch (err) {
+      remember('classic.SessionStart', err);
+    }
     return next(e);
   }).catch(($, e, next) => next(e));
 

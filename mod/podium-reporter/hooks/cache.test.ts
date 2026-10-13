@@ -4,6 +4,7 @@ import {
   coldCost,
   decide,
   idle,
+  modelSwitched,
   newCache,
   pingDone,
   pingStarted,
@@ -12,8 +13,10 @@ import {
   setWarming,
   stop,
   PING_LEAD_MS,
+  PING_TIMEOUT_MS,
   TTL_DEFAULT_MS,
   TTL_LONG_MS,
+  ttlFromResume,
 } from './cache.ts'
 
 const T = 1_800_000_000_000
@@ -29,6 +32,35 @@ describe('cache: when the last request started, and which lifetime', () => {
     expect(setTtl(newCache(), '1h').ttlMs).toBe(TTL_LONG_MS)
     expect(setTtl(setTtl(newCache(), '1h'), '5m').ttlMs).toBe(TTL_DEFAULT_MS)
     expect(setTtl(newCache(), 'weekly').ttlMs).toBe(TTL_DEFAULT_MS)
+  })
+
+  test('5 minutes is an assumption until Claude Code names the lifetime', () => {
+    expect(newCache().ttlKnown).toBe(false)
+    expect(setTtl(newCache(), '5m')).toMatchObject({ ttlMs: TTL_DEFAULT_MS, ttlKnown: true })
+    expect(setTtl(newCache(), '1h')).toMatchObject({ ttlMs: TTL_LONG_MS, ttlKnown: true })
+    expect(setTtl(newCache(), undefined).ttlKnown).toBe(false)
+  })
+
+  test('a resume tells the lifetime only when its gap falls between 5 minutes and an hour', () => {
+    // 10 minutes since the last response: cache still warm means 1 hour; expired means 5 minutes
+    expect(ttlFromResume(600, false)).toBe('1h')
+    expect(ttlFromResume(600, true)).toBe('5m')
+    // under 5 minutes both lifetimes are warm; past an hour both are expired: nothing to learn
+    expect(ttlFromResume(120, false)).toBeNull()
+    expect(ttlFromResume(4000, true)).toBeNull()
+    // not a resume
+    expect(ttlFromResume(undefined, undefined)).toBeNull()
+  })
+
+  test('a model switch leaves the new model a cold cache; the same model, still warm, keeps it', () => {
+    const c = requestStarted(newCache(), T)
+    const sw = (from: string, to: string, warm: boolean, ttl: '5m' | '1h' = '5m') => modelSwitched(c, { from, to, warm, ttl })
+    expect(sw('claude-opus-5-5', 'claude-sonnet-5-5', true).lastRequestAt).toBeNull()
+    expect(sw('claude-opus-5-5', 'claude-sonnet-5-5', false).lastRequestAt).toBeNull()
+    expect(sw('claude-opus-5-5', 'claude-opus-5-5', false).lastRequestAt).toBeNull()
+    expect(sw('claude-opus-5-5', 'claude-opus-5-5', true, '1h')).toMatchObject({ lastRequestAt: T, ttlMs: TTL_LONG_MS, ttlKnown: true })
+    // a cold cache has nothing to keep warm: no ping until the next request
+    expect(decide(idle(setWarming(sw('a', 'b', true), true), true, T), T + 4 * 60_000, MAX)).toBe('wait')
   })
 
   test('the latest request start wins; an older one never moves it back', () => {
@@ -60,6 +92,22 @@ describe('cache: deciding when to ping', () => {
 
   test('one at a time: never while a ping is in flight', () => {
     expect(decide(pingStarted(ready(), T + 240_000), T + 241_000, MAX)).toBe('wait')
+  })
+
+  test('a ping with no answer within the timeout stops warming, and is not retried', () => {
+    const c = pingStarted(ready(), T + 240_000)
+    expect(decide(c, T + 240_000 + PING_TIMEOUT_MS - 1, MAX)).toBe('wait')
+    expect(decide(c, T + 240_000 + PING_TIMEOUT_MS, MAX)).toBe('timeout')
+    const stopped = stop(c, 'timeout')
+    expect(stopped.inFlightSince).toBeNull()
+    expect(decide(stopped, T + 240_000 + PING_TIMEOUT_MS + 1000, MAX)).toBe('wait')
+  })
+
+  test('the session running again ends a ping in flight, so the next idle period can ping', () => {
+    let c = idle(pingStarted(ready(), T + 240_000), false, T + 250_000)
+    expect(c.inFlightSince).toBeNull()
+    c = idle(requestStarted(c, T + 250_000), true, T + 260_000)
+    expect(decide(c, T + 250_000 + TTL_DEFAULT_MS - PING_LEAD_MS, MAX)).toBe('ping')
   })
 
   test('a cache that has already expired is not rewritten', () => {
@@ -95,7 +143,7 @@ describe('cache: what a ping did', () => {
     const start = T + 240_000
     const out = pingDone(pingStarted(ready(), start), start, { isAnswered: true, text: 'OK', usage: usage(40_000) }, 'claude-opus-5-5')
     expect(out.stop).toBeNull()
-    expect(out.cache).toMatchObject({ pings: 1, inFlight: false, lastRequestAt: start, lastPingAt: start })
+    expect(out.cache).toMatchObject({ pings: 1, inFlightSince: null, lastRequestAt: start, lastPingAt: start })
     // 10 in at $4, 2 out at $20, 40,000 read at $0.20 per million
     expect(Math.abs(out.costUsd! - ((10 * 4 + 2 * 20 + 40_000 * 0.2) / 1e6))).toBeLessThan(1e-10)
     expect(Math.abs(out.cache.costUsd - (out.costUsd!))).toBeLessThan(1e-10)
@@ -110,7 +158,7 @@ describe('cache: what a ping did', () => {
   test('an API error stops warming for this idle period and is not retried', () => {
     const out = pingDone(pingStarted(ready(), T + 240_000), T + 240_000, { isAnswered: false, reason: 'api-error', status: 429, error: 'rate_limit', usage: usage(0) }, 'claude-opus-5-5')
     expect(out.stop).toBe('api-error')
-    expect(out.cache).toMatchObject({ pings: 0, stopped: 'api-error', inFlight: false, lastRequestAt: T })
+    expect(out.cache).toMatchObject({ pings: 0, stopped: 'api-error', inFlightSince: null, lastRequestAt: T })
     expect(decide(out.cache, T + 250_000, MAX)).toBe('wait')
   })
 
@@ -118,6 +166,18 @@ describe('cache: what a ping did', () => {
     const out = pingDone(pingStarted(ready(), T + 240_000), T + 240_000, { isAnswered: false, reason: 'nothing-to-fork' }, 'claude-opus-5-5')
     expect(out.stop).toBe('nothing-to-fork')
     expect(out.cache.pings).toBe(0)
+  })
+
+  test('a late answer to a ping already given up on is ignored', () => {
+    const start = T + 240_000
+    const gaveUp = stop(pingStarted(ready(), start), 'timeout')
+    const out = pingDone(gaveUp, start, { isAnswered: true, text: 'OK', usage: usage(40_000) }, 'claude-opus-5-5')
+    expect(out.late).toBe(true)
+    expect(out.cache).toBe(gaveUp)
+    expect(out.stop).toBeNull()
+    // and one for an earlier ping, while a newer one is in flight
+    const newer = pingStarted(requestStarted(gaveUp, start + 100_000), start + 340_000)
+    expect(pingDone(newer, start, { isAnswered: true, text: 'OK', usage: usage(40_000) }, 'claude-opus-5-5')).toMatchObject({ late: true, cache: newer })
   })
 
   test('an aborted ping stops it too', () => {
