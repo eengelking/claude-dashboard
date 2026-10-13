@@ -13,11 +13,13 @@ shared server, ask the owner for your own token) and enter it with
 it was made for, and a revoked or rotated-away token is refused too. The mod logs the refusal once and
 tries again about once a minute, so queued reports go out within a minute of the settings being right.
 
-### The status line says "update mod" or "upgrade server"
+### The status line says "update mod", "update available" or "upgrade server"
 
 The server and the mod are released separately, and the server keeps a range of mod versions it reads
 correctly (SPEC 6.8). `update mod` means the mod in this session is older than that range. `upgrade server`
-means it is newer. Reports still arrive either way. Only `major.minor` is compared, so a patch release never
+means it is newer. `update available` is the mild one: the mod is inside the range, but the server
+supports a newer `major.minor` than this mod, so a newer mod exists that the server reads. The status line
+always starts with the mod's version (`podium v0.11.1 ● 3 live`). Reports still arrive either way. Only `major.minor` is compared, so a patch release never
 triggers it, and a version the server cannot read (the simulator's `0.1.0-sim`) shows nothing. `/podium`
 prints both versions. A mod older than 0.3.0 cannot show this itself, but the dashboard still marks its card.
 To fix `update mod`, run `claude plugin update podium-reporter@eengelking-marketplace`, then `/reload-plugins` in the
@@ -30,13 +32,13 @@ It is marked `sensitive`, and Claude Code only draws menu rows for options that 
 `/plugin configure`. For a copy loaded with `--plugin-dir`, putting the token in `~/.claude/settings.json`
 under `pluginConfigs`, `podium-reporter`, `options`, `token` also worked when we tried it.
 
-### The status line has a warning sign in front of `podium ● 1 live`
+### The status line has a warning sign in front of `podium v0.11.1 ● 1 live`
 
-The line reads `⚠ podium-reporter: podium ● 1 live`. Claude Code adds the `⚠` and the mod's name to every
+The line reads `⚠ podium-reporter: podium v0.11.1 ● 1 live`. Claude Code adds the `⚠` and the mod's name to every
 line a mod pins with `$.ui.status`; its [mods API docs](https://code.claude.com/docs/en/plugins/mods/api.md)
 give the format as `⚠ my-mod: checks: 3 passing`. It is not a Podium warning and not a trust marker: the docs
-describe no approval, signing or marketplace step that clears it, and the mod passes only `podium ● 1 live`.
-Nothing you can do removes it. `podium ○ offline` is the real warning. We have not checked it against a
+describe no approval, signing or marketplace step that clears it, and the mod passes only `podium v0.11.1 ● 1 live`.
+Nothing you can do removes it. `podium v0.11.1 ○ offline` is the real warning. We have not checked it against a
 mod loaded with `--plugin-dir`, but the docs do not say the icon depends on where the mod came from.
 
 ### The effort shown is the old one after I run `/effort`

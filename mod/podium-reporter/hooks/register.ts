@@ -48,7 +48,7 @@ import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.11.0';
+export const VERSION = '0.11.1';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -465,7 +465,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
   const fetch: FetchLike = (url, init) => $.http.fetch(url, init);
   const transport =
     rt?.transport ??
-    new Transport(fetch, { serverUrl: opts.serverUrl, token: opts.token, heartbeatMs: opts.heartbeatMs }, (line) => remember('transport', line));
+    new Transport(fetch, { serverUrl: opts.serverUrl, token: opts.token, heartbeatMs: opts.heartbeatMs, version: VERSION }, (line) => remember('transport', line));
   rt = {
     state,
     transport,

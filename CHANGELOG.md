@@ -14,6 +14,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - The facts bar on the orchestrator page now shows the reporter's version in a **Reporter** cell just before Copy resume command, for example `0.11.0`. A session with no mod says "Settings hooks", and a reporter outside the range the server supports shows `0.3.0 · update` or `0.99.0 · upgrade server` in amber, with the same tooltip as the card's chip. No protocol or mod change. (#124)
 
 ### Documentation
@@ -29,6 +30,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - Wall notices now sit at the bottom of the wall, one per row, each with an X. Closing one turns it off for everyone and shows a confirmation that names it and links to the new **Settings** tab in Admin, which has an On/Off switch for every notice and a **Show background sessions on the wall** switch. That second switch replaces the per-tab state behind Show them, so the choice now holds across reloads and browsers. The settings are stored on the server and pushed to open tabs. (#114)
 - The agent panel has a **Report** group with two buttons, Task prompt and Final answer, that open the text in a modal with markdown rendered as formatting. A button is dimmed and inert when there is nothing to show (and the answer says "not finished" while the agent runs). The modal blurs the page behind it, closes with the X, Esc or a click outside, keeps focus inside and gives it back, and has a Copy button. Raw HTML in the text is shown as text. The whole prompt and answer need the new opt-in `fullPrompts` reporter option (mod 0.10.0, off by default): they are redacted, cut at 20,000 characters, sent once, stored in a new `agent_texts` table and fetched when the modal opens from `GET /api/fleet/sessions/:id/agents/:agentId/text`. Without it, or with an older mod, the modal shows the 400-character excerpt and says why. The supported reporter range is now 0.2.0–0.10.0. (#97)
 
@@ -46,6 +48,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - `npm run podium:sim -- --nested` keeps one session running agents that launch agents: a subagent under a subagent four levels deep, a fork under a subagent and a subagent under a fork. In every scenario an agent now waits for the agents it launched before it finishes, and a nested fork inherits its parent agent's model and effort. (#101)
 
 - A people view for a Podium that several people report to. Once any live session belongs to a named person (from a person's token, see #36), the wall groups orchestrators into a band per person: the person's monogram and name, their group, the machines they report from, how many sessions are live, waiting or stale, and their share of today's estimated spend. Each card names its machine. Sessions sent with the admin secret are under Admin and sessions with no owner under Unassigned, after the people. Group by switches between People, Group (a band per group from Admin, each card naming its owner, people without a group under No group) and None (the flat wall with an owner on each card). Bands can be ordered by who needs attention, by spend or by name, and collapse to their header. The left list groups the same way, and clicking a person or group there narrows the wall to them. "You are" tells this browser who is looking (remembered in `localStorage`), which pins your own band first and makes "Only me" work. The right panel starts with "Spend today, by person" (or by group), as a bar chart or a table. With no named person the console looks exactly as before. The simulator takes `--person NAME[=TOKEN]` and `--unnamed` to demo it. (#34)
@@ -148,6 +151,7 @@ and a plugin you can install from a marketplace.
 
 ### Added
 
+- Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - **Podium fleet console** (`#/`, the default view). Every Claude Code session
   running with the reporter mod shows up in one browser tab within about two
   seconds: model and effort, plan, the agents it launched (subagents and forks),

@@ -20,6 +20,20 @@ export interface TransportConfig {
   serverUrl: string;
   token: string;
   heartbeatMs: number;
+  /** This reporter's own version; passed in so the transport never imports it. */
+  version: string;
+}
+
+/** The oldest and newest reporter the server reads correctly (SPEC 6.8). */
+export interface ReporterSupport {
+  min: string;
+  max: string;
+}
+
+/** Major and minor of a version as numbers; null when it is not one. */
+function minorOf(v: string): [number, number] | null {
+  const m = /^(\d+)\.(\d+)(?:\.|$)/.exec(v);
+  return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
 export type SendOutcome = 'ok' | 'rejected' | 'refused' | 'failed' | 'busy';
@@ -40,6 +54,8 @@ export class Transport {
   /** Where the server places this reporter's version; null until a reply says (an older server never does). */
   compat: 'ok' | 'outdated' | 'newer' | null = null;
   serverVersion: string | null = null;
+  /** What the server reads correctly; null until a reply says (an older server never does). */
+  support: ReporterSupport | null = null;
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
@@ -107,11 +123,13 @@ export class Transport {
       if (res.ok) {
         let acked = events.length;
         try {
-          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown };
+          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown; reporterSupport?: unknown };
           if (typeof body.ackedEvents === 'number') acked = Math.max(0, Math.min(events.length, body.ackedEvents));
           if (typeof body.liveSessions === 'number') this.liveSessions = body.liveSessions;
           this.compat = body.reporterCompat === 'outdated' || body.reporterCompat === 'newer' || body.reporterCompat === 'ok' ? body.reporterCompat : null;
           this.serverVersion = typeof body.serverVersion === 'string' ? body.serverVersion : null;
+          const sup = body.reporterSupport as Partial<ReporterSupport> | null | undefined;
+          this.support = sup && typeof sup.min === 'string' && typeof sup.max === 'string' ? { min: sup.min, max: sup.max } : null;
         } catch {
           // a 200 without a JSON body still acks what was sent
         }
@@ -177,13 +195,27 @@ export class Transport {
     this.queue = this.queue.filter((e) => !ids.has(e.id));
   }
 
+  /**
+   * True when the server supports a newer major.minor than this reporter but still reads it (so it is not
+   * `outdated`). Patch releases are not flagged: `max` moves with the report format, not with every release.
+   */
+  get behind(): boolean {
+    if (!this.support || this.compat === 'outdated' || this.compat === 'newer') return false;
+    const mine = minorOf(this.cfg.version);
+    const max = minorOf(this.support.max);
+    if (!mine || !max) return false;
+    return mine[0] < max[0] || (mine[0] === max[0] && mine[1] < max[1]);
+  }
+
   statusText(): string {
-    if (this.refused) return 'podium ○ token refused';
-    if (this.online === false) return 'podium ○ offline';
-    if (this.online === null) return 'podium ○ connecting';
-    const live = `podium ● ${this.liveSessions ?? 1} live`;
+    const name = `podium v${this.cfg.version}`;
+    if (this.refused) return `${name} ○ token refused`;
+    if (this.online === false) return `${name} ○ offline`;
+    if (this.online === null) return `${name} ○ connecting`;
+    const live = `${name} ● ${this.liveSessions ?? 1} live`;
     if (this.compat === 'outdated') return `${live} · update mod`;
     if (this.compat === 'newer') return `${live} · upgrade server`;
+    if (this.behind) return `${live} · update available`;
     return live;
   }
 
@@ -197,6 +229,7 @@ export class Transport {
     const server = this.serverVersion ? ` (server ${this.serverVersion})` : '';
     if (this.compat === 'outdated') return `This reporter is older than the Podium server supports${server}: update the podium-reporter mod (claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins).`;
     if (this.compat === 'newer') return `This reporter is newer than the Podium server supports${server}: upgrade the Podium server.`;
+    if (this.behind) return `A newer podium-reporter is supported by the server${server}: it reads reporters up to ${this.support!.max}, this one is ${this.cfg.version}. Update with claude plugin update podium-reporter@eengelking-marketplace, then /reload-plugins.`;
     return null;
   }
 }

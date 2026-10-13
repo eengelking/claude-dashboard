@@ -53,7 +53,7 @@ viewer sees both at once.
    ```
 
    The session appears on the wall once you send it a prompt, not before. Until then the status line under
-   the prompt reads `podium ● 0 live`. After the first prompt it reads `podium ● 1 live`.
+   the prompt reads `podium v0.11.1 ● 0 live`. After the first prompt it reads `podium v0.11.1 ● 1 live`.
 
 5. Type `/podium` to show the link, connection state and report counts. Then give the session a
    readable name, because the wall shows it on the card:

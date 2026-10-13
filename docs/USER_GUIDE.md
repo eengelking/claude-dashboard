@@ -49,8 +49,8 @@ the firewall and what everyone who can reach the server can see.
 
 In a session, run `/podium`. You should see `Connection: online`. Then send the session a prompt. A session
 appears in the browser within a couple of seconds of doing its first bit of work, not before, so a brand new
-session is not on the wall yet and its status line reads `podium ● 0 live`. Once it has run, the status line
-reads `podium ● 1 live`. If it says `podium ○ offline`, see "Something is wrong" below, and for the other
+session is not on the wall yet and its status line reads `podium v0.11.1 ● 0 live`. Once it has run, the status line
+reads `podium v0.11.1 ● 1 live`. If it says `podium v0.11.1 ○ offline`, see "Something is wrong" below, and for the other
 case see "Sessions that have not done anything yet".
 
 Give a session a name that shows on its card with `/podium name <text>`.
@@ -337,7 +337,7 @@ means the mod in that session is older than the server supports. To update it:
    session you can use `/plugin`, open the Installed tab, pick `podium-reporter` and choose Update now.
 2. Apply it. A running session keeps the version it loaded, so run `/reload-plugins` in it, or start a new
    session. Sessions you do not reload keep reporting the old version and stay marked.
-3. Run `/podium`. The `Versions:` line shows the mod's version, and the `· update mod` ending on the status
+3. Run `/podium`. The `Versions:` line shows the mod's version, and the `· update mod` or `· update available` ending on the status
    line goes away after the next report.
 
 If the command says it is already at the latest version but the card is still marked, the marketplace has
@@ -363,6 +363,7 @@ with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull,
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
 | A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. See "Updating the mod" below. It keeps reporting meanwhile |
+| The status line ends in `· update available` | Your mod works, but the server supports a newer one. See "Updating the mod" below |
 | A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (see "Updating the mod" below) |
 
 More in [GOTCHAS.md](GOTCHAS.md).

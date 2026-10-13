@@ -314,7 +314,7 @@ All calls are async unless noted. Read each one's doc comment in the types file 
 | `$.settings.read()`, `$.env.get(NAME)` | merged settings; env var (name must be a **string literal**) | Optional: read `CLAUDE_EFFORT`, `LANG`. |
 | `$.command.register({ name, description, argumentHint? })` | Registers a slash command | `/podium`. Serve with `on('command.run', { command: 'podium' }, …)` returning `{ text }`. Call in `session.start`. |
 | `$.tool.register({ name, description, inputSchema, isDeferred? })` | Registers `mcp__podium-reporter__<name>` | Optional `plan` tool so an orchestrator can name its plan (section 6.3). Serve with `on('tool.call', { tool: 'mcp__podium-reporter__plan' }, …)` returning `{ result }`. |
-| `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium ● 4 live` or `podium ○ offline`; the host draws it as `⚠ podium-reporter: <text>`, which the mod does not control. `log` to `debug` only. No toasts except on first successful connect and first failure. |
+| `$.ui.status(text)`, `$.ui.toast(text)`, `$.ui.log(text, { to: 'debug' })` | Status-line entry, toast, transcript or debug-log line | Status line shows `podium v0.11.1 ● 4 live` or `podium v0.11.1 ○ offline` (the mod's own `VERSION` in every state); the host draws it as `⚠ podium-reporter: <text>`, which the mod does not control. `log` to `debug` only. No toasts except on first successful connect and first failure. |
 | `$.model.complete({ model, prompt, effort? })` | `{ isAnswered, text?, usage, reason? }`, never rejects over provider errors | Optional failure explanation (Phase 5), default **off**. |
 | `$.agent.register(spec)`, `$.agent.spawn(args)` | Define or start agent types | **Not used.** Listed so the implementer does not reach for them. |
 
@@ -611,7 +611,7 @@ Only `major.minor` is compared, so a mod-only patch fix never warns. `checkRepor
 
 A mismatch is a warning, never an error. The server still accepts and shows every report it can read.
 
-- The reply to a report carries `serverVersion`, `reporterSupport` and `reporterCompat` for that report's version. A mod that reads them shows `· update mod` or `· upgrade server` on its status line, a line in `/podium`, and a toast once. A mod that predates this ignores them, and a mod talking to a server that predates this sees no `reporterCompat` and shows nothing.
+- The reply to a report carries `serverVersion`, `reporterSupport` and `reporterCompat` for that report's version. A mod that reads them shows `· update mod` or `· upgrade server` on its status line, a line in `/podium`, and a toast once. A reporter inside the range but a major.minor below `reporterSupport.max` shows `· update available` instead (a patch difference is not flagged); this needs no new server field. A mod that predates this ignores them, and a mod talking to a server that predates this sees no `reporterCompat` and shows nothing.
 - `SessionView` carries `reporterVersion` (null for a hooks-only session, which has no mod) and `compat` (always `unknown` for hooks). `StateBody.server` carries `{ version, reporterSupport }`, and the UI shows the server version in the left rail footer.
 - The dashboard marks each affected card, counts them in the top bar, and says what to do on the session's page.
 
