@@ -239,8 +239,11 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .alert svg { margin-top: 1px; }
 .podium .alert.stale { background: color-mix(in srgb, var(--serious) 14%, transparent); border-color: color-mix(in srgb, var(--serious) 45%, transparent); }
 .podium .alert.risk { background: color-mix(in srgb, var(--crit) 16%, transparent); border-color: var(--crit); }
-.podium .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--ink2); font-size: 12px; margin: 14px 0 0; align-items: center; }
-.podium .legend > span { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* The legend (#92) is a footer under the middle column: the content in .main scrolls, the legend does not. Its background is halfway between the card surface and the page, so it does not blend into the cards. */
+.podium .mid { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.podium .mid > .main { flex: 1; }
+.podium .legend { flex: none; display: flex; gap: 6px 22px; flex-wrap: wrap; justify-content: center; align-items: center; text-align: center; padding: 12px 24px; background: color-mix(in srgb, var(--surface) 50%, var(--bg)); border-top: 1px solid var(--border); color: var(--ink2); font-size: 12px; }
+.podium .legend > span { display: inline-flex; gap: 6px 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .podium .legend .a { width: 10px; height: 10px; border-radius: 2px; background: var(--ink2); display: inline-block; }
 .podium .legend .a.f { border-radius: 50%; }
 .podium .legend .a.q { background: transparent; border: 1.5px dashed var(--ink2); }
@@ -437,7 +440,11 @@ body.podium-resizing .podium .cols { transition: none; }
 @media (max-width: 1040px) {
   .podium, .podium .app { height: auto; }
   .podium .app { display: block; }
-  .podium .cols { display: block; }
+  /* stacked: the page scrolls as a whole and the legend ends it, with room around it */
+  .podium .cols { display: flex; flex-direction: column; }
+  .podium .mid { display: contents; }
+  .podium .rail { order: 1; } .podium .mid > .main { order: 2; flex: none; } .podium .side { order: 3; }
+  .podium .legend { order: 4; padding: 20px 24px 28px; gap: 10px 20px; }
   .podium .rz { display: none; }
   .podium .wall-enter { display: none; }
   .podium .pane-tab { position: static; width: 100%; height: 28px; display: flex; align-items: center; justify-content: flex-start; padding-left: 14px; }

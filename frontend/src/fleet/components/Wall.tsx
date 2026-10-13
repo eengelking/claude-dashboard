@@ -1,7 +1,7 @@
 import { fmtTok, fmtUsd } from "../format";
 import { SORTS, STATUS_FILTERS, type SortKey, type StatusFilter } from "../logic";
-import type { Kpis, LifecycleConfig, ModelFamily, SessionView } from "../types";
-import { ModelChip, NO_PRICE_TITLE } from "./Chips";
+import type { Kpis, LifecycleConfig, SessionView } from "../types";
+import { NO_PRICE_TITLE } from "./Chips";
 import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
 import { Sparkline } from "./Sparkline";
@@ -100,36 +100,6 @@ export function Toolbar(props: {
   );
 }
 
-export function Legend() {
-  const fams: ModelFamily[] = ["opus", "sonnet", "haiku", "fable"];
-  return (
-    <div className="legend" aria-label="Legend">
-      <span>
-        <i className="a" />
-        subagent (blank slate)
-      </span>
-      <span>
-        <i className="a f" />
-        fork (keeps context)
-      </span>
-      <span>
-        <i className="a q" />
-        queued
-      </span>
-      <span>
-        <i className="a d" />
-        done
-      </span>
-      <span>
-        Square color is the model:{" "}
-        {fams.map((f) => (
-          <ModelChip key={f} family={f} />
-        ))}
-      </span>
-    </div>
-  );
-}
-
 export function Wall(props: {
   sessions: SessionView[];
   totalLive: number;
@@ -189,7 +159,6 @@ export function Wall(props: {
           </button>
         </div>
       )}
-      <Legend />
     </>
   );
 }

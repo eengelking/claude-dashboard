@@ -11,6 +11,7 @@ import { Rail, type Split } from "./components/Rail";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
+import { Legend } from "./components/Legend";
 import { Wall } from "./components/Wall";
 import { removeSession, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
@@ -280,52 +281,55 @@ export function FleetView({ state }: { state: FleetState }) {
             collapsed={panes.collapsed.left}
             onToggle={() => toggle("left")}
           />
-          <main className="main" id="podium-main">
-            {notice && (
-              <div className="callout notice" role="status">
-                <div>{notice}</div>
-              </div>
-            )}
-            {state.phase === "loading" && !state.error ? (
-              <div className="none">Connecting to the Podium server…</div>
-            ) : selected ? (
-              <FocusView
-                s={selected}
-                now={now}
-                config={state.config}
-                sort={aSort}
-                onSort={onAgentSort}
-                selectedAgent={selAgent}
-                flashAgent={flash}
-                onAgent={selectAgent}
-                onRemove={onRemove}
-              />
-            ) : (
-              <Wall
-                sessions={shown}
-                totalLive={all.length}
-                kpis={state.kpis}
-                split={split}
-                filter={filter}
-                onFilter={setFilter}
-                sort={sort}
-                onSort={setSort}
-                cleared={state.clearedToday}
-                now={now}
-                config={state.config}
-                entering={enteringSession}
-                leaving={state.leaving}
-                onOpen={selectSession}
-                onRemove={onRemove}
-                detached={{
-                  count: sets.hidden.length,
-                  costUsd: sets.hidden.reduce((n, s) => n + (s.costUsd ?? 0), 0),
-                  show: showDetached,
-                  onToggle: () => setShowDetached((v) => !v),
-                }}
-              />
-            )}
-          </main>
+          <div className="mid">
+            <main className="main" id="podium-main">
+              {notice && (
+                <div className="callout notice" role="status">
+                  <div>{notice}</div>
+                </div>
+              )}
+              {state.phase === "loading" && !state.error ? (
+                <div className="none">Connecting to the Podium server…</div>
+              ) : selected ? (
+                <FocusView
+                  s={selected}
+                  now={now}
+                  config={state.config}
+                  sort={aSort}
+                  onSort={onAgentSort}
+                  selectedAgent={selAgent}
+                  flashAgent={flash}
+                  onAgent={selectAgent}
+                  onRemove={onRemove}
+                />
+              ) : (
+                <Wall
+                  sessions={shown}
+                  totalLive={all.length}
+                  kpis={state.kpis}
+                  split={split}
+                  filter={filter}
+                  onFilter={setFilter}
+                  sort={sort}
+                  onSort={setSort}
+                  cleared={state.clearedToday}
+                  now={now}
+                  config={state.config}
+                  entering={enteringSession}
+                  leaving={state.leaving}
+                  onOpen={selectSession}
+                  onRemove={onRemove}
+                  detached={{
+                    count: sets.hidden.length,
+                    costUsd: sets.hidden.reduce((n, s) => n + (s.costUsd ?? 0), 0),
+                    show: showDetached,
+                    onToggle: () => setShowDetached((v) => !v),
+                  }}
+                />
+              )}
+            </main>
+            <Legend />
+          </div>
           <SidePanel
             events={state.events}
             sessions={state.sessions}

@@ -1,0 +1,251 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Podium Legend Footer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout (issue #92): the legend leaves the scrolling content and becomes a footer under the middle column only.
+   The rail and the right panel keep their full height beside it. It appears on the wall and on the orchestrator page,
+   stays visible in wall mode, and in the stacked layout (below 1040 px) it sits at the end of the page. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --fable: #d95926;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --foot: color-mix(in srgb, var(--surface) 50%, var(--bg));
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834; color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
+[hidden] { display: none !important; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.page { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+.demo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; background: var(--raised); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
+.demo b { color: var(--ink); }
+.demo .grp { display: inline-flex; gap: 4px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 500; }
+.btn:hover { background: var(--sel); }
+.btn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); color: var(--ink); }
+kbd { font: 11px var(--font-mono); padding: 0 5px; border: 1px solid var(--axis); border-radius: 3px; color: var(--ink2); }
+
+/* the console under test */
+.stage { min-height: 0; display: flex; justify-content: center; background: var(--bg); }
+.podium { position: relative; min-height: 0; width: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.narrow .podium { max-width: 760px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+.top { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+.top[hidden], .strip[hidden], .banner[hidden] { display: none; }
+.logo { font-weight: 700; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.spacer { flex: 1; }
+.banner { padding: 5px 16px; font-size: 12px; color: var(--ink2); background: var(--raised); border-bottom: 1px solid var(--border); }
+.strip { display: flex; justify-content: center; height: 4px; background: var(--axis); position: relative; }
+.strip button { position: absolute; top: 0; padding: 0 10px; height: 14px; line-height: 12px; font-size: 10px; background: var(--axis); color: var(--ink2); border-radius: 0 0 6px 6px; }
+
+.cols { --rail-w: 252px; --side-w: 340px; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); transition: grid-template-columns .18s ease; }
+.cols.l-off { --rail-w: 24px; } .cols.r-off { --side-w: 24px; }
+.rail, .side { background: var(--surface); position: relative; overflow: hidden; min-height: 0; }
+.rail { border-right: 1px solid var(--border); } .side { border-left: 1px solid var(--border); }
+.pane-body { padding: 12px 14px; min-width: 200px; }
+.pane-body h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.row { padding: 8px 0; border-bottom: 1px solid var(--grid); color: var(--ink2); }
+.row b { color: var(--ink); }
+.tab { position: absolute; top: 8px; width: 24px; height: 28px; display: grid; place-items: center; color: var(--ink2); border-radius: 4px; }
+.tab:hover { background: var(--hover); }
+.rail .tab { right: 0; } .side .tab { left: 0; }
+.l-off .rail .pane-body, .r-off .side .pane-body { visibility: hidden; }
+
+/* the middle column: content scrolls, the footer does not */
+.mid { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.main { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 20px; }
+.legend-bar {
+  flex: none; background: var(--foot); border-top: 1px solid var(--border);
+  padding: 12px 24px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 22px;
+  color: var(--ink2); font-size: 12px; text-align: center;
+}
+.legend-bar span { display: inline-flex; align-items: center; gap: 6px; }
+.legend-bar .models { gap: 6px 14px; flex-wrap: wrap; justify-content: center; }
+.a { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--ink2); flex: none; }
+.a.f { border-radius: 50%; } .a.q { background: transparent; border: 1.5px dashed var(--ink2); } .a.d { opacity: .3; }
+.a.opus { background: var(--opus); } .a.sonnet { background: var(--sonnet); } .a.haiku { background: var(--haiku); } .a.fable { background: var(--fable); }
+
+/* wall */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--surface); min-width: 0; }
+.card .nm { font-weight: 600; font-size: 14px; } .card .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.crew { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 10px; }
+.crew .a { width: 11px; height: 11px; }
+.card .foot { margin-top: 10px; color: var(--ink2); font-size: 12px; }
+.bar { height: 5px; border-radius: 3px; background: var(--grid); margin-top: 10px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--sonnet); }
+.none { color: var(--muted); }
+
+/* orchestrator page */
+.focus h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+.focus .sub { color: var(--muted); margin: 2px 0 12px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.fact { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface); }
+.fact .k { color: var(--muted); font-size: 11.5px; } .fact .v { font-weight: 600; margin-top: 1px; }
+.tree { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.tree .ar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--grid); }
+.tree .ar:last-child { border-bottom: 0; }
+.tree .ar .cnt { color: var(--muted); margin-left: auto; font-size: 12px; }
+
+/* wall mode: panes and top bar collapsed, the footer stays */
+.wallbtn { position: absolute; top: 6px; right: 10px; z-index: 10; }
+
+/* stacked layout, below 1040 px: the page scrolls as a whole and the legend ends it, with room around it */
+.narrow .cols { display: flex; flex-direction: column; overflow: auto; }
+.narrow .mid { display: contents; }
+.narrow .rail, .narrow .side { border: 0; border-bottom: 1px solid var(--border); flex: none; }
+.narrow .rail { order: 1; } .narrow .main { order: 2; flex: none; overflow: visible; } .narrow .side { order: 3; }
+.narrow .legend-bar { order: 4; padding: 20px 24px 28px; gap: 10px 20px; }
+.narrow .cols.l-off .rail .pane-body, .narrow .cols.r-off .side .pane-body { display: none; }
+.narrow .cols.l-off .rail, .narrow .cols.r-off .side { height: 28px; }
+.narrow .tab { position: static; width: 100%; justify-content: start; padding-left: 14px; }
+@media (prefers-reduced-motion: reduce) { .cols { transition: none; } }
+</style>
+
+<div class="page" id="page">
+  <div class="demo">
+    <b>Mockup for #92.</b>
+    <span class="grp">View
+      <button class="btn" data-view="wall" aria-pressed="true">Fleet wall</button>
+      <button class="btn" data-view="focus" aria-pressed="false">Orchestrator</button>
+    </span>
+    <button class="btn" data-act="l" aria-pressed="false">Left pane <kbd>[</kbd></button>
+    <button class="btn" data-act="r" aria-pressed="false">Right pane <kbd>]</kbd></button>
+    <button class="btn" data-act="w" aria-pressed="false">Wall mode <kbd>w</kbd></button>
+    <button class="btn" data-act="n" aria-pressed="false">Narrow layout (&lt; 1040 px)</button>
+    <span class="grp">Footer color
+      <button class="btn" data-foot="mix" aria-pressed="true">Halfway to the page</button>
+      <button class="btn" data-foot="surface" aria-pressed="false">Surface</button>
+    </span>
+    <span>Scroll the content: the legend stays put.</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="podium" id="p" aria-label="Console">
+      <button class="btn wallbtn" data-act="w" id="wallbtn" hidden>Exit wall mode (Esc)</button>
+      <header class="top" id="top">
+        <span class="logo">Podium</span>
+        <span class="pill">Fleet</span>
+        <span class="pill"><i class="dot"></i>6 reporters live, synced 0.4s ago</span>
+        <span class="spacer"></span>
+        <button class="btn" data-act="t">Hide top bar</button>
+      </header>
+      <div class="strip" id="strip" hidden><button data-act="t">Show top bar</button></div>
+      <div class="banner" id="banner">Live fleet. Cost is an estimate from reported token counts.</div>
+
+      <div class="cols" id="cols">
+        <nav class="rail" aria-label="Orchestrators">
+          <button class="tab" data-act="l" aria-label="Collapse left pane" id="ltab">&#8249;</button>
+          <div class="pane-body" id="rail-body">
+            <h2>Orchestrators</h2>
+            <div class="row"><b>podium</b><br>Opus 5.5, high</div>
+            <div class="row"><b>docs-sweep</b><br>Sonnet 5.5, medium</div>
+            <div class="row"><b>release-prep</b><br>Haiku 5.5, low</div>
+          </div>
+        </nav>
+
+        <div class="mid">
+          <main class="main" id="main"></main>
+          <footer class="legend-bar" aria-label="Legend">
+            <span><i class="a"></i>subagent (blank slate)</span>
+            <span><i class="a f"></i>fork (keeps context)</span>
+            <span><i class="a q"></i>queued</span>
+            <span><i class="a d"></i>done</span>
+            <span class="models">Square color is the model:
+              <span><i class="a opus"></i>Opus</span>
+              <span><i class="a sonnet"></i>Sonnet</span>
+              <span><i class="a haiku"></i>Haiku</span>
+              <span><i class="a fable"></i>Fable</span>
+            </span>
+          </footer>
+        </div>
+
+        <aside class="side" aria-label="Activity and agent detail">
+          <button class="tab" data-act="r" aria-label="Collapse right pane" id="rtab">&#8250;</button>
+          <div class="pane-body" id="side-body">
+            <h2>Activity</h2>
+            <div class="row mono">14:02 podium started Agent</div>
+            <div class="row mono">14:01 docs-sweep finished Bash</div>
+            <div class="row mono">14:00 release-prep opened a plan</div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const names = ["podium", "docs-sweep", "release-prep", "api-refactor", "billing-sync", "flaky-e2e", "perf-profile", "oidc-login", "invoice-v2", "offline-sync", "release-notes", "schema-migrate", "search-index", "ledger-export"];
+const fams = ["opus", "sonnet", "haiku", "fable"];
+const kinds = ["", "", "f", "q", "d", ""];
+function crew(n, seed) { let h = ""; for (let i = 0; i < n; i++) h += '<i class="a ' + fams[(seed + i) % 4] + " " + kinds[(seed * 3 + i) % 6] + '"></i>'; return h; }
+function wallHtml() {
+  return '<div class="cards">' + names.map((n, i) =>
+    '<div class="card"><div class="nm">' + n + '</div><div class="sub mono">~/dev/' + n + ' · main</div>' +
+    '<div class="crew">' + crew(5 + (i * 3) % 11, i) + '</div>' +
+    '<div class="bar"><i style="width:' + (15 + (i * 17) % 80) + '%"></i></div>' +
+    '<div class="foot mono">$' + (0.4 + i * 0.83).toFixed(2) + ' · ' + (1.2 + i * 0.7).toFixed(1) + 'M tok</div></div>').join("") + "</div>";
+}
+function focusHtml() {
+  const agents = ["Map call sites", "Draft migration", "Run the e2e suite", "Review the diff", "Write release notes", "Check the lockfile", "Profile startup", "Fix flaky retry", "Update the docs", "Seed the sample data", "Compare token counts", "Audit the schema"];
+  return '<div class="focus"><h1>podium</h1><div class="sub mono">~/dev/claude-dashboard · main</div>' +
+    '<div class="facts"><div class="fact"><div class="k">Orchestrator model</div><div class="v">Opus 5.5, high</div></div>' +
+    '<div class="fact"><div class="k">Agents</div><div class="v">12</div></div><div class="fact"><div class="k">Est. cost</div><div class="v mono">$4.12</div></div>' +
+    '<div class="fact"><div class="k">Tokens</div><div class="v mono">3.8M</div></div></div>' +
+    '<div class="tree">' + agents.map((a, i) => '<div class="ar"><i class="a ' + fams[i % 4] + " " + kinds[(i * 5) % 6] + '"></i>' + a + '<span class="cnt mono">' + (i + 2) + ' tool calls</span></div>').join("") + "</div></div>";
+}
+const s = { view: "wall", l: false, r: false, t: false, w: false, n: false, foot: "mix" }; let before = null;
+const $ = (id) => document.getElementById(id);
+function paint() {
+  if ($("main").dataset.view !== s.view) { $("main").innerHTML = s.view === "wall" ? wallHtml() : focusHtml(); $("main").dataset.view = s.view; $("main").scrollTop = 0; }
+  $("cols").classList.toggle("l-off", s.l); $("cols").classList.toggle("r-off", s.r);
+  $("top").hidden = s.t; $("strip").hidden = !s.t; $("banner").hidden = s.t; $("wallbtn").hidden = !s.w;
+  $("stage").classList.toggle("narrow", s.n);
+  document.documentElement.style.setProperty("--foot", s.foot === "surface" ? "var(--surface)" : "color-mix(in srgb, var(--surface) 50%, var(--bg))");
+  $("ltab").textContent = s.l ? "›" : "‹"; $("rtab").textContent = s.r ? "‹" : "›";
+  $("rail-body").toggleAttribute("inert", s.l); $("side-body").toggleAttribute("inert", s.r);
+  for (const b of document.querySelectorAll(".demo [data-view]")) b.setAttribute("aria-pressed", String(b.dataset.view === s.view));
+  for (const b of document.querySelectorAll(".demo [data-foot]")) b.setAttribute("aria-pressed", String(b.dataset.foot === s.foot));
+  for (const k of ["l", "r", "w", "n"]) document.querySelector('.demo [data-act="' + k + '"]').setAttribute("aria-pressed", String(s[k]));
+}
+function wall() {
+  if (!s.w) { before = { l: s.l, r: s.r, t: s.t }; s.l = s.r = s.t = true; s.w = true; } else { Object.assign(s, before); s.w = false; }
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-act],[data-view],[data-foot]"); if (!a) return;
+  if (a.dataset.view) s.view = a.dataset.view; else if (a.dataset.foot) s.foot = a.dataset.foot;
+  else if (a.dataset.act === "w") wall(); else s[a.dataset.act] = !s[a.dataset.act];
+  paint();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const m = { "[": "l", "]": "r", "\\": "t" }[e.key];
+  if (m) s[m] = !s[m]; else if (e.key === "w" || (e.key === "Escape" && s.w)) wall(); else return;
+  paint();
+});
+paint();
+</script>

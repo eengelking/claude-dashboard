@@ -56,6 +56,23 @@ describe("orchestrator page", () => {
     expect(alert.firstChild!.nodeType).toBe(Node.ELEMENT_NODE);
   });
 
+  it("the legend is a footer under the middle column on the wall and on this page, outside the scrolling main (#92)", () => {
+    const st = stateFrom({ sessions: [makeSession({ agents })] });
+    const { container } = render(<FleetView state={st} />);
+    const onWall = container.querySelectorAll(".legend");
+    expect(onWall).toHaveLength(1);
+    const main = container.querySelector("main.main")!;
+    expect(onWall[0]!.tagName).toBe("FOOTER");
+    expect(main.contains(onWall[0]!)).toBe(false);
+    expect(onWall[0]!.parentElement).toBe(main.parentElement);
+    fireEvent.click(container.querySelector(".wall .card")!);
+    const onPage = container.querySelectorAll(".legend");
+    expect(onPage).toHaveLength(1);
+    expect(container.querySelector("main.main")!.contains(onPage[0]!)).toBe(false);
+    expect(onPage[0]!.parentElement).toBe(container.querySelector("main.main")!.parentElement);
+    expect(onPage[0]).toHaveTextContent("Square color is the model:");
+  });
+
   it("has the facts bar with Copy resume command as the last cell", () => {
     const { container } = openFocus();
     const cells = [...container.querySelectorAll(".facts > .fact")];
