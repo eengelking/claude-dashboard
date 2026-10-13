@@ -52,6 +52,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     status: "running",
     waitReason: null,
     waitNote: null,
+    background: null,
     endReason: null,
     startedAt: 1_000_000,
     lastSeenAt: 2_000_000,

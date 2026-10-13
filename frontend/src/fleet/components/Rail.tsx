@@ -1,6 +1,7 @@
 import { planProgress, sessionCounts } from "../logic";
 import type { SessionView } from "../types";
-import { BlowBadge, ModelChip, PlanBar } from "./Chips";
+import { backgroundOf, BlowBadge, ModelChip, PlanBar, sessionDot } from "./Chips";
+import { backgroundStatus } from "../waiting";
 import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
 import { Monogram, YouTag } from "./People";
@@ -53,9 +54,9 @@ export function Rail(props: {
       <div key={s.id} className={`ritem-slot${removable ? " has-remove" : ""}`}>
         <button type="button" className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
           <div className="l1">
-            <i className={`dot ${s.status}`} aria-hidden="true" />
+            <i className={sessionDot(s)} aria-hidden="true" />
             <span className="nm">{s.name}</span>
-            <span className="vh">{s.status}</span>
+            <span className="vh">{backgroundOf(s) ? backgroundStatus(s.background!) : s.status}</span>
             {showOwner && (
               <span title={owner}>
                 <Monogram name={owner} kind={s.owner === null ? "unassigned" : s.owner === ADMIN ? "admin" : "person"} size="sm" />

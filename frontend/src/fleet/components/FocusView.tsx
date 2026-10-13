@@ -8,6 +8,7 @@ import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel, type PlanTab } from "./PlanPanel";
 import { HOOKS_NOTE, versionNote, waitSummary } from "./SessionCard";
+import { backgroundDetail, backgroundLead, backgroundTitle, idleOnBackground } from "../waiting";
 
 export function FocusView(props: {
   s: SessionView;
@@ -78,6 +79,18 @@ export function FocusView(props: {
 }
 
 function WaitCallout({ s }: { s: SessionView }) {
+  if (idleOnBackground(s)) {
+    // Not a wait on the person: the sentence, then what it waits on, cut at a character limit (#119).
+    const detail = backgroundDetail(s.background);
+    return (
+      <div className="alert bg" style={{ margin: 0 }} title={backgroundTitle(s.background)}>
+        <div className="wait-rows">
+          <div className="wait-lead">{backgroundLead(s.background)}</div>
+          {detail && <div className="wait-detail">{detail}</div>}
+        </div>
+      </div>
+    );
+  }
   const { lead, detail } = waitSummary(s);
   return (
     <div className="alert" style={{ margin: 0 }}>

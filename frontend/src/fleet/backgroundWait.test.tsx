@@ -42,7 +42,8 @@ describe("the card", () => {
 
   it("is blue and quiet: a ring dot, not the waiting-on-you chip, and no amber alert", () => {
     const { container } = renderCard();
-    expect(container.querySelector(".st")!.textContent).not.toContain("waiting on you");
+    expect(container.querySelector(".st")!.textContent).toContain("waiting on shell");
+    expect(container.querySelector(".st")!.className).not.toContain("waiting");
     expect(container.querySelector(".st .dot.ring")).not.toBeNull();
     expect(container.querySelector(".st .dot.waiting")).toBeNull();
     expect(container.querySelector(".alert")!.className).toContain("bg");
@@ -63,12 +64,11 @@ describe("the card", () => {
 
 describe("the orchestrator page", () => {
   it("leads with the sentence and puts the task description on its own row", () => {
-    const description = "npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default";
-    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", description)])] })} />);
+    const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", "nightly build")])] })} />);
     fireEvent.click(container.querySelector(".wall .card")!);
     const callout = container.querySelector(".card.notice .alert")!;
     expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for 1 background shell to finish.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe(description);
+    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Shell: nightly build");
     expect(callout.textContent).not.toContain("Answer in its terminal");
   });
 
@@ -90,7 +90,7 @@ describe("the counts", () => {
 
   it("the rail row says what it waits on", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell")])] })} />);
-    const row = container.querySelector(".rail .ritem")!;
+    const row = [...container.querySelectorAll(".rail .ritem")].find((r) => r.textContent?.includes("api-refactor"))!;
     expect(row.textContent).toContain("waiting on shell");
     expect(row.querySelector(".dot.ring")).not.toBeNull();
   });

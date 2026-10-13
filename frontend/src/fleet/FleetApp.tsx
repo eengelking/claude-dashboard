@@ -2,6 +2,7 @@
 // the activity / agent panel. Data comes from useFleet; everything here is presentation state.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./fleet.css";
+import { idleOnBackground } from "./waiting";
 import { filterSessions, defaultAgentDir, sortSessions, splitDetached, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
 import { PAGE } from "./components/ActivityList";
 import type { AgentSort } from "./components/AgentTree";
@@ -104,7 +105,8 @@ export function FleetView({ state }: { state: FleetState }) {
   const shown = filterSessions(peopleShown, filter);
   const split: Split = {
     running: live.filter((s) => s.status === "running").length,
-    waiting: live.filter((s) => s.status === "waiting").length,
+    // A session idle on background work is not waiting on the person (#119).
+    waiting: live.filter((s) => s.status === "waiting" && !idleOnBackground(s)).length,
     stale: live.filter((s) => s.status === "stale").length,
   };
   const reporters = live.filter((s) => s.status !== "stale").length;

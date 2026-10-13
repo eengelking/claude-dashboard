@@ -1,8 +1,8 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
 import { COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
-import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
-import { toolOfNote, waitLead } from "../waiting";
+import { backgroundOf, BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, sessionDot, StatusChip } from "./Chips";
+import { backgroundLead, backgroundTitle, idleOnBackground, toolOfNote, waitLead } from "../waiting";
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
@@ -59,9 +59,9 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
     <div className={`card-slot${s.status === "stale" && props.onRemove ? " has-remove" : ""}`}>
     <button type="button" className={cls} onClick={props.onOpen} disabled={props.leaving} data-session={s.id}>
       <div className="h">
-        <i className={`dot ${s.status}`} aria-hidden="true" />
+        <i className={sessionDot(s)} aria-hidden="true" />
         <span className="nm">{s.name}</span>
-        <StatusChip status={s.status} />
+        <StatusChip status={s.status} background={backgroundOf(s)} />
       </div>
       <div className="path mono" title={s.project}>
         <bdi>{s.project}</bdi>
@@ -134,7 +134,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         </span>
       </div>
       {/* The card stays short: the sentence only. The orchestrator page adds the tool name or question (waitSummary). */}
-      {s.status === "waiting" && <div className="alert">{waitSummary(s).lead}</div>}
+      {s.status === "waiting" && (idleOnBackground(s) ? <div className="alert bg" title={backgroundTitle(s.background)}>{backgroundLead(s.background)}</div> : <div className="alert">{waitSummary(s).lead}</div>)}
       {s.status === "stale" && (
         <div className="alert stale">
           {/* One child: .alert is a flex row, and its gap would otherwise open between every text run and span. */}

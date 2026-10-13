@@ -2,7 +2,7 @@ import { fmtDur, fmtPct, fmtTok } from "../format";
 import { COST_HINT_ORCHESTRATOR, orchestratorCostUsd, sessionElapsedSec, TOKENS_HINT } from "../logic";
 import type { SessionView } from "../types";
 import { reporterBelow, SkillChips, ToolChips } from "./AgentDetail";
-import { BlowBadge, Cost, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
+import { backgroundOf, BlowBadge, Cost, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
 import { IconBack } from "./Icons";
 import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
@@ -18,7 +18,7 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
       <div className="det">
         <h3>{s.name}</h3>
         <div>
-          <StatusChip status={s.status} />
+          <StatusChip status={s.status} background={backgroundOf(s)} />
         </div>
         {s.reporter === "hooks" && <div className="note">{HOOKS_NOTE}</div>}
         {versionNote(s) && <div className="note">{versionNote(s)!.text}</div>}

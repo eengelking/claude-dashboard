@@ -5,7 +5,7 @@ import { cssVar, FAMILY_COLOR } from "./Chips";
 import { IconJump } from "./Icons";
 import { readableEvent } from "../eventText";
 import { parentOf } from "../logic";
-import { parseWaitEvent, waitLead } from "../waiting";
+import { backgroundEventLead, idleOnBackground, parseBackgroundEvent, parseWaitEvent, waitLead } from "../waiting";
 
 export const PAGE = 12;
 
@@ -51,10 +51,13 @@ export function ActivityList(props: {
           shown.map((e) => {
             const live = props.gone[e.sessionId] ? undefined : props.sessions[e.sessionId];
             const wait = e.kind === "wait" ? parseWaitEvent(e.text) : null;
+            const bg = e.kind === "wait" ? parseBackgroundEvent(e.text) : null;
+            // Like a wait on you, a background wait is tinted only while it is the session's latest news and the session still waits on it.
+            const bgOpen = !!bg && !!live && idleOnBackground(live) && !(latest[e.sessionId] > e.t);
             // A wait stays yellow only while it is the session's latest news and the session is still waiting.
-            const plain = wait ? null : readableEvent(e);
+            const plain = wait || bg ? null : readableEvent(e);
             const open = !!wait && live?.status === "waiting" && !(latest[e.sessionId] > e.t);
-            const cls = [props.isNew(e.id) && "new", wait && (open ? "w" : "ans"), e.kind === "fail" && "bad", e.kind === "blow" && "blowev", !live && "gone", props.selectedAgent && e.agentId === props.selectedAgent && "cur"]
+            const cls = [props.isNew(e.id) && "new", wait && (open ? "w" : "ans"), bg && (bgOpen ? "bgw" : "ans"), e.kind === "fail" && "bad", e.kind === "blow" && "blowev", !live && "gone", props.selectedAgent && e.agentId === props.selectedAgent && "cur"]
               .filter(Boolean)
               .join(" ");
             const hint = hintFor(e, live);
@@ -69,6 +72,11 @@ export function ActivityList(props: {
                     <>
                       <span className="lead">{waitLead(wait.reason, wait.tool, !open)}</span>
                       {wait.tool && <span className="tool">{wait.tool}</span>}
+                    </>
+                  ) : bg ? (
+                    <>
+                      <span className="lead">{backgroundEventLead(bg.counts, !bgOpen)}</span>
+                      <span className="tool">{bg.pill}</span>
                     </>
                   ) : plain ? (
                     <>

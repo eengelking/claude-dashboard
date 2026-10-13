@@ -2,6 +2,8 @@
 export type {
   ActivityView,
   AgentView,
+  BackgroundTask,
+  BackgroundWait,
   BlowoutLogEntry,
   ChangedFile,
   Effort,

@@ -2,7 +2,8 @@
 import type { CSSProperties } from "react";
 import { fmtUsd } from "../format";
 import { EFFORTS, familyName } from "../logic";
-import type { GitInfo, ModelFamily } from "../types";
+import type { BackgroundWait, GitInfo, ModelFamily, SessionView } from "../types";
+import { backgroundStatus, backgroundTitle, idleOnBackground } from "../waiting";
 import { IconBranch, IconCheck, IconClock, IconDown, IconMod, IconTree, IconUp, IconWarn, IconX } from "./Icons";
 
 export const FAMILY_COLOR: Record<ModelFamily, string> = {
@@ -73,7 +74,27 @@ export function StatusIcon({ status }: { status: StatusKind }) {
  * `delegating` (the tooltip text, from `delegateText`) swaps a running row for the display-only
  * "delegating" state: the row is idle while agents it launched run. It is not a session status.
  */
-export function StatusChip({ status, delegating }: { status: StatusKind; delegating?: string }) {
+/** The dot class for a session: the pulsing blue ring while it is idle on background work, else its status (#119). */
+export function sessionDot(s: Pick<SessionView, "status" | "waitReason" | "background">): string {
+  return idleOnBackground(s) ? "dot ring bgwait" : `dot ${s.status}`;
+}
+
+/** The background wait to hand to StatusChip, or undefined when the session waits on the person or is not waiting. */
+export function backgroundOf(s: Pick<SessionView, "status" | "waitReason" | "background">): BackgroundWait | undefined {
+  return idleOnBackground(s) ? s.background : undefined;
+}
+
+export function StatusChip({ status, delegating, background }: { status: StatusKind; delegating?: string; background?: BackgroundWait }) {
+  if (background && status === "waiting") {
+    const title = backgroundTitle(background);
+    return (
+      <span className="st bg" title={title}>
+        <i className="dot ring bgwait" aria-hidden="true" />
+        {backgroundStatus(background)}
+        <span className="vh">. Not waiting on you.</span>
+      </span>
+    );
+  }
   if (delegating && status === "running") {
     return (
       <span className="st deleg" title={delegating}>
