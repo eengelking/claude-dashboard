@@ -107,6 +107,8 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
               <button type="button" className="linkbtn" onClick={() => props.onAgent(parent.id)}>
                 {parent.description}
               </button>
+            ) : a.parentId && a.parentId !== a.id ? (
+              "an agent no longer listed"
             ) : (
               "the orchestrator"
             )}

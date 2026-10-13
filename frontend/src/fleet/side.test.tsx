@@ -168,6 +168,16 @@ describe("nested agents in the panel, the activity feed, the card strip and the 
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Survey adapters");
   });
 
+  it("does not call an agent launched by the orchestrator when its parent is missing from the list", () => {
+    const s = makeSession({ agents: [makeAgent({ id: "o", parentId: "gone", description: "Orphan" })] });
+    const utils = render(<FleetView state={stateFrom({ sessions: [s] })} />);
+    fireEvent.click(utils.container.querySelector(".wall .card")!);
+    fireEvent.click(utils.container.querySelector('button.trow[data-agent="o"]')!);
+    const dl = utils.container.querySelector(".side dl")!;
+    const by = [...dl.querySelectorAll("dt")].find((d) => d.textContent === "Launched by")!.nextElementSibling!;
+    expect(by.textContent).toBe("an agent no longer listed");
+  });
+
   it("shows the agent's own cost, and the branch with every agent under it once", () => {
     const { dd } = openAgent("p");
     expect(dd("Est. cost")!.textContent).toContain("own");

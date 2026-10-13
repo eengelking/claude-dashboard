@@ -1,5 +1,5 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
-import { agentCounts, COST_HINT_SESSION, currentStep, dropAtOf, parentOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
+import { agentCounts, COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StatusChip } from "./Chips";
 import { toolOfNote, waitLead } from "../waiting";
@@ -47,6 +47,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const { s, now, config } = props;
   const p = planProgress(s.plan);
   const c = agentCounts(s.agents);
+  const byId = new Map(s.agents.map((a) => [a.id, a]));
   const step = currentStep(s.plan);
   const risk = s.blowouts.level === 2;
   const vNote = versionNote(s);
@@ -118,7 +119,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       )}
       <div className="crew" aria-label={`${c.running} running, ${c.done} done of ${c.all} agents`}>
         {treeOrder(s.agents).map((a) => {
-          const parent = parentOf(s.agents, a);
+          const parent = a.parentId && a.parentId !== a.id ? byId.get(a.parentId) : undefined;
           return (
             <span
               key={a.id}
