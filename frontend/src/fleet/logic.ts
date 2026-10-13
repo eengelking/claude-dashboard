@@ -72,7 +72,8 @@ export function filterSessions(list: readonly SessionView[], filter: { status: S
  */
 export function splitDetached(list: readonly SessionView[], now: number, showHidden: boolean): { shown: SessionView[]; hidden: SessionView[] } {
   const hidden = list.filter((s) => s.attached === false && s.hideAt !== null && now >= s.hideAt);
-  return { shown: showHidden ? list.slice() : list.filter((s) => !hidden.includes(s)), hidden };
+  const set = new Set(hidden);
+  return { shown: showHidden ? list.slice() : list.filter((s) => !set.has(s)), hidden };
 }
 
 export interface PlanProgress {
