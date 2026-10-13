@@ -60,11 +60,10 @@ curl -s "$url/api/fleet/state" | MIN="$min" node -e '
         if (!all.length) continue;
         const last = all[all.length - 1];
         const req = (last.input_tokens || 0) + (last.cache_read_input_tokens || 0) + (last.cache_creation_input_tokens || 0);
-        const withOut = req;
         const podium = (a.context && a.context.tokens) || 0;
-        const gap = withOut ? ((withOut - podium) / withOut) * 100 : 0;
+        const gap = req ? ((req - podium) / req) * 100 : 0;
         if (Math.abs(gap) < Number(process.env.MIN)) continue;
-        console.log(`${a.id.slice(0, 16).padEnd(17)} ${String(a.status).padEnd(8)} ${String(podium).padStart(7)} ${String(withOut).padStart(11)} ${gap.toFixed(1).padStart(5)}  ${(a.description || "").slice(0, 40)}`);
+        console.log(`${a.id.slice(0, 16).padEnd(17)} ${String(a.status).padEnd(8)} ${String(podium).padStart(7)} ${String(req).padStart(11)} ${gap.toFixed(1).padStart(5)}  ${(a.description || "").slice(0, 40)}`);
       }
     }
   });'
