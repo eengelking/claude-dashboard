@@ -64,19 +64,17 @@ export function FactsBar({ s, now, onAgent }: { s: SessionView; now: number; onA
           <BlowBadge n={s.blowouts.orchestrator} />
         </div>
       </div>
-      <div className="fact">
+      <div className="fact agents">
         <div className="k">Agents</div>
-        <div className="v mono counts">
-          <div className="n-row">
-            <span className="n-running">{c.running} running</span>
-            {firstFail && (
-              <button type="button" className="blow l2" onClick={() => onAgent(firstFail.id)} title="Show the first failure">
-                <IconX />
-                {c.failed} failed
-              </button>
-            )}
-          </div>
-          <span className="n-done">{c.done} done</span>
+        <div className="v mono">
+          <span className="n-running">{c.running} running</span>
+          <span className="n-done">{` / ${c.done} done`}</span>
+          {firstFail && (
+            <button type="button" className="blow l2" onClick={() => onAgent(firstFail.id)} title="Show the first failure">
+              <IconX />
+              {c.failed} failed
+            </button>
+          )}
         </div>
       </div>
       <div className="fact">
