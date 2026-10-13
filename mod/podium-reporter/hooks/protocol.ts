@@ -182,6 +182,41 @@ export interface SessionReport {
   files: FilesReport | null;
   /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
   attached: boolean | null;
+  /** The main thread's prompt cache: when it was last refreshed and whether it is kept warm. null when the reporter is too old to send it. */
+  cache: CacheReport | null;
+}
+
+/** Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an aborted ping, or a cache that had already expired. */
+export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired';
+
+/**
+ * Cache warming (the `cacheWarming` option or `/podium warm on`): while the session waits on the person, one
+ * tool-less request over its own transcript shortly before the cache would expire. Off by default.
+ */
+export interface CacheWarming {
+  on: boolean;
+  /** `off`; `ready`: on, the session is running; `warming`: on, idle, pinging; `stopped`: stopped for this idle period (stopReason). */
+  state: 'off' | 'ready' | 'warming' | 'stopped';
+  stopReason: WarmStop | null;
+  /** Pings sent this session, and their estimated cost from the usage each returned. */
+  pings: number;
+  costUsdEst: number;
+  lastPingAt: number | null;
+  /** When warming stops on its own in this idle period (its start plus the maximum duration); null unless warming. */
+  untilAt: number | null;
+}
+
+/** The main thread's prompt cache, from the reporter's clock (the server converts the times to its own). */
+export interface CacheReport {
+  /** When the main thread's latest model request started, a warming ping included; null before the first response. */
+  lastRequestAt: number | null;
+  /** How long a cache entry lives from the start of the request that read or wrote it: 300,000, or 3,600,000 when the session uses the 1-hour lifetime. */
+  ttlMs: number;
+  /** The tokens the next request re-sends (the main thread's context); a cold cache writes them again. null when unknown. */
+  tokens: number | null;
+  /** The estimated extra cost of that cold start over reading a warm cache (USD); null for a model with no price. */
+  coldCostUsd: number | null;
+  warming: CacheWarming;
 }
 
 export interface Report {

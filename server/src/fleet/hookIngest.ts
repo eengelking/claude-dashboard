@@ -56,6 +56,7 @@ function storedSession(row: SessionRow | undefined, id: string, cwd: string, now
     loop: null,
     files: parse(row?.files_json ?? null, null),
     attached: row?.attached == null ? null : row.attached === 1,
+    cache: null, // settings hooks say nothing about the prompt cache
   };
 }
 

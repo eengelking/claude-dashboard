@@ -2,6 +2,7 @@
 import type { AgentReport, Report, TokenCounts } from './protocol.js';
 import type { AgentRow, EventRow, FleetDb, SessionRow } from './db.js';
 import { family } from './derive.js';
+import { parseStoredCache, storeCache } from './cache.js';
 
 /** An older reporter prices a non-Claude model as Sonnet; Podium has no price for it, so drop the figure. */
 const priced = (model: string | null, usd: number | null): number | null => (model && family(model) === 'other' ? null : usd);
@@ -86,6 +87,7 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number,
     owner: owner ?? prev?.owner ?? null,
     // A settings hook carries no machine, so a session keeps the one its reporter last sent.
     machine_json: r.machine ? JSON.stringify(r.machine) : prev?.machine_json ?? null,
+    cache_json: json(storeCache(s.cache, r.sentAt, serverTime, parseStoredCache(prev?.cache_json ?? null))),
   };
 }
 

@@ -96,6 +96,12 @@ describe("podiumctl command construction", () => {
     expect(env).toMatchObject({ HOST: "0.0.0.0", PORT: "4317", PODIUM_DB: "/data/podium.sqlite", STALE_AFTER_MS: "9000" });
   });
 
+  it("passes the prompt cache alert settings through to the server (#27)", () => {
+    const c = resolveConfig({ PODIUM_CACHE_ALERTS: "off", CACHE_WARN_MS: "90000" }, {});
+    expect(serverEnv(c, true)).toMatchObject({ PODIUM_CACHE_ALERTS: "off", CACHE_WARN_MS: "90000" });
+    expect(serverEnv(c, false)).toMatchObject({ PODIUM_CACHE_ALERTS: "off", CACHE_WARN_MS: "90000" });
+  });
+
   it("tells a containerised server the host's home, by name only, and leaves standalone alone", () => {
     const env = serverEnv(cfg, true);
     expect(env.PODIUM_HOST_HOME).toBe(os.homedir());

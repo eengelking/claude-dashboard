@@ -62,6 +62,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     owner: null,
     ownerGroup: null,
     machine: null,
+    cache: null,
     context: { tokens: 410_000, window: 1_000_000, percent: 41 },
     costUsd: 12.84,
     tokensTotal: 2_500_000,
@@ -115,6 +116,7 @@ export function makeState(over: Partial<StateBody> = {}): StateBody {
     clearedToday: 0,
     events: [makeEvent()],
     server: { version: "0.3.0", reporterSupport: { min: "0.2.0", max: "0.4.0" } },
+    cacheAlerts: { mode: "auto", shown: 0, suppressed: false },
     ...over,
   };
 }

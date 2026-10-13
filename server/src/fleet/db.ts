@@ -116,6 +116,12 @@ ALTER TABLE sessions ADD COLUMN owner TEXT;
   PRIMARY KEY (session_id, agent_id)
 );`,
   },
+  {
+    version: 9,
+    // The main thread's prompt cache as JSON, times in the server's clock (issue #27); NULL from a reporter older
+    // than 0.11.0. How many cooling alerts a dashboard has shown lives in settings ('cache_alerts_shown').
+    sql: 'ALTER TABLE sessions ADD COLUMN cache_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -155,6 +161,7 @@ export interface SessionRow {
   detached_at: number | null;
   owner: string | null;
   machine_json: string | null;
+  cache_json: string | null;
 }
 
 export interface AgentRow {
@@ -365,6 +372,18 @@ export class FleetDb {
         v: string;
       }[]
     ).map((r) => r.v);
+  }
+
+  // ---- settings -------------------------------------------------------------------------------
+
+  /** A server setting from the settings table (migration 6); null when it was never set. */
+  getSetting(key: string): string | null {
+    const r = this.stmt('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+    return r?.value ?? null;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.stmt('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
   }
 
   // ---- agents ---------------------------------------------------------------------------------

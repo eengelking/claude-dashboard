@@ -32,6 +32,7 @@ import {
   markTextSent,
   type SentTexts,
   setIdentity,
+  withCache,
   skillLoaded,
   step,
   toolResult,
@@ -42,11 +43,12 @@ import {
   type SessionState,
 } from './state.ts';
 import { Transport, type FetchLike } from './transport.ts';
+import { decide, idle, pingDone, pingStarted, pingText, PING_PROMPT, requestStarted, setTtl, setWarming, stop, stopText, WARM_MINUTES_DEFAULT, type ForkOutcome } from './cache.ts';
 import { explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.10.0';
+export const VERSION = '0.11.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -64,6 +66,10 @@ interface Options {
   showStatus: boolean;
   explainFailures: boolean;
   fullPrompts: boolean;
+  /** Keep the prompt cache warm while the session waits on the person (issue #27). Off by default. */
+  cacheWarming: boolean;
+  /** The longest one idle period is kept warm, in minutes (see the break-even in cache.ts). */
+  cacheWarmingMinutes: number;
 }
 
 interface HookStat {
@@ -91,6 +97,8 @@ interface Runtime {
   skillCalls: number;
   /** This machine, read only when a userName is set; null otherwise, so nothing identifying is sent. */
   machine: MachineInfo | null;
+  /** `/podium warm on|off` for this session id (kept in $.store); null follows the cacheWarming option. */
+  warmOverride: boolean | null;
 }
 
 export function readOptions(o: Record<string, unknown>): Options {
@@ -106,6 +114,8 @@ export function readOptions(o: Record<string, unknown>): Options {
     showStatus: typeof o.showStatus === 'boolean' ? o.showStatus : true,
     explainFailures: o.explainFailures === true,
     fullPrompts: o.fullPrompts === true,
+    cacheWarming: o.cacheWarming === true,
+    cacheWarmingMinutes: n(o.cacheWarmingMinutes, WARM_MINUTES_DEFAULT, 1),
   };
 }
 
@@ -170,7 +180,17 @@ function metaOf(r: Runtime, now: number) {
     userName: opts.userName || null,
     machine: r.machine,
     fullText: opts.fullPrompts,
+    warmMaxMs: warmMaxMs(),
   };
+}
+
+function warmMaxMs(): number {
+  return opts.cacheWarmingMinutes * 60_000;
+}
+
+/** Whether warming is on for this session: `/podium warm` for its id, else the option. */
+function warmingOn(r: Runtime): boolean {
+  return r.warmOverride ?? opts.cacheWarming;
 }
 
 function showStatus($: Engine, r: Runtime): void {
@@ -328,6 +348,16 @@ async function loadName($: Engine, id: string): Promise<string | null> {
   }
 }
 
+/** `/podium warm on|off` kept for a session id; null when it was never set. */
+async function loadWarm($: Engine, id: string): Promise<boolean | null> {
+  try {
+    const v = await $.store.get(`warm:${id}`);
+    return typeof v === 'boolean' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A /clear happened: the old id gets its final report, then reporting starts under the new id. */
 async function switchSession($: Engine, r: Runtime, newId: string, now: number): Promise<void> {
   if (!r.state.ended) {
@@ -345,6 +375,7 @@ async function switchSession($: Engine, r: Runtime, newId: string, now: number):
   const effort = r.state.main.effort;
   r.state = addEvent(resetForNewId(r.state, newId, startedAt), 'start', null, `session.start · ${shortName(r.state.main.model)}${effort ? ` ${effort}` : ''}`, now);
   r.storedName = await loadName($, newId);
+  r.warmOverride = await loadWarm($, newId);
 }
 
 /** The flush timer: notice a session id change, refresh usage and agents, post a report if due. */
@@ -367,6 +398,7 @@ async function flush($: Engine): Promise<void> {
     await readSurfaces($, r);
     await readAgents($, r, now);
     if (opts.explainFailures) requestExplanations($, r);
+    warmTick($, r, now);
     await flushOnce($, r, now, false);
   } catch (err) {
     record($, 'flush', err);
@@ -382,6 +414,48 @@ async function engineNow($: Engine): Promise<number> {
   } catch {
     return nowMs();
   }
+}
+
+/**
+ * Cache warming (issue #27), off by default. While the session waits on the person, one tool-less request over
+ * its own transcript a minute before the cache would expire, bounded per idle period; see cache.ts.
+ */
+function warmTick($: Engine, r: Runtime, now: number): void {
+  const s = r.state;
+  let cache = s.cache.on === warmingOn(r) ? s.cache : setWarming(s.cache, warmingOn(r));
+  // Waiting for a prompt only: a permission wait is mid-turn, and a ping then would follow an unanswered tool call.
+  cache = idle(cache, !s.ended && s.status === 'waiting' && s.waitReason === 'input', now);
+  const action = decide(cache, now, warmMaxMs());
+  if (action === 'ping') {
+    r.state = withCache(s, pingStarted(cache, now));
+    void warmPing($, s.id, now, s.main.model);
+  } else if (action !== 'wait') {
+    r.state = addEvent(withCache(s, stop(cache, action)), 'note', null, stopText(action, warmMaxMs()), now, { kind: 'cache-stop', reason: action });
+  } else {
+    r.state = withCache(s, cache);
+  }
+}
+
+async function warmPing($: Engine, sessionId: string, start: number, model: string | null): Promise<void> {
+  let res: ForkOutcome;
+  try {
+    res = (await $.model.fork({ prompt: PING_PROMPT })) as ForkOutcome;
+  } catch (err) {
+    record($, 'model.fork', err);
+    res = { isAnswered: false, reason: 'api-error' };
+  }
+  const r = rt;
+  if (!r || r.state.id !== sessionId) return;
+  const out = pingDone(r.state.cache, start, res, model);
+  const s = withCache(r.state, out.cache);
+  r.state = out.stop
+    ? addEvent(s, 'note', null, stopText(out.stop, warmMaxMs()), start, { kind: 'cache-stop', reason: out.stop, ...(res.isAnswered ? {} : { status: res.status ?? null, error: res.error ?? null }) })
+    : addEvent(s, 'note', null, pingText(res.usage, out.costUsd), start, {
+        kind: 'cache-ping',
+        cacheRead: res.usage?.cache_read_input_tokens ?? 0,
+        cacheWrite: res.usage?.cache_creation_input_tokens ?? 0,
+        costUsd: out.costUsd,
+      });
 }
 
 /** T5.2, off by default: one small-model explanation per new failure, from the redacted record only. */
@@ -479,11 +553,12 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,
     machine: rt?.machine ?? (await readMachine($)),
+    warmOverride: await loadWarm($, id),
   };
   const r = rt;
   await readAgents($, r, now);
   try {
-    await $.command.register({ name: 'podium', description: 'Podium fleet console: link, connection state, and naming this session', argumentHint: '[name <text>]' });
+    await $.command.register({ name: 'podium', description: 'Podium fleet console: link, connection state, naming this session, and keeping its prompt cache warm', argumentHint: '[name <text> | warm on|off]' });
   } catch (err) {
     record($, 'command.register', err);
   }
@@ -542,6 +617,8 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     r.state = { ...r.state, dirty: true };
     return `Podium: this session is now named "${name}".`;
   }
+  const w = /^warm(?:\s+(on|off))?$/i.exec(args.trim());
+  if (w && r) return warmCommand($, r, w[1]?.toLowerCase() ?? null);
   if (!r) return 'Podium reporter is loaded but the session has not started yet.';
   const t = r.transport;
   const hooks = Object.entries(stats)
@@ -557,10 +634,35 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,
     hooks.length ? `Reporter time per hook: ${hooks.join('; ')}` : '',
+    warmLine(r),
     'Name this session: /podium name <text>',
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+function warmLine(r: Runtime): string {
+  const c = r.state.cache;
+  const spent = c.pings ? ` (${c.pings} ping${c.pings === 1 ? '' : 's'} so far, about $${c.costUsd.toFixed(4)})` : '';
+  if (!warmingOn(r)) return `Cache warming: off${spent}. Keep the prompt cache warm while this session waits: /podium warm on`;
+  const stopped = c.on && c.stopped ? `; ${stopText(c.stopped, warmMaxMs())}` : '';
+  return `Cache warming: on, at most ${opts.cacheWarmingMinutes} minutes per idle period${spent}${stopped}. Turn it off: /podium warm off`;
+}
+
+/** /podium warm on|off: for this session id only, kept in $.store so a reload keeps it. */
+async function warmCommand($: Engine, r: Runtime, choice: string | null): Promise<string> {
+  if (choice === null) return warmLine(r);
+  const on = choice === 'on';
+  r.warmOverride = on;
+  r.state = withCache(r.state, setWarming(r.state.cache, on));
+  try {
+    await $.store.set(`warm:${r.state.id}`, on);
+  } catch (err) {
+    record($, 'store.set', err);
+  }
+  return on
+    ? `Podium: Cache warming is on for this session. While it waits on you, one small request about a minute before the prompt cache expires keeps it warm, for at most ${opts.cacheWarmingMinutes} minutes per idle period. Each costs about a tenth of the prompt's input price. Nothing is added to the conversation. Turn it off with /podium warm off.`
+    : 'Podium: Cache warming is off for this session.';
 }
 
 // ---- registration -------------------------------------------------------------------------------
@@ -600,9 +702,12 @@ export const register: Register = (on, rawOptions) => {
   }).catch(($, e, next) => next(e));
 
   on('turn.step', async function* ($, e, next) {
+    // A cache entry lives from the start of the request that read or wrote it: note when a main-thread one starts.
+    const startedAt = !e.agentId && rt ? await engineNow($) : null;
     const res = yield* next(e);
     safe('turn.step', (r) => {
       r.state = step(r.state, { agentId: e.agentId, model: e.model, effort: e.effort, usage: res?.usage ?? null, stopReason: res?.stopReason ?? null }, nowMs());
+      if (startedAt !== null && res?.usage) r.state = withCache(r.state, requestStarted(r.state.cache, startedAt));
     });
     return res;
   }).catch(async function* ($, e, next) {
@@ -717,6 +822,14 @@ export const register: Register = (on, rawOptions) => {
   on('classic.Notification', async ($, e, next) => {
     safe('classic.Notification', (r) => {
       r.state = notification(r.state, e.notification_type, e.message, nowMs());
+    });
+    return next(e);
+  }).catch(($, e, next) => next(e));
+
+  // The only place the session says which cache lifetime it uses (`5m` or `1h`).
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    safe('classic.PostModelSwitch', (r) => {
+      r.state = withCache(r.state, setTtl(r.state.cache, e.cache_ttl));
     });
     return next(e);
   }).catch(($, e, next) => next(e));

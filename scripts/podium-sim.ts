@@ -8,6 +8,7 @@
 import os from 'node:os';
 import type { ActivityEvent, AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, MachineInfo, Plan, Report } from '../server/src/fleet/protocol.ts';
 import { costOf, shortName, windowOf, type Family } from '../mod/podium-reporter/hooks/models.ts';
+import { coldCost } from '../mod/podium-reporter/hooks/cache.ts';
 
 const HELP = `podium-sim: POST simulated Claude Code session reports to a Podium server.
 
@@ -264,6 +265,8 @@ interface SimSession {
   silent: boolean;
   endedAt: number | null;
   doneSent: number;
+  /** When the main loop last made a model request: each running second (Report.session.cache). */
+  lastRequestAt: number;
 }
 
 export interface SimOptions {
@@ -412,6 +415,7 @@ export class Simulator {
       silent: false,
       endedAt: null,
       doneSent: 0,
+      lastRequestAt: now,
     };
     const own = splitTokens(rng, rng.int(60_000, 220_000));
     add(s.tokens, own);
@@ -639,6 +643,7 @@ export class Simulator {
       s.loop.lastTool = tool;
     }
     if (rng.chance(0.3)) s.loop.steps = { done: s.loop.steps.done + 1, total: null };
+    s.lastRequestAt = this.now();
     const own = splitTokens(rng, rng.int(200, 900) * 6);
     add(s.tokens, own);
     s.ownCost += costOf(own, s.model) ?? 0;
@@ -773,6 +778,14 @@ export class Simulator {
         loop: { ...s.loop, skills: [...s.loop.skills], toolCounts: { ...s.loop.toolCounts }, steps: { ...s.loop.steps } },
         files: this.filesOf(s),
         attached: this.attachedOf(s),
+        // Simulated waits are short, so the cache stays warm; warming is never on.
+        cache: {
+          lastRequestAt: s.lastRequestAt,
+          ttlMs: 300_000,
+          tokens: Math.round(ctx * window),
+          coldCostUsd: coldCost(Math.round(ctx * window), s.model, 300_000),
+          warming: { on: false, state: 'off', stopReason: null, pings: 0, costUsdEst: 0, lastPingAt: null, untilAt: null },
+        },
       },
       agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
       events: s.events.slice(0, 100),

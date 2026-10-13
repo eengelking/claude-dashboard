@@ -3,9 +3,11 @@
 import type { AgentRow, BlowoutRow, EventRow, SampleRow, SessionRow } from './db.js';
 import { checkReporter } from './compat.js';
 import { tokenSum } from './ingest.js';
+import { cacheView, DEFAULT_CACHE_WARN_MS, parseStoredCache } from './cache.js';
 import type {
   ActivityView,
   AgentView,
+  CacheAlert,
   EventKind,
   Failure,
   FilesReport,
@@ -140,6 +142,8 @@ export interface DeriveConfig {
   /** For sessions known only from settings hooks (no heartbeat); falls back to `staleAfterMs`. */
   hookStaleAfterMs?: number;
   home: string;
+  /** How long before its prompt cache expires a waiting session is `cooling`. */
+  cacheWarnMs?: number;
 }
 
 /**
@@ -179,6 +183,8 @@ export interface SessionInput {
   hideAt?: number | null;
   /** From the people table: the group the session's owner is in. */
   ownerGroup?: string | null;
+  /** From the fleet: the cooling alert the counter decided for this session (CacheView.alert). */
+  cacheAlert?: CacheAlert;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -192,6 +198,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
   const agents = input.agents.map(agentView);
   const agentBlows = agents.map((a) => a.blowouts);
   const agentTotal = agentBlows.reduce((a, b) => a + b, 0);
+  const status = sessionStatus(row, input.heard, now, staleAfterFor(row, cfg));
   return {
     id: row.id,
     name: row.name,
@@ -206,7 +213,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     model: row.model,
     modelFamily: family(row.model),
     effort: row.effort,
-    status: sessionStatus(row, input.heard, now, staleAfterFor(row, cfg)),
+    status,
     waitReason: row.wait_reason === 'permission' || row.wait_reason === 'input' ? row.wait_reason : null,
     waitNote: row.wait_note,
     endReason: row.end_reason,
@@ -240,6 +247,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     owner: row.owner,
     ownerGroup: input.ownerGroup ?? null,
     machine: parse<MachineInfo | null>(row.machine_json, null),
+    cache: cacheView(parseStoredCache(row.cache_json), status, now, cfg.cacheWarnMs ?? DEFAULT_CACHE_WARN_MS, input.cacheAlert ?? null),
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

@@ -21,6 +21,8 @@ interface World {
   surfaces: { value: ('terminal' | 'desktop' | 'vscode' | 'mobile')[]; fail: boolean }
   /** Every command the plugin ran, as its argument vector. */
   ran: string[][]
+  /** `$.model.fork`: each prompt it was given, and how the next call answers. */
+  fork: { prompts: string[]; reply: 'ok' | 'api-error' | 'nothing' }
 }
 
 const GIT: Record<string, string> = {
@@ -42,6 +44,13 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   const clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on, store)
   const ran: string[][] = []
+  const fork: World['fork'] = { prompts: [], reply: 'ok' }
+  on('model.fork', (_$, e) => {
+    fork.prompts.push(e.prompt)
+    if (fork.reply === 'nothing') return { value: { isAnswered: false, reason: 'nothing-to-fork' } }
+    if (fork.reply === 'api-error') return { value: { isAnswered: false, reason: 'api-error', status: 429, error: 'rate_limit', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+    return { value: { isAnswered: true, text: 'OK', usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 120_000, cache_creation_input_tokens: 0 } } }
+  })
   on('session.id', () => ({ value: sessionId.value }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.root', () => ({ value: CWD }))
@@ -100,7 +109,8 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('classic.PermissionRequest', () => ({}))
   on('classic.Notification', () => ({}))
-  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran }
+  on('classic.PostModelSwitch', () => ({}))
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran, fork }
 }
 
 type StepArgs = Parameters<Engine['turn']['step']>[0]
@@ -127,6 +137,15 @@ const spawnInput = (over: Partial<AgentSpawnInput> & { tool_use_id: string }): A
 
 /** `/podium <args>` typed at the prompt. */
 const podium = (args: string): CommandRunInput => ({ command: 'podium', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
+
+/** One prompt on the main loop: a turn with one model request, then the session waits on the person. */
+async function mainTurn($: Engine, turnId = 't1') {
+  await $.turn.start({ text: 'go', turnId })
+  await stepOnce($, { turnId, index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 })
+  await $.turn.complete({ answer: 'done', durationMs: 10, isAborted: false, turnId, reason: 'answer' })
+}
+
+const MIN = 60_000
 
 describe('podium-reporter end to end', () => {
   test('raises every hooked event and posts agents, plan, failure, blowouts and skills', async ($, on) => {
@@ -527,5 +546,167 @@ describe('podium-reporter end to end', () => {
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
     await w.clock.advance(1000)
     expect(w.posts[0]!.session.name).toBe('from-option')
+  })
+})
+
+describe('podium-reporter prompt cache', () => {
+  test('reports when the last main-loop request started and the cache lifetime', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.cache).toMatchObject({ lastRequestAt: null, ttlMs: 300_000 })
+    const t0 = w.clock.now()
+    await mainTurn($)
+    await w.clock.advance(1000)
+    const c = w.posts.at(-1)!.session.cache!
+    expect(c).toMatchObject({ lastRequestAt: t0, ttlMs: 300_000, tokens: 120_000 })
+    // a cold start writes the 120k tokens at $5 instead of reading them at $0.20 per million (Opus)
+    expect(Math.abs(c.coldCostUsd! - (120_000 * (5 - 0.2) / 1e6))).toBeLessThan(1e-6)
+    expect(c.warming).toMatchObject({ on: false, state: 'off', pings: 0 })
+    // an agent's requests use its own cache, not the main thread's
+    await w.clock.advance(5000)
+    await $.agent.spawn(spawnInput({ tool_use_id: 'c1' }))
+    await stepOnce($, { turnId: 'ta', index: 0, model: 'claude-sonnet-5-5', messageCount: 2, agentId: 'a-sub' })
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.cache!.lastRequestAt).toBe(t0)
+    // the session says it uses the 1-hour lifetime
+    await $.classic.PostModelSwitch({ from_model: 'claude-opus-5-5', to_model: 'claude-opus-5-5', requested_model: 'opus', source: 'command', context_tokens: 120_000, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0.9, pricing: 'catalog' } as never)
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.cache!.ttlMs).toBe(3_600_000)
+  })
+
+  test('warming off (the default): nothing is sent however long the session idles', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(12 * MIN)
+    expect(w.fork.prompts).toHaveLength(0)
+    expect(w.posts.at(-1)!.session.cache!.warming.state).toBe('off')
+  })
+
+  test('warming on: one ping a minute before each expiry, each counted and in the activity', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    const rows = mock.session(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    const t0 = w.clock.now()
+    await mainTurn($)
+    await w.clock.advance(4 * MIN - 1000)
+    expect(w.fork.prompts).toHaveLength(0)
+    await w.clock.advance(2000)
+    expect(w.fork.prompts).toEqual(['Reply with OK.'])
+    const firstPing = t0 + 4 * MIN
+    // the next ping is measured from the start of this one
+    await w.clock.advance(4 * MIN - 2000)
+    expect(w.fork.prompts).toHaveLength(1)
+    await w.clock.advance(2000)
+    expect(w.fork.prompts).toHaveLength(2)
+    await w.clock.advance(1000)
+    const c = w.posts.at(-1)!.session.cache!
+    expect(c.warming).toMatchObject({ on: true, state: 'warming', pings: 2, lastPingAt: firstPing + 4 * MIN })
+    // the idle period starts when the reporter next looks (each second) after the turn ends; it lasts 30 minutes
+    expect(c.warming.untilAt! - (t0 + 30 * MIN)).toBeGreaterThanOrEqual(0)
+    expect(c.warming.untilAt! - (t0 + 30 * MIN)).toBeLessThanOrEqual(1000)
+    expect(c.lastRequestAt).toBe(firstPing + 4 * MIN)
+    expect(Math.abs(c.warming.costUsdEst - (2 * (5 * 4 + 2 * 20 + 120_000 * 0.2) / 1e6))).toBeLessThan(1e-8)
+    const pings = w.posts.flatMap((p) => p.events).filter((e) => e.data?.kind === 'cache-ping')
+    expect(pings).toHaveLength(2)
+    expect(pings[0]!.text).toContain('120k tokens read from the cache')
+    // nothing was added to the conversation
+    expect(rows.appended()).toHaveLength(0)
+  })
+
+  test('warming stops at the maximum duration of an idle period', { options: { cacheWarming: true, cacheWarmingMinutes: 10 } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(15 * MIN)
+    expect(w.fork.prompts).toHaveLength(2) // at 4 and 8 minutes
+    const r = w.posts.at(-1)!
+    expect(r.session.cache!.warming).toMatchObject({ state: 'stopped', stopReason: 'max-duration', pings: 2 })
+    expect(w.posts.flatMap((p) => p.events).some((e) => e.data?.kind === 'cache-stop' && e.text.includes('10-minute limit'))).toBe(true)
+  })
+
+  test('an API error stops warming, and it is not retried', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    w.fork.reply = 'api-error'
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(12 * MIN)
+    expect(w.fork.prompts).toHaveLength(1)
+    expect(w.posts.at(-1)!.session.cache!.warming).toMatchObject({ state: 'stopped', stopReason: 'api-error', pings: 0 })
+  })
+
+  test('nothing to fork stops warming', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    w.fork.reply = 'nothing'
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(10 * MIN)
+    expect(w.fork.prompts).toHaveLength(1)
+    expect(w.posts.at(-1)!.session.cache!.warming.stopReason).toBe('nothing-to-fork')
+  })
+
+  test('after /clear there is nothing to keep warm', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(MIN)
+    await $.session.end({ reason: 'clear', sessionId: SID, resume: { id: SID } })
+    w.sessionId.value = 'sess-after-clear'
+    await w.clock.advance(10 * MIN)
+    expect(w.fork.prompts).toHaveLength(0)
+    expect(w.posts.at(-1)!.session.cache).toMatchObject({ lastRequestAt: null })
+  })
+
+  test('no ping while the session runs: its own requests keep the cache warm', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(2 * MIN)
+    await $.turn.start({ text: 'again', turnId: 't2' })
+    await w.clock.advance(10 * MIN)
+    expect(w.fork.prompts).toHaveLength(0)
+    expect(w.posts.at(-1)!.session.cache!.warming.state).toBe('ready')
+  })
+
+  test('the session ending stops warming', { options: { cacheWarming: true } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    await w.clock.advance(MIN)
+    await $.session.end({ reason: 'prompt_input_exit', sessionId: SID, resume: { id: SID } })
+    await w.clock.advance(10 * MIN)
+    expect(w.fork.prompts).toHaveLength(0)
+  })
+
+  test('/podium warm on and off change it for this session only', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+    await w.clock.advance(1000)
+    await mainTurn($)
+    const onText = (await $.command.run(podium('warm on'))).text ?? ''
+    expect(onText).toContain('Cache warming is on for this session')
+    await w.clock.advance(4 * MIN + 1000)
+    expect(w.fork.prompts).toHaveLength(1)
+    expect((await $.command.run(podium(''))).text).toContain('Cache warming: on')
+    const offText = (await $.command.run(podium('warm off'))).text ?? ''
+    expect(offText).toContain('Cache warming is off for this session')
+    await w.clock.advance(10 * MIN)
+    expect(w.fork.prompts).toHaveLength(1)
+    expect(w.posts.at(-1)!.session.cache!.warming).toMatchObject({ on: false, state: 'off', pings: 1 })
+  })
+
+  test('the PostModelSwitch hook passes the engine result through', async ($, on) => {
+    world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    expect(await $.classic.PostModelSwitch({ from_model: 'a', to_model: 'b', requested_model: null, source: 'command', context_tokens: 0, prompt_cache_warm: false, cache_ttl: '5m', estimated_cache_write_usd: 0, pricing: 'default' } as never)).toEqual({})
   })
 })

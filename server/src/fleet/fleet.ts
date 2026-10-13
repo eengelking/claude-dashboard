@@ -7,7 +7,8 @@ import { REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { ingestReport, type IngestResult } from './ingest.js';
 import { hookToReport } from './hookIngest.js';
 import { validateReport } from './protocol.js';
-import type { ActivityView, HistoryRow, Kpis, RemovedReason, Report, ReporterSupport, SessionStatusView, SessionView, StateBody } from './protocol.js';
+import type { ActivityView, CacheAlert, CacheAlertMode, CacheAlertsView, HistoryRow, Kpis, RemovedReason, Report, ReporterSupport, SessionStatusView, SessionView, StateBody } from './protocol.js';
+import { alertEligible, CACHE_ALERTS_KEY, CACHE_TIP_ALERTS, cacheStateOf, DEFAULT_CACHE_WARN_MS, nextAlert, parseStoredCache } from './cache.js';
 import { formatSse, SseHub } from './sse.js';
 
 export interface FleetConfig {
@@ -23,6 +24,10 @@ export interface FleetConfig {
   /** Minimum gap between two `session` messages for one session. */
   throttleMs: number;
   dbPath: string;
+  /** How long before its prompt cache expires a waiting session is `cooling` (CACHE_WARN_MS). */
+  cacheWarnMs: number;
+  /** Cooling alerts: the tip twice then none (`auto`), always (`on`), or never (`off`) (PODIUM_CACHE_ALERTS). */
+  cacheAlerts: CacheAlertMode;
 }
 
 export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
@@ -33,6 +38,8 @@ export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   detachedHideAfterMs: 60_000,
   retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
   throttleMs: 500,
+  cacheWarnMs: DEFAULT_CACHE_WARN_MS,
+  cacheAlerts: 'auto',
 };
 
 function envMs(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
@@ -40,6 +47,11 @@ function envMs(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   if (v === undefined || v === '') return fallback;
   const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function alertMode(v: string | undefined, fallback: CacheAlertMode): CacheAlertMode {
+  const m = (v ?? '').trim().toLowerCase();
+  return m === 'auto' || m === 'on' || m === 'off' ? m : fallback;
 }
 
 /** Lifecycle and retention settings from the environment (SPEC 7.2, 7.5). */
@@ -57,6 +69,8 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
     lingerMs: envMs(env, 'LINGER_MS', d.lingerMs),
     detachedHideAfterMs: envMs(env, 'DETACHED_HIDE_AFTER_MS', d.detachedHideAfterMs),
     throttleMs: d.throttleMs,
+    cacheWarnMs: envMs(env, 'CACHE_WARN_MS', d.cacheWarnMs),
+    cacheAlerts: alertMode(env.PODIUM_CACHE_ALERTS, d.cacheAlerts),
     retention: {
       samplesMs: envMs(env, 'RETAIN_SAMPLES_MS', d.retention.samplesMs),
       eventsMs: envMs(env, 'RETAIN_EVENTS_MS', d.retention.eventsMs),
@@ -73,6 +87,15 @@ interface LiveEntry {
   heard: boolean;
   /** The status last broadcast, to notice stale transitions. */
   status: SessionStatusView | null;
+  /** The prompt cache's state and alert at the last sweep, to notice it start cooling or go cold. */
+  cache?: string;
+}
+
+/** One cooling period of one session: the alert decided for it, fixed once an open dashboard has seen it. */
+interface CacheEpisode {
+  expiresAt: number | null;
+  alert: CacheAlert;
+  counted: boolean;
 }
 
 export class Fleet {
@@ -82,6 +105,9 @@ export class Fleet {
   private readonly startedAt: number;
   private readonly clockSkew = new Map<string, number>();
   private costMinuteCache: { at: number; rows: { m: number; v: number }[] } | null = null;
+  private readonly cacheEpisodes = new Map<string, CacheEpisode>();
+  /** Cooling alerts shown to an open dashboard so far, kept in the settings table across restarts. */
+  private cacheShown: number;
 
   constructor(
     readonly db: FleetDb,
@@ -89,6 +115,8 @@ export class Fleet {
     readonly now: () => number = Date.now,
   ) {
     this.startedAt = now();
+    const shown = Number(db.getSetting(CACHE_ALERTS_KEY));
+    this.cacheShown = Number.isInteger(shown) && shown > 0 ? shown : 0;
     // On start every stored session that has not ended is treated as stale until it reports again;
     // a done session still inside its linger window stays until the window closes.
     for (const row of db.liveCandidates(this.startedAt - cfg.lingerMs)) {
@@ -97,7 +125,7 @@ export class Fleet {
   }
 
   private get derive(): DeriveConfig {
-    return { staleAfterMs: this.cfg.staleAfterMs, hookStaleAfterMs: this.cfg.hookStaleAfterMs, home: this.cfg.home };
+    return { staleAfterMs: this.cfg.staleAfterMs, hookStaleAfterMs: this.cfg.hookStaleAfterMs, home: this.cfg.home, cacheWarnMs: this.cfg.cacheWarnMs };
   }
 
   isLive(id: string): boolean {
@@ -194,10 +222,69 @@ export class Fleet {
         dropAt: entry ? this.dropAtFor(row, entry.heard, now) : null,
         hideAt: row.attached === 0 && row.detached_at !== null ? row.detached_at + this.cfg.detachedHideAfterMs : null,
         ownerGroup: this.db.groupOfOwner(row.owner),
+        cacheAlert: this.cacheAlertOf(row),
       },
       now,
       this.derive,
     );
+  }
+
+  // ---- the prompt cache's cooling alert (issue #27) ---------------------------------------------
+
+  cacheAlerts(): CacheAlertsView {
+    const mode = this.cfg.cacheAlerts;
+    return { mode, shown: this.cacheShown, suppressed: mode === 'auto' && this.cacheShown >= CACHE_TIP_ALERTS };
+  }
+
+  /** The dashboard's "turn cache alerts back on": the count starts over, and a session cooling now is decided again. */
+  resetCacheAlerts(): void {
+    this.setCacheShown(0);
+    this.cacheEpisodes.clear();
+    this.sweep();
+    this.tick();
+  }
+
+  private setCacheShown(n: number): void {
+    this.cacheShown = n;
+    this.db.setSetting(CACHE_ALERTS_KEY, String(n));
+  }
+
+  /** The alert decided for this cooling period, or the one it would get if an open dashboard saw it now. */
+  private cacheAlertOf(row: SessionRow): CacheAlert {
+    const c = parseStoredCache(row.cache_json);
+    const expiresAt = c && c.lastRequestAt !== null ? c.lastRequestAt + c.ttlMs : null;
+    const ep = this.cacheEpisodes.get(row.id);
+    if (ep && ep.counted && ep.expiresAt === expiresAt) return ep.alert;
+    return nextAlert(this.cfg.cacheAlerts, this.cacheShown);
+  }
+
+  /**
+   * Keeps one episode per cooling period. The first sweep that finds a dashboard open (an SSE client) fixes
+   * its alert and counts it, so an alert nobody could see is not counted. Returns the cache's state and alert,
+   * so the sweep can tell when to send the session.
+   */
+  private trackCache(row: SessionRow, status: SessionStatusView, now: number): string {
+    const c = parseStoredCache(row.cache_json);
+    if (!c) {
+      this.cacheEpisodes.delete(row.id);
+      return '';
+    }
+    const { state, expiresAt } = cacheStateOf(c, status, now, this.cfg.cacheWarnMs);
+    if (!alertEligible(c, status, now, this.cfg.cacheWarnMs)) {
+      this.cacheEpisodes.delete(row.id);
+      return `${state}:`;
+    }
+    let ep = this.cacheEpisodes.get(row.id);
+    if (!ep || ep.expiresAt !== expiresAt) {
+      ep = { expiresAt, alert: null, counted: false };
+      this.cacheEpisodes.set(row.id, ep);
+    }
+    if (!ep.counted && this.hub.size > 0) {
+      ep.alert = nextAlert(this.cfg.cacheAlerts, this.cacheShown);
+      ep.counted = true;
+      if (ep.alert !== null) this.setCacheShown(this.cacheShown + 1);
+    }
+    return `${state}:${this.cacheAlertOf(row)}`;
   }
 
   /**
@@ -287,6 +374,7 @@ export class Fleet {
       clearedToday: this.clearedToday(),
       events: this.events({ limit: STATE_EVENTS }),
       server: { version: serverVersion(), reporterSupport: REPORTER_SUPPORT },
+      cacheAlerts: this.cacheAlerts(),
     };
   }
 
@@ -316,6 +404,7 @@ export class Fleet {
   deleteSession(id: string): boolean {
     const wasLive = this.live.delete(id);
     this.clockSkew.delete(id);
+    this.cacheEpisodes.delete(id);
     const t = this.pending.get(id);
     if (t) clearTimeout(t);
     this.pending.delete(id);
@@ -341,6 +430,7 @@ export class Fleet {
     const now = this.now();
     this.live.delete(row.id);
     this.clockSkew.delete(row.id);
+    this.cacheEpisodes.delete(row.id);
     const t = this.pending.get(row.id);
     if (t) clearTimeout(t);
     this.pending.delete(row.id);
@@ -392,7 +482,10 @@ export class Fleet {
           this.db.insertSampleIfAbsent({ ...last, t: nowSec, tokens_delta: 0 });
         }
       }
-      if (entry.status !== null && entry.status !== status) {
+      const cache = this.trackCache(row, status, now);
+      const cacheChanged = entry.cache !== undefined && entry.cache !== cache;
+      entry.cache = cache;
+      if ((entry.status !== null && entry.status !== status) || cacheChanged) {
         entry.status = status;
         if (!this.unused(row)) this.hub.broadcast('session', this.viewOf(row));
       } else if (entry.status === null) {
@@ -401,9 +494,9 @@ export class Fleet {
     }
   }
 
-  /** Every 2 s: KPIs to every client; doubles as the keepalive. */
+  /** Every 2 s: KPIs and the cooling-alert counter to every client; doubles as the keepalive. */
   tick(): void {
-    this.hub.broadcast('tick', { serverTime: this.now(), kpis: this.kpis() });
+    this.hub.broadcast('tick', { serverTime: this.now(), kpis: this.kpis(), cacheAlerts: this.cacheAlerts() });
   }
 
   /** Hourly: retention. */

@@ -1,6 +1,6 @@
 {
   "name": "podium-reporter",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
   "author": { "name": "Ed Engelking" },
   "userConfig": {
@@ -58,6 +58,18 @@
       "title": "Send full prompts and answers",
       "description": "Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can show them in full. Off by default: only the first 400 characters are sent.",
       "default": false
+    },
+    "cacheWarming": {
+      "type": "boolean",
+      "title": "Keep the prompt cache warm",
+      "description": "While the session waits on you, send one small request about a minute before its prompt cache expires, so your next prompt reads the cache instead of writing it again. Each costs about a tenth of the prompt's input price; nothing is added to the conversation. Off by default. /podium warm on|off changes it for one session.",
+      "default": false
+    },
+    "cacheWarmingMinutes": {
+      "type": "number",
+      "title": "Cache warming limit (minutes)",
+      "description": "Stop keeping the cache warm after this many minutes of waiting. Pings pay for themselves for about 46 minutes at the standard cache read price (about 11 pings), longer on models with cheaper reads.",
+      "default": 30
     }
   }
 }

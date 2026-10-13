@@ -12,6 +12,7 @@ import {
   type EndReason,
   type FailureCandidate,
 } from './failures.ts';
+import { newCache, type CacheState } from './cache.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
 import type { ActivityEvent, AgentStatus, Effort, Failure, FilesReport, GitInfo, RateLimit } from './protocol.ts';
@@ -129,6 +130,8 @@ export interface SessionState {
   events: ActivityEvent[];
   evSeq: number;
   dirty: boolean;
+  /** The main thread's prompt cache and cache warming (cache.ts). */
+  cache: CacheState;
 }
 
 export function emptyLoop(model: string | null = null): LoopStats {
@@ -182,13 +185,19 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
     events: [],
     evSeq: 0,
     dirty: true,
+    cache: newCache(),
   };
 }
 
-/** A fresh session under a new id (after /clear), keeping where it runs. */
+/** A fresh session under a new id (after /clear), keeping where it runs. Its cache starts empty: there is nothing to keep warm. */
 export function resetForNewId(s: SessionState, id: string, startedAt: number): SessionState {
   const n = newSession({ id, cwd: s.cwd, startedAt, model: s.main.model });
-  return { ...n, projectRoot: s.projectRoot, repoName: s.repoName, git: s.git, main: { ...n.main, effort: s.main.effort } };
+  return { ...n, projectRoot: s.projectRoot, repoName: s.repoName, git: s.git, main: { ...n.main, effort: s.main.effort }, cache: { ...newCache(s.cache.on), ttlMs: s.cache.ttlMs } };
+}
+
+/** The cache's state changed; a report is due only when it did. */
+export function withCache(s: SessionState, cache: CacheState): SessionState {
+  return cache === s.cache ? s : { ...s, cache, dirty: true };
 }
 
 // ---- helpers ------------------------------------------------------------------------------------

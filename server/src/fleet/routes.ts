@@ -189,6 +189,13 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     res.json({ ok: true });
   });
 
+  // "Turn cache alerts back on" (issue #27): the count of cooling alerts starts over. Like Remove it needs no
+  // token: it changes what the dashboard shows and sends nothing to a session.
+  router.post('/cache-alerts/reset', (_req, res) => {
+    fleet.resetCacheAlerts();
+    res.json({ ok: true, cacheAlerts: fleet.cacheAlerts() });
+  });
+
   router.get('/events', (req, res) => {
     const before = intParam(req.query.before);
     const limit = intParam(req.query.limit);

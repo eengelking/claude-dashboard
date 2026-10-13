@@ -185,6 +185,41 @@ export interface SessionReport {
   files: FilesReport | null;
   /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
   attached: boolean | null;
+  /** The main thread's prompt cache: when it was last refreshed and whether it is kept warm. null when the reporter is too old to send it. */
+  cache: CacheReport | null;
+}
+
+/** Why cache warming stopped for an idle period: its maximum duration, an API error, nothing to fork (a /clear), an aborted ping, or a cache that had already expired. */
+export type WarmStop = 'max-duration' | 'api-error' | 'nothing-to-fork' | 'aborted' | 'expired';
+
+/**
+ * Cache warming (the `cacheWarming` option or `/podium warm on`): while the session waits on the person, one
+ * tool-less request over its own transcript shortly before the cache would expire. Off by default.
+ */
+export interface CacheWarming {
+  on: boolean;
+  /** `off`; `ready`: on, the session is running; `warming`: on, idle, pinging; `stopped`: stopped for this idle period (stopReason). */
+  state: 'off' | 'ready' | 'warming' | 'stopped';
+  stopReason: WarmStop | null;
+  /** Pings sent this session, and their estimated cost from the usage each returned. */
+  pings: number;
+  costUsdEst: number;
+  lastPingAt: number | null;
+  /** When warming stops on its own in this idle period (its start plus the maximum duration); null unless warming. */
+  untilAt: number | null;
+}
+
+/** The main thread's prompt cache, from the reporter's clock (the server converts the times to its own). */
+export interface CacheReport {
+  /** When the main thread's latest model request started, a warming ping included; null before the first response. */
+  lastRequestAt: number | null;
+  /** How long a cache entry lives from the start of the request that read or wrote it: 300,000, or 3,600,000 when the session uses the 1-hour lifetime. */
+  ttlMs: number;
+  /** The tokens the next request re-sends (the main thread's context); a cold cache writes them again. null when unknown. */
+  tokens: number | null;
+  /** The estimated extra cost of that cold start over reading a warm cache (USD); null for a model with no price. */
+  coldCostUsd: number | null;
+  warming: CacheWarming;
 }
 
 export interface Report {
@@ -228,6 +263,37 @@ export interface BlowoutLogEntry {
   kind: string;
   tokensBefore: number | null;
   tokensAfter: number | null;
+}
+
+/** Where the main thread's prompt cache stands: kept warm by requests, inside the warning window before it expires, or expired. */
+export type CacheStateName = 'warm' | 'cooling' | 'cold';
+
+/** The cooling alert a card and a rail row show: with the tip about cache warming, without it, or none. */
+export type CacheAlert = 'tip' | 'plain' | null;
+
+/** The main thread's prompt cache as the dashboard sees it (issue #27). Times are the server's clock. */
+export interface CacheView {
+  /** A running session is warm: it sends its own requests. A session with no request yet is cold. */
+  state: CacheStateName;
+  /** When the cache expires: the last request's start plus the lifetime; null before the first response. */
+  expiresAt: number | null;
+  ttlMs: number;
+  tokens: number | null;
+  coldCostUsd: number | null;
+  warming: CacheWarming;
+  /** Only for a session waiting on the person, cooling, with warming off; decided by the counter (CacheAlertsView). */
+  alert: CacheAlert;
+}
+
+/** `auto`: show the tip with the first two alerts, then no more; `on`: always show them; `off`: never (PODIUM_CACHE_ALERTS). */
+export type CacheAlertMode = 'auto' | 'on' | 'off';
+
+/** The counter of cooling alerts shown to an open dashboard, kept across restarts. */
+export interface CacheAlertsView {
+  mode: CacheAlertMode;
+  shown: number;
+  /** Alerts are off because they were shown twice and cache warming was not turned on; the dashboard offers to turn them back on. */
+  suppressed: boolean;
 }
 
 /** `outdated`: below the supported range, update the mod. `newer`: above it, upgrade the server. `unknown`: unreadable, no warning. */
@@ -293,6 +359,8 @@ export interface SessionView {
   ownerGroup: string | null;
   /** The machine the session runs on, as the reporter sent it; null when it sent none (no userName, or older than 0.9.0). */
   machine: MachineInfo | null;
+  /** The main thread's prompt cache; null from a reporter older than 0.11.0 and for a hooks-only session. */
+  cache: CacheView | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -357,6 +425,8 @@ export interface StateBody {
   events: ActivityView[];
   /** The server's own version and the reporter range it supports, for the mismatch notice. */
   server: { version: string; reporterSupport: ReporterSupport };
+  /** The cooling-alert counter; every tick carries it too. */
+  cacheAlerts: CacheAlertsView;
 }
 
 export type RemovedReason = 'done' | 'dropped' | 'deleted';
@@ -745,6 +815,41 @@ function session(v: unknown, path: string): SessionReport {
     loop: loop(o.loop, `${path}.loop`),
     files: filesReport(o.files, `${path}.files`),
     attached: o.attached === undefined || o.attached === null ? null : bool(o.attached, `${path}.attached`),
+    cache: cacheReport(o.cache, `${path}.cache`),
+  };
+}
+
+const WARM_STATES = ['off', 'ready', 'warming', 'stopped'] as const;
+const WARM_STOPS: readonly WarmStop[] = ['max-duration', 'api-error', 'nothing-to-fork', 'aborted', 'expired'];
+/** The longest prompt cache lifetime there is (1 hour). */
+const MAX_TTL_MS = 3_600_000;
+
+function nonNegOrNull(v: unknown, path: string): number | null {
+  const n = numOrNull(v, path);
+  return n === null ? null : Math.max(0, n);
+}
+
+function cacheReport(v: unknown, path: string): CacheReport | null {
+  if (v === null || v === undefined) return null;
+  const o = obj(v, path);
+  const w = obj(o.warming, `${path}.warming`);
+  const ttl = num(o.ttlMs, `${path}.ttlMs`);
+  if (ttl <= 0) throw new Invalid(`${path}.ttlMs`, 'expected a positive number');
+  const tokens = intOrNull(o.tokens, `${path}.tokens`);
+  return {
+    lastRequestAt: numOrNull(o.lastRequestAt, `${path}.lastRequestAt`),
+    ttlMs: Math.min(MAX_TTL_MS, Math.round(ttl)),
+    tokens,
+    coldCostUsd: nonNegOrNull(o.coldCostUsd, `${path}.coldCostUsd`),
+    warming: {
+      on: bool(w.on, `${path}.warming.on`),
+      state: oneOf(w.state, `${path}.warming.state`, WARM_STATES),
+      stopReason: oneOfOrNull(w.stopReason, `${path}.warming.stopReason`, WARM_STOPS),
+      pings: int(w.pings, `${path}.warming.pings`),
+      costUsdEst: Math.max(0, num(w.costUsdEst, `${path}.warming.costUsdEst`)),
+      lastPingAt: numOrNull(w.lastPingAt, `${path}.warming.lastPingAt`),
+      untilAt: numOrNull(w.untilAt, `${path}.warming.untilAt`),
+    },
   };
 }
 

@@ -38,6 +38,10 @@
       "steps": { "done": 23, "total": null }
     },
     "attached": true,
+    "cache": {
+      "lastRequestAt": 1791647990000, "ttlMs": 300000, "tokens": 410000, "coldCostUsd": 1.968,
+      "warming": { "on": false, "state": "off", "stopReason": null, "pings": 0, "costUsdEst": 0, "lastPingAt": null, "untilAt": null }
+    },
     "files": {
       "files": [
         { "path": "src/invoice/export.ts", "status": "modified", "added": 24, "removed": 6, "from": null },

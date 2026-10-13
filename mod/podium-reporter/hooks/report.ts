@@ -1,5 +1,6 @@
 // SessionState -> Report (SPEC 6.2). Pure. Every free-text field passes through redaction and is cut
 // to its limit here, so nothing leaves the machine unredacted.
+import { cacheReport, WARM_MINUTES_DEFAULT } from './cache.ts';
 import { clip, excerpt } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { family, windowOf } from './models.ts';
@@ -28,6 +29,8 @@ export interface ReportMeta {
   machine?: MachineInfo | null;
   /** The `fullPrompts` option: send each agent's whole prompt and answer, once. */
   fullText?: boolean;
+  /** The `cacheWarmingMinutes` option, in ms: how long one idle period is kept warm at most. */
+  warmMaxMs?: number;
 }
 
 /** Display name (SPEC 6.6): /podium name, the option, a worktree's branch or folder, the repo folder, the id. */
@@ -159,6 +162,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       loop: loopFields(s.main),
       attached: s.attached,
       files: { ...s.files, files: s.files.files.map((f) => ({ ...f, path: clip(f.path, 300), from: f.from === null ? null : clip(f.from, 300) })) },
+      cache: cacheReport(s.cache, ctxTokens, s.main.model, meta.warmMaxMs ?? WARM_MINUTES_DEFAULT * 60_000),
     },
     agents: withinTextBudget(agents.map((a) => agentReport(a, meta.fullText === true))),
     events: events.slice(0, MAX_EVENTS_PER_REPORT).map((e) => ({ ...e, text: clip(e.text, 240) })),

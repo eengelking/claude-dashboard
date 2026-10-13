@@ -11,7 +11,7 @@ function session(over: Partial<SessionRow> = {}): SessionRow {
     started_at: 1000, last_seen_at: 2000, ended_at: null, dropped_at: null, cwd: '/tmp/demo', project_root: null,
     repo_name: null, git_json: null, model: 'opus', effort: 'high', context_tokens: null, context_window: null,
     context_percent: null, cost_usd: 1.5, tok_in: 0, tok_out: 0, tok_cr: 0, tok_cw: 0, rate_limits_json: null,
-    blowouts: 0, plan_json: null, reporter_version: '0.1.0', engine_version: null, loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null,
+    blowouts: 0, plan_json: null, reporter_version: '0.1.0', engine_version: null, loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null, cache_json: null,
     ...over,
   };
 }
@@ -26,7 +26,7 @@ describe('openDb', () => {
     const db = openDb(':memory:');
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['admin_log', 'agent_texts', 'agents', 'blowouts', 'events', 'groups', 'people', 'person_machines', 'samples', 'schema_migrations', 'sessions', 'settings']));
-    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }]);
     db.close();
   });
 
@@ -46,13 +46,36 @@ describe('openDb', () => {
     old.exec('ALTER TABLE sessions DROP COLUMN detached_at');
     old.exec('ALTER TABLE sessions DROP COLUMN owner');
     old.exec('ALTER TABLE sessions DROP COLUMN machine_json');
+    old.exec('ALTER TABLE sessions DROP COLUMN cache_json');
     for (const t of ['person_machines', 'people', 'groups', 'admin_log', 'settings', 'agent_texts']) old.exec(`DROP TABLE ${t}`);
     old.exec('DELETE FROM schema_migrations WHERE version >= 2');
     old.close();
     const db = openDb(file);
-    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }]);
     expect(db.prepare("SELECT tool_calls, tool_counts_json FROM agents WHERE id = 'a'").get()).toEqual({ tool_calls: 7, tool_counts_json: null });
-    expect(db.prepare("SELECT name, loop_json, files_json, attached, detached_at, owner, machine_json FROM sessions WHERE id = 's1'").get()).toEqual({ name: 'demo', loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null });
+    expect(db.prepare("SELECT name, loop_json, files_json, attached, detached_at, owner, machine_json, cache_json FROM sessions WHERE id = 's1'").get()).toEqual({ name: 'demo', loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null, cache_json: null });
+    db.close();
+  });
+
+  it('migration 9 adds the prompt cache column to a version 8 database and keeps its sessions and settings', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'podium-db-'));
+    tmpDirs.push(dir);
+    const file = path.join(dir, 'podium.sqlite');
+    const a = new FleetDb(openDb(file));
+    a.upsertSession(session());
+    a.close();
+    const old = openDb(file);
+    old.exec('ALTER TABLE sessions DROP COLUMN cache_json');
+    old.exec("INSERT INTO settings (key, value) VALUES ('allow_admin_secret_reporting', '0')");
+    old.exec('DELETE FROM schema_migrations WHERE version >= 9');
+    old.close();
+    const db = new FleetDb(openDb(file));
+    expect(db.db.prepare('SELECT MAX(version) AS v FROM schema_migrations').get()).toEqual({ v: 9 });
+    expect(db.getSession('s1')).toMatchObject({ name: 'demo', cache_json: null });
+    expect(db.getSetting('allow_admin_secret_reporting')).toBe('0');
+    expect(db.getSetting('cache_alerts_shown')).toBeNull();
+    db.setSetting('cache_alerts_shown', '2');
+    expect(db.getSetting('cache_alerts_shown')).toBe('2');
     db.close();
   });
 
@@ -65,7 +88,7 @@ describe('openDb', () => {
     a.close();
     const db = openDb(file);
     expect(db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 8 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 9 });
     expect(db.prepare('SELECT name FROM sessions').all()).toEqual([{ name: 'demo' }]);
     expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     db.close();
