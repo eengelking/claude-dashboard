@@ -65,3 +65,6 @@
 .adminv .sw button[aria-checked="true"]::after { transform: translateX(14px); background: #fff; }
 @media (prefers-reduced-motion: reduce) { .adminv .sw button::after { transition: none; } }
 @media (max-width: 860px) { .adminv .two2 { grid-template-columns: minmax(0, 1fr); } .adminv .addrow { justify-content: flex-start; } }
+.adminv .setrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.adminv .setrow .setname { min-width: 0; }
+.adminv .setrow .sw { flex: none; }

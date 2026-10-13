@@ -3,7 +3,7 @@
 // and reopened, and the snapshot it sends on connect resyncs everything.
 import { useEffect, useReducer } from "react";
 import { fleetReducer, initialState, LEAVE_MS, type FleetState } from "./store";
-import type { ActivityView, Kpis, RemovedReason, SessionView, StateBody } from "./types";
+import type { ActivityView, Kpis, RemovedReason, SessionView, StateBody, WallSettingsView } from "./types";
 
 export const SILENCE_MS = 6000;
 export const RECONNECT_MS = 2000;
@@ -72,6 +72,7 @@ export function useFleet(opts: UseFleetOptions = {}): FleetState {
       on<SessionView>("session", (view, at) => dispatch({ type: "session", view, at }));
       on<ActivityView>("activity", (event, at) => dispatch({ type: "activity", event, at }));
       on<{ sessionId: string; reason: RemovedReason }>("removed", (d, at) => dispatch({ type: "removed", sessionId: d.sessionId, reason: d.reason, at }));
+      on<WallSettingsView>("wall", (wall, at) => dispatch({ type: "wall", wall, at }));
       on<{ serverTime: number; kpis: Kpis }>("tick", (d, at) => dispatch({ type: "tick", serverTime: d.serverTime, kpis: d.kpis, at }));
       s.onerror = () => {
         if (stopped || source !== s) return;
@@ -126,4 +127,20 @@ export async function removeSession(id: string, base = "/api/fleet"): Promise<vo
   const res = await fetch(`${base}/sessions/${encodeURIComponent(id)}/drop`, { method: "POST" });
   // 404 and 409 mean it already left or is reporting again: the stream shows the truth, nothing to report.
   if (!res.ok && res.status !== 404 && res.status !== 409) throw new Error(`HTTP ${res.status}`);
+}
+
+/** Closing a wall notice turns it off for everyone; it takes no token, like Remove. */
+export async function closeNotice(id: string, base = "/api/fleet"): Promise<void> {
+  const res = await fetch(`${base}/notices/${encodeURIComponent(id)}/close`, { method: "POST" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+/** The Show them / Hide them link on the background-sessions note changes the same setting as Admin > Settings. */
+export async function setShowBackgroundSessions(show: boolean, base = "/api/fleet"): Promise<void> {
+  const res = await fetch(`${base}/wall/background-sessions`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ show }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

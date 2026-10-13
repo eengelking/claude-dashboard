@@ -13,7 +13,8 @@ import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
 import { Legend } from "./components/Legend";
 import { Wall } from "./components/Wall";
-import { removeSession, useFleet, type UseFleetOptions } from "./useFleet";
+import { NoticeClosed, type NoticeItem } from "./components/NoticeStack";
+import { closeNotice, removeSession, setShowBackgroundSessions, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
 import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
@@ -92,7 +93,8 @@ export function FleetView({ state }: { state: FleetState }) {
   const all = useMemo(() => Object.values(state.sessions), [state.sessions]);
   const live = all.filter((s) => !state.leaving[s.id]);
   const sorted = useMemo(() => sortSessions(all, sort), [all, sort]);
-  const [showDetached, setShowDetached] = useState(false);
+  const showDetached = state.wall.showBackgroundSessions;
+  const [closed, setClosed] = useState<string | null>(null);
   const sets = splitDetached(sorted, now, showDetached);
   // The people view (#34) switches on once any live session belongs to a named person.
   const people = usePeoplePrefs();
@@ -196,6 +198,18 @@ export function FleetView({ state }: { state: FleetState }) {
     setSelAgent(null);
     setNotice(null);
   };
+  const onCloseNotice = (n: NoticeItem) => {
+    closeNotice(n.id)
+      .then(() => setClosed(n.name))
+      .catch((err: Error) => setNotice(`Could not close the notice: ${err.message}. Try again.`));
+  };
+  // The confirmation clears itself after about 9 seconds.
+  useEffect(() => {
+    if (closed === null) return;
+    const t = setTimeout(() => setClosed(null), 9000);
+    return () => clearTimeout(t);
+  }, [closed]);
+
   const onRemove = (id: string) => {
     removeSession(id).catch((err: Error) => setNotice(`Could not remove the session: ${err.message}. Try again.`));
   };
@@ -387,11 +401,15 @@ export function FleetView({ state }: { state: FleetState }) {
                     count: sets.hidden.length,
                     costUsd: sets.hidden.reduce((n, s) => n + (s.costUsd ?? 0), 0),
                     show: showDetached,
-                    onToggle: () => setShowDetached((v) => !v),
+                    onToggle: () =>
+                      setShowBackgroundSessions(!showDetached).catch((err: Error) => setNotice(`Could not change the setting: ${err.message}. Try again.`)),
                   }}
+                  noticeOn={(id) => state.wall.notices[id] !== false}
+                  onCloseNotice={onCloseNotice}
                   people={wallPeople}
                 />
               )}
+              {closed !== null && <NoticeClosed name={closed} onDismiss={() => setClosed(null)} />}
             </main>
             <Legend />
           </div>

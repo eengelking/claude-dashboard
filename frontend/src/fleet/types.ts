@@ -20,6 +20,7 @@ export type {
   SessionStatusView,
   SessionView,
   StateBody,
+  WallSettingsView,
 } from "../../../server/src/fleet/protocol";
 
 /** The product name, kept in one place so it can change (SPEC 12.10). */

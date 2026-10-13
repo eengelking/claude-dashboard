@@ -8,6 +8,7 @@ import { Band, PeopleBar } from "./People";
 import type { GroupBy, Unit } from "../people";
 import type { ComponentProps } from "react";
 import { Sparkline } from "./Sparkline";
+import { NoticeStack, type NoticeItem } from "./NoticeStack";
 
 export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
   const k = kpis;
@@ -136,6 +137,9 @@ export function Wall(props: {
   onRemove?: (id: string) => void;
   /** Sessions nobody is attached to that were set aside, and whether they are being shown anyway. */
   detached: { count: number; costUsd: number; show: boolean; onToggle: () => void };
+  /** Whether a notice is switched on in Admin > Settings (on unless turned off), and what closing one does. */
+  noticeOn?: (id: string) => boolean;
+  onCloseNotice?: (item: NoticeItem) => void;
   people?: WallPeople;
 }) {
   const pv = props.people;
@@ -153,6 +157,24 @@ export function Wall(props: {
     />
   );
   const banded = pv && pv.groupBy !== "none";
+  const notices: NoticeItem[] = [];
+  if (props.detached.count > 0 && (props.noticeOn?.("background-sessions") ?? true)) {
+    notices.push({
+      id: "background-sessions",
+      name: "Background sessions",
+      body: (
+        <>
+          <b>
+            {props.detached.count} background {props.detached.count === 1 ? "session" : "sessions"} {props.detached.show ? "shown" : "hidden"}
+          </b>
+          <span>nobody is attached{props.detached.costUsd > 0 ? `, ${fmtUsd(props.detached.costUsd)} so far` : ""}</span>
+          <button type="button" className="link" onClick={props.detached.onToggle}>
+            {props.detached.show ? "Hide them" : "Show them"}
+          </button>
+        </>
+      ),
+    });
+  }
   return (
     <>
       <KpiStrip kpis={props.kpis} split={props.split} />
@@ -174,17 +196,7 @@ export function Wall(props: {
           <code>npm run podium:sim</code>.
         </div>
       )}
-      {props.detached.count > 0 && (
-        <div className="fold">
-          <b>
-            {props.detached.count} background {props.detached.count === 1 ? "session" : "sessions"} {props.detached.show ? "shown" : "hidden"}
-          </b>
-          <span>nobody is attached{props.detached.costUsd > 0 ? `, ${fmtUsd(props.detached.costUsd)} so far` : ""}</span>
-          <button type="button" className="link" onClick={props.detached.onToggle}>
-            {props.detached.show ? "Hide them" : "Show them"}
-          </button>
-        </div>
-      )}
+      <NoticeStack items={notices} onClose={(n) => props.onCloseNotice?.(n)} />
     </>
   );
 }

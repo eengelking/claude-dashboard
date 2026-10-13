@@ -115,6 +115,7 @@ export function makeState(over: Partial<StateBody> = {}): StateBody {
     clearedToday: 0,
     events: [makeEvent()],
     server: { version: "0.3.0", reporterSupport: { min: "0.2.0", max: "0.4.0" } },
+    wall: { notices: { "background-sessions": true }, showBackgroundSessions: false },
     ...over,
   };
 }

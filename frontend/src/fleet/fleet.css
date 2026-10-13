@@ -420,6 +420,18 @@ body.modal-open #root { filter: blur(5px); }
 .podium .fold b { color: var(--ink); font-weight: 600; }
 .podium .fold .link { margin-left: auto; color: var(--ink2); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
 .podium .fold .link:hover { color: var(--ink); }
+.podium .notices { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.podium .notices .fold { margin-top: 0; padding: 7px 8px 7px 14px; flex-wrap: nowrap; }
+.podium .fold .txt { flex: 1; min-width: 0; display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: center; }
+.podium .x { width: 26px; height: 26px; border-radius: 5px; display: grid; place-items: center; color: var(--ink2); flex: none; }
+.podium .x:hover { background: var(--sel, var(--border)); color: var(--ink); }
+.podium .x svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; }
+.podium .toast { position: fixed; right: 14px; bottom: 14px; z-index: 30; max-width: min(420px, calc(100% - 28px)); background: var(--raised, var(--surface, var(--bg))); border: 1px solid var(--border); border-radius: 8px; padding: 10px 10px 10px 14px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); font-size: 12.5px; }
+.podium .toast .t { flex: 1; min-width: 0; }
+.podium .toast b { display: block; color: var(--ink); margin-bottom: 2px; }
+.podium .toast .t span { color: var(--ink2); }
+.podium .toast .go { display: inline-block; margin-top: 6px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 560px) { .podium .notices .fold { flex-wrap: wrap; } }
 .podium .card.risk { border-color: var(--crit); box-shadow: inset 0 3px 0 var(--crit); }
 .podium .ritem.risk { border-left-color: var(--crit); }
 .podium .callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 12%, transparent); font-size: 12.5px; }

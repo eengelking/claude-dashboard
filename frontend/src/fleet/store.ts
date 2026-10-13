@@ -1,5 +1,5 @@
 // The fleet state the UI renders, and the pure reducer that applies server messages to it.
-import type { ActivityView, Kpis, LifecycleConfig, RemovedReason, SessionView, StateBody } from "./types";
+import type { ActivityView, Kpis, LifecycleConfig, RemovedReason, SessionView, StateBody, WallSettingsView } from "./types";
 
 /** At most this many activity events are kept in memory (SPEC 8.1). */
 export const EVENT_CAP = 150;
@@ -28,6 +28,8 @@ export interface FleetState {
   events: ActivityView[];
   /** The server's version and the reporter range it supports; null until the first snapshot. */
   server: StateBody["server"] | null;
+  /** The wall's notice switches and background-session setting, set in Admin > Settings. */
+  wall: WallSettingsView;
 }
 
 export type FleetAction =
@@ -35,6 +37,7 @@ export type FleetAction =
   | { type: "session"; view: SessionView; at: number }
   | { type: "activity"; event: ActivityView; at: number }
   | { type: "removed"; sessionId: string; reason: RemovedReason; at: number }
+  | { type: "wall"; wall: WallSettingsView; at: number }
   | { type: "tick"; serverTime: number; kpis: Kpis; at: number }
   | { type: "disconnected"; at: number }
   | { type: "error"; message: string }
@@ -53,6 +56,7 @@ export const initialState: FleetState = {
   clearedToday: 0,
   events: [],
   server: null,
+  wall: { notices: {}, showBackgroundSessions: false },
 };
 
 function capEvents(list: ActivityView[]): ActivityView[] {
@@ -93,6 +97,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
         clearedToday: action.body.clearedToday,
         events: capEvents(action.body.events),
         server: action.body.server ?? state.server,
+        wall: action.body.wall ?? state.wall,
       };
     }
     case "session": {
@@ -126,6 +131,8 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
       const { [action.sessionId]: _l, ...leaving } = state.leaving;
       return { ...state, sessions, leaving };
     }
+    case "wall":
+      return { ...state, ...live(state, action.at), wall: action.wall };
     case "tick":
       return { ...state, ...live(state, action.at), serverTime: action.serverTime, kpis: action.kpis };
     case "disconnected":

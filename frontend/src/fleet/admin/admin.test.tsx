@@ -18,6 +18,8 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     groups: [] as { id: number; name: string }[],
     calls: [] as string[],
     expire: false,
+    notices: { "background-sessions": true } as Record<string, boolean>,
+    showBackground: false,
   };
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   const row = (p: P) => ({ id: p.id, name: p.name, last4: "ab12", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
@@ -55,7 +57,16 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     }
     if (path === "/groups") return json(200, { total: 0, page: 1, pageSize: 50, rows: [] });
     if (path === "/log") return json(200, { total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
-    if (path === "/settings") return json(200, { allowAdminSecretReporting: true });
+    if (path === "/settings" && method === "PUT") {
+      const b = JSON.parse(String(init?.body));
+      if (b.notices) for (const [id, on] of Object.entries(b.notices)) state.notices[id] = on as boolean;
+      if ("showBackgroundSessions" in b) state.showBackground = b.showBackgroundSessions;
+      return json(200, { ok: true });
+    }
+    if (path === "/settings") {
+      const notices = Object.entries(state.notices).map(([id, on]) => ({ id, name: "Background sessions", description: "Says how many are set aside.", on }));
+      return json(200, { allowAdminSecretReporting: true, notices, showBackgroundSessions: state.showBackground });
+    }
     return json(404, { ok: false, error: "nope" });
   });
   vi.stubGlobal("fetch", fetchFn);
@@ -187,7 +198,7 @@ describe("tabs", () => {
     render(<AdminView />);
     await unlock();
     const tabs = within(screen.getByRole("tablist", { name: "Admin sections" })).getAllByRole("tab");
-    expect(tabs).toHaveLength(4);
+    expect(tabs).toHaveLength(5);
     tabs[0]!.focus();
     fireEvent.keyDown(tabs[0]!, { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: /Groups/ })).toHaveAttribute("aria-selected", "true");
@@ -199,5 +210,32 @@ describe("tabs", () => {
     fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
     expect(screen.getByRole("tab", { name: /Admin log/ })).toHaveAttribute("aria-selected", "true");
     await waitFor(() => expect(screen.getByText("Wrong secret (1)")).toBeInTheDocument());
+  });
+});
+
+describe("Settings tab (#114)", () => {
+  it("lists the wall notices and the background-sessions row with switches that follow the server", async () => {
+    const srv = fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    const notice = await screen.findByRole("switch", { name: /Background sessions/ });
+    expect(notice).toHaveAttribute("aria-checked", "true");
+    const show = screen.getByRole("switch", { name: /Show background sessions on the wall/ });
+    expect(show).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(notice);
+    await waitFor(() => expect(screen.getByRole("switch", { name: /Background sessions \u00a0?Off|Background sessions Off/ })).toHaveAttribute("aria-checked", "false"));
+    expect(srv.notices["background-sessions"]).toBe(false);
+    fireEvent.click(show);
+    await waitFor(() => expect(srv.showBackground).toBe(true));
+  });
+
+  it("opens on the Settings tab for #/admin/settings, the link a closed notice points to", async () => {
+    fakeServer();
+    window.location.hash = "#/admin/settings";
+    render(<AdminView />);
+    await unlock();
+    expect(screen.getByRole("tab", { name: /^Settings/ })).toHaveAttribute("aria-selected", "true");
+    window.location.hash = "";
   });
 });

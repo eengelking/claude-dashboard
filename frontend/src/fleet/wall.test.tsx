@@ -380,12 +380,65 @@ describe("sessions nobody is attached to (#45)", () => {
     expect(soon.textContent).toContain("nobody attached");
     expect(soon.textContent).toMatch(/hides in/);
     expect(screen.getByText("1 background session hidden")).toBeInTheDocument();
+    // The setting lives on the server: the link asks for it and the state it comes back in shows them.
+    const fetchFn = vi.fn(() => Promise.resolve(new Response("{}", { status: 200 })));
+    vi.stubGlobal("fetch", fetchFn);
     fireEvent.click(screen.getByRole("button", { name: "Show them" }));
-    expect([...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent)).toContain("long-gone");
-    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
-    expect([...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent)).not.toContain("long-gone");
+    expect(fetchFn).toHaveBeenCalledWith("/api/fleet/wall/background-sessions", expect.objectContaining({ method: "PUT", body: JSON.stringify({ show: true }) }));
+    vi.unstubAllGlobals();
   });
 
+  it("shows them when the server setting is on, with a Hide them link", () => {
+    const now = Date.now();
+    const st = stateFrom({
+      sessions: [makeSession({ id: "gone", name: "long-gone", attached: false, hideAt: now - 1_000 })],
+      wall: { notices: { "background-sessions": true }, showBackgroundSessions: true },
+    });
+    const { container } = render(<FleetView state={st} />);
+    expect([...container.querySelectorAll(".wall .card .nm")].map((e) => e.textContent)).toContain("long-gone");
+    expect(screen.getByRole("button", { name: "Hide them" })).toBeInTheDocument();
+  });
+});
+
+describe("wall notices (#114)", () => {
+  const hidden = () => stateFrom({ sessions: [makeSession({ id: "gone", name: "long-gone", attached: false, hideAt: Date.now() - 1_000 })] });
+
+  it("sits below the cards, and never above or between them", () => {
+    const { container } = render(<FleetView state={hidden()} />);
+    const stack = container.querySelector(".notices")!;
+    expect(stack).toBeTruthy();
+    const wall = container.querySelector(".wall");
+    const last = wall ?? container.querySelector(".kpis")!;
+    expect(last.compareDocumentPosition(stack) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.querySelectorAll(".fold")).toHaveLength(1);
+  });
+
+  it("closes with its X, says which notice was turned off and links to Admin > Settings, and the confirmation has its own X", async () => {
+    const fetchFn = vi.fn(() => Promise.resolve(new Response('{"ok":true}', { status: 200 })));
+    vi.stubGlobal("fetch", fetchFn);
+    render(<FleetView state={hidden()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Close notice: Background sessions" }));
+    expect(fetchFn).toHaveBeenCalledWith("/api/fleet/notices/background-sessions/close", { method: "POST" });
+    const toast = (await screen.findByText("Notice turned off")).closest(".toast") as HTMLElement;
+    expect(toast).toHaveTextContent("Background sessions");
+    expect(within(toast).getByRole("link", { name: /Open Admin > Settings/ })).toHaveAttribute("href", "#/admin/settings");
+    fireEvent.click(within(toast).getByRole("button", { name: "Close this message" }));
+    expect(screen.queryByText("Notice turned off")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not render a notice that is switched off in Admin", () => {
+    const st = stateFrom({
+      sessions: [makeSession({ id: "gone", name: "long-gone", attached: false, hideAt: Date.now() - 1_000 })],
+      wall: { notices: { "background-sessions": false }, showBackgroundSessions: false },
+    });
+    const { container } = render(<FleetView state={st} />);
+    expect(container.querySelector(".fold")).toBeNull();
+    expect(container.querySelector(".notices")).toBeNull();
+  });
+});
+
+describe("more on sessions nobody is attached to (#45)", () => {
   it("looks the same as before for a session whose reporter does not say", () => {
     const st = stateFrom({ sessions: [makeSession({ attached: null, hideAt: null })] });
     const { container } = render(<FleetView state={st} />);
