@@ -1,17 +1,13 @@
 import type { ReactNode } from "react";
 import type { Phase } from "../store";
-import { APP_NAME } from "../types";
-import { Logo } from "./Icons";
+import { BrandLink } from "./BrandLink";
 
 export function TopBar(props: { phase: Phase; reporters: number; outdated?: number; newer?: number; lastMessageAt: number; now: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters, lastMessageAt, now } = props;
   const synced = lastMessageAt ? Math.max(0, (now - lastMessageAt) / 1000) : null;
   return (
     <header className="top" id="podium-top" hidden={props.collapsed}>
-      <div className="logo">
-        <Logo />
-        {APP_NAME}
-      </div>
+      <BrandLink />
       <span className="pill">Fleet</span>
       {/* Do not add anything to the right of the connection pill below. Its text changes width as "synced 0.0s
           ago" ticks, so everything after it would shift. Leave that space empty for now. */}

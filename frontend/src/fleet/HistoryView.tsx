@@ -10,7 +10,7 @@ import { OrchestratorDetail } from "./components/OrchestratorDetail";
 import type { AgentSort } from "./components/AgentTree";
 import { Cost, ModelChip } from "./components/Chips";
 import { FocusView } from "./components/FocusView";
-import { Logo } from "./components/Icons";
+import { BrandLink } from "./components/BrandLink";
 import { ThemePicker } from "./components/ThemePicker";
 import { useTheme } from "./useTheme";
 import { APP_NAME, type HistoryRow, type SessionView } from "./types";
@@ -81,10 +81,7 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
     <div className="podium">
       <div className="app" style={{ gridTemplateRows: "auto auto 1fr" }}>
         <header className="top">
-          <div className="logo">
-            <Logo />
-            {APP_NAME}
-          </div>
+          <BrandLink />
           <span className="pill">History</span>
           <span className="spacer" />
           <a className="btn" href="#/">

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import "../fleet.css";
 import "./admin.css";
-import { Logo } from "../components/Icons";
+import { BrandLink } from "../components/BrandLink";
 import { ThemePicker } from "../components/ThemePicker";
 import { useTheme } from "../useTheme";
 import { APP_NAME } from "../types";
@@ -91,10 +91,7 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
     <div className="podium">
       <div className="app" style={{ gridTemplateRows: "auto auto 1fr" }}>
         <header className="top">
-          <div className="logo">
-            <Logo />
-            {APP_NAME}
-          </div>
+          <BrandLink />
           <span className="pill">Admin</span>
           <span className="spacer" />
           <a className="btn" href="#/">
