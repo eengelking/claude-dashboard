@@ -54,6 +54,9 @@ export function TopBar(props: { phase: Phase; reporters: number; outdated?: numb
         </button>
       )}
       {props.wall}
+      <a className="btn" href="#/admin" title="Tokens, groups and the admin log">
+        Admin
+      </a>
     </header>
   );
 }

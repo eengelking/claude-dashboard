@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FleetApp } from "./fleet/FleetApp";
+import { AdminView } from "./fleet/admin/AdminView";
 import { HistoryView } from "./fleet/HistoryView";
 import { routeFor } from "./route";
 
@@ -11,7 +12,9 @@ function Root() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-  if (routeFor(hash) === "history") return <HistoryView />;
+  const route = routeFor(hash);
+  if (route === "history") return <HistoryView />;
+  if (route === "admin") return <AdminView />;
   return <FleetApp />;
 }
 

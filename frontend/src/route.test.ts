@@ -7,6 +7,10 @@ describe("routeFor", () => {
     expect(routeFor("#/history?day=2026-10-10")).toBe("history");
   });
 
+  it("opens Admin for #/admin", () => {
+    expect(routeFor("#/admin")).toBe("admin");
+  });
+
   it("opens the fleet console for #/, an empty hash and anything unknown", () => {
     expect(routeFor("")).toBe("fleet");
     expect(routeFor("#/")).toBe("fleet");
