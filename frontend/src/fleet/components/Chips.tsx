@@ -69,7 +69,19 @@ export function StatusIcon({ status }: { status: StatusKind }) {
   return <IconClock />;
 }
 
-export function StatusChip({ status }: { status: StatusKind }) {
+/**
+ * `delegating` (the tooltip text, from `delegateText`) swaps a running row for the display-only
+ * "delegating" state: the row is idle while agents it launched run. It is not a session status.
+ */
+export function StatusChip({ status, delegating }: { status: StatusKind; delegating?: string }) {
+  if (delegating && status === "running") {
+    return (
+      <span className="st deleg" title={delegating} aria-label={`delegating. ${delegating}`}>
+        <i className="dot ring" aria-hidden="true" />
+        delegating
+      </span>
+    );
+  }
   return (
     <span className={`st ${status}`}>
       <StatusIcon status={status} />

@@ -424,3 +424,35 @@ describe("Plan and Files tabs", () => {
     expect(container.querySelector(".two")).not.toHaveClass("wide");
   });
 });
+
+describe("delegating (#98)", () => {
+  const nested = [makeAgent({ id: "p", description: "Parent agent" }), makeAgent({ id: "c", parentId: "p", description: "Child agent" })];
+  const chip = (c: HTMLElement, sel: string) => c.querySelector(`${sel} .st`) as HTMLElement;
+
+  it("shows the orchestrator and a parent agent as delegating while their children run, and the leaf as running", () => {
+    const { container } = openFocus({ agents: nested });
+    expect(chip(container, ".trow.root").textContent).toBe("delegating");
+    expect(chip(container, ".trow.root")).toHaveAttribute("title", "Waiting on 1 agent: Parent agent. Not waiting on you.");
+    expect(chip(container, '[data-agent="p"]').textContent).toBe("delegating");
+    expect(chip(container, '[data-agent="p"]')).toHaveAttribute("title", "Waiting on 1 agent: Child agent. Not waiting on you.");
+    expect(chip(container, '[data-agent="c"]').textContent).toBe("running");
+    expect(container.querySelector(".fh h1 .st")!.textContent).toBe("delegating");
+  });
+
+  it("goes back to running when the agents finish", () => {
+    const { container } = openFocus({ agents: [makeAgent({ id: "p", status: "done", endedAt: 1_500_000 })] });
+    expect(chip(container, ".trow.root").textContent).toBe("running");
+    expect(container.querySelector(".fh h1 .st")!.textContent).toBe("running");
+  });
+
+  it("leaves the session's own waiting status alone, and the fleet card keeps saying running", () => {
+    const waiting = openFocus({ status: "waiting", waitReason: "permission", agents: nested });
+    expect(chip(waiting.container, ".trow.root").textContent).toBe("waiting on you");
+    cleanup();
+    const st = stateFrom({ sessions: [makeSession({ agents: nested })] });
+    const { container } = render(<FleetView state={st} />);
+    const card = container.querySelector(".wall .card")!;
+    expect(card.querySelector(".st")!.textContent).toBe("running");
+    expect(card.querySelector(".st.deleg")).toBeNull();
+  });
+});

@@ -46,4 +46,16 @@ describe("themes", () => {
     expect(html).toContain(`/^(${others.map((t) => t.id).join("|")})$/`);
     for (const t of others) for (const m of t.modes) expect(css).toContain(`:root[data-theme-name="${t.id}"][data-theme="${m}"] .podium {`);
   });
+
+  it("defines the delegating colors in Podium's blocks and in every palette block (#98)", () => {
+    const fleet = readFileSync(resolve(__dirname, "fleet.css"), "utf8");
+    const themes = readFileSync(resolve(__dirname, "themes.css"), "utf8");
+    const blocks = (css: string) => css.split("}").filter((b) => /--bg:/.test(b));
+    const all = [...blocks(fleet), ...blocks(themes)];
+    expect(all.length).toBeGreaterThanOrEqual(13);
+    for (const b of all) {
+      expect(b, b.slice(0, 80)).toMatch(/--deleg:\s*#/);
+      expect(b, b.slice(0, 80)).toMatch(/--deleg-text:\s*#/);
+    }
+  });
 });

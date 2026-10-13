@@ -24,8 +24,9 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
   now: number;
   selected: boolean;
   flash: boolean;
+  delegating?: string;
   onSelect: (id: string) => void;
-}>(function AgentRow({ a, guides, now, selected, flash, onSelect }, ref) {
+}>(function AgentRow({ a, guides, now, selected, flash, delegating, onSelect }, ref) {
   return (
     <button
       ref={ref}
@@ -60,7 +61,7 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
       <div className="num"><Cost usd={a.costUsdEst} family={a.modelFamily} /></div>
       <div className="num">{fmtDur(agentElapsedSec(a, now))}</div>
       <div className="cell">
-        <StatusChip status={a.status} />
+        <StatusChip status={a.status} delegating={delegating} />
       </div>
     </button>
   );

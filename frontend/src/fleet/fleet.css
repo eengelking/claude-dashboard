@@ -22,6 +22,8 @@
   --good: #0ca30c;
   --good-text: #3dbb3d;
   --warn: #fab219;
+  --deleg: #2fa4e0;
+  --deleg-text: #5cbcf0;
   --serious: #ec835a;
   --crit: #d03b3b;
   --crit-text: #ee6a6a;
@@ -37,7 +39,7 @@
     --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
     --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834; --other: #6b6a64;
-    --good-text: #006300; --crit-text: #b52a2a;
+    --good-text: #006300; --crit-text: #b52a2a; --deleg: #0a7fb8; --deleg-text: #07608c;
     --eff-low: #d9601f; --eff-medium: #2f8f3a; --eff-high: #1f78c8; --eff-xhigh: #7a3fe0;
     --eff-r1: #c9302c; --eff-r2: #d9601f; --eff-r3: #c99a0a; --eff-r4: #2f8f3a; --eff-r5: #4a6fd0;
     color-scheme: light;
@@ -47,7 +49,7 @@
   --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
   --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
   --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834; --other: #6b6a64;
-  --good-text: #006300; --crit-text: #b52a2a;
+  --good-text: #006300; --crit-text: #b52a2a; --deleg: #0a7fb8; --deleg-text: #07608c;
   --eff-low: #d9601f; --eff-medium: #2f8f3a; --eff-high: #1f78c8; --eff-xhigh: #7a3fe0;
   --eff-r1: #c9302c; --eff-r2: #d9601f; --eff-r3: #c99a0a; --eff-r4: #2f8f3a; --eff-r5: #4a6fd0;
   color-scheme: light;
@@ -134,6 +136,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium[data-beat="1"] .step.active .ic::after, .podium[data-beat="3"] .step.active .ic::after { opacity: .775; }
 .podium[data-beat="2"] .crew .a.running, .podium[data-beat="2"] .step.active .ic::after { opacity: .55; }
 .podium .dot.waiting { background: transparent; border: 2px solid var(--warn); }
+.podium .dot.ring { background: transparent; border: 1.5px solid var(--deleg); }
 .podium .dot.stale { background: var(--serious); }
 .podium .dot.done { background: var(--axis); }
 .podium .dot.failed { background: var(--crit); }
@@ -141,6 +144,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .podium .st.running { color: var(--good-text); } .podium .st.done { color: var(--muted); } .podium .st.failed, .podium .st.aborted { color: var(--crit-text); }
 .podium .st.aborted { color: var(--muted); }
+.podium .st.deleg { color: var(--deleg-text); }
 .podium .st.queued, .podium .st.waiting { color: var(--warn); } .podium .st.stale { color: var(--serious); }
 
 /* rail */

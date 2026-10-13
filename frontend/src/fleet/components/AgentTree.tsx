@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { buildTree, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, TOKENS_HINT, type AgentSortKey } from "../logic";
+import { buildTree, delegateText, ORCHESTRATOR_ROW, sessionElapsedSec, sortAgents, TOKENS_HINT, waitingOnByRow, type AgentSortKey } from "../logic";
 import type { SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
@@ -32,6 +32,11 @@ export function AgentTree(props: {
 }) {
   const { s, now, sort } = props;
   const rows = sort.key ? sortAgents(s.agents, sort.key, sort.dir, now).map((a) => ({ agent: a, guides: [] })) : buildTree(s.agents);
+  const waiting = waitingOnByRow(s);
+  const delegating = (id: string) => {
+    const kids = waiting.get(id);
+    return kids ? delegateText(kids) : undefined;
+  };
   const flashRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (props.flashAgent && flashRef.current?.scrollIntoView) flashRef.current.scrollIntoView({ block: "center" });
@@ -94,7 +99,7 @@ export function AgentTree(props: {
           <div className="num"><Cost usd={s.costUsd} family={s.modelFamily} /></div>
           <div className="num">{fmtDur(sessionElapsedSec(s, now))}</div>
           <div className="cell">
-            <StatusChip status={s.status} />
+            <StatusChip status={s.status} delegating={delegating(ORCHESTRATOR_ROW)} />
           </div>
         </button>
         {rows.length ? (
@@ -107,6 +112,7 @@ export function AgentTree(props: {
               now={now}
               selected={props.selectedAgent === r.agent.id}
               flash={props.flashAgent === r.agent.id}
+              delegating={delegating(r.agent.id)}
               onSelect={props.onSelect}
             />
           ))

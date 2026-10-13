@@ -1,16 +1,18 @@
-import { currentStep } from "../logic";
+import { currentStep, delegateText, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
 import type { SessionView } from "../types";
 import { GitLine, StatusChip } from "./Chips";
 import { MiniCharts } from "./MiniCharts";
 
 export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
   const step = currentStep(s.plan);
+  const kids = waitingOnByRow(s).get(ORCHESTRATOR_ROW);
+  const delegating = kids ? delegateText(kids) : undefined;
   return (
     <div className="fh">
       <div className="id">
         <h1>
-          <i className={`dot ${s.status}`} aria-hidden="true" />
-          {s.name} <StatusChip status={s.status} />
+          <i className={delegating ? "dot ring" : `dot ${s.status}`} aria-hidden="true" />
+          {s.name} <StatusChip status={s.status} delegating={delegating} />
         </h1>
         {s.plan ? (
           <div className="goal">

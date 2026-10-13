@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
-import { ContextBar, Cost, EffortMeter, ModelChip, NO_PRICE_TITLE } from "./Chips";
+import { ContextBar, Cost, EffortMeter, ModelChip, NO_PRICE_TITLE, StatusChip } from "./Chips";
 import { EFFORTS } from "../logic";
 
 afterEach(cleanup);
@@ -69,3 +69,25 @@ describe("a model that is not a Claude model (#66)", () => {
   });
 });
 
+
+describe("StatusChip delegating variant (#98)", () => {
+  it("says delegating with a ring dot, the detail as tooltip and screen-reader text, and none of the amber classes", () => {
+    const text = "Waiting on 2 agents: A, B. Not waiting on you.";
+    const { container } = render(<StatusChip status="running" delegating={text} />);
+    const st = container.querySelector(".st")!;
+    expect(st).toHaveClass("deleg");
+    expect(st).not.toHaveClass("running");
+    expect(st).not.toHaveClass("waiting");
+    expect(st).toHaveAttribute("title", text);
+    expect(st).toHaveAttribute("aria-label", `delegating. ${text}`);
+    expect(st.textContent).toBe("delegating");
+    expect(st.querySelector(".dot.ring")).toBeInTheDocument();
+    expect(st.querySelector(".dot.waiting")).toBeNull();
+  });
+
+  it("is unchanged without it", () => {
+    const { container } = render(<StatusChip status="running" />);
+    expect(container.querySelector(".st")).toHaveClass("running");
+    expect(container.querySelector(".st")!.textContent).toBe("running");
+  });
+});

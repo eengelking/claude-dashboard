@@ -154,7 +154,35 @@ export function buildTree(agents: readonly AgentView[]): TreeRow[] {
   return rows;
 }
 
-export type AgentSortKey = "model" | "effort" | "ctx" | "tok" | "cost" | "time" | "status";
+/**
+ * Rows that are waiting on agents they launched, keyed by agent id (`ORCHESTRATOR_ROW` for the
+ * orchestrator): a row whose own status is `running` and that has running direct children. Display-only;
+ * Podium cannot tell a foreground launch from a background one, so any running child counts. A child
+ * whose parent is missing counts for the orchestrator, as `buildTree` places it at the top level. While the
+ * session itself is not `running` (waiting on the user, stale, done) nothing is returned, its own status wins.
+ */
+export function waitingOnByRow(s: SessionView): Map<string, AgentView[]> {
+  const out = new Map<string, AgentView[]>();
+  if (s.status !== "running") return out;
+  const byId = new Map(s.agents.map((a) => [a.id, a]));
+  for (const a of s.agents) {
+    if (a.status !== "running") continue;
+    const p = a.parentId && a.parentId !== a.id && byId.has(a.parentId) ? a.parentId : ORCHESTRATOR_ROW;
+    if (p !== ORCHESTRATOR_ROW && byId.get(p)!.status !== "running") continue;
+    const list = out.get(p) ?? [];
+    list.push(a);
+    out.set(p, list);
+  }
+  return out;
+}
+
+/** The tooltip and screen-reader detail for a delegating row. A string, so memoised rows stay equal between renders. */
+export function delegateText(children: readonly AgentView[]): string {
+  const n = children.length;
+  return `Waiting on ${n} agent${n === 1 ? "" : "s"}: ${children.map((a) => a.description).join(", ")}. Not waiting on you.`;
+}
+
+export type AgentSortKey ="model" | "effort" | "ctx" | "tok" | "cost" | "time" | "status";
 
 const AGENT_STATUS_ORDER: Record<AgentView["status"], number> = { running: 0, failed: 1, queued: 2, aborted: 3, done: 4 };
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agentCounts, agentTokens, sessionTokens, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
+import { delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, agentTokens, sessionTokens, buildTree, currentStep, filterSessions, planProgress, splitDetached, sortAgents, sortSessions, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -156,5 +156,56 @@ describe("Tokens figure (issue #96)", () => {
       agents: [makeAgent({ id: "x", context: { tokens: 50_000, window: 1_000_000, percent: 5 } }), makeAgent({ id: "y", context: { tokens: 30_000, window: 1_000_000, percent: 3 } })],
     });
     expect(sessionTokens(s)).toBe(280_000);
+  });
+});
+
+describe("delegating (issue #98): a running row with running children is waiting on them", () => {
+  const ids = (m: Map<string, unknown[]>, k: string) => (m.get(k) as { id: string }[] | undefined)?.map((a) => a.id);
+
+  it("has no entries with no agents, or when every agent is finished, failed, queued or aborted", () => {
+    expect(waitingOnByRow(makeSession({ agents: [] })).size).toBe(0);
+    for (const status of ["done", "failed", "queued", "aborted"] as const) {
+      expect(waitingOnByRow(makeSession({ agents: [makeAgent({ status })] })).size, status).toBe(0);
+    }
+  });
+
+  it("the orchestrator waits on one or two running agents it launched", () => {
+    const one = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "a" })] }));
+    expect(ids(one, ORCHESTRATOR_ROW)).toEqual(["a"]);
+    const two = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "a" }), makeAgent({ id: "b", kind: "fork" })] }));
+    expect(ids(two, ORCHESTRATOR_ROW)).toEqual(["a", "b"]);
+    expect(two.has("a")).toBe(false);
+  });
+
+  it("a running agent waits on its own running children, and the orchestrator counts only its direct child", () => {
+    const m = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "a" }), makeAgent({ id: "b", parentId: "a" }), makeAgent({ id: "c", parentId: "a", kind: "fork" })] }));
+    expect(ids(m, ORCHESTRATOR_ROW)).toEqual(["a"]);
+    expect(ids(m, "a")).toEqual(["b", "c"]);
+    expect(m.has("b")).toBe(false);
+  });
+
+  it("a finished parent is not waiting, even with a running child", () => {
+    const m = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "a", status: "done" }), makeAgent({ id: "b", parentId: "a" })] }));
+    expect(m.has("a")).toBe(false);
+    expect(m.has(ORCHESTRATOR_ROW)).toBe(false);
+  });
+
+  it("a child whose parent is missing, or itself, counts for the orchestrator, and a parent cycle does not loop", () => {
+    const m = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "a", parentId: "gone" }), makeAgent({ id: "b", parentId: "b" })] }));
+    expect(ids(m, ORCHESTRATOR_ROW)).toEqual(["a", "b"]);
+    const cyc = waitingOnByRow(makeSession({ agents: [makeAgent({ id: "x", parentId: "y" }), makeAgent({ id: "y", parentId: "x" })] }));
+    expect(ids(cyc, "x")).toEqual(["y"]);
+    expect(ids(cyc, "y")).toEqual(["x"]);
+  });
+
+  it("the session's own status wins: waiting on the user, stale or done show nothing", () => {
+    for (const status of ["waiting", "stale", "done"] as const) {
+      expect(waitingOnByRow(makeSession({ status, agents: [makeAgent()] })).size, status).toBe(0);
+    }
+  });
+
+  it("words the tooltip for one and for several agents, and says it is not waiting on you", () => {
+    expect(delegateText([makeAgent({ description: "Map call sites" })])).toBe("Waiting on 1 agent: Map call sites. Not waiting on you.");
+    expect(delegateText([makeAgent({ description: "A" }), makeAgent({ description: "B" })])).toBe("Waiting on 2 agents: A, B. Not waiting on you.");
   });
 });

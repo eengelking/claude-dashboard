@@ -8,9 +8,10 @@ Usage: npx tsx scripts/theme-contrast.ts [options]
 
 Reads the token blocks in frontend/src/fleet/fleet.css (Podium) and themes.css (the rest).
 Checks, on --bg and --surface:
-  text     ink, ink2, muted, good-text, crit-text         need 4.5:1
-  marks    good, warn, serious, crit, opus, sonnet,
-           haiku, fable                                    need 3:1, or Podium's own ratio for the
+  text     ink, ink2, muted, good-text, crit-text,
+           deleg-text                                      need 4.5:1
+  marks    good, warn, serious, crit, deleg, opus,
+           sonnet, haiku, fable                                   need 3:1, or Podium's own ratio for the
                                                            same mode when that is lower (parity)
   models   the four model colors must differ from each other (OKLab distance, need 0.08)
 
@@ -83,12 +84,12 @@ const results: Result[] = [];
 const add = (palette: string, check: string, value: number, need: number) => results.push({ palette, check, value: Math.round(value * 100) / 100, need, ok: value >= need });
 
 const base = podium();
-const MARKS = ['good', 'warn', 'serious', 'crit', 'opus', 'sonnet', 'haiku', 'fable'];
+const MARKS = ['good', 'warn', 'serious', 'crit', 'deleg', 'opus', 'sonnet', 'haiku', 'fable'];
 for (const [name, t] of Object.entries({ ...base, ...others() })) {
   const ref = base[`podium/${name.split('/')[1]}`];
   for (const bgName of ['bg', 'surface']) {
     const bg = t[bgName];
-    for (const k of ['ink', 'ink2', 'muted', 'good-text', 'crit-text']) add(name, `${k} on ${bgName}`, ratio(t[k], bg), 4.5);
+    for (const k of ['ink', 'ink2', 'muted', 'good-text', 'crit-text', 'deleg-text']) add(name, `${k} on ${bgName}`, ratio(t[k], bg), 4.5);
     for (const k of MARKS) add(name, `${k} on ${bgName}`, ratio(t[k], bg), Math.min(3, Math.floor(ratio(ref[k], ref[bgName]) * 100) / 100));
   }
   const m = ['opus', 'sonnet', 'haiku', 'fable'];
