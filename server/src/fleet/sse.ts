@@ -7,7 +7,7 @@ export interface SseSink {
   end?(): void;
 }
 
-export type SseEventName = 'snapshot' | 'session' | 'activity' | 'removed' | 'tick';
+export type SseEventName = 'snapshot' | 'session' | 'activity' | 'removed' | 'tick' | 'wall';
 
 export function formatSse(event: SseEventName, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
