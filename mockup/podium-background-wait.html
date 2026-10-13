@@ -130,7 +130,7 @@ body[data-beat="3"] .dot.ring::after { transform: scale(1); opacity: 0; }
     <li>With several kinds, the text lists the counts: "Waiting for 1 background shell and 1 background agent to finish". The tooltip lists each task with a short description.</li>
     <li>A scheduled wake-up reads "Waiting for a scheduled wake-up at 14:30".</li>
     <li>The card says only the short line. It never carries a task description, so a long one cannot wrap it.</li>
-    <li>The orchestrator callout adds the task description after the line, on its own row below it, and ends in an ellipsis when it runs out of room. The full text is in the tooltip.</li>
+    <li>The orchestrator callout adds the task description after the line, on its own row below it, cut at a character limit and ended with " ..." (a space, then three dots). The full text is in the tooltip.</li>
     <li>A shell's command is shortened and redacted before it leaves the machine, and is never sent whole.</li>
     <li>The blue ring pulses like the green running dot, on the same shared beat. It stops with reduced motion.</li>
     <li>The moment the work ends, the wording goes back to normal ("Waiting for your input", or running when a new turn starts).</li>
@@ -145,6 +145,9 @@ var CASES = {
   done: { n: 1, line: "Waiting for your input.", tip: null, feed: "Waiting for your input", rail: "waiting on you" }
 };
 var $ = function (id) { return document.getElementById(id); };
+/* CSS text-overflow cannot put a space before its ellipsis, so the product cuts the description at a character limit and adds " ..." itself. The CSS ellipsis stays as a safety net for narrow windows. */
+var CUT = 64;
+function cut(t) { t = String(t); if (t.length <= CUT) return t; return t.slice(0, CUT).replace(/\s+$/, "") + " ..."; }
 function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 function render(key) {
   var c = CASES[key], quiet = !c.n; var detail = c.long || (c.tip && c.tip[1]);
@@ -157,7 +160,7 @@ function render(key) {
   $("topwait").textContent = youCount + " waiting on you";
   $("shown").textContent = "2 shown";
   $("callout").innerHTML = quiet
-    ? '<div class="wait bg rows" title="' + esc(c.line + ' ' + detail) + '"><span>' + esc(c.line) + '</span><small>' + esc(detail) + '</small></div>'
+    ? '<div class="wait bg rows" title="' + esc(c.line + ' ' + detail) + '"><span>' + esc(c.line) + '</span><small>' + esc(cut(detail)) + '</small></div>'
     : '<div class="wait you">Waiting for your input.</div>';
   $("tip").innerHTML = quiet ? esc(c.tip[0]) + '<small>' + esc(detail) + '</small>' : 'Waiting for your input.<small>Hover shows nothing extra for a wait on you.</small>';
   $("rail").innerHTML =
