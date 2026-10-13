@@ -157,7 +157,7 @@ What that means in practice:
 - A card can stay on the wall after you close the window. Closing Claude Code can leave the conversation
   running in the background (the window says "Your conversation moved to the background"). That is a real
   session and it stays until it ends. See "Closing a background session" below for how to list and end it.
-- A session with no window on it is marked. After `/exit` the card turns dashed and muted with a "nobody attached" chip and a countdown. After `DETACHED_HIDE_AFTER_MS` (a minute by default) it leaves the wall and a line under the wall says how many background sessions are hidden and what they cost, with a Show them button. It still counts in the totals and in History. Run `claude attach` and the card comes back as a normal card at once. A one-off `claude -p` run reads the same way, because it never has a window. This needs the mod at 0.7.0 or later; an older mod's sessions are never marked.
+- A session with no window on it is marked. After `/exit` the card turns dashed and muted with a "nobody attached" chip and a countdown. After `DETACHED_HIDE_AFTER_MS` (a minute by default) it leaves the wall and a note at the bottom of the wall says how many background sessions are hidden and what they cost, with a Show them link. Close the note with its X to turn it off; Admin > Settings turns it back on and can also keep background sessions on the wall. It still counts in the totals and in History. Run `claude attach` and the card comes back as a normal card at once. A one-off `claude -p` run reads the same way, because it never has a window. This needs the mod at 0.7.0 or later; an older mod's sessions are never marked.
 - Sessions you started without the mod, reported through settings hooks, are never hidden this way, because
   hooks carry no token or cost figures to judge them by.
 
@@ -270,7 +270,7 @@ Admin is for the person who runs the server. Open it with the **Admin** button i
 without activity, and five wrong secrets lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has four tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
+Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
 
 - **People.** Type a name and choose Create token. Podium shows the token once, above the tabs, with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
@@ -284,7 +284,12 @@ Admin has four tabs. Every list is paged by the server, 50 rows at a time (25 an
   seconds.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
-- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations and group changes, with the
+- **Settings.** The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
+  turns its switch off for everyone. After you close one, Podium says so and links to this tab. A second
+  switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
+  default). These settings apply to every browser and stay after a restart.
+- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes and changes to
+  the wall settings, with the
   address each came from. It never holds a token or the secret.
 
 A report is accepted when its token belongs to the person whose name it also sends. The server decides who a

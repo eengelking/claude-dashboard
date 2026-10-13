@@ -150,6 +150,8 @@ h1 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
       <h2>Wall notices</h2>
       <p class="hint">Short notes shown at the bottom of the wall. Closing one on the wall turns it off here. Turn it back on with its switch.</p>
       <div class="rows" id="rows"></div>
+      <h2>The wall</h2>
+      <div class="rows" id="wallrows"></div>
     </div>
   </div>
 
@@ -197,6 +199,15 @@ function renderRows() {
       '<div class="sw"><span class="lbl">' + (on ? "On" : "Off") + '</span><button type="button" role="switch" aria-checked="' + on + '" aria-label="' + esc(d.name) + '" data-sw="' + d.id + '"></button></div></div>';
   }).join("");
 }
+function renderWallRows() {
+  var on = state.bgShown;
+  $("wallrows").innerHTML = '<div class="row"><div class="l"><b>Show background sessions on the wall</b><span>Sessions nobody is attached to are set aside after a minute. Turn this on to keep them in view. Off by default.</span></div>' +
+    '<div class="sw"><span class="lbl">' + (on ? "On" : "Off") + '</span><button type="button" role="switch" aria-checked="' + on + '" aria-label="Show background sessions on the wall" data-bg="1"></button></div></div>';
+}
+$("wallrows").addEventListener("click", function (e) {
+  if (!e.target.closest("[data-bg]")) return;
+  state.bgShown = !state.bgShown; renderWallRows(); renderNotices();
+});
 function setView(v) {
   state.view = v;
   $("wall").hidden = v !== "wall"; $("admin").hidden = v !== "admin";
@@ -216,7 +227,7 @@ $("notices").addEventListener("click", function (e) {
     var d = DEFS.filter(function (x) { return x.id === c.dataset.close; })[0];
     var el = c.closest(".notice"); el.classList.add("leaving");
     setTimeout(function () { state.on[d.id] = false; renderNotices(); renderRows(); showToast(d); }, 150);
-  } else if (a && a.dataset.act === "background") { state.bgShown = !state.bgShown; renderNotices(); }
+  } else if (a && a.dataset.act === "background") { state.bgShown = !state.bgShown; renderNotices(); renderWallRows(); }
   else if (a) { var d2 = DEFS[1]; state.on.cachealerts = false; renderNotices(); renderRows(); }
 });
 $("rows").addEventListener("click", function (e) {
@@ -227,8 +238,8 @@ $("v-wall").onclick = function () { setView("wall"); };
 $("v-admin").onclick = function () { setView("admin"); };
 $("toast-go").onclick = function () { $("toast").hidden = true; state.toast = null; setView("admin"); };
 $("toast-x").onclick = function () { $("toast").hidden = true; state.toast = null; };
-$("reset").onclick = function () { state.on = { background: true, cachealerts: true }; state.bgShown = false; state.toast = null; $("toast").hidden = true; renderNotices(); renderRows(); setView("wall"); };
-renderNotices(); renderRows();
+$("reset").onclick = function () { state.on = { background: true, cachealerts: true }; state.bgShown = false; state.toast = null; $("toast").hidden = true; renderNotices(); renderRows(); renderWallRows(); setView("wall"); };
+renderNotices(); renderRows(); renderWallRows();
 </script>
 </body>
 </html>

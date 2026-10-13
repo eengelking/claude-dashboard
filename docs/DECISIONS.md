@@ -251,3 +251,18 @@ person whose sessions have all ended has no band, though today's spend still lis
 so a copied `~/.claude` makes two machines share one id (the host name still differs in most cases). Group changes
 in Admin reach a live session's card with its next report rather than at once.
 
+## 22. Wall notices are server settings, shown at the bottom, with one switch each in Admin
+
+**Choice.** Informational notes about the wall (today, the background-sessions note) sit in one stack at the bottom
+of the wall. Each has an X. Closing one turns it off for every browser and tells the user where to turn it back on,
+Admin > Settings, which has one switch per notice. The switches, and whether background sessions are shown, are rows in
+the `settings` table, sent in the state body and pushed to open tabs as a `wall` stream event. Closing a notice and
+the Show them / Hide them link are open routes like Remove, not Admin calls.
+**Why.** A note above the cards pushes the work down and a note that cannot be closed gets in the way every time.
+The wall has no Admin session, so what it shows has to come in the state it already receives. One setting per server
+matches how the rest of Admin works, and keeps "show background sessions" from resetting on every reload, as the
+old per-tab state did.
+**Cost.** Anyone who can reach the dashboard can close a notice or show background sessions for everyone, the same
+trust Remove already has. A notice closed by mistake is easy to restore but affects every viewer until it is. The
+list of notices lives in two places, the server's `NOTICES` and the wall's stack, so a new notice touches both.
+

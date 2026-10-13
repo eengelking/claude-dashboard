@@ -23,6 +23,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Added
 
+- Wall notices now sit at the bottom of the wall, one per row, each with an X. Closing one turns it off for everyone and shows a confirmation that names it and links to the new **Settings** tab in Admin, which has an On/Off switch for every notice and a **Show background sessions on the wall** switch. That second switch replaces the per-tab state behind Show them, so the choice now holds across reloads and browsers. The settings are stored on the server and pushed to open tabs. (#114)
 - The agent panel has a **Report** group with two buttons, Task prompt and Final answer, that open the text in a modal with markdown rendered as formatting. A button is dimmed and inert when there is nothing to show (and the answer says "not finished" while the agent runs). The modal blurs the page behind it, closes with the X, Esc or a click outside, keeps focus inside and gives it back, and has a Copy button. Raw HTML in the text is shown as text. The whole prompt and answer need the new opt-in `fullPrompts` reporter option (mod 0.10.0, off by default): they are redacted, cut at 20,000 characters, sent once, stored in a new `agent_texts` table and fetched when the modal opens from `GET /api/fleet/sessions/:id/agents/:agentId/text`. Without it, or with an older mod, the modal shows the 400-character excerpt and says why. The supported reporter range is now 0.2.0–0.10.0. (#97)
 
 ### Changed
