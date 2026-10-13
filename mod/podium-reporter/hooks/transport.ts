@@ -6,6 +6,8 @@ import type { ActivityEvent, Report } from './protocol.ts';
 export const QUEUE_MAX = 500;
 export const BACKOFF_MS = [1000, 2000, 5000, 10_000] as const;
 export const EVENTS_PER_REPORT = 100;
+/** How long to wait after the server refuses the token or name: it will not change until the settings do. */
+export const REFUSED_RETRY_MS = 60_000;
 
 export interface HttpResult {
   status: number;
@@ -20,7 +22,7 @@ export interface TransportConfig {
   heartbeatMs: number;
 }
 
-export type SendOutcome = 'ok' | 'rejected' | 'failed' | 'busy';
+export type SendOutcome = 'ok' | 'rejected' | 'refused' | 'failed' | 'busy';
 
 export class Transport {
   queue: ActivityEvent[] = [];
@@ -41,6 +43,9 @@ export class Transport {
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
+  private loggedRefusal = false;
+  /** True while the server's last answer was a 401. */
+  refused = false;
   private rejectStreak = 0;
 
   constructor(
@@ -118,6 +123,8 @@ export class Transport {
         this.lastSentAt = now;
         this.lastError = null;
         this.sent++;
+        this.refused = false;
+        this.loggedRefusal = false;
         return 'ok';
       }
       if (res.status === 400 || res.status === 413) {
@@ -134,6 +141,20 @@ export class Transport {
           this.log(`podium-reporter: server rejected a report (${res.status}): ${res.text.slice(0, 200)}`);
         }
         return 'rejected';
+      }
+      if (res.status === 401) {
+        // The token is wrong, revoked, or does not belong to the configured name. Keep the events, wait a long
+        // while (nothing changes until the settings do), and say so once. The token is never put in a message.
+        this.refused = true;
+        this.online = false;
+        this.nextAttemptAt = now + REFUSED_RETRY_MS;
+        this.lastSentAt = now;
+        this.lastError = 'server refused the token or name (401)';
+        if (!this.loggedRefusal) {
+          this.loggedRefusal = true;
+          this.log('podium-reporter: the server refused this reporter (401): check the Podium token and user name settings');
+        }
+        return 'refused';
       }
       throw new Error(`HTTP ${res.status}`);
     } catch (err) {
@@ -156,12 +177,18 @@ export class Transport {
   }
 
   statusText(): string {
+    if (this.refused) return 'podium ○ token refused';
     if (this.online === false) return 'podium ○ offline';
     if (this.online === null) return 'podium ○ connecting';
     const live = `podium ● ${this.liveSessions ?? 1} live`;
     if (this.compat === 'outdated') return `${live} · update mod`;
     if (this.compat === 'newer') return `${live} · upgrade server`;
     return live;
+  }
+
+  /** What to tell the user when the server refused the token or name; null when it did not. */
+  refusalNotice(): string | null {
+    return this.refused ? 'The server refused this reporter. Check that the Podium token belongs to the user name in the podium-reporter settings (claude plugin configure podium-reporter), or ask the server owner for a new token.' : null;
   }
 
   /** What to tell the user when the server says this reporter and it do not match; null when they do (or it cannot tell). */

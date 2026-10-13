@@ -42,7 +42,7 @@ import {
 import { Transport, type FetchLike } from './transport.ts';
 import { explainPrompt } from './failures.ts';
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -56,6 +56,7 @@ interface Options {
   flushIntervalMs: number;
   heartbeatMs: number;
   sessionName: string;
+  userName: string;
   showStatus: boolean;
   explainFailures: boolean;
 }
@@ -77,6 +78,8 @@ interface Runtime {
   lastStatus: string | null;
   toastedOk: boolean;
   toastedFail: boolean;
+  /** The refusal notice last toasted, so a later refusal is news again once a report has gone through. */
+  toastedRefusal: string | null;
   /** The version notice last toasted, so each distinct one shows once. */
   toastedVersion: string | null;
   /** Skill tool calls in flight: a skill.prompt during one belongs to that call's loop. */
@@ -92,6 +95,7 @@ export function readOptions(o: Record<string, unknown>): Options {
     flushIntervalMs: n(o.flushIntervalMs, 1000, 200),
     heartbeatMs: n(o.heartbeatMs, 5000, 1000),
     sessionName: s(o.sessionName, ''),
+    userName: s(o.userName, ''),
     showStatus: typeof o.showStatus === 'boolean' ? o.showStatus : true,
     explainFailures: o.explainFailures === true,
   };
@@ -155,6 +159,7 @@ function metaOf(r: Runtime, now: number) {
     now,
     storedName: r.storedName,
     optionName: opts.sessionName || null,
+    userName: opts.userName || null,
   };
 }
 
@@ -179,6 +184,17 @@ function toastOnce($: Engine, r: Runtime, ok: boolean): void {
       r.toastedFail = true;
       $.ui.toast(`Podium: cannot reach ${opts.serverUrl}; will keep retrying`);
     }
+  } catch {
+    // no toasts on this host
+  }
+}
+
+function toastRefusalOnce($: Engine, r: Runtime): void {
+  const notice = r.transport.refusalNotice();
+  if (!notice || notice === r.toastedRefusal) return;
+  r.toastedRefusal = notice;
+  try {
+    $.ui.toast(`Podium: ${notice}`);
   } catch {
     // no toasts on this host
   }
@@ -211,7 +227,13 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
   if (outcome === 'failed') {
     r.state = { ...r.state, dirty: true };
     toastOnce($, r, false);
-  } else if (outcome === 'ok') toastOnce($, r, true);
+  } else if (outcome === 'refused') {
+    r.state = { ...r.state, dirty: true };
+    toastRefusalOnce($, r);
+  } else if (outcome === 'ok') {
+    r.toastedRefusal = null; // accepted again: a later refusal is news again
+    toastOnce($, r, true);
+  }
   else if (outcome === 'busy') r.state = { ...r.state, dirty: true };
   toastVersionOnce($, r);
   showStatus($, r);
@@ -407,6 +429,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     lastStatus: null,
     toastedOk: rt?.toastedOk ?? false,
     toastedFail: rt?.toastedFail ?? false,
+    toastedRefusal: rt?.toastedRefusal ?? null,
     toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,
   };

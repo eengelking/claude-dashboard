@@ -445,6 +445,20 @@ describe('podium-reporter end to end', () => {
     expect(w.posts.at(-1)!.session.id).toBe('sess-resumed')
   })
 
+  test('the userName option is sent with every report, and is left out when empty', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.userName).toBe('Dana')
+  })
+
+  test('no userName is sent when the option is empty', async ($, on) => {
+    const w = world(on)
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect('userName' in w.posts[0]!).toBe(false)
+  })
+
   test('the sessionName option names the session', { options: { sessionName: 'from-option' } }, async ($, on) => {
     const w = world(on)
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })

@@ -20,6 +20,8 @@ export interface ReportMeta {
   storedName: string | null;
   /** The `sessionName` option. */
   optionName: string | null;
+  /** The `userName` option: the person this reporter is configured as. The server checks it against the token. */
+  userName?: string | null;
 }
 
 /** Display name (SPEC 6.6): /podium name, the option, a worktree's branch or folder, the repo folder, the id. */
@@ -107,6 +109,7 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
     v: 1,
     sentAt: meta.now,
     reporter: { name: REPORTER_NAME, version: meta.version, engineVersion: meta.engineVersion, hostSurface: meta.hostSurface },
+    ...(meta.userName && meta.userName.trim() ? { userName: clip(meta.userName.trim(), 80) } : {}),
     session: {
       id: s.id,
       name: displayName(s, meta.storedName, meta.optionName),

@@ -1,6 +1,6 @@
 {
   "name": "podium-reporter",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
   "author": { "name": "Ed Engelking" },
   "userConfig": {
@@ -13,9 +13,15 @@
     "token": {
       "type": "string",
       "title": "Podium token",
-      "description": "Sent as X-Podium-Token when the server sets PODIUM_TOKEN. Leave empty otherwise.",
+      "description": "Sent as X-Podium-Token. Use the token the server owner made for you in Podium Admin (it only works with your user name), or the server's admin secret on a single-user setup. Leave empty when the server has no token.",
       "default": "",
       "sensitive": true
+    },
+    "userName": {
+      "type": "string",
+      "title": "Your name in Podium",
+      "description": "The name the server owner gave you when they made your token. The server accepts your reports only when the token and this name match. Leave empty on a single-user setup.",
+      "default": ""
     },
     "flushIntervalMs": {
       "type": "number",
