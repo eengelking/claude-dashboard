@@ -3,6 +3,8 @@ export type {
   ActivityView,
   AgentView,
   BlowoutLogEntry,
+  CacheAlertsView,
+  CacheView,
   ChangedFile,
   Effort,
   Failure,

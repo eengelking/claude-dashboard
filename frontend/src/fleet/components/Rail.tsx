@@ -5,6 +5,7 @@ import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
 import { Monogram, YouTag } from "./People";
 import { ADMIN, type GroupBy, type Unit } from "../people";
+import { RailCacheChip } from "./CacheNote";
 
 /** The people view in the left list: the same grouping as the wall, and a band header that narrows the wall to it. */
 export interface RailPeople {
@@ -41,6 +42,8 @@ export function Rail(props: {
   collapsed?: boolean;
   onToggle?: () => void;
   people?: RailPeople;
+  /** The time the cache countdown counts to; the rail shows none without it. */
+  now?: number;
 }) {
   const pv = props.people;
   const item = (s: SessionView, showOwner: boolean) => {
@@ -63,6 +66,7 @@ export function Rail(props: {
               </span>
             )}
             <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
+            {props.now !== undefined && <RailCacheChip s={s} now={props.now} />}
             <ModelChip family={s.modelFamily} model={s.model} />
           </div>
           <div className="l2">

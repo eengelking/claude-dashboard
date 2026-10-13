@@ -13,7 +13,7 @@ import { SidePanel } from "./components/SidePanel";
 import { TopBar } from "./components/TopBar";
 import { Legend } from "./components/Legend";
 import { Wall } from "./components/Wall";
-import { removeSession, useFleet, type UseFleetOptions } from "./useFleet";
+import { removeSession, resetCacheAlerts, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
 import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
@@ -199,6 +199,9 @@ export function FleetView({ state }: { state: FleetState }) {
   const onRemove = (id: string) => {
     removeSession(id).catch((err: Error) => setNotice(`Could not remove the session: ${err.message}. Try again.`));
   };
+  const onResetCacheAlerts = () => {
+    resetCacheAlerts().catch((err: Error) => setNotice(`Could not turn cache alerts back on: ${err.message}. Try again.`));
+  };
   const selectAgent = (id: string) => {
     setSelAgent(id);
     flashRow(null);
@@ -344,6 +347,7 @@ export function FleetView({ state }: { state: FleetState }) {
             collapsed={panes.collapsed.left}
             onToggle={() => toggle("left")}
             people={railPeople}
+            now={now}
           />
           <div className="mid">
             <main className="main" id="podium-main">
@@ -390,6 +394,8 @@ export function FleetView({ state }: { state: FleetState }) {
                     onToggle: () => setShowDetached((v) => !v),
                   }}
                   people={wallPeople}
+                  cacheAlerts={state.cacheAlerts}
+                  onResetCacheAlerts={onResetCacheAlerts}
                 />
               )}
             </main>

@@ -6,6 +6,7 @@ import { toolOfNote, waitLead } from "../waiting";
 import { IconWarn } from "./Icons";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
+import { CacheAlertBox, WarmingChip } from "./CacheNote";
 
 export const HOOKS_NOTE = "Reported by Claude Code settings hooks, not the reporter mod: context, cost, tokens, the plan and which agent launched which are unavailable, so every agent shows under the orchestrator.";
 
@@ -95,6 +96,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
             {vNote.chip}
           </span>
         )}
+        <WarmingChip cache={s.cache} />
       </div>
       {risk && (
         <div className="alert risk">
@@ -135,6 +137,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       </div>
       {/* The card stays short: the sentence only. The orchestrator page adds the tool name or question (waitSummary). */}
       {s.status === "waiting" && <div className="alert">{waitSummary(s).lead}</div>}
+      <CacheAlertBox s={s} now={now} />
       {s.status === "stale" && (
         <div className="alert stale">
           {/* One child: .alert is a flex row, and its gap would otherwise open between every text run and span. */}

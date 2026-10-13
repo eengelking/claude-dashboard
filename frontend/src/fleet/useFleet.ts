@@ -3,7 +3,7 @@
 // and reopened, and the snapshot it sends on connect resyncs everything.
 import { useEffect, useReducer } from "react";
 import { fleetReducer, initialState, LEAVE_MS, type FleetState } from "./store";
-import type { ActivityView, Kpis, RemovedReason, SessionView, StateBody } from "./types";
+import type { ActivityView, CacheAlertsView, Kpis, RemovedReason, SessionView, StateBody } from "./types";
 
 export const SILENCE_MS = 6000;
 export const RECONNECT_MS = 2000;
@@ -72,7 +72,7 @@ export function useFleet(opts: UseFleetOptions = {}): FleetState {
       on<SessionView>("session", (view, at) => dispatch({ type: "session", view, at }));
       on<ActivityView>("activity", (event, at) => dispatch({ type: "activity", event, at }));
       on<{ sessionId: string; reason: RemovedReason }>("removed", (d, at) => dispatch({ type: "removed", sessionId: d.sessionId, reason: d.reason, at }));
-      on<{ serverTime: number; kpis: Kpis }>("tick", (d, at) => dispatch({ type: "tick", serverTime: d.serverTime, kpis: d.kpis, at }));
+      on<{ serverTime: number; kpis: Kpis; cacheAlerts?: CacheAlertsView }>("tick", (d, at) => dispatch({ type: "tick", serverTime: d.serverTime, kpis: d.kpis, cacheAlerts: d.cacheAlerts, at }));
       s.onerror = () => {
         if (stopped || source !== s) return;
         dispatch({ type: "disconnected", at: Date.now() });
@@ -126,4 +126,10 @@ export async function removeSession(id: string, base = "/api/fleet"): Promise<vo
   const res = await fetch(`${base}/sessions/${encodeURIComponent(id)}/drop`, { method: "POST" });
   // 404 and 409 mean it already left or is reporting again: the stream shows the truth, nothing to report.
   if (!res.ok && res.status !== 404 && res.status !== 409) throw new Error(`HTTP ${res.status}`);
+}
+
+/** "Turn cache alerts back on": the server starts the count over and tells every open tab with its next tick. */
+export async function resetCacheAlerts(base = "/api/fleet"): Promise<void> {
+  const res = await fetch(`${base}/cache-alerts/reset`, { method: "POST" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

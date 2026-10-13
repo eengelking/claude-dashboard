@@ -1,5 +1,5 @@
 // The fleet state the UI renders, and the pure reducer that applies server messages to it.
-import type { ActivityView, Kpis, LifecycleConfig, RemovedReason, SessionView, StateBody } from "./types";
+import type { ActivityView, CacheAlertsView, Kpis, LifecycleConfig, RemovedReason, SessionView, StateBody } from "./types";
 
 /** At most this many activity events are kept in memory (SPEC 8.1). */
 export const EVENT_CAP = 150;
@@ -28,6 +28,8 @@ export interface FleetState {
   events: ActivityView[];
   /** The server's version and the reporter range it supports; null until the first snapshot. */
   server: StateBody["server"] | null;
+  /** The cooling-alert counter (#27); null until the first snapshot or from a server that predates it. */
+  cacheAlerts: CacheAlertsView | null;
 }
 
 export type FleetAction =
@@ -35,7 +37,7 @@ export type FleetAction =
   | { type: "session"; view: SessionView; at: number }
   | { type: "activity"; event: ActivityView; at: number }
   | { type: "removed"; sessionId: string; reason: RemovedReason; at: number }
-  | { type: "tick"; serverTime: number; kpis: Kpis; at: number }
+  | { type: "tick"; serverTime: number; kpis: Kpis; cacheAlerts?: CacheAlertsView; at: number }
   | { type: "disconnected"; at: number }
   | { type: "error"; message: string }
   | { type: "purge"; sessionId: string };
@@ -53,6 +55,7 @@ export const initialState: FleetState = {
   clearedToday: 0,
   events: [],
   server: null,
+  cacheAlerts: null,
 };
 
 function capEvents(list: ActivityView[]): ActivityView[] {
@@ -93,6 +96,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
         clearedToday: action.body.clearedToday,
         events: capEvents(action.body.events),
         server: action.body.server ?? state.server,
+        cacheAlerts: action.body.cacheAlerts ?? state.cacheAlerts,
       };
     }
     case "session": {
@@ -127,7 +131,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
       return { ...state, sessions, leaving };
     }
     case "tick":
-      return { ...state, ...live(state, action.at), serverTime: action.serverTime, kpis: action.kpis };
+      return { ...state, ...live(state, action.at), serverTime: action.serverTime, kpis: action.kpis, cacheAlerts: action.cacheAlerts ?? state.cacheAlerts };
     case "disconnected":
       return state.phase === "disconnected" ? state : { ...state, phase: "disconnected" };
     case "error":

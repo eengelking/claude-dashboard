@@ -1,6 +1,7 @@
 import { fmtTok, fmtUsd } from "../format";
 import { SORTS, STATUS_FILTERS, type SortKey, type StatusFilter } from "../logic";
-import type { Kpis, LifecycleConfig, SessionView } from "../types";
+import type { CacheAlertsView, Kpis, LifecycleConfig, SessionView } from "../types";
+import { CacheAlertsOff } from "./CacheNote";
 import { NO_PRICE_TITLE } from "./Chips";
 import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
@@ -137,6 +138,9 @@ export function Wall(props: {
   /** Sessions nobody is attached to that were set aside, and whether they are being shown anyway. */
   detached: { count: number; costUsd: number; show: boolean; onToggle: () => void };
   people?: WallPeople;
+  /** The cooling-alert counter, and the action that turns alerts back on once they are off (#27). */
+  cacheAlerts?: CacheAlertsView | null;
+  onResetCacheAlerts?: () => void;
 }) {
   const pv = props.people;
   const card = (s: SessionView, showName: boolean) => (
@@ -158,6 +162,7 @@ export function Wall(props: {
       <KpiStrip kpis={props.kpis} split={props.split} />
       {pv && <PeopleBar {...pv.bar} />}
       <Toolbar filter={props.filter} onFilter={props.onFilter} sort={props.sort} onSort={props.onSort} shown={props.sessions.length} cleared={props.cleared} />
+      {props.onResetCacheAlerts && <CacheAlertsOff view={props.cacheAlerts ?? null} onReset={props.onResetCacheAlerts} />}
       {props.sessions.length ? (
         banded ? (
           <Bands sessions={props.sessions} people={pv} card={card} />
