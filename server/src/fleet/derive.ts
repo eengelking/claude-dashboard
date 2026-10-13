@@ -6,6 +6,7 @@ import { tokenSum } from './ingest.js';
 import type {
   ActivityView,
   AgentView,
+  BackgroundWait,
   EventKind,
   Failure,
   FilesReport,
@@ -181,6 +182,11 @@ export interface SessionInput {
   ownerGroup?: string | null;
 }
 
+/** A waiting session whose only wait is on background work or a wake-up, not on the person (#119). */
+export function idleOnBackground(v: { status: string; waitReason: string | null; background: BackgroundWait | null }): boolean {
+  return v.status === 'waiting' && v.waitReason === null && v.background !== null;
+}
+
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
   if (row.status === 'done') return 'done';
   if (!heard || now - row.last_seen_at > staleAfterMs) return 'stale';
@@ -235,6 +241,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     plan: parse<Plan | null>(row.plan_json, null),
     loop: parse<LoopReport | null>(row.loop_json, null),
     files: parse<FilesReport | null>(row.files_json, null),
+    background: parse<BackgroundWait | null>(row.background_json, null),
     attached: row.attached === null ? null : row.attached === 1,
     hideAt: input.hideAt ?? null,
     owner: row.owner,
@@ -299,7 +306,8 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
   };
   for (const v of input.views) {
     if (v.status === 'running') k.running++;
-    else if (v.status === 'waiting') k.waiting++;
+    // A session idle on background work is not waiting on the person (#119).
+    else if (v.status === 'waiting' && !idleOnBackground(v)) k.waiting++;
     else if (v.status === 'stale') k.stale++;
     k.agentsTotal += v.agents.length;
     k.agentsRunning += v.agents.filter((a) => a.status === 'running').length;

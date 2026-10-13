@@ -158,6 +158,22 @@ export interface ActivityEvent {
   data: Record<string, unknown> | null;
 }
 
+/** What a session idle between turns is still waiting on: background work in flight, or a scheduled wake-up (#119). */
+export type BackgroundKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'wakeup' | 'other';
+
+export interface BackgroundTask {
+  type: BackgroundKind;
+  /** A short description; never a whole shell command. */
+  description: string;
+  status: string;
+}
+
+export interface BackgroundWait {
+  tasks: BackgroundTask[];
+  /** When the next scheduled wake-up fires (epoch ms); null when there is none or its time is unknown. */
+  wakeAt: number | null;
+}
+
 export interface SessionReport {
   id: string;
   name: string;
@@ -185,6 +201,8 @@ export interface SessionReport {
   files: FilesReport | null;
   /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
   attached: boolean | null;
+  /** Background work the session is idle on. Absent from a reporter older than 0.11.0 and when there is none. */
+  background?: BackgroundWait | null;
 }
 
 export interface Report {
@@ -283,6 +301,8 @@ export interface SessionView {
   loop: LoopReport | null;
   /** The files the session changed; null from a reporter older than 0.6.0 and for a hooks-only session. */
   files: FilesReport | null;
+  /** What the session is idle on: background work or a scheduled wake-up. null when it waits on nothing. Not a wait on the person. */
+  background: BackgroundWait | null;
   /** Whether any client is attached; null from a reporter older than 0.7.0 and for a hooks-only session, which counts as attached. */
   attached: boolean | null;
   /** When a session nobody is attached to leaves the wall: the first detached report plus DETACHED_HIDE_AFTER_MS. null while attached or unknown. */
@@ -408,6 +428,8 @@ export const LIMITS = {
   planSteps: 100,
   skills: 50,
   toolNames: 100,
+  backgroundTasks: 20,
+  backgroundDescription: 120,
   rateLimits: 10,
   blowoutLog: 50,
   files: 200,
@@ -718,6 +740,7 @@ function session(v: unknown, path: string): SessionReport {
   const o = obj(v, path);
   const id = str(o.id, `${path}.id`, LIMITS.id);
   if (!id) throw new Invalid(`${path}.id`, 'must not be empty');
+  const bg = background(o.background, `${path}.background`);
   return {
     id,
     name: str(o.name, `${path}.name`, LIMITS.name),
@@ -753,7 +776,27 @@ function session(v: unknown, path: string): SessionReport {
     loop: loop(o.loop, `${path}.loop`),
     files: filesReport(o.files, `${path}.files`),
     attached: o.attached === undefined || o.attached === null ? null : bool(o.attached, `${path}.attached`),
+    ...(bg ? { background: bg } : {}),
   };
+}
+
+const BACKGROUND_KINDS = ['shell', 'agent', 'monitor', 'workflow', 'wakeup', 'other'] as const;
+
+/** What a session idle between turns still waits on (#119). An empty list is no background work at all. */
+function background(v: unknown, path: string): BackgroundWait | null {
+  if (v === null || v === undefined) return null;
+  const o = obj(v, path);
+  const tasks = arr(o.tasks, `${path}.tasks`, LIMITS.backgroundTasks).map((t, i) => {
+    const p = `${path}.tasks[${i}]`;
+    const to = obj(t, p);
+    return {
+      type: oneOf(to.type, `${p}.type`, BACKGROUND_KINDS),
+      description: str(to.description, `${p}.description`, LIMITS.backgroundDescription),
+      status: str(to.status, `${p}.status`, 40),
+    };
+  });
+  const wakeAt = numOrNull(o.wakeAt, `${path}.wakeAt`);
+  return tasks.length ? { tasks, wakeAt } : null;
 }
 
 /** A reporter's machine: a host name (clamped) and its own random id (letters, digits, `-` and `_`, at most 32). */

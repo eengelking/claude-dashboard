@@ -385,7 +385,7 @@ describe('protocol', () => {
     const bg = { tasks: [{ type: 'shell', description: 'nightly build', status: 'running' }], wakeAt: null };
     const withBg = (background: unknown) => {
       const f = loadFixture();
-      return { ...f, session: { ...f.session, background } };
+      return { ...(f as object), session: { ...(f as { session: object }).session, background } };
     };
     it('accepts a report that says what the session waits on', () => {
       const r = validateReport(withBg(bg));

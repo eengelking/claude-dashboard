@@ -155,6 +155,22 @@ export interface ActivityEvent {
   data: Record<string, unknown> | null;
 }
 
+/** What a session idle between turns is still waiting on: background work in flight, or a scheduled wake-up (#119). */
+export type BackgroundKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'wakeup' | 'other';
+
+export interface BackgroundTask {
+  type: BackgroundKind;
+  /** A short description; never a whole shell command. */
+  description: string;
+  status: string;
+}
+
+export interface BackgroundWait {
+  tasks: BackgroundTask[];
+  /** When the next scheduled wake-up fires (epoch ms); null when there is none or its time is unknown. */
+  wakeAt: number | null;
+}
+
 export interface SessionReport {
   id: string;
   name: string;
@@ -182,6 +198,8 @@ export interface SessionReport {
   files: FilesReport | null;
   /** Whether any client (a terminal, a phone) is attached. false for a background session left running after /exit. null when unknown: a reporter too old to send it. */
   attached: boolean | null;
+  /** Background work the session is idle on. Absent from a reporter older than 0.11.0 and when there is none. */
+  background?: BackgroundWait | null;
 }
 
 export interface Report {

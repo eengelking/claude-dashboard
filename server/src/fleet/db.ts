@@ -116,6 +116,11 @@ ALTER TABLE sessions ADD COLUMN owner TEXT;
   PRIMARY KEY (session_id, agent_id)
 );`,
   },
+  {
+    version: 9,
+    // What a session idle between turns still waits on (BackgroundWait as JSON, issue #119); NULL when nothing.
+    sql: 'ALTER TABLE sessions ADD COLUMN background_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -151,6 +156,7 @@ export interface SessionRow {
   engine_version: string | null;
   loop_json: string | null;
   files_json: string | null;
+  background_json: string | null;
   attached: number | null;
   detached_at: number | null;
   owner: string | null;
