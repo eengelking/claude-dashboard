@@ -202,6 +202,19 @@ run without touching your own server, copy the mod, point its `serverUrl` defaul
 with its own `PODIUM_DB`, and pass `--settings '{"enabledPlugins":{"podium-reporter@eengelking-marketplace":false}}'`
 so the installed copy stays quiet. The simulator's `--nested` flag shows the same shapes with no run at all.
 
+### A server test fails now and then with a 404, a 401 or a body of `{}`, and passes on the next run
+
+supertest listens on the wildcard address and then connects to `127.0.0.1`. On macOS, if another process holds
+`127.0.0.1:P`, the wildcard bind of the same port `P` still succeeds, and connections to `127.0.0.1:P` go to the
+other process. So a busy machine (the full run's own workers, the container, a second run, a browser) sometimes
+answers a test's request with someone else's server (#137). The fix is `server/src/testSetup.ts`, which vitest
+loads for every file and which makes a bare `listen(0)` bind `127.0.0.1`. A test that starts its own server should
+say `127.0.0.1` too, and a new test setup file that replaces `setupFiles` must keep `testSetup.ts` in the list.
+It binds with Node's internal `_listen2`, because supertest reads the port the moment `listen(0)` returns and a
+public `listen(0, '127.0.0.1')` is not synchronous; `testSetup.test.ts` fails if a Node upgrade breaks that. To
+check for the flake, run several full runs at once, for example six loops of `npx vitest run` in parallel, which
+failed about 7% of runs before the fix and none of 60 after.
+
 ### Finished nested agents are missing from `$.agent.list()`
 
 Once a parent agent finishes, the engine's list drops the finished agents it launched (SPEC 5.3). The mod keeps

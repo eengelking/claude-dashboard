@@ -137,7 +137,9 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 7. **Extra server files.** Besides the files 4.1 lists, `server/src/fleet/` has `fleet.ts` (the service
    that owns the live set and turns ingests and sweeps into SSE messages, used by `routes.ts` and
    `sweeper.ts`) and `testing.ts` (fixture loader for tests). `server/vitest.config.ts` adds
-   `scripts/*.test.ts` to the server suite so the simulator is tested by `npm test`.
+   `scripts/*.test.ts` to the server suite so the simulator is tested by `npm test`, and loads
+   `server/src/testSetup.ts`, which binds the tests' own servers to `127.0.0.1` (GOTCHAS, "A server test
+   fails now and then").
 8. **Samples between reports.** 7.2 says one sample row per second per live session, but a quiet session
    reports only every 5 s. The sweeper writes a carry-forward sample (same totals, delta 0) for each
    second a live, non-stale session has none, so its charts do not drop to zero between heartbeats.
