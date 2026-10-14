@@ -195,6 +195,8 @@ export interface SessionInput {
   ownerGroup?: string | null;
   /** The Admin's prices; a cost is repriced from the usage the reporter sent. */
   pricing?: Pricing;
+  /** Whether the reporter has the activityFeed option on, from the activity store; null when unknown. */
+  activityFeed?: boolean | null;
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -257,6 +259,7 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     owner: row.owner,
     ownerGroup: input.ownerGroup ?? null,
     machine: parse<MachineInfo | null>(row.machine_json, null),
+    activityFeed: input.activityFeed ?? null,
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

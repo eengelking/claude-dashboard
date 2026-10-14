@@ -130,6 +130,23 @@ export interface LoopReport {
   steps: { done: number; total: null };
 }
 
+/** The loop key of the orchestrator's own feed, in the report reply's `watch` list and the activity route (#118). Engine agent ids never start with `@`. */
+export const MAIN_LOOP = '@orchestrator';
+
+/** `reasoning` is reserved for the model's thinking; the reporter does not send it. */
+export type ActivityKind = 'tool' | 'text' | 'reasoning';
+
+/**
+ * One entry of a loop's activity feed (#118): a tool call (the tool's name, a space, and a short summary of its
+ * arguments) or the text the model wrote in one step. Redacted and cut to 300 characters by the reporter. Sent only
+ * with the `activityFeed` option on, and only for a loop the server's reply lists as watched.
+ */
+export interface ActivityEntry {
+  at: number;
+  kind: ActivityKind;
+  text: string;
+}
+
 export interface AgentReport {
   id: string;
   parentId: string | null;
@@ -163,6 +180,8 @@ export interface AgentReport {
    */
   promptText?: string;
   answerText?: string;
+  /** The agent's last 20 activity entries, oldest first: only while someone watches it, with the `activityFeed` option on (0.13.0 and later). */
+  activity?: ActivityEntry[];
   failure: Failure | null;
 }
 
@@ -222,6 +241,10 @@ export interface SessionReport {
   attached: boolean | null;
   /** Background work the session is idle on. Absent from a reporter older than 0.11.0 and when there is none. */
   background?: BackgroundWait | null;
+  /** Whether the reporter's `activityFeed` option is on. Absent from a reporter older than 0.13.0. */
+  activityFeed?: boolean;
+  /** The main loop's last 20 activity entries, as on an agent: only while someone watches the orchestrator. */
+  activity?: ActivityEntry[];
 }
 
 export interface Report {
@@ -295,7 +318,7 @@ export type ModelFamily = 'opus' | 'sonnet' | 'haiku' | 'fable' | 'other';
 
 export type SessionStatusView = 'running' | 'waiting' | 'stale' | 'done';
 
-export interface AgentView extends Omit<AgentReport, 'promptText' | 'answerText'> {
+export interface AgentView extends Omit<AgentReport, 'promptText' | 'answerText' | 'activity'> {
   modelFamily: ModelFamily;
   /** Length of the full prompt / answer the server holds, null when it has none (served by the text endpoint). */
   promptChars: number | null;
@@ -375,6 +398,11 @@ export interface SessionView {
   ownerGroup: string | null;
   /** The machine the session runs on, as the reporter sent it; null when it sent none (no userName, or older than 0.9.0). */
   machine: MachineInfo | null;
+  /**
+   * Whether the reporter's activityFeed option is on (#118). null when the server does not know: a reporter older
+   * than 0.13.0, a settings-hooks session, or no report since the server started. Held in memory, not stored.
+   */
+  activityFeed: boolean | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
 }
@@ -498,6 +526,10 @@ export const LIMITS = {
   files: 200,
   filePath: 300,
   machineName: 64,
+  /** One loop's activity feed (#118): entries kept, characters per entry, and characters over the whole report. */
+  activityEntries: 20,
+  activityText: 300,
+  activityChars: 60_000,
 } as const;
 
 export type ValidateResult = { ok: true; report: Report } | { ok: false; error: string; path: string };
@@ -758,6 +790,7 @@ function agent(v: unknown, path: string): AgentReport {
     answerExcerpt: strOrNull(o.answerExcerpt, `${path}.answerExcerpt`, LIMITS.excerpt),
     ...(o.promptText === undefined || o.promptText === null ? {} : { promptText: text(o.promptText, `${path}.promptText`, LIMITS.fullText) }),
     ...(o.answerText === undefined || o.answerText === null ? {} : { answerText: text(o.answerText, `${path}.answerText`, LIMITS.fullText) }),
+    ...activity(o.activity, `${path}.activity`),
     failure: failure(o.failure, `${path}.failure`),
   };
 }
@@ -865,7 +898,36 @@ function session(v: unknown, path: string): SessionReport {
     files: filesReport(o.files, `${path}.files`),
     attached: o.attached === undefined || o.attached === null ? null : bool(o.attached, `${path}.attached`),
     ...(bg ? { background: bg } : {}),
+    ...(o.activityFeed === undefined || o.activityFeed === null ? {} : { activityFeed: bool(o.activityFeed, `${path}.activityFeed`) }),
+    ...activity(o.activity, `${path}.activity`),
   };
+}
+
+const ACTIVITY_KINDS: readonly ActivityKind[] = ['tool', 'text', 'reasoning'];
+
+/** A loop's activity feed (#118). Absent stays absent; each entry is cut to its limit, a longer list is rejected. */
+function activity(v: unknown, path: string): { activity?: ActivityEntry[] } {
+  if (v === undefined || v === null) return {};
+  return {
+    activity: arr(v, path, LIMITS.activityEntries).map((e, i) => {
+      const p = `${path}[${i}]`;
+      const o = obj(e, p);
+      return { at: num(o.at, `${p}.at`), kind: oneOf(o.kind, `${p}.kind`, ACTIVITY_KINDS), text: str(o.text, `${p}.text`, LIMITS.activityText) };
+    }),
+  };
+}
+
+/** Keeps the report's activity within LIMITS.activityChars: the orchestrator's first, then the agents' in order. A loop that does not fit loses its feed for this report. */
+function withinActivityBudget(r: Report): void {
+  let left: number = LIMITS.activityChars;
+  const fits = (list: ActivityEntry[]) => {
+    const n = list.reduce((sum, e) => sum + e.text.length, 0);
+    if (n > left) return false;
+    left -= n;
+    return true;
+  };
+  if (r.session.activity && !fits(r.session.activity)) delete r.session.activity;
+  for (const a of r.agents) if (a.activity && !fits(a.activity)) delete a.activity;
 }
 
 const BACKGROUND_KINDS = ['shell', 'agent', 'monitor', 'workflow', 'wakeup', 'other'] as const;
@@ -926,6 +988,7 @@ export function validateReport(body: unknown): ValidateResult {
     if (userName !== null) report.userName = userName;
     const m = machine(o.machine, '$.machine');
     if (m !== null) report.machine = m;
+    withinActivityBudget(report);
     return { ok: true, report };
   } catch (err) {
     if (err instanceof Invalid) return { ok: false, error: err.message, path: err.path };

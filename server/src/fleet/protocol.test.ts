@@ -458,4 +458,63 @@ describe('protocol', () => {
       expect(validateReport(withBg({ ...bg, wakeAt: 'soon' }))).toMatchObject({ ok: false, path: '$.session.background.wakeAt' });
     });
   });
+
+  describe('activity feed (#118)', () => {
+    const entry = { at: 1_800_000_000_000, kind: 'tool', text: 'Read docs/SPEC.md' };
+    const withActivity = (session: Record<string, unknown>, agent: Record<string, unknown> = {}) => {
+      const f = loadFixture() as { session: Record<string, unknown>; agents: Record<string, unknown>[] };
+      Object.assign(f.session, session);
+      Object.assign(f.agents[0]!, agent);
+      return f;
+    };
+    it('accepts the option flag and entries on the session and on an agent', () => {
+      const r = validateReport(withActivity({ activityFeed: true, activity: [entry] }, { activity: [{ ...entry, kind: 'text', text: 'Next, the tests.' }] }));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.session.activityFeed).toBe(true);
+      expect(r.report.session.activity).toEqual([entry]);
+      expect(r.report.agents[0]!.activity).toEqual([{ ...entry, kind: 'text', text: 'Next, the tests.' }]);
+    });
+    it('leaves both out for a reporter that sends neither', () => {
+      const r = validateReport(loadFixture());
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect('activityFeed' in r.report.session).toBe(false);
+      expect('activity' in r.report.session).toBe(false);
+      expect('activity' in r.report.agents[0]!).toBe(false);
+    });
+    it('accepts the reserved reasoning kind and rejects an unknown one', () => {
+      expect(validateReport(withActivity({ activity: [{ ...entry, kind: 'reasoning' }] })).ok).toBe(true);
+      expect(validateReport(withActivity({ activity: [{ ...entry, kind: 'thinking' }] }))).toMatchObject({ ok: false, path: '$.session.activity[0].kind' });
+    });
+    it('rejects more entries than a loop keeps', () => {
+      const many = Array.from({ length: LIMITS.activityEntries + 1 }, () => entry);
+      expect(validateReport(withActivity({}, { activity: many }))).toMatchObject({ ok: false, path: '$.agents[0].activity' });
+    });
+    it('cuts a long entry and strips control characters instead of rejecting it', () => {
+      const r = validateReport(withActivity({ activity: [{ ...entry, text: `a\u0007b${'x'.repeat(900)}` }] }));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const t = r.report.session.activity![0]!.text;
+      expect(t).toHaveLength(LIMITS.activityText);
+      expect(t.startsWith('a b')).toBe(true);
+    });
+    it('rejects a flag that is not a boolean', () => {
+      expect(validateReport(withActivity({ activityFeed: 'yes' }))).toMatchObject({ ok: false, path: '$.session.activityFeed' });
+    });
+    it('drops the entries past the per-report budget rather than the report', () => {
+      const full = Array.from({ length: LIMITS.activityEntries }, (_, i) => ({ ...entry, at: entry.at + i, text: 'y'.repeat(LIMITS.activityText) }));
+      const f = loadFixture() as { session: Record<string, unknown>; agents: Record<string, unknown>[] };
+      f.session.activity = full;
+      const base = f.agents[0]!;
+      f.agents = Array.from({ length: 20 }, (_, i) => ({ ...base, id: `x${i}`, activity: full }));
+      const r = validateReport(f);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const chars = [r.report.session.activity ?? [], ...r.report.agents.map((a) => a.activity ?? [])].flat().reduce((n, e) => n + e.text.length, 0);
+      expect(chars).toBeLessThanOrEqual(LIMITS.activityChars);
+      expect(r.report.session.activity).toHaveLength(LIMITS.activityEntries);
+      expect(r.report.agents.at(-1)!.activity).toBeUndefined();
+    });
+  });
 });

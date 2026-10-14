@@ -1,0 +1,136 @@
+// The agent activity feed (#118), held in memory only. Nothing here is written to the database.
+//
+// A viewer watching an agent's panel takes a lease by fetching GET /sessions/:id/agents/:agentId/activity, and
+// renews it with every fetch. The reply to each mod report lists the loops under a live lease (`watch`); the mod
+// captures and sends a loop's entries only while it is listed. The server keeps the last 20 entries of a watched
+// loop and drops them when the lease lapses, when the session leaves the live set or is deleted, and on restart.
+// Entries from before the lease began are never kept, so a viewer who comes back starts empty.
+import { LIMITS, MAIN_LOOP, type ActivityEntry, type Report } from './protocol.js';
+
+/** The refresh intervals the panel offers, in seconds. The first is the default. */
+export const ACTIVITY_EVERY_SECONDS = [5, 10, 20, 30, 60] as const;
+/**
+ * How long a lease outlives the viewer's interval: one missed or slow fetch, and a report cycle or two, before the
+ * server lets go. A lease taken with `every=5` lapses 20 s after the last fetch; with `every=60`, 75 s after it.
+ */
+export const ACTIVITY_LEASE_SLACK_MS = 15_000;
+
+/** A stored entry, numbered in the order the server took it, so a viewer can tell what is new. */
+export interface ActivityEntryView extends ActivityEntry {
+  seq: number;
+}
+
+/** What the activity route answers. `since` is when the current lease began; null when the session is not live. */
+export interface ActivityReply {
+  entries: ActivityEntryView[];
+  since: number | null;
+  live: boolean;
+  serverTime: number;
+}
+
+interface Lease {
+  since: number;
+  until: number;
+  seq: number;
+  entries: ActivityEntryView[];
+}
+
+/** The interval a request asked for, in seconds: one of ACTIVITY_EVERY_SECONDS, 5 for anything else. */
+export function everyOf(v: unknown): number {
+  const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : NaN;
+  return (ACTIVITY_EVERY_SECONDS as readonly number[]).includes(n) ? n : ACTIVITY_EVERY_SECONDS[0];
+}
+
+export class ActivityStore {
+  /** Session id -> loop key (an agent id, or MAIN_LOOP) -> lease. */
+  private readonly leases = new Map<string, Map<string, Lease>>();
+  /** Session id -> whether its reporter has the activityFeed option on, from the last report that said. */
+  private readonly feed = new Map<string, boolean>();
+
+  constructor(private readonly now: () => number) {}
+
+  /** Live leases across every session, for tests and the health of the store. */
+  get size(): number {
+    let n = 0;
+    for (const loops of this.leases.values()) n += loops.size;
+    return n;
+  }
+
+  /** Takes or renews a viewer's lease on one loop and returns what it holds. */
+  watch(sessionId: string, loop: string, everySeconds: number): { entries: ActivityEntryView[]; since: number } {
+    const now = this.now();
+    this.expireSession(sessionId, now);
+    let loops = this.leases.get(sessionId);
+    if (!loops) {
+      loops = new Map();
+      this.leases.set(sessionId, loops);
+    }
+    let lease = loops.get(loop);
+    if (!lease) {
+      lease = { since: now, until: now, seq: 0, entries: [] };
+      loops.set(loop, lease);
+    }
+    lease.until = Math.max(lease.until, now + everySeconds * 1000 + ACTIVITY_LEASE_SLACK_MS);
+    return { entries: lease.entries.map((e) => ({ ...e })), since: lease.since };
+  }
+
+  /** The loops of a session someone is watching: the report reply's `watch`. */
+  watched(sessionId: string): string[] {
+    this.expireSession(sessionId, this.now());
+    return [...(this.leases.get(sessionId)?.keys() ?? [])];
+  }
+
+  /** Whether the session's reporter has the option on; null when no report has said (an older reporter, or since a restart). */
+  feedOn(sessionId: string): boolean | null {
+    return this.feed.get(sessionId) ?? null;
+  }
+
+  /**
+   * Takes the entries of a validated report for the loops under a live lease; the rest are ignored. `skewMs` is the
+   * report's `sentAt` minus the server's time, so an entry's time can be compared with when the lease began.
+   */
+  ingest(report: Report, skewMs: number): void {
+    const sid = report.session.id;
+    if (typeof report.session.activityFeed === 'boolean') this.feed.set(sid, report.session.activityFeed);
+    const loops = this.leases.get(sid);
+    if (!loops) return;
+    this.expireSession(sid, this.now());
+    const take = (loop: string, list: ActivityEntry[] | undefined) => {
+      const lease = loops.get(loop);
+      if (lease && list?.length) this.merge(lease, list, skewMs);
+    };
+    take(MAIN_LOOP, report.session.activity);
+    for (const a of report.agents) take(a.id, a.activity);
+  }
+
+  /** Adds what is new in a reporter's snapshot (its last 20, oldest first) and keeps the last 20. */
+  private merge(lease: Lease, list: ActivityEntry[], skewMs: number): void {
+    for (const e of list) {
+      if (e.at - skewMs < lease.since) continue;
+      const last = lease.entries[lease.entries.length - 1];
+      if (last && e.at < last.at) continue;
+      if (last && e.at === last.at && lease.entries.some((x) => x.at === e.at && x.kind === e.kind && x.text === e.text)) continue;
+      lease.entries.push({ seq: ++lease.seq, at: e.at, kind: e.kind, text: e.text });
+    }
+    if (lease.entries.length > LIMITS.activityEntries) lease.entries.splice(0, lease.entries.length - LIMITS.activityEntries);
+  }
+
+  /** Drops every lease that has lapsed. The sweeper calls it once a second. */
+  expire(): void {
+    const now = this.now();
+    for (const sid of [...this.leases.keys()]) this.expireSession(sid, now);
+  }
+
+  /** The session left the live set or was deleted: its leases and entries go, and what it said about the option. */
+  dropSession(sessionId: string): void {
+    this.leases.delete(sessionId);
+    this.feed.delete(sessionId);
+  }
+
+  private expireSession(sessionId: string, now: number): void {
+    const loops = this.leases.get(sessionId);
+    if (!loops) return;
+    for (const [loop, lease] of loops) if (now > lease.until) loops.delete(loop);
+    if (!loops.size) this.leases.delete(sessionId);
+  }
+}

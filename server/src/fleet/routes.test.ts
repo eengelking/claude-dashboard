@@ -6,7 +6,7 @@ import request from 'supertest';
 import { openDb, FleetDb } from './db.js';
 import { DEFAULT_CONFIG, Fleet } from './fleet.js';
 import { createFleetRouter } from './routes.js';
-import type { Report } from './protocol.js';
+import { MAIN_LOOP, type Report } from './protocol.js';
 import { fixtureReport } from './testing.js';
 
 const closers: (() => void)[] = [];
@@ -176,6 +176,97 @@ describe('reads', () => {
       expect(r.status, bad).toBe(400);
     }
     expect((await request(app).get('/api/fleet/history?day=2024-02-29')).status).toBe(200);
+  });
+});
+
+describe('the activity feed (#118)', () => {
+  /** The fixture as the reporter would send it now, with the option on and the given entries on its first agent. */
+  const live = (activity: { at: number; kind: 'tool' | 'text'; text: string }[] = [], main: typeof activity = []): Report => {
+    const r = fixtureReport();
+    r.sentAt = Date.now();
+    r.session.activityFeed = true;
+    r.agents[0]!.activity = activity;
+    if (main.length) r.session.activity = main;
+    return r;
+  };
+  const url = (r: Report, loop: string, every = '') => `/api/fleet/sessions/${encodeURIComponent(r.session.id)}/agents/${encodeURIComponent(loop)}/activity${every}`;
+
+  it('the report reply lists no loop while nobody watches, and the agent once a viewer fetches', async () => {
+    const { app } = setup();
+    const r = live();
+    const first = await request(app).post('/api/fleet/report').send(r);
+    expect(first.body.watch).toEqual([]);
+    const got = await request(app).get(url(r, r.agents[0]!.id, '?every=10'));
+    expect(got.status).toBe(200);
+    expect(got.body).toMatchObject({ entries: [], live: true });
+    expect(typeof got.body.since).toBe('number');
+    const second = await request(app).post('/api/fleet/report').send(live());
+    expect(second.body.watch).toEqual([r.agents[0]!.id]);
+  });
+
+  it('serves what the reporter sent for a watched loop, numbered, and the orchestrator under @orchestrator', async () => {
+    const { app } = setup();
+    const r = live();
+    await request(app).post('/api/fleet/report').send(r);
+    await request(app).get(url(r, r.agents[0]!.id));
+    await request(app).get(url(r, MAIN_LOOP));
+    const at = Date.now() + 5;
+    const second = await request(app)
+      .post('/api/fleet/report')
+      .send(live([{ at, kind: 'tool', text: 'Bash npm test' }, { at: at + 1, kind: 'text', text: 'Two failures.' }], [{ at, kind: 'tool', text: 'Agent Map call sites' }]));
+    expect(second.body.watch.sort()).toEqual([MAIN_LOOP, r.agents[0]!.id].sort());
+    const agent = await request(app).get(url(r, r.agents[0]!.id));
+    expect(agent.body.entries).toEqual([
+      { seq: 1, at, kind: 'tool', text: 'Bash npm test' },
+      { seq: 2, at: at + 1, kind: 'text', text: 'Two failures.' },
+    ]);
+    const main = await request(app).get(url(r, MAIN_LOOP));
+    expect(main.body.entries.map((e: { text: string }) => e.text)).toEqual(['Agent Map call sites']);
+  });
+
+  it('keeps nothing for a loop nobody watches, and never puts entries in the session view', async () => {
+    const { app, fleet } = setup();
+    const r = live([{ at: Date.now(), kind: 'tool', text: 'Read a' }]);
+    await request(app).post('/api/fleet/report').send(r);
+    expect(fleet.activity.size).toBe(0);
+    const view = (await request(app).get(`/api/fleet/sessions/${r.session.id}`)).body;
+    expect(view.activityFeed).toBe(true);
+    expect(JSON.stringify(view)).not.toContain('Read a');
+  });
+
+  it('404 for an unknown session or agent; a session that has left the live set answers live: false and takes no lease', async () => {
+    let t = Date.now();
+    const fleet = new Fleet(new FleetDb(openDb(':memory:')), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' }, () => t);
+    closers.push(() => fleet.close());
+    const app = express();
+    app.use('/api/fleet', createFleetRouter(fleet, { log: () => {} }));
+    const r = live();
+    expect((await request(app).get(url(r, 'x'))).status).toBe(404);
+    await request(app).post('/api/fleet/report').send(r);
+    expect((await request(app).get(url(r, 'no-such-agent'))).status).toBe(404);
+    await request(app).get(url(r, r.agents[0]!.id));
+    const done = live();
+    done.session.status = 'done';
+    done.session.endReason = 'prompt_input_exit';
+    await request(app).post('/api/fleet/report').send(done);
+    t += DEFAULT_CONFIG.lingerMs + 1;
+    fleet.sweep();
+    expect(fleet.isLive(r.session.id)).toBe(false);
+    expect(fleet.activity.size).toBe(0);
+    const got = await request(app).get(url(r, r.agents[0]!.id));
+    expect(got.status).toBe(200);
+    expect(got.body).toMatchObject({ entries: [], live: false, since: null });
+    expect(fleet.activity.size).toBe(0);
+  });
+
+  it('a session that is deleted takes its feed with it', async () => {
+    const { app, fleet } = setup();
+    const r = live();
+    await request(app).post('/api/fleet/report').send(r);
+    await request(app).get(url(r, r.agents[0]!.id));
+    expect(fleet.activity.size).toBe(1);
+    fleet.deleteSession(r.session.id);
+    expect(fleet.activity.size).toBe(0);
   });
 });
 

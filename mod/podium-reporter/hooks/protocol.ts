@@ -127,6 +127,23 @@ export interface LoopReport {
   steps: { done: number; total: null };
 }
 
+/** The loop key of the orchestrator's own feed, in the report reply's `watch` list and the activity route (#118). Engine agent ids never start with `@`. */
+export const MAIN_LOOP = '@orchestrator';
+
+/** `reasoning` is reserved for the model's thinking; the reporter does not send it. */
+export type ActivityKind = 'tool' | 'text' | 'reasoning';
+
+/**
+ * One entry of a loop's activity feed (#118): a tool call (the tool's name, a space, and a short summary of its
+ * arguments) or the text the model wrote in one step. Redacted and cut to 300 characters by the reporter. Sent only
+ * with the `activityFeed` option on, and only for a loop the server's reply lists as watched.
+ */
+export interface ActivityEntry {
+  at: number;
+  kind: ActivityKind;
+  text: string;
+}
+
 export interface AgentReport {
   id: string;
   parentId: string | null;
@@ -160,6 +177,8 @@ export interface AgentReport {
    */
   promptText?: string;
   answerText?: string;
+  /** The agent's last 20 activity entries, oldest first: only while someone watches it, with the `activityFeed` option on (0.13.0 and later). */
+  activity?: ActivityEntry[];
   failure: Failure | null;
 }
 
@@ -219,6 +238,10 @@ export interface SessionReport {
   attached: boolean | null;
   /** Background work the session is idle on. Absent from a reporter older than 0.11.0 and when there is none. */
   background?: BackgroundWait | null;
+  /** Whether the reporter's `activityFeed` option is on. Absent from a reporter older than 0.13.0. */
+  activityFeed?: boolean;
+  /** The main loop's last 20 activity entries, as on an agent: only while someone watches the orchestrator. */
+  activity?: ActivityEntry[];
 }
 
 export interface Report {

@@ -62,6 +62,18 @@ keeps SPEC 7.7's rule that reported strings reach the page only as text nodes, a
 modal is portaled to `<body>` inside its own `.podium` wrapper (for the theme tokens), and blurs `#root`; a
 capturing key listener keeps Esc and the shell shortcuts from reaching the page behind it.
 
+**The activity feed** (`server/src/fleet/activity.ts`, issue #118). Observed only: nothing about an agent's
+activity is captured, sent or kept unless a viewer is watching that loop. `ActivityStore` lives on the `Fleet`
+and holds two maps in process memory: leases (session, then loop key: an agent id or `@orchestrator`), each with
+its start, its expiry and a ring of the last 20 entries numbered by `seq`; and whether each session's reporter
+has the option on (`SessionView.activityFeed`). `GET .../agents/:agentId/activity?every=` takes or renews a lease
+for `every` seconds plus `ACTIVITY_LEASE_SLACK_MS` (15 s); the report route answers with `watch`, the loops under
+a live lease; `Fleet.ingest` hands each validated report to the store, which merges only watched loops' entries,
+skipping any stamped (through the session's clock skew) before the lease began and any it already has. The sweeper
+expires leases every second, and a session leaving the live set or being deleted drops its leases. No table, no
+migration, nothing in the state or the stream; `ingest.ts` never sees the entries, because it copies named
+fields only.
+
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
 `sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to

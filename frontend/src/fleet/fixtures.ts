@@ -63,6 +63,7 @@ export function makeSession(over: Partial<SessionView> = {}): SessionView {
     owner: null,
     ownerGroup: null,
     machine: null,
+    activityFeed: null,
     context: { tokens: 410_000, window: 1_000_000, percent: 41 },
     costUsd: 12.84,
     tokensTotal: 2_500_000,

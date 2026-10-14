@@ -2,7 +2,8 @@
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import type { Fleet } from './fleet.js';
 import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
-import { validateReport } from './protocol.js';
+import { MAIN_LOOP, validateReport } from './protocol.js';
+import { everyOf, type ActivityReply } from './activity.js';
 import { OwnerConflict } from './ingest.js';
 import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow } from './people.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
@@ -79,7 +80,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     try {
       const out = fleet.ingest(result.report, ownerOf(id));
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
-      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version) });
+      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version), watch: fleet.activity.watched(out.sessionId) });
     } catch (err) {
       if (err instanceof OwnerConflict) {
         res.status(409).json({ ok: false, error: 'that session belongs to someone else', path: '$.session.id' });
@@ -164,6 +165,21 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       return;
     }
     res.json(t);
+  });
+
+  // An agent's recent activity (#118). Each fetch takes or renews the viewer's lease on that loop for `every` seconds
+  // plus a margin; the reply to the next report then asks the mod for its entries. `@orchestrator` is the main loop.
+  // In memory only, never in the state or the stream. No token, like the other reads.
+  router.get('/sessions/:id/agents/:agentId/activity', (req, res) => {
+    const { id, agentId } = req.params;
+    if (!fleet.db.getSession(id) || (agentId !== MAIN_LOOP && !fleet.db.getAgents(id).some((a) => a.id === agentId))) {
+      res.status(404).json({ ok: false, error: 'unknown session or agent', path: '$.agentId' });
+      return;
+    }
+    let body: ActivityReply;
+    if (!fleet.isLive(id)) body = { entries: [], since: null, live: false, serverTime: fleet.now() };
+    else body = { ...fleet.activity.watch(id, agentId, everyOf(req.query.every)), live: true, serverTime: fleet.now() };
+    res.set('Cache-Control', 'no-store').json(body);
   });
 
   router.delete('/sessions/:id', requireToken, (req, res) => {
