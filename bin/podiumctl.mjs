@@ -21,6 +21,7 @@ export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS',
   'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS',
   'TZ',
+  'PODIUM_LOG_LEVEL', 'PODIUM_LOG_FORMAT', 'PODIUM_LOG_SHIP_URL', 'PODIUM_LOG_SHIP_HEADERS', 'PODIUM_LOG_SHIP_BUFFER',
 ];
 /** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. */
 export const OWN_KEYS = ['PODIUMCTL_MODE', 'PODIUMCTL_PORT', 'PODIUMCTL_BIND', 'PODIUM_TOKEN', 'PODIUM_DB'];
@@ -56,7 +57,7 @@ Options:
   -f, --follow                  logs: follow
   --tail N                      logs: lines to show (default 100)
   --rotate                      token: generate a new admin secret
-  --show-token                  config: print the token instead of masking it
+  --show-token                  config: print the token, log ship header values and URL password instead of masking them
   -h, --help                    This help
 
 Files (set PODIUMCTL_HOME to move them; default ~/.podium):
@@ -68,6 +69,16 @@ Auth: the first \`start\` generates the admin secret and saves it as PODIUM_TOKE
 the Admin section in the browser, where you make a token for each person. On your own machine a reporter can
 send the secret itself as X-Podium-Token. Find it any time with \`podiumctl token\`. To run without auth (and
 without Admin): \`podiumctl config set PODIUM_TOKEN=\` (empty on purpose).
+
+Logging (server output; \`podiumctl logs\` shows it):
+  PODIUM_LOG_LEVEL         debug, info (default), warn or error. debug adds one line per HTTP request
+  PODIUM_LOG_FORMAT        text (default, as before) or json (one JSON object per line)
+  PODIUM_LOG_SHIP_URL      Also push every line to this endpoint, e.g. a VictoriaLogs server at
+                           http://HOST:9428 (its /insert/jsonline is added). Off when empty
+  PODIUM_LOG_SHIP_HEADERS  Headers for that endpoint, Name=Value;Name2=Value2 (auth, AccountID)
+  PODIUM_LOG_SHIP_BUFFER   Lines kept while the endpoint is down (default 2000; the oldest go first)
+  Example: podiumctl config set PODIUM_LOG_SHIP_URL=http://host.containers.internal:9428
+  (in container mode that name reaches this machine; standalone, use 127.0.0.1), then podiumctl restart
 
 Config keys: ${ALL_KEYS.join(', ')}.
 `;
@@ -182,6 +193,23 @@ ${envLines}
 [Install]
 WantedBy=default.target
 `;
+}
+
+/** The config as `podiumctl config` prints it: the token, log ship header values and a ship URL's password hidden. */
+export function maskConfig(file) {
+  const shown = { ...file };
+  if (shown.PODIUM_TOKEN) shown.PODIUM_TOKEN = '(hidden; --show-token or `podiumctl token`)';
+  if (shown.PODIUM_LOG_SHIP_HEADERS) {
+    shown.PODIUM_LOG_SHIP_HEADERS = shown.PODIUM_LOG_SHIP_HEADERS.split(';').filter((p) => p.trim())
+      .map((p) => `${p.split('=')[0].trim()}=(hidden)`).join(';');
+  }
+  if (shown.PODIUM_LOG_SHIP_URL) {
+    try {
+      const u = new URL(shown.PODIUM_LOG_SHIP_URL);
+      if (u.password) { u.password = 'hidden'; shown.PODIUM_LOG_SHIP_URL = u.toString(); }
+    } catch { /* not a URL: the server says so at start, and there is no password to hide */ }
+  }
+  return shown;
 }
 
 // ---------- environment ----------
@@ -454,8 +482,7 @@ function cmdConfig(cfg, args, flags) {
     say(`${args[0] === 'set' ? 'Set' : 'Unset'} ${key}. Run \`podiumctl restart\` to apply.`);
     return;
   }
-  const shown = { ...file };
-  if (shown.PODIUM_TOKEN && !flags['show-token']) shown.PODIUM_TOKEN = '(hidden; --show-token or `podiumctl token`)';
+  const shown = flags['show-token'] ? { ...file } : maskConfig(file);
   say(`# ${configPath()}\n# resolved: mode=${cfg.mode} port=${cfg.port} bind=${cfg.bind}`);
   say(Object.entries(shown).map(([k, v]) => `${k}=${v}`).join('\n') || '(no settings saved yet)');
 }

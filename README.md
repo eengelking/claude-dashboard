@@ -124,8 +124,10 @@ session comes from the token that sent it: with the shared admin secret every se
 and with the server's auth turned off every session is Unassigned, because then anyone could claim any
 name. Per-person read permissions are not part of Podium.
 
-Other settings (`STALE_AFTER_MS`, `RETAIN_*`, and so on, see the table below) are set with
-`podiumctl config set KEY=VALUE` and applied on `restart`. Set `PODIUMCTL_HOME` to keep the files
+Other settings (`STALE_AFTER_MS`, `RETAIN_*`, the `PODIUM_LOG_*` logging settings, and so on, see the table
+below) are set with `podiumctl config set KEY=VALUE` and applied on `restart`. "Logs" in the
+[user guide](docs/USER_GUIDE.md#logs) covers what the server logs, sending it to VictoriaLogs, and pointing an
+agent at it. Set `PODIUMCTL_HOME` to keep the files
 somewhere other than `~/.podium`. `podiumctl --help` lists everything.
 
 Start on boot: in container mode the boot service runs `podiumctl start`, which also starts the Podman

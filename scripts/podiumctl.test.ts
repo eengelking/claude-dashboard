@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  containerRunArgs, launchdPlist, parseArgs, parseEnvFile, resolveConfig, serializeEnv, serverEnv, systemdUnit,
+  containerRunArgs, launchdPlist, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
 } from "../bin/podiumctl.mjs";
 
 const BIN = path.join(__dirname, "..", "bin", "podiumctl.mjs");
@@ -134,6 +134,61 @@ describe("podiumctl command construction", () => {
     const co = systemdUnit({ args: ["/n", "/s p", "start"], stopArgs: ["/n", "/s p", "stop"], standalone: false, env: {} });
     expect(co).toContain('ExecStart=/n "/s p" start');
     expect(co).toContain('ExecStop=/n "/s p" stop');
+  });
+});
+
+describe("podiumctl logging settings (#140)", () => {
+  const LOG_KEYS = ["PODIUM_LOG_LEVEL", "PODIUM_LOG_FORMAT", "PODIUM_LOG_SHIP_URL", "PODIUM_LOG_SHIP_HEADERS", "PODIUM_LOG_SHIP_BUFFER"];
+  const file = {
+    PODIUM_LOG_LEVEL: "debug",
+    PODIUM_LOG_FORMAT: "json",
+    PODIUM_LOG_SHIP_URL: "http://logs.lan:9428",
+    PODIUM_LOG_SHIP_HEADERS: "Authorization=Bearer hdr-s3cret;AccountID=4",
+    PODIUM_LOG_SHIP_BUFFER: "500",
+  };
+
+  it("are config keys passed through to the server, in both modes", () => {
+    expect(PASSTHROUGH).toEqual(expect.arrayContaining(LOG_KEYS));
+    const cfg = resolveConfig(file);
+    expect(serverEnv(cfg, true)).toMatchObject(file);
+    expect(serverEnv(cfg, false)).toMatchObject(file);
+  });
+
+  it("never puts a header value on the podman command line", () => {
+    const cfg = resolveConfig(file);
+    const args = containerRunArgs(cfg, Object.keys(serverEnv(cfg, true)));
+    expect(args).toContain("PODIUM_LOG_SHIP_HEADERS");
+    expect(args.join(" ")).not.toContain("hdr-s3cret");
+  });
+
+  it("can be set, keep = and ; inside a value, and hide header values and URL passwords in `config`", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    try {
+      expect(ctl(home, "config", "set", "PODIUM_LOG_SHIP_HEADERS=Authorization=Basic dXNlcjpwYXNz==;AccountID=4").status).toBe(0);
+      expect(ctl(home, "config", "set", "PODIUM_LOG_SHIP_URL=https://vl:pa55word@logs.lan/vl").status).toBe(0);
+      expect((parseEnvFile(fs.readFileSync(path.join(home, "config.env"), "utf8")) as Record<string, string>).PODIUM_LOG_SHIP_HEADERS).toBe("Authorization=Basic dXNlcjpwYXNz==;AccountID=4");
+      const shown = ctl(home, "config").stdout;
+      expect(shown).not.toContain("dXNlcjpwYXNz");
+      expect(shown).not.toContain("pa55word");
+      expect(shown).toContain("Authorization=(hidden)");
+      expect(shown).toContain("AccountID=(hidden)");
+      expect(shown).toContain("logs.lan/vl");
+      const all = ctl(home, "config", "--show-token").stdout;
+      expect(all).toContain("dXNlcjpwYXNz==");
+      expect(all).toContain("pa55word");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("are listed in --help", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    try {
+      const help = ctl(home, "--help").stdout;
+      for (const k of LOG_KEYS) expect(help).toContain(k);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
