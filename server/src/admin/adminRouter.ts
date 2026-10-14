@@ -10,6 +10,7 @@ import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
 import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
+import { createLogger, loggerFromLine, type Fields, type Logger } from '../logging/logger.js';
 
 export interface AdminRouterOptions {
   /** The admin secret. null when the server runs without authentication: Admin is then switched off. */
@@ -27,6 +28,9 @@ export interface AdminRouterOptions {
   /** Wrong tries before a source is locked out, and for how long. */
   maxFails?: number;
   lockMs?: number;
+  /** The server's logger (#140): each Admin change is an `admin.<action>` event with the source address. */
+  logger?: Logger;
+  /** A plain line sink, kept for callers from before the logger. */
   log?: (line: string) => void;
 }
 
@@ -68,10 +72,20 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   const idleMs = opts.idleMs ?? 10 * 60_000;
   const maxFails = opts.maxFails ?? 5;
   const lockMs = opts.lockMs ?? 15 * 60_000;
-  const log = opts.log ?? ((line: string) => console.error(line));
+  const logger = opts.logger ?? (opts.log ? loggerFromLine(opts.log) : createLogger({ secrets: opts.secret ? [opts.secret] : [] }));
   const sessions = new Map<string, number>(); // session id -> last activity
   const fails = new Map<string, { n: number; lockedUntil: number }>();
   const router = Router();
+
+  /**
+   * An Admin Log entry, and the same change as an `admin.<kind>` log event. The event carries the action, the
+   * source address and the ids in `fields`, never the entry's free text (names, prices) or a token.
+   */
+  const audit = (req: Request, kind: string, detail: string, fields: Fields = {}) => {
+    const src = sourceOf(req);
+    people.log(kind, detail, src, now());
+    logger.log(kind === 'unlock_failed' ? 'warn' : 'info', `admin.${kind}`, `podium: admin ${kind.replace(/_/g, ' ')} from ${src}`, { action: kind, source: src, ...fields });
+  };
 
   router.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -141,7 +155,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       const sid = randomBytes(32).toString('hex');
       sessions.set(sid, now());
       res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'strict', path: '/api/admin', secure: req.secure });
-      people.log('unlock', 'Admin unlocked', src, now());
+      audit(req, 'unlock', 'Admin unlocked');
       res.json({ ok: true });
       return;
     }
@@ -149,7 +163,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (fails.size >= MAX_SOURCES) fails.delete(fails.keys().next().value as string);
     const locked = n >= maxFails;
     fails.set(src, { n: locked ? 0 : n, lockedUntil: locked ? now() + lockMs : 0 });
-    people.log('unlock_failed', locked ? `Wrong secret (${n}); locked for ${Math.round(lockMs / 60_000)} minutes` : `Wrong secret (${n})`, src, now());
+    audit(req, 'unlock_failed', locked ? `Wrong secret (${n}); locked for ${Math.round(lockMs / 60_000)} minutes` : `Wrong secret (${n})`, { failures: n, locked });
     res.status(401).json({ ok: false, error: 'wrong secret' });
   });
 
@@ -171,7 +185,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       res.status(err.code === 'duplicate' ? 409 : err.code === 'not_found' ? 404 : 400).json({ ok: false, error: err.message });
       return;
     }
-    log(`podium: admin request failed: ${(err as Error).message}`);
+    logger.error('request.failed', `podium: admin request failed: ${(err as Error).message}`, { route: '/api/admin', reason: (err as Error).message, status: 500 });
     res.status(500).json({ ok: false, error: 'failed' });
   };
   const groupNameOf = (p: PersonRow) => (p.groupId === null ? null : (people.getGroup(p.groupId)?.name ?? null));
@@ -189,7 +203,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       const name = typeof req.body?.name === 'string' ? req.body.name : '';
       const groupId = typeof req.body?.groupId === 'number' ? req.body.groupId : null;
       const { person, token } = people.createPerson(name, groupId, now());
-      people.log('person_created', `Added ${person.name}`, sourceOf(req), now());
+      audit(req, 'person_created', `Added ${person.name}`, { person_id: person.id });
       res.status(201).json({ ok: true, person: publicPerson(person, groupNameOf(person)), token });
     } catch (err) {
       fail(res, err);
@@ -202,7 +216,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     try {
       const out = people.rotate(id, now());
       if (!out) return void res.status(404).json({ ok: false, error: 'unknown person' });
-      people.log('token_rotated', `Rotated the token of ${out.person.name}`, sourceOf(req), now());
+      audit(req, 'token_rotated', `Rotated the token of ${out.person.name}`, { person_id: id });
       res.json({ ok: true, person: publicPerson(out.person, groupNameOf(out.person)), token: out.token });
     } catch (err) {
       fail(res, err);
@@ -214,7 +228,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (id === null) return void res.status(400).json({ ok: false, error: 'bad id' });
     const p = people.getPerson(id);
     if (!p) return void res.status(404).json({ ok: false, error: 'unknown person' });
-    if (people.revoke(id, now())) people.log('token_revoked', `Revoked the token of ${p.name}`, sourceOf(req), now());
+    if (people.revoke(id, now())) audit(req, 'token_revoked', `Revoked the token of ${p.name}`, { person_id: id });
     res.json({ ok: true });
   });
 
@@ -225,7 +239,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (raw !== null && typeof raw !== 'number') return void res.status(400).json({ ok: false, error: 'groupId must be a number or null' });
     const p = people.getPerson(id);
     if (!p || !people.setGroup(id, raw)) return void res.status(404).json({ ok: false, error: 'unknown person or group' });
-    people.log('group_assigned', raw === null ? `${p.name} moved to no group` : `${p.name} moved to ${people.getGroup(raw)?.name}`, sourceOf(req), now());
+    audit(req, 'group_assigned', raw === null ? `${p.name} moved to no group` : `${p.name} moved to ${people.getGroup(raw)?.name}`, { person_id: id, group_id: raw });
     res.json({ ok: true });
   });
 
@@ -238,7 +252,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   router.post('/groups', (req, res) => {
     try {
       const g = people.createGroup(typeof req.body?.name === 'string' ? req.body.name : '', now());
-      people.log('group_created', `Created the group ${g.name}`, sourceOf(req), now());
+      audit(req, 'group_created', `Created the group ${g.name}`, { group_id: g.id });
       res.status(201).json({ ok: true, ...g });
     } catch (err) {
       fail(res, err);
@@ -250,7 +264,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (id === null) return void res.status(400).json({ ok: false, error: 'bad id' });
     const g = people.getGroup(id);
     if (!g || !people.deleteGroup(id)) return void res.status(404).json({ ok: false, error: 'unknown group' });
-    people.log('group_deleted', `Deleted the group ${g.name}`, sourceOf(req), now());
+    audit(req, 'group_deleted', `Deleted the group ${g.name}`, { group_id: id });
     res.json({ ok: true });
   });
 
@@ -277,14 +291,14 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       const v = body.allowAdminSecretReporting;
       if (typeof v !== 'boolean') return void res.status(400).json({ ok: false, error: 'allowAdminSecretReporting must be true or false' });
       people.setAdminReporting(v);
-      people.log('admin_reporting_changed', `Reporting with the admin secret turned ${v ? 'on' : 'off'}`, sourceOf(req), now());
+      audit(req, 'admin_reporting_changed', `Reporting with the admin secret turned ${v ? 'on' : 'off'}`, { on: v });
       return void res.json({ ok: true, allowAdminSecretReporting: v });
     }
     if ('showBackgroundSessions' in body) {
       const v = body.showBackgroundSessions;
       if (typeof v !== 'boolean' || !wall) return void res.status(400).json({ ok: false, error: 'showBackgroundSessions must be true or false' });
       wall.setShowBackgroundSessions(v);
-      people.log('wall_background_changed', `Background sessions ${v ? 'shown' : 'hidden'} on the wall`, sourceOf(req), now());
+      audit(req, 'wall_background_changed', `Background sessions ${v ? 'shown' : 'hidden'} on the wall`, { on: v });
       return void res.json({ ok: true, showBackgroundSessions: v });
     }
     if ('features' in body) {
@@ -295,7 +309,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       }
       for (const id of ids) {
         features.setFeature(id, f[id]);
-        people.log('feature_changed', `Feature ${id} turned ${f[id] ? 'on' : 'off'}`, sourceOf(req), now());
+        audit(req, 'feature_changed', `Feature ${id} turned ${f[id] ? 'on' : 'off'}`, { setting: id, on: f[id] });
       }
       return void res.json({ ok: true, features: featureList() });
     }
@@ -307,7 +321,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       }
       for (const id of ids) {
         wall.setNotice(id, n[id]);
-        people.log('wall_notice_changed', `Wall notice ${id} turned ${n[id] ? 'on' : 'off'}`, sourceOf(req), now());
+        audit(req, 'wall_notice_changed', `Wall notice ${id} turned ${n[id] ? 'on' : 'off'}`, { setting: id, on: n[id] });
       }
       return void res.json({ ok: true, notices: noticeList() });
     }
@@ -323,12 +337,12 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       if (JSON.stringify(prices.overrides()) === before) return void res.json({ ok: true, modelPrices: prices.view() });
       const k = m.key.trim().toLowerCase();
       const p = m.std as PriceSet;
-      people.log(
+      audit(
+        req,
         'model_price_changed',
         `Set the price of ${k} per million tokens: input ${p.input}, output ${p.output}, cache read ${p.cacheRead}, cache write ${p.cacheWrite}, 1-hour cache write ${p.cacheWrite1h}` +
           (m.long ? ` (prompts over 100,000 tokens: input ${m.long.input}, output ${m.long.output})` : ''),
-        sourceOf(req),
-        now(),
+        { model: k },
       );
       return void res.json({ ok: true, modelPrices: prices.view() });
     }
@@ -338,7 +352,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       const had = JSON.stringify(prices.overrides());
       prices.reset(k);
       if (JSON.stringify(prices.overrides()) === had) return void res.json({ ok: true, modelPrices: prices.view() });
-      people.log('model_price_reset', `Reset the price of ${k.trim().toLowerCase()} to the built-in value`, sourceOf(req), now());
+      audit(req, 'model_price_reset', `Reset the price of ${k.trim().toLowerCase()} to the built-in value`, { model: k.trim().toLowerCase() });
       return void res.json({ ok: true, modelPrices: prices.view() });
     }
     res.status(400).json({ ok: false, error: 'no known setting in the request' });

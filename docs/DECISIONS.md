@@ -321,3 +321,23 @@ that also started off would make the feature take two steps to try for no added 
 **Cost.** A machine with the option on still captures nothing while the flag is off, which can puzzle its owner
 until the panel's note explains it. Open panels keep making one small request per interval while the flag is off.
 A flip sends every browser a full snapshot, which is fine for a switch that changes rarely.
+
+## 26. The server logs events, and can push them to a central platform
+
+**Choice.** The server writes each thing it does as an event with a stable dotted name, a level and flat fields
+(`server/src/logging/`, #140). Plain text stays the default and prints what the server always printed; `json` prints
+one object per line. When `PODIUM_LOG_SHIP_URL` is set, the server also pushes the JSON lines to that endpoint,
+shaped for VictoriaLogs' JSON line ingest, from a bounded buffer that drops the oldest lines when the endpoint is
+down. Only the server logs this way; the mod does not. Access logging is one `http.request` line per request at
+`debug`, so it is off at the default `info`. Admin changes are `admin.*` events with the action and the source
+address, and the Admin Log table is unchanged. Node's own `fetch` and `zlib` do the work, with no logging library.
+**Why.** The maintainer wants an agent to find out what a deployment did through the VictoriaLogs MCP server: a
+rejected report by its reason, a session's start and end. A push from the server needs nothing else installed, and
+the same JSON on stdout still serves a collector such as Vector or Fluent Bit for anyone who prefers that. The mod's
+logs would leave the user's machine, a different privacy decision, so they stay out until someone asks. A line per
+request is noise for most people, and the paths already show in the events that matter.
+**Cost.** With shipping on, the server makes network calls on its own, and lines are lost when the endpoint is down
+longer than the buffer lasts (it says so once). The default text output now carries info lines it did not before
+(sessions starting and ending, reporters connecting, sweeps and Admin changes); `PODIUM_LOG_LEVEL=warn` goes back to
+errors and refusals only. Field names are checked against a deny list and strings are scrubbed, but a new field still
+needs its author to think about what it carries.

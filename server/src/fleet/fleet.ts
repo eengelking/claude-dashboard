@@ -13,6 +13,8 @@ import { ModelPriceStore } from './modelPrices.js';
 import { WallSettings } from './wallSettings.js';
 import { ActivityStore } from './activity.js';
 import { ACTIVITY_FEED, FeatureFlags } from './featureFlags.js';
+import { checkReporter } from './compat.js';
+import { silentLogger, type Logger } from '../logging/logger.js';
 
 export interface FleetConfig {
   staleAfterMs: number;
@@ -69,6 +71,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
   };
 }
 
+/** Reporters remembered for `reporter.connected`; the oldest is forgotten past this. */
+const MAX_REPORTERS = 1000;
+
 /** How many events /state returns and the UI keeps. */
 export const STATE_EVENTS = 150;
 
@@ -94,11 +99,15 @@ export class Fleet {
   private readonly startedAt: number;
   private readonly clockSkew = new Map<string, number>();
   private costMinuteCache: { at: number; rows: { m: number; v: number }[] } | null = null;
+  /** When each reporter (owner, machine, kind) last reported, for `reporter.connected` (#140). */
+  private readonly reporters = new Map<string, number>();
 
   constructor(
     readonly db: FleetDb,
     readonly cfg: FleetConfig,
     readonly now: () => number = Date.now,
+    /** Lifecycle events (#140): session.started/ended, reporter.connected/silent, sweep.removed. Silent by default. */
+    readonly logger: Logger = silentLogger,
   ) {
     this.startedAt = now();
     this.features = new FeatureFlags(db.db, (id, on) => {
@@ -146,15 +155,32 @@ export class Fleet {
     const res = ingestReport(this.db, report, this.now(), owner);
     this.clockSkew.set(res.sessionId, res.clockSkewMs);
     this.activity.ingest(report, res.clockSkewMs);
+    this.noteReporter(report, owner);
     const entry = this.live.get(res.sessionId);
+    const row = this.db.getSession(res.sessionId);
     if (entry) {
       entry.heard = true;
     } else if (!(res.ended && res.wasDone)) {
       // New, revived, or back after leaving the live set. A repeated final report for a session that
       // already left is stored but does not bring it back.
       this.live.set(res.sessionId, { heard: true, status: null });
+      this.logger.info('session.started', `podium: session ${res.sessionId} ${res.created ? 'started' : 'is reporting again'}`, {
+        session_id: res.sessionId,
+        owner,
+        created: res.created,
+        revived: !res.created,
+        model: row?.model ?? null,
+        reporter: report.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
+      });
     }
-    const row = this.db.getSession(res.sessionId);
+    if (res.ended && !res.wasDone) {
+      this.logger.info('session.ended', `podium: session ${res.sessionId} ended${row?.end_reason ? ` (${row.end_reason})` : ''}`, {
+        session_id: res.sessionId,
+        owner,
+        reason: 'done',
+        end_reason: row?.end_reason ?? null,
+      });
+    }
     if (!this.unused(row)) {
       for (const e of res.newEvents.slice().sort((a, b) => a.t - b.t)) {
         this.hub.broadcast('activity', activityView(e, row));
@@ -162,6 +188,28 @@ export class Fleet {
     }
     if (this.live.has(res.sessionId)) this.scheduleSession(res.sessionId);
     return res;
+  }
+
+  /** `reporter.connected` the first time a reporter is heard, and again when it comes back after going quiet. */
+  private noteReporter(report: Report, owner: string | null): void {
+    const kind = report.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod';
+    const key = `${owner ?? ''}\u0000${report.machine?.id ?? ''}\u0000${kind}`;
+    const now = this.now();
+    const last = this.reporters.get(key);
+    this.reporters.delete(key); // re-insert so the oldest entry is the one forgotten at the cap
+    this.reporters.set(key, now);
+    if (this.reporters.size > MAX_REPORTERS) this.reporters.delete(this.reporters.keys().next().value as string);
+    if (last !== undefined && now - last <= this.cfg.staleAfterMs) return;
+    const who = [owner, report.machine?.name].filter(Boolean).join(' on ') || 'an unnamed reporter';
+    this.logger.info('reporter.connected', `podium: ${kind === 'hooks' ? 'settings hooks' : 'reporter'} ${report.reporter.version} connected (${who})`, {
+      owner,
+      machine: report.machine?.name ?? null,
+      machine_id: report.machine?.id ?? null,
+      reporter: kind,
+      reporter_version: report.reporter.version,
+      reporter_compat: checkReporter(report.reporter.version),
+      returning: last !== undefined,
+    });
   }
 
   /** A classic settings-hook payload (T5.1): merged with what is stored, then ingested as a report. */
@@ -350,6 +398,7 @@ export class Fleet {
     this.pending.delete(id);
     const existed = this.db.deleteSession(id);
     if (wasLive) this.hub.broadcast('removed', { sessionId: id, reason: 'deleted' satisfies RemovedReason });
+    if (existed) this.logger.info('session.deleted', `podium: session ${id} deleted`, { session_id: id, live: wasLive });
     return existed;
   }
 
@@ -362,12 +411,21 @@ export class Fleet {
     const row = entry ? this.db.getSession(id) : undefined;
     if (!entry || !row) return 'unknown';
     if (sessionStatus(row, entry.heard, this.now(), staleAfterFor(row, this.derive)) !== 'stale') return 'not-stale';
-    this.leave(row, 'dropped', 'heartbeat lost');
+    this.leave(row, 'dropped', 'heartbeat lost', 'remove');
     return 'dropped';
   }
 
-  private leave(row: SessionRow, reason: 'done' | 'dropped', text: string): void {
+  private leave(row: SessionRow, reason: 'done' | 'dropped', text: string, by: 'sweep' | 'remove' = 'sweep'): void {
     const now = this.now();
+    if (reason === 'dropped') {
+      this.logger.info('session.ended', `podium: session ${row.id} ended: heartbeat lost${by === 'remove' ? ' (removed from the wall)' : ''}`, {
+        session_id: row.id,
+        owner: row.owner,
+        reason: 'heartbeat lost',
+        by,
+        silent_s: Math.round((now - row.last_seen_at) / 1000),
+      });
+    }
     this.live.delete(row.id);
     this.clockSkew.delete(row.id);
     this.activity.dropSession(row.id);
@@ -399,6 +457,7 @@ export class Fleet {
     const now = this.now();
     this.activity.expire();
     const nowSec = Math.floor(now / 1000);
+    const removed = { done: [] as string[], dropped: [] as string[] };
     for (const [id, entry] of [...this.live]) {
       const row = this.db.getSession(id);
       if (!row) {
@@ -406,13 +465,17 @@ export class Fleet {
         continue;
       }
       if (row.status === 'done') {
-        if (now - (row.ended_at ?? now) >= this.cfg.lingerMs) this.leave(row, 'done', 'session ended');
+        if (now - (row.ended_at ?? now) >= this.cfg.lingerMs) {
+          this.leave(row, 'done', 'session ended');
+          removed.done.push(id);
+        }
         continue;
       }
       const status = sessionStatus(row, entry.heard, now, staleAfterFor(row, this.derive));
       if (status === 'stale') {
         if (now >= (this.dropAtFor(row, entry.heard, now) ?? Infinity)) {
           this.leave(row, 'dropped', 'heartbeat lost');
+          removed.dropped.push(id);
           continue;
         }
       } else {
@@ -424,11 +487,28 @@ export class Fleet {
         }
       }
       if (entry.status !== null && entry.status !== status) {
+        if (status === 'stale') {
+          this.logger.warn('reporter.silent', `podium: session ${id} went quiet (no report for ${Math.round((now - row.last_seen_at) / 1000)} s)`, {
+            session_id: id,
+            owner: row.owner,
+            silent_s: Math.round((now - row.last_seen_at) / 1000),
+            was: entry.status,
+          });
+        }
         entry.status = status;
         if (!this.unused(row)) this.hub.broadcast('session', this.viewOf(row));
       } else if (entry.status === null) {
         entry.status = status;
       }
+    }
+    const n = removed.done.length + removed.dropped.length;
+    if (n > 0) {
+      this.logger.info('sweep.removed', `podium: sweep removed ${n} session${n === 1 ? '' : 's'} from the wall (${removed.done.length} ended, ${removed.dropped.length} heartbeat lost)`, {
+        removed: n,
+        done: removed.done.length,
+        dropped: removed.dropped.length,
+        session_ids: [...removed.done, ...removed.dropped].join(','),
+      });
     }
   }
 
