@@ -123,9 +123,12 @@ runs only when `PODIUM_LOG_SHIP_URL` is set: `push` appends the JSON line to an 
 1 s timer (or a full batch of 100) gzips a batch as NDJSON and `fetch`es it to `<url>/insert/jsonline` with
 `_time_field=timestamp&_msg_field=message&_stream_fields=service,host`, `Content-Type: application/stream+json`
 and the `PODIUM_LOG_SHIP_HEADERS`, with a 5 s timeout. A failed batch goes back to the front; past
-`PODIUM_LOG_SHIP_BUFFER` lines (2000) the oldest are dropped. A 4xx other than 408 and 429 drops the batch rather
-than retrying it, and retries back off from 1 s to 30 s. The shipper reports a failure, a full buffer and the
-recovery once each through the logger with `ship: false`, so those lines never feed the buffer they describe.
+`PODIUM_LOG_SHIP_BUFFER` lines (2000) the oldest are dropped. Only a 400, 413 or 422 (a batch the endpoint calls
+malformed or too large) drops that batch; any other answer, 401, 403, 404 and 5xx included, keeps it and retries,
+backing off from 1 s to 30 s, and no full batch starts a flush while a retry is not due. The shipper reports a
+failure (`log.ship_failed`), a full buffer (`log.ship_dropping`), a refused batch (`log.ship_refused`) and the
+recovery once each per outage through the logger with `ship: false`, so those lines never feed the buffer they
+describe.
 Request paths never await it. `setup.ts` reads the settings and turns a bad value into its default plus one
 `log.config_invalid` warning. Who emits what: `index.ts` (`server.start` with the settings, never the token;
 `server.stop`, then up to 1 s to send what is left), `requestLog.ts` (`http.request` at debug: method, path without

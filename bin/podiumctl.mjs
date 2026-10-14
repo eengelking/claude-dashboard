@@ -201,12 +201,15 @@ export function maskConfig(file) {
   if (shown.PODIUM_TOKEN) shown.PODIUM_TOKEN = '(hidden; --show-token or `podiumctl token`)';
   if (shown.PODIUM_LOG_SHIP_HEADERS) {
     shown.PODIUM_LOG_SHIP_HEADERS = shown.PODIUM_LOG_SHIP_HEADERS.split(';').filter((p) => p.trim())
-      .map((p) => `${p.split('=')[0].trim()}=(hidden)`).join(';');
+      .map((p) => (p.includes('=') ? `${p.split('=')[0].trim()}=(hidden)` : '(hidden)')).join(';');
   }
   if (shown.PODIUM_LOG_SHIP_URL) {
     try {
       const u = new URL(shown.PODIUM_LOG_SHIP_URL);
-      if (u.password) { u.password = 'hidden'; shown.PODIUM_LOG_SHIP_URL = u.toString(); }
+      if (u.password) u.password = 'hidden';
+      if (u.username) u.username = 'hidden';
+      for (const k of [...u.searchParams.keys()]) u.searchParams.set(k, 'hidden');
+      if (u.password || u.username || [...u.searchParams.keys()].length) shown.PODIUM_LOG_SHIP_URL = u.toString();
     } catch { /* not a URL: the server says so at start, and there is no password to hide */ }
   }
   return shown;

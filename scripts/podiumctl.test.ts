@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  containerRunArgs, launchdPlist, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
+  containerRunArgs, launchdPlist, maskConfig, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
 } from "../bin/podiumctl.mjs";
 
 const BIN = path.join(__dirname, "..", "bin", "podiumctl.mjs");
@@ -179,6 +179,17 @@ describe("podiumctl logging settings (#140)", () => {
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
+  });
+
+  it("maskConfig hides a header pair with no '=', a URL's user name and its query values, and leaves a plain URL alone", () => {
+    const shown = maskConfig({ PODIUM_LOG_SHIP_HEADERS: "Bearer abc123;AccountID=4", PODIUM_LOG_SHIP_URL: "https://vluser:pw@logs.lan/vl?apikey=XKEY123" }) as Record<string, string>;
+    expect(shown.PODIUM_LOG_SHIP_HEADERS).not.toContain("abc123");
+    expect(shown.PODIUM_LOG_SHIP_HEADERS).toContain("AccountID=(hidden)");
+    expect(shown.PODIUM_LOG_SHIP_URL).not.toMatch(/vluser|pw@|XKEY123/);
+    expect(shown.PODIUM_LOG_SHIP_URL).toContain("logs.lan/vl");
+    expect(shown.PODIUM_LOG_SHIP_URL).toContain("apikey=");
+    const plain = maskConfig({ PODIUM_LOG_SHIP_URL: "http://logs.lan:9428" }) as Record<string, string>;
+    expect(plain.PODIUM_LOG_SHIP_URL).toBe("http://logs.lan:9428");
   });
 
   it("are listed in --help", () => {

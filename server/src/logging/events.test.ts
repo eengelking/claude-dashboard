@@ -156,6 +156,31 @@ describe('the events', () => {
     expect(recs.find((x) => x.event === 'sweep.removed')).toMatchObject({ level: 'info', removed: 1, done: 1, dropped: 0 });
   });
 
+  it('session.started says revived only for a session that had ended or been dropped and came back', () => {
+    const clock = { t: T0 };
+    const s = stack({ clock });
+    const started = () => s.records().filter((x) => x.event === 'session.started');
+    const r = fixtureReport();
+    s.fleet.ingest(r);
+    expect(started().at(-1)).toMatchObject({ created: true, revived: false });
+
+    // Stored but not held live, as when another server process wrote it: it reports again, it was never ended.
+    (s.fleet as unknown as { live: Map<string, unknown> }).live.delete(r.session.id);
+    clock.t += 1000;
+    s.fleet.ingest({ ...r, sentAt: clock.t });
+    expect(started()).toHaveLength(2);
+    expect(started().at(-1)).toMatchObject({ created: false, revived: false });
+
+    // Dropped (heartbeat lost), then back.
+    for (let i = 0; i < 80; i++) {
+      clock.t += 1000;
+      s.fleet.sweep();
+    }
+    expect(s.fleet.isLive(r.session.id)).toBe(false);
+    s.fleet.ingest({ ...r, sentAt: clock.t, events: [] });
+    expect(started().at(-1)).toMatchObject({ created: false, revived: true });
+  });
+
   it('a session that stops reporting goes silent, then ends as heartbeat lost', () => {
     const clock = { t: T0 };
     const s = stack({ clock });

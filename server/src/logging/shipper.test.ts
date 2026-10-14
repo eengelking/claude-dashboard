@@ -1,5 +1,5 @@
 // Shipping log lines to a central platform such as VictoriaLogs (#140): batched NDJSON, bounded, never in the way.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import net from 'node:net';
 import { gunzipSync } from 'node:zlib';
 import { LogShipper, parseShipHeaders, shipUrl } from './shipper.js';
@@ -139,13 +139,53 @@ describe('LogShipper', () => {
     expect(notes.join('\n')).toContain('503');
   });
 
-  it('drops a batch the endpoint refuses as malformed (4xx) instead of retrying it forever', async () => {
-    const f = fakeFetch({ status: 400 });
-    const s = make({ url: 'http://h:9428', fetch: f.fn, notify: () => {} });
-    s.push('{}');
-    await s.flush();
-    expect(s.size).toBe(0);
-    expect(s.dropped).toBe(1);
+  for (const status of [400, 413, 422]) {
+    it(`drops a batch the endpoint refuses as malformed (HTTP ${status}), and says so as a refusal, not a full buffer`, async () => {
+      const f = fakeFetch({ status });
+      const notes: { event: string; message: string }[] = [];
+      const s = make({ url: 'http://h:9428', fetch: f.fn, notify: (event, message) => notes.push({ event, message }), backoffMs: 0 });
+      s.push('{"a":1}');
+      s.push('{"a":2}');
+      await s.flush();
+      expect(s.size).toBe(0);
+      expect(s.dropped).toBe(2);
+      expect(notes.map((n) => n.event)).toEqual(['log.ship_refused']);
+      expect(notes[0]!.message).toContain(`HTTP ${status}`);
+      expect(notes[0]!.message).toContain('dropped 2 lines');
+      expect(notes.some((n) => /buffer is full/.test(n.message))).toBe(false);
+      // Once per outage: a second refused batch says nothing more.
+      s.push('{"a":3}');
+      await s.flush();
+      expect(s.dropped).toBe(3);
+      expect(notes).toHaveLength(1);
+    });
+  }
+
+  for (const status of [401, 403, 404, 500, 503]) {
+    it(`keeps the batch and retries on HTTP ${status}, a setup or server problem rather than a bad batch`, async () => {
+      const f = fakeFetch({ status });
+      const notes: string[] = [];
+      const s = make({ url: 'http://h:9428', fetch: f.fn, notify: (e) => notes.push(e) });
+      s.push('{}');
+      await s.flush();
+      expect(s.size).toBe(1);
+      expect(s.dropped).toBe(0);
+      expect(notes).toEqual(['log.ship_failed']);
+    });
+  }
+
+  it('does not start a flush for a full batch while a retry is not yet due', async () => {
+    const f = fakeFetch({ fail: true });
+    const s = make({ url: 'http://h:9428', batchSize: 1, fetch: f.fn, notify: () => {}, backoffMs: 60_000 });
+    s.push('{"i":0}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(f.calls).toHaveLength(1); // the first full batch went, and failed
+    const flush = vi.spyOn(s, 'flush');
+    s.push('{"i":1}');
+    s.push('{"i":2}');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(flush).not.toHaveBeenCalled();
+    expect(f.calls).toHaveLength(1);
   });
 
   it('gives up on a hung endpoint after its timeout and keeps the lines for later', async () => {

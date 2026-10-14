@@ -419,9 +419,13 @@ If the server cannot reach the address, its log says `log shipping to ... failed
   `_msg_field=message`, `_stream_fields=service,host`). Give a full URL to change them.
 - For authentication or a tenant, set headers:
   `podiumctl config set "PODIUM_LOG_SHIP_HEADERS=Authorization=Bearer <token>;AccountID=0"`. `podiumctl config`
-  shows the header names and hides their values; `--show-token` shows them.
-- If VictoriaLogs is down, Podium keeps the last `PODIUM_LOG_SHIP_BUFFER` lines (2000), drops the oldest past that,
-  and says once in its own log that it is dropping and again when it recovers. Reports are never held up.
+  shows the header names and hides their values (a pair with no `=` is hidden whole); `--show-token` shows them.
+- If VictoriaLogs is down, or answers with an error such as 401 (wrong credentials), 403, 404 (wrong URL) or a 5xx,
+  Podium keeps the last `PODIUM_LOG_SHIP_BUFFER` lines (2000), drops the oldest past that, retries, and says once in
+  its own log that it is dropping and again when it recovers. Reports are never held up.
+- If VictoriaLogs refuses a batch as malformed or too large (400, 413 or 422), retrying would not help, so Podium
+  drops that batch and says once that the endpoint refused it and how many lines were dropped.
+- `podiumctl config` also hides a user name or password in the URL and the values of its query arguments.
 
 ### Point an agent at it
 

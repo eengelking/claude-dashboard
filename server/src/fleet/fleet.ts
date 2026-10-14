@@ -168,7 +168,7 @@ export class Fleet {
         session_id: res.sessionId,
         owner,
         created: res.created,
-        revived: !res.created,
+        revived: res.revived,
         model: row?.model ?? null,
         reporter: report.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
       });

@@ -82,6 +82,8 @@ export interface ShipperOptions {
 }
 
 const MAX_BACKOFF_MS = 30_000;
+/** Answers that mean the batch itself is bad (malformed, too large, unprocessable): dropped, not retried. */
+const REFUSED_STATUS = new Set([400, 413, 422]);
 
 export class LogShipper {
   private readonly url: string;
@@ -100,6 +102,7 @@ export class LogShipper {
   private failures = 0;
   private retryAt = 0;
   private dropping = false;
+  private refusedWarned = false;
   private droppedSinceWarn = 0;
   private closed = false;
   private scheduled = false;
@@ -131,7 +134,7 @@ export class LogShipper {
     if (this.closed) return;
     this.queue.push(line);
     this.trim();
-    if (this.queue.length >= this.batchSize && !this.scheduled) {
+    if (this.queue.length >= this.batchSize && !this.scheduled && this.now() >= this.retryAt) {
       this.scheduled = true;
       setImmediate(() => {
         this.scheduled = false;
@@ -183,8 +186,9 @@ export class LogShipper {
       });
       if (!res.ok) {
         failure = `HTTP ${res.status}`;
-        // A request the endpoint calls malformed will not get better on a retry.
-        refused = res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429;
+        // Only a batch the endpoint calls malformed or too large is dropped: it will not get better on a retry.
+        // Anything else (401, 403 and 404 are a setup problem, 5xx a server one) keeps the batch and retries.
+        refused = REFUSED_STATUS.has(res.status);
       }
       void res.body?.cancel().catch(() => {});
     } catch (err) {
@@ -202,8 +206,23 @@ export class LogShipper {
       this.failures = 0;
       this.retryAt = 0;
       this.dropping = false;
+      this.refusedWarned = false;
       this.droppedSinceWarn = 0;
       if (this.queue.length >= this.batchSize && !this.closed) setImmediate(() => void this.flush());
+      return;
+    }
+
+    if (refused) {
+      this.dropped += batch.length;
+      this.droppedSinceWarn += batch.length;
+      if (!this.refusedWarned) {
+        this.refusedWarned = true;
+        this.notify('log.ship_refused', `podium: ${this.shown} refused a batch of log lines (${failure}); dropped ${batch.length} lines`, {
+          endpoint: this.shown,
+          reason: failure,
+          dropped: batch.length,
+        });
+      }
       return;
     }
 
@@ -215,10 +234,6 @@ export class LogShipper {
       });
     }
     this.retryAt = this.now() + Math.min(MAX_BACKOFF_MS, this.backoffMs * 2 ** (this.failures - 1));
-    if (refused) {
-      this.lose(batch.length);
-      return;
-    }
     this.queue.unshift(...batch);
     this.trim();
   }
