@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { AgentDetail } from "./components/AgentDetail";
+import { OrchestratorDetail } from "./components/OrchestratorDetail";
 import { makeAgent, makeSession } from "./fixtures";
 import type { AgentView, SessionView } from "./types";
 
@@ -140,5 +141,16 @@ describe("why the panel shows Last tool", () => {
   it("says nothing on a current mod that has sent no counts yet", () => {
     const { container } = panel({ reporter: "mod", reporterVersion: "0.3.0" }, { toolCounts: null });
     expect(container.textContent).not.toMatch(NOTE);
+  });
+});
+
+describe("the orchestrator panel with the activity feed (#118)", () => {
+  it("keeps one Tools used group as the session's figures change", () => {
+    const loop = { skills: [], lastTool: "Read", toolCalls: 3, toolCounts: { Read: 3 }, steps: { done: 2, total: null } };
+    const s = makeSession({ reporterVersion: "0.13.0", activityFeed: true, loop });
+    const r = render(<OrchestratorDetail s={s} now={2_000_000} onBack={() => {}} />);
+    for (let i = 4; i < 8; i++) r.rerender(<OrchestratorDetail s={{ ...s, loop: { ...loop, toolCalls: i, toolCounts: { Read: i } } }} now={2_000_000 + i} onBack={() => {}} />);
+    expect(screen.getAllByText(/^Tools used/)).toHaveLength(1);
+    expect(screen.getAllByText("Activity")).toHaveLength(1);
   });
 });

@@ -427,7 +427,9 @@ body.modal-open #root { filter: blur(5px); }
 .podium .modal.modal-feed { width: min(820px, 100%); height: min(78vh, 760px); }
 .podium .modal .mb.feedmb { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 14px 18px; overflow: hidden; }
 .podium .modal .mb.feedmb .feedwrap { flex: 1; min-height: 0; display: flex; }
-.podium .modal .mb.feedmb .feed { height: auto; flex: 1; }
+/* The modal's markdown rules for lists (.mb ol, .mb li) must not reach the feed. */
+.podium .modal .mb.feedmb .feed { height: auto; flex: 1; max-width: none; margin: 0; padding: 0; }
+.podium .modal .mb.feedmb .feed li { margin: 0; }
 .podium .modal .mb.feedmb .feed li { font-size: 13px; grid-template-columns: 48px 16px minmax(0, 1fr); }
 .podium .modal .mb.feedmb .feed .tool .body { font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .podium .feed li.new { animation: none; } }
