@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium agent activity feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mockup for issue #118: a live feed of an agent's recent tool calls and text, on the agent panel.
+     Layout: the agent screen from the orchestrator view, with the feed as a new section under the Report buttons.
+     Uses Podium's own tokens and the .sec / dl patterns from podium.html, so nothing here is a new visual language.
+     Three states: feed on and the agent running (new entries arrive every couple of seconds), feed on and the agent finished, option off.
+     The feed is the last 20 entries, newest at the bottom, each with a time and a kind. Scroll up and it stops following; the pill jumps back. Expand opens the same feed in a modal: the app behind it blurs, and Esc, the X or a click on the dimmed area closes it, as in the prompt modal.
+     Entries are example data. Secrets are shown already redacted, as the mod would send them. -->
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --good: #0ca30c; --good-text: #3dbb3d; --deleg: #2fa4e0; --deleg-text: #5cbcf0; --warn: #fab219; --crit: #d03b3b;
+  --tool: #5cbcf0; --text: #c3c2b7; --code: #141413; --redact: #3a2a2a; --redact-text: #e08a8a;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --good: #1f9d55; --good-text: #006300; --deleg: #0a7fb8; --deleg-text: #07608c;
+    --tool: #07608c; --text: #52514e; --code: #f1f0ec; --redact: #f5e3e3; --redact-text: #9b2c2c; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --good: #1f9d55; --good-text: #006300; --deleg: #0a7fb8; --deleg-text: #07608c;
+  --tool: #07608c; --text: #52514e; --code: #f1f0ec; --redact: #f5e3e3; --redact-text: #9b2c2c; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.45 var(--font-ui); padding: 20px 16px 60px; }
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 17px; margin: 0 0 4px; }
+h2 { font-size: 14px; margin: 34px 0 4px; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; max-width: 72ch; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 12px 0 0; font-size: 12.5px; color: var(--ink2); }
+.bar label { display: inline-flex; gap: 6px; align-items: center; }
+button.theme { font: inherit; font-size: 12px; color: var(--ink2); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--good-text); outline-offset: 2px; }
+
+.two { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+@media (max-width: 800px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.sec { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow: hidden; }
+.sec > .sh { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); gap: 8px; }
+.sec h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.src { font-size: 11.5px; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 7px 12px; border-bottom: 1px solid var(--grid); }
+td { padding: 9px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+.sub { color: var(--muted); }
+.st { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.dot.ring { background: none; border: 1.5px solid var(--deleg); }
+.dot.done { background: var(--muted); }
+.st.run { color: var(--good-text); } .st.deleg { color: var(--deleg-text); } .st.done { color: var(--muted); }
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+.side { padding: 14px 16px 16px; }
+.side h4 { margin: 0 0 2px; font-size: 14px; }
+.side .state { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+dl.kv { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 5px 10px; margin: 0 0 14px; font-size: 12.5px; }
+dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; }
+.lab { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
+.docbtn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+.docbtn .t { flex: 1; font-weight: 600; } .docbtn .m { font: 500 11px var(--font-mono); color: var(--muted); }
+
+/* the feed */
+.feedwrap { position: relative; }
+.feed { list-style: none; margin: 0; padding: 0; height: 292px; overflow-y: auto; background: var(--code); border: 1px solid var(--grid); border-radius: 6px; scroll-behavior: auto; }
+.feed li { display: grid; grid-template-columns: 42px 16px minmax(0, 1fr); gap: 0 6px; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 12px; line-height: 1.4; }
+.feed li:last-child { border-bottom: 0; }
+.feed .at { font: 400 11px var(--font-mono); color: var(--muted); padding-top: 1px; }
+.feed .k { color: var(--muted); padding-top: 2px; }
+.feed .tool .k { color: var(--tool); }
+.feed .body { min-width: 0; overflow-wrap: anywhere; }
+.feed .tool .body { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+.feed .tool .name { color: var(--tool); font-weight: 600; }
+.feed .tool .arg { color: var(--ink2); }
+.feed .txt .body { color: var(--text); }
+.feed .cut { color: var(--muted); }
+.feed li.new { animation: arrive .5s ease-out; }
+@keyframes arrive { from { background: var(--sel); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .feed li.new { animation: none; } }
+.rd { background: var(--redact); color: var(--redact-text); border-radius: 3px; padding: 0 3px; }
+.feedfoot { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.jump { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%); font: inherit; font-size: 11.5px; color: var(--ink); background: var(--raised); border: 1px solid var(--axis); border-radius: 999px; padding: 3px 12px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.jump[hidden] { display: none; }
+.live { display: inline-flex; align-items: center; gap: 6px; }
+.live select { font: inherit; font-size: 12px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+/* modal: same pattern as podium-prompt-modal.html */
+#app { transition: filter .15s ease; }
+body.modal-open #app { filter: blur(5px); }
+body.modal-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { #app { transition: none; } }
+:root { --scrim: rgba(8,8,8,0.55); --shadow: 0 24px 60px rgba(0,0,0,.55); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --scrim: rgba(249,249,247,0.55); --shadow: 0 24px 60px rgba(11,11,11,.22); } }
+:root[data-theme="light"] { --scrim: rgba(249,249,247,0.55); --shadow: 0 24px 60px rgba(11,11,11,.22); }
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 24px 16px; z-index: 10; }
+.scrim[hidden] { display: none; }
+.modal { width: min(820px, 100%); height: min(78vh, 760px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--axis); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+.mh { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--border); }
+.mh .ttl { flex: 1; min-width: 0; }
+.mh h2 { margin: 0; font-size: 14px; }
+.mh .sub2 { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh .x { font: inherit; font-size: 16px; line-height: 1; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; width: 30px; height: 30px; display: grid; place-items: center; cursor: pointer; }
+.mh .x:hover { background: var(--hover); color: var(--ink); }
+.mb { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px 14px; gap: 6px; }
+.mb .feedwrap { flex: 1; min-height: 0; display: flex; }
+.mb .feed { height: auto; flex: 1; }
+.mb .feed li { font-size: 13px; grid-template-columns: 48px 16px minmax(0, 1fr); }
+.mb .feed .tool .body { font-size: 12.5px; }
+.expand { font: inherit; font-size: 11.5px; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; }
+.expand:hover { background: var(--hover); color: var(--ink); }
+.lab .tools { display: inline-flex; gap: 10px; align-items: center; }
+.feed li.empty { display: block; color: var(--muted); font-size: 12px; padding: 14px 12px; }
+.off { border: 1px dashed var(--axis); border-radius: 6px; padding: 12px 12px 12px; color: var(--ink2); font-size: 12.5px; }
+.off b { color: var(--ink); }
+.off code { font: 11.5px var(--font-mono); background: var(--code); border: 1px solid var(--grid); border-radius: 4px; padding: 1px 5px; }
+.off .ghost { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div id="app">
+<div class="wrap">
+  <h1>Agent activity feed</h1>
+  <p class="note">The right-hand panel is the agent panel from the orchestrator screen. The new Activity section sits under the Report buttons. It lists the agent's recent tool calls and the text it writes between them, newest at the bottom, and it fills while the agent works. The reporter option <span class="mono">activityFeed</span> is off by default; with it off, the section says what it would show and how to turn it on.</p>
+  <div class="bar" role="group" aria-label="Mockup controls">
+    <label><input type="radio" name="st" value="live" checked> Feed on, agent running</label>
+    <label><input type="radio" name="st" value="done"> Feed on, agent finished</label>
+    <label><input type="radio" name="st" value="off"> Option off</label>
+    <button class="theme" id="theme" type="button">Switch theme</button>
+  </div>
+
+  <h2>The agent panel</h2>
+  <p class="note">Running: the agent does something every couple of seconds, but the panel fetches only on the interval you pick (5s to start; 10, 20, 30 or 60s), so new entries arrive in batches, and only while this panel is open and the tab is visible. Close the panel and nothing is fetched. The list follows the newest entry. Scroll up to read earlier entries and it stops following; "Jump to latest" brings it back. Opening the panel starts the feed; it begins empty and fills from that moment, and leaving clears it, so coming back starts again from then. Finished (here as an agent you were watching as it ended): the entries stop and the final answer is one click away in Report, as today.</p>
+  <div class="two">
+    <div class="sec">
+      <div class="sh"><h3>Agents</h3><span class="src">1 launched · click a header to sort</span></div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Task</th><th>Model</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Time</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><b>claude-dashboard</b> <span class="sub">orchestrator</span></td><td>Sonnet</td><td class="r mono">2.17M</td><td class="r mono">$1.48</td><td class="r mono">2:31</td><td><span class="st deleg" id="orchStatus"><span class="dot ring"></span>delegating</span></td></tr>
+          <tr><td><b>Implement issue #34</b> <span class="sub">general-purpose</span></td><td>Opus</td><td class="r mono">1.83M</td><td class="r mono">$1.21</td><td class="r mono">1:32</td><td><span class="st run" id="rowStatus"><span class="dot"></span>running</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <aside class="sec side" aria-label="Agent panel">
+      <h4>Implement issue #34</h4>
+      <span class="state st run" id="sideState"><span class="dot pulse"></span>running</span>
+      <dl class="kv">
+        <dt>Orchestrator</dt><dd>claude-dashboard</dd>
+        <dt>Kind</dt><dd>Subagent</dd>
+        <dt>Type</dt><dd class="mono">general-purpose</dd>
+        <dt>Model</dt><dd>Opus</dd>
+        <dt>Steps</dt><dd class="mono" id="steps">20 model requests</dd>
+      </dl>
+      <span class="lab">Report</span>
+      <div class="docbtn"><span class="t">Task prompt</span><span class="m">1,842 chars</span></div>
+      <div class="docbtn"><span class="t">Final answer</span><span class="m" id="ans">not finished</span></div>
+
+      <div class="lab"><span class="tools"><span>Activity</span>
+          <button type="button" class="expand" id="expand" aria-haspopup="dialog"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9"/></svg>Expand</button></span>
+        <span class="live" id="liveTag"><label for="every" class="sub">Refresh every</label>
+          <select id="every" aria-label="Refresh interval"><option value="5">5s</option><option value="10">10s</option><option value="20">20s</option><option value="30">30s</option><option value="60">60s</option></select></span>
+      </div>
+      <div id="on">
+        <div class="feedwrap">
+          <ol class="feed" id="feed" aria-label="Recent activity, newest last" tabindex="0"></ol>
+          <button type="button" class="jump" id="jump" hidden>Jump to latest</button>
+        </div>
+        <div class="feedfoot"><span id="count">Last 20 of 47 entries</span><span id="upd">Updated just now</span></div>
+        <div class="feedfoot"><span>Kept only while someone is watching. Closing this clears it. Secrets are removed before they leave the session.</span></div>
+      </div>
+      <div class="off" id="off" hidden>
+        <b>Recent tool calls and text appear here while the agent works.</b>
+        <div class="ghost">Turn on the <code>activityFeed</code> option (Send an agent's recent activity) of podium-reporter to see them. Each entry is redacted and cut to 300 characters before it is sent.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle" id="modal">
+    <div class="mh">
+      <div class="ttl"><h2 id="mTitle">Activity</h2><div class="sub2">Implement issue #34 · general-purpose · Opus</div></div>
+      <span class="live" id="liveTag2"><label for="every2" class="sub">Refresh every</label>
+        <select id="every2" aria-label="Refresh interval"><option value="5">5s</option><option value="10">10s</option><option value="20">20s</option><option value="30">30s</option><option value="60">60s</option></select></span>
+      <button type="button" class="x" id="close" aria-label="Close (Esc)">&#x2715;</button>
+    </div>
+    <div class="mb">
+      <div class="feedwrap">
+        <ol class="feed" id="feed2" aria-label="Recent activity, newest last" tabindex="0"></ol>
+        <button type="button" class="jump" id="jump2" hidden>Jump to latest</button>
+      </div>
+      <div class="feedfoot"><span id="count2"></span><span id="upd2"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Example data. rd() marks text the mod has already replaced; the console never sees the original.
+const rd = s => '<span class="rd">' + s + '</span>';
+const SCRIPT = [
+  ["tool", "Read", "docs/SPEC.md (lines 560-600)"],
+  ["text", "The spec says agent prompts and answers are redacted and cut to 400 characters. I'll follow the same pattern for the feed."],
+  ["tool", "Grep", "\"promptExcerpt\" in server/src/fleet"],
+  ["tool", "Read", "server/src/fleet/protocol.ts"],
+  ["tool", "Edit", "server/src/fleet/protocol.ts"],
+  ["tool", "Bash", "npm test -- protocol"],
+  ["text", "Two failures: the whitespace check on the mirrored block. Copying the same edit into the mod's copy."],
+  ["tool", "Edit", "mod/podium-reporter/hooks/protocol.ts"],
+  ["tool", "Bash", "curl -H \"Authorization: " + rd("[redacted]") + "\" http://localhost:4317/api/fleet/sessions"],
+  ["tool", "Bash", "npm test"],
+  ["text", "All 256 server tests pass. Moving on to the frontend panel."],
+  ["tool", "Write", "frontend/src/fleet/components/ActivityFeed.tsx"],
+  ["tool", "Bash", "npm run build"],
+  ["text", "Build is clean. Writing the component test for the feed next, then the docs."]
+];
+const PRE = [ // already on screen when the page opens
+  ["00:41","tool","Read","CLAUDE.md"],
+  ["00:42","tool","Bash","gh issue view 34"],
+  ["00:44","text","I'll start with the failing test, then the fix."],
+  ["00:49","tool","Edit","server/src/fleet/people.test.ts"],
+  ["00:55","tool","Bash","npm test -- people"],
+  ["00:58","text","Fails for the expected reason: the grouping returns one band per session."],
+  ["01:03","tool","Edit","server/src/fleet/people.ts"],
+  ["01:11","tool","Bash","npm test -- people"],
+  ["01:17","tool","Read","docs/SPEC.md (lines 733-760)"],
+  ["01:22","text","SPEC 7.4 already names the band order, so no ambiguity to flag."]
+];
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const fmt = s => String(Math.floor(s / 60)).padStart(2,"0") + ":" + String(s % 60).padStart(2,"0");
+const ICON = {
+  tool: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m3 4 4 4-4 4M8.5 12.5H13"/></svg>',
+  text: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4.5h10M3 8h10M3 11.5h6"/></svg>'
+};
+// One list of entries, drawn in two places: the panel and the modal. Each keeps its own "following" state.
+const views = [
+  { feed: $("feed"), jump: $("jump"), following: true },
+  { feed: $("feed2"), jump: $("jump2"), following: true }
+];
+let entries = [], n = 0, timer = null, workTimer = null, agoTimer = null, idx = 0, secs = 82, pending = [], lastFetch = Date.now(), live = true;
+function li(e, fresh) {
+  const el = document.createElement("li");
+  el.className = e.kind === "tool" ? "tool" : "txt"; if (fresh) el.classList.add("new");
+  const label = e.kind === "tool" ? "Tool call" : "Text";
+  const body = e.kind === "tool"
+    ? '<span class="name">' + esc(e.a) + '</span> <span class="arg">' + (e.b.includes("<span") ? e.b : esc(e.b)) + '</span>'
+    : esc(e.a);
+  el.innerHTML = '<span class="at">' + e.at + '</span><span class="k" title="' + label + '" role="img" aria-label="' + label + '">' + ICON[e.kind] + '</span><span class="body">' + body + '</span>';
+  return el;
+}
+function add(at, kind, a, b, fresh) {
+  views.forEach(v => v.feed.querySelectorAll("li.empty").forEach(x => x.remove()));
+  const e = { at, kind, a, b: b || "" }; entries.push(e); n++;
+  if (entries.length > 20) entries.shift();
+  views.forEach(v => {
+    v.feed.appendChild(li(e, fresh));
+    while (v.feed.children.length > 20) v.feed.removeChild(v.feed.firstChild);
+    if (v.following) v.feed.scrollTop = v.feed.scrollHeight;
+  });
+}
+function count() { const t = n === 0 ? "Nothing yet" : "Last " + entries.length + " of " + n + " since you started watching"; $("count").textContent = t; $("count2").textContent = t; }
+function seed(keep) {
+  entries = []; n = 0; idx = 0; secs = 82; views.forEach(v => { v.feed.innerHTML = ""; v.following = true; v.jump.hidden = true; });
+  if (!keep) {
+    views.forEach(v => { const e = document.createElement("li"); e.className = "empty"; e.textContent = "Watching from now. Earlier activity is not kept, and nothing is kept after you close this."; v.feed.appendChild(e); });
+  } else PRE.forEach(p => p[1] === "tool" ? add(p[0], "tool", p[2], p[3]) : add(p[0], "text", p[2]));
+  count();
+}
+// The agent works all the time (work, every 2.2s) but the panel only fetches on the chosen interval (fetchNow) while it or the modal is open.
+function work() { const s = SCRIPT[idx % SCRIPT.length]; idx++; secs += 3 + (idx % 3); pending.push([fmt(secs), s]); }
+function fetchNow() {
+  pending.forEach(([at, s]) => s[0] === "tool" ? add(at, "tool", s[1], s[2], true) : add(at, "text", s[1], null, true));
+  if (pending.length) $("steps").textContent = (20 + idx) + " model requests";
+  pending = []; lastFetch = Date.now(); count();
+  views.forEach(v => { if (!v.following) v.jump.hidden = false; });
+}
+function ago() { const s = Math.round((Date.now() - lastFetch) / 1000); const t = s < 2 ? "Updated just now" : "Updated " + s + "s ago"; $("upd").textContent = t; $("upd2").textContent = t; }
+function schedule() { clearInterval(timer); timer = setInterval(fetchNow, +$("every").value * 1000); }
+function setEvery(v) { $("every").value = v; $("every2").value = v; if (timer) schedule(); }
+$("every").addEventListener("change", e => setEvery(e.target.value));
+$("every2").addEventListener("change", e => setEvery(e.target.value));
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearInterval(timer); else if (timer) { fetchNow(); schedule(); } });
+views.forEach(v => {
+  v.feed.addEventListener("scroll", () => { v.following = v.feed.scrollTop + v.feed.clientHeight >= v.feed.scrollHeight - 6; v.jump.hidden = v.following; });
+  v.jump.addEventListener("click", () => { v.following = true; v.feed.scrollTop = v.feed.scrollHeight; v.jump.hidden = true; v.feed.focus(); });
+});
+
+// modal: the same open/close behaviour as podium-prompt-modal.html (blur the app, Esc, X, click the dimmed area, focus trap, focus returns)
+let opener = null;
+function openModal(from) {
+  opener = from; $("scrim").hidden = false; document.body.classList.add("modal-open");
+  views[1].following = true; views[1].feed.scrollTop = views[1].feed.scrollHeight; $("close").focus();
+}
+function closeModal() {
+  if ($("scrim").hidden) return;
+  $("scrim").hidden = true; document.body.classList.remove("modal-open");
+  if (opener) opener.focus();
+}
+$("expand").addEventListener("click", e => openModal(e.currentTarget));
+$("close").addEventListener("click", closeModal);
+$("scrim").addEventListener("mousedown", e => { if (e.target === $("scrim")) closeModal(); });
+document.addEventListener("keydown", e => {
+  if ($("scrim").hidden) return;
+  if (e.key === "Escape") { e.preventDefault(); closeModal(); }
+  if (e.key === "Tab") {
+    const f = [...$("modal").querySelectorAll("button:not([hidden]), select, ol")];
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
+
+function setState(v) {
+  closeModal();
+  clearInterval(timer); timer = null; clearInterval(workTimer); clearInterval(agoTimer); pending = [];
+  const on = v !== "off";
+  $("on").hidden = !on; $("off").hidden = on; $("liveTag").hidden = v !== "live"; $("expand").hidden = !on;
+  const run = v !== "done";
+  $("sideState").className = "state st " + (run ? "run" : "done");
+  $("sideState").innerHTML = '<span class="dot' + (run ? " pulse" : " done") + '"></span>' + (run ? "running" : "finished");
+  $("rowStatus").className = "st " + (run ? "run" : "done");
+  $("rowStatus").innerHTML = '<span class="dot' + (run ? "" : " done") + '"></span>' + (run ? "running" : "finished");
+  $("orchStatus").className = "st " + (run ? "deleg" : "run");
+  $("orchStatus").innerHTML = run ? '<span class="dot ring"></span>delegating' : '<span class="dot"></span>running';
+  $("ans").textContent = run ? "not finished" : "2,604 chars";
+  $("steps").textContent = run ? "20 model requests" : "34 model requests";
+  $("liveTag2").hidden = v !== "live";
+  if (on) {
+    seed(v === "done");
+    if (v === "done") { // a finished agent keeps its last entries; none arrive
+      SCRIPT.slice(0, 10).forEach(s => { secs += 4; s[0] === "tool" ? add(fmt(secs), "tool", s[1], s[2]) : add(fmt(secs), "text", s[1]); });
+      count(); $("upd").textContent = "Agent finished, no more updates"; $("upd2").textContent = "Agent finished, no more updates";
+    } else { lastFetch = Date.now(); workTimer = setInterval(work, 2200); agoTimer = setInterval(ago, 1000); schedule(); }
+  }
+}
+document.querySelectorAll('input[name="st"]').forEach(r => r.addEventListener("change", e => setState(e.target.value)));
+setState("live");
+
+$("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+</script>
+</body>
+</html>
