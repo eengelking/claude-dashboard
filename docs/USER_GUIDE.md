@@ -241,8 +241,9 @@ empty when you open the panel and fills from then on, every 5 seconds by default
 stops following; **Jump to latest** brings it back. **Expand** opens the same list in a larger window, which closes
 like the Report one. Nothing is fetched while the panel is closed or the tab is hidden, and Podium keeps only the
 last 20 entries, only while someone is watching: close the panel and it is gone, and opening it again starts empty.
-It needs podium-reporter 0.13.0 or later with the mod's `activityFeed` option on. Everyone who can open the console
-can watch, which is why the option is off by default.
+It needs podium-reporter 0.13.0 or later with the mod's `activityFeed` option on, and the server's
+**Agent activity feed** flag on in Admin > Settings > Feature flags. Everyone who can open the console can watch,
+which is why the option is off by default.
 
 To turn it on:
 
@@ -254,6 +255,9 @@ To turn it on:
    says the option is off, run `/reload-plugins` in that session.
 4. Open the agent's panel. The feed starts empty and fills from that moment, because nothing is sent for an agent
    nobody is watching.
+5. If the section says "The activity feed is turned off by the Admin.", the person who runs the server has
+   switched it off for everyone in Admin > Settings > Feature flags. It is on by default. An open panel keeps
+   checking and starts the feed again, empty, once the flag is back on; you do not need to reload.
 
 The option is per machine, like the rest of the mod's options, so each person who wants the feed for their own
 sessions turns it on for themselves.
@@ -323,7 +327,11 @@ Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 an
   seconds.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
-- **Settings.** The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
+- **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
+  today is **Agent activity feed** (`activity-feed`), on by default. Turned off, every agent and orchestrator
+  panel says the Admin turned the feed off, the server asks no mod for activity and forgets what it held,
+  whatever each machine's `activityFeed` option says. Turned back on, open panels start the feed again,
+  empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
   turns its switch off for everyone. After you close one, Podium says so and links to this tab. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
   default). These settings apply to every browser and stay after a restart.
@@ -337,7 +345,7 @@ Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 an
   the five prices and save; until then its cost reads "n/a". Cache writes use the 5-minute price unless Claude
   Code reports which writes were 1-hour ones.
 - **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes and changes to
-  the wall settings and model prices, with the
+  the feature flags, the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.
 
 A report is accepted when its token belongs to the person whose name it also sends. The server decides who a
