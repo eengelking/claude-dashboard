@@ -26,6 +26,8 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     calls: [] as string[],
     expire: false,
     notices: { "background-sessions": true } as Record<string, boolean>,
+    features: { "activity-feed": true } as Record<string, boolean>,
+    bodies: [] as unknown[],
     showBackground: false,
     prices: {
       "sonnet-5-5": { std: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5, cacheWrite1h: 4 } } as { std: PriceSet; long?: PriceSet },
@@ -72,6 +74,8 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     if (path === "/log") return json(200, { total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
     if (path === "/settings" && method === "PUT") {
       const b = JSON.parse(String(init?.body));
+      state.bodies.push(b);
+      if (b.features) for (const [id, on] of Object.entries(b.features)) state.features[id] = on as boolean;
       if (b.notices) for (const [id, on] of Object.entries(b.notices)) state.notices[id] = on as boolean;
       if ("showBackgroundSessions" in b) state.showBackground = b.showBackgroundSessions;
       if (b.modelPrice) {
@@ -99,7 +103,13 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
           ...(base ? { builtinStd: base } : {}),
         };
       });
-      return json(200, { allowAdminSecretReporting: true, notices, showBackgroundSessions: state.showBackground, modelPrices: { asOf: "2026-10-13", models } });
+      const features = Object.entries(state.features).map(([id, on]) => ({
+        id,
+        name: "Agent activity feed",
+        description: "Shows an agent's recent tool calls and text in its panel while someone watches.",
+        on,
+      }));
+      return json(200, { allowAdminSecretReporting: true, features, notices, showBackgroundSessions: state.showBackground, modelPrices: { asOf: "2026-10-13", models } });
     }
     return json(404, { ok: false, error: "nope" });
   });
@@ -263,6 +273,26 @@ describe("Settings tab (#114)", () => {
     expect(srv.notices["background-sessions"]).toBe(false);
     fireEvent.click(show);
     await waitFor(() => expect(srv.showBackground).toBe(true));
+  });
+
+  it("puts Feature flags above Wall notices, with the activity feed's switch, id and description (#118)", async () => {
+    const srv = fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    const flag = await screen.findByRole("switch", { name: /Agent activity feed/ });
+    expect(flag).toHaveAttribute("aria-checked", "true");
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings.indexOf("Feature flags")).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf("Feature flags")).toBeLessThan(headings.indexOf("Wall notices"));
+    expect(screen.getByText(/Turn a feature off for everyone on this server\./)).toBeInTheDocument();
+    expect(screen.getByText("activity-feed")).toBeInTheDocument();
+    expect(screen.getByText(/Shows an agent's recent tool calls and text in its panel/)).toBeInTheDocument();
+    fireEvent.click(flag);
+    await waitFor(() => expect(screen.getByRole("switch", { name: /Agent activity feed/ })).toHaveAttribute("aria-checked", "false"));
+    expect(srv.bodies).toContainEqual({ features: { "activity-feed": false } });
+    expect(srv.features["activity-feed"]).toBe(false);
+    expect(screen.getByRole("switch", { name: /Agent activity feed/ })).toHaveAccessibleName(/Off$/);
   });
 
   it("opens on the Settings tab for #/admin/settings, the link a closed notice points to", async () => {

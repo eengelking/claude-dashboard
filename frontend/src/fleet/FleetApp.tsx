@@ -428,6 +428,7 @@ export function FleetView({ state }: { state: FleetState }) {
             onAgent={selectAgent}
             onBack={() => setSelAgent(null)}
             now={now}
+            activityFeedOn={state.features["activity-feed"] !== false}
             collapsed={panes.collapsed.right}
             onToggle={() => toggle("right")}
             spend={spendPanel}

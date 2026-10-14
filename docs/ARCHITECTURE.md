@@ -84,7 +84,10 @@ watched. `report.ts` sends `session.activityFeed` always, and a loop's `activity
 the ring is not empty, within a 60,000-character budget per report. In the UI, `useActivityFeed.ts` runs the
 fetch loop (only while `ActivityFeed.tsx` is mounted, the feed is on and `usePageVisible` says the tab is shown;
 once more and then stop for a finished loop) and keeps a cursor: the first answer's highest `seq` is skipped, so a
-viewer never sees entries from before they looked, and a changed `since` means the lease was started again. The
+viewer never sees entries from before they looked, and a changed `since` means the lease was started again. A reply
+with `enabled: false` empties the hook's list and sets `adminOff`; the loop keeps running, and `FleetApp` passes the
+flag from `StateBody.features` down through `SidePanel` (`activityFeedOn`) as the section's `adminOn`, which shows the
+Admin's note ahead of the reporter notes and, when it changes, makes the hook ask again at once. The
 section sits in `AgentDetail` and `OrchestratorDetail` (loop `@orchestrator`, which is also `ORCHESTRATOR_ROW`). The
 simulator (`scripts/podium-sim.ts`) reads `watch` from each reply too and sends a scripted entry a second for each
 watched loop that is still working, so the panel can be seen filling without a real session.

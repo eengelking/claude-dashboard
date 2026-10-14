@@ -10,12 +10,17 @@ interface NoticeRow {
   on: boolean;
 }
 interface Settings {
+  /** Server-wide feature flags (#118); the same row shape as a notice. */
+  features: NoticeRow[];
   notices: NoticeRow[];
   showBackgroundSessions: boolean;
   modelPrices: ModelPricesView;
 }
 
-/** Wall settings: one switch per informational notice, and whether background sessions show on the wall (#114). */
+/**
+ * Server settings: the feature flags (#118), one switch per informational wall notice and whether background sessions
+ * show on the wall (#114), and the model prices (#117).
+ */
 export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => void }) {
   const list = useList<Settings>(api, "/settings", onLocked);
   const [err, setErr] = useState("");
@@ -49,10 +54,11 @@ export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => 
     reset: (key: string) => putPrice({ resetModelPrice: key }),
   };
   const data = list.data;
-  const row = (id: string, name: string, description: string, on: boolean | undefined, flip: () => void) => (
+  const row = (id: string, name: string, description: string, on: boolean | undefined, flip: () => void, tag?: string) => (
     <div className="setrow" key={id}>
       <div className="setname">
         <b id={`set-${id}-n`}>{name}</b>
+        {tag && <span className="fid">{tag}</span>}
         <div className="hint ink2">{description}</div>
       </div>
       <div className="sw">
@@ -63,6 +69,15 @@ export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => 
   );
   return (
     <div className="stack pad">
+      <section aria-labelledby="admin-features-h">
+        <h2 id="admin-features-h">Feature flags</h2>
+        <div className="hint ink2">
+          Turn a feature off for everyone on this server. A flag that is off hides the feature in the console and stops its data. New features that can be switched off appear here.
+        </div>
+        {data
+          ? (data.features ?? []).map((f) => row(`feature-${f.id}`, f.name, f.description, f.on, () => put({ features: { [f.id]: !f.on } }), f.id))
+          : row("feature-loading", "Feature flags", "", undefined, () => {})}
+      </section>
       <section aria-labelledby="admin-notices-h">
         <h2 id="admin-notices-h">Wall notices</h2>
         <div className="hint ink2">Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.</div>

@@ -69,6 +69,8 @@
 .adminv .setrow { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .adminv .setrow .setname { min-width: 0; }
 .adminv .setrow .sw { flex: none; }
+/* A feature flag's id beside its name (#118, mockup/podium-feature-flags.html). */
+.adminv .setrow .fid { font: 500 11px var(--font-mono); color: var(--muted); margin-left: 6px; }
 
 /* Model prices (#117): one table, five price columns, a second row for a model's long-prompt prices. */
 .adminv .hint.wide { max-width: 72ch; }

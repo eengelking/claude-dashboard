@@ -20,6 +20,14 @@ describe("fleetReducer", () => {
     expect(s2.gone.s1).toBe("done");
   });
 
+  it("snapshot carries the Admin's feature flags, and keeps the last ones when a body has none", () => {
+    expect(initialState.features).toEqual({});
+    let s = snap({ features: { "activity-feed": false } });
+    expect(s.features).toEqual({ "activity-feed": false });
+    s = fleetReducer(s, { type: "snapshot", body: { ...makeState(), features: undefined as never }, at: 200 });
+    expect(s.features).toEqual({ "activity-feed": false });
+  });
+
   it("session upserts and revives a gone session", () => {
     let s = snap();
     s = fleetReducer(s, { type: "session", view: makeSession({ id: "s2", name: "two" }), at: 110 });

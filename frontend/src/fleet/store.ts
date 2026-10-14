@@ -30,6 +30,8 @@ export interface FleetState {
   server: StateBody["server"] | null;
   /** The wall's notice switches and background-session setting, set in Admin > Settings. */
   wall: WallSettingsView;
+  /** The Admin's feature flags by id (Admin > Settings > Feature flags). A flag missing here counts as on. */
+  features: Record<string, boolean>;
 }
 
 export type FleetAction =
@@ -57,6 +59,7 @@ export const initialState: FleetState = {
   events: [],
   server: null,
   wall: { notices: {}, showBackgroundSessions: false },
+  features: {},
 };
 
 function capEvents(list: ActivityView[]): ActivityView[] {
@@ -98,6 +101,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
         events: capEvents(action.body.events),
         server: action.body.server ?? state.server,
         wall: action.body.wall ?? state.wall,
+        features: action.body.features ?? state.features,
       };
     }
     case "session": {

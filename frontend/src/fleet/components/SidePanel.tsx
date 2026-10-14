@@ -19,6 +19,8 @@ export function SidePanel(props: {
   onAgent: (id: string) => void;
   onBack: () => void;
   now: number;
+  /** The Admin's activity-feed flag: false turns the agent and orchestrator Activity sections into a note. */
+  activityFeedOn?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   /** The people view's spend chart, shown above the activity list on the wall. */
@@ -30,9 +32,9 @@ export function SidePanel(props: {
       {props.onToggle && <PaneTab side="right" collapsed={!!props.collapsed} controls="podium-side-body" onToggle={props.onToggle} shortcut="]" />}
       <div id="podium-side-body" hidden={props.collapsed}>
       {props.selected && props.selectedAgent === ORCHESTRATOR_ROW ? (
-        <OrchestratorDetail s={props.selected} now={props.now} onBack={props.onBack} />
+        <OrchestratorDetail s={props.selected} now={props.now} onBack={props.onBack} activityFeedOn={props.activityFeedOn} />
       ) : agent && props.selected ? (
-        <AgentDetail s={props.selected} a={agent} now={props.now} onBack={props.onBack} onAgent={props.onAgent} />
+        <AgentDetail s={props.selected} a={agent} now={props.now} onBack={props.onBack} onAgent={props.onAgent} activityFeedOn={props.activityFeedOn} />
       ) : (
         <>
         {props.spend}

@@ -7,6 +7,10 @@ import { usePageVisible } from "./usePageVisible";
 // it, and every fetch renews that lease. So this fetches only while the panel is mounted (the modal belongs to it),
 // the feed is on and the tab is visible, on the viewer's own interval. It shows only entries that arrived after its
 // first answer: entries another viewer was already watching are not backfilled.
+//
+// The Admin can turn the feed off for the whole server (Admin > Settings > Feature flags). A reply then says
+// `enabled: false`: the hook drops what it showed and reports `adminOff`, but keeps asking at the same interval, so the
+// feed comes back by itself when the flag is turned on again.
 
 export type { ActivityReply };
 export type FetchActivity = (sessionId: string, loop: string, every: number) => Promise<ActivityReply>;
@@ -44,9 +48,11 @@ export interface FeedState {
   failed: boolean;
   /** False when the server says the session is not live: nothing will come. */
   live: boolean;
+  /** The last reply said the Admin has turned the feed off for this server. */
+  adminOff: boolean;
 }
 
-const EMPTY: FeedState = { entries: [], seen: 0, fetchedAt: null, failed: false, live: true };
+const EMPTY: FeedState = { entries: [], seen: 0, fetchedAt: null, failed: false, live: true, adminOff: false };
 
 export function useActivityFeed(opts: {
   sessionId: string;
@@ -56,9 +62,15 @@ export function useActivityFeed(opts: {
   /** The loop is still working. A finished one is fetched once more, for its last entries, and then left alone. */
   active: boolean;
   every: number;
+  /**
+   * The Admin's flag as the console's state last said (true when not known). It only matters when it changes: the hook
+   * asks again at once, so the panel follows a flip without waiting out the interval.
+   */
+  adminOn?: boolean;
   fetchActivity?: FetchActivity;
 }): FeedState {
   const { sessionId, loop, enabled, active, every } = opts;
+  const adminOn = opts.adminOn ?? true;
   const visible = usePageVisible();
   const [state, setState] = useState<FeedState>(EMPTY);
   const fetchRef = useRef(opts.fetchActivity ?? defaultFetch);
@@ -78,13 +90,19 @@ export function useActivityFeed(opts: {
       try {
         const r = await fetchRef.current(sessionId, loop, every);
         if (cancelled) return;
+        // Turned off by the Admin: the server holds nothing for us now, so neither do we. The next lease starts afresh.
+        if (r.enabled === false) {
+          cursor.current = null;
+          setState({ ...EMPTY, fetchedAt: Date.now(), live: r.live, adminOff: true });
+          return;
+        }
         const top = r.entries.reduce((n, e) => Math.max(n, e.seq), 0);
         const c = cursor.current;
         // A first answer, or a lease the server started afresh (seq counts from 1 again): what it holds already
         // happened before this viewer was watching, so it is skipped rather than backfilled.
         if (!c || c.since !== r.since) {
           cursor.current = { since: r.since, seq: top };
-          setState((st) => ({ ...st, fetchedAt: Date.now(), failed: false, live: r.live }));
+          setState((st) => ({ ...st, fetchedAt: Date.now(), failed: false, live: r.live, adminOff: false }));
           return;
         }
         const fresh = r.entries.filter((e) => e.seq > c.seq);
@@ -95,6 +113,7 @@ export function useActivityFeed(opts: {
           fetchedAt: Date.now(),
           failed: false,
           live: r.live,
+          adminOff: false,
         }));
       } catch {
         if (!cancelled) setState((st) => ({ ...st, failed: true }));
@@ -106,7 +125,7 @@ export function useActivityFeed(opts: {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [sessionId, loop, enabled, visible, active, every]);
+  }, [sessionId, loop, enabled, visible, active, every, adminOn]);
 
   return state;
 }
