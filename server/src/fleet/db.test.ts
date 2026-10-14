@@ -135,6 +135,10 @@ describe('openDb', () => {
       const by = f.costByOwnerSince(MIDNIGHT, doubled);
       expect(by.reduce((n, r) => n + r.costUsd, 0)).toBeCloseTo(12, 9);
       expect(by.find((r) => r.owner === 'Dana K.')?.costUsd).toBeCloseTo(10, 9);
+      // One pass gives the same total and split.
+      const both = f.spendTotals(MIDNIGHT, doubled);
+      expect(both.total).toBeCloseTo(f.costSince(MIDNIGHT, doubled), 9);
+      expect(both.byOwner).toEqual(by);
     });
   });
 

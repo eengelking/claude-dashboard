@@ -391,8 +391,18 @@ export class FleetDb {
 
   /** `costSince` split by owner, with the group each owner is in (Admin, no owner and no group give null), largest first. */
   costByOwnerSince(since: number, cost: CostOf = storedCost): { owner: string | null; group: string | null; costUsd: number }[] {
+    return this.spendBy(this.spendSince(since, cost));
+  }
+
+  /** `costSince` and `costByOwnerSince` from one pass over the sessions, so the total is the sum of the split. */
+  spendTotals(since: number, cost: CostOf = storedCost): { total: number; byOwner: { owner: string | null; group: string | null; costUsd: number }[] } {
+    const rows = this.spendSince(since, cost);
+    return { total: rows.reduce((n, r) => n + r.usd, 0), byOwner: this.spendBy(rows) };
+  }
+
+  private spendBy(rows: { owner: string | null; grp: string | null; usd: number }[]): { owner: string | null; group: string | null; costUsd: number }[] {
     const by = new Map<string, { owner: string | null; group: string | null; costUsd: number }>();
-    for (const r of this.spendSince(since, cost)) {
+    for (const r of rows) {
       const k = `${r.owner ?? ''}\u0000${r.grp ?? ''}`;
       const e = by.get(k) ?? { owner: r.owner, group: r.grp, costUsd: 0 };
       e.costUsd += r.usd;

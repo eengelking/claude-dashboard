@@ -252,11 +252,12 @@ export class Fleet {
     if (!this.costMinuteCache || now - this.costMinuteCache.at > 5000) {
       this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60) };
     }
+    const spend = this.db.spendTotals(startOfDay(now), cost);
     return computeKpis(
       {
         views,
-        costToday: this.db.costSince(startOfDay(now), cost),
-        costTodayByOwner: this.db.costByOwnerSince(startOfDay(now), cost),
+        costToday: spend.total,
+        costTodayByOwner: spend.byOwner,
         tokensPerSecond: this.db.fleetTokensPerSecond(nowSec - 61),
         costPerMinute: this.costMinuteCache.rows,
       },
