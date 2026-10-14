@@ -72,6 +72,15 @@ describe("isUrgentChange", () => {
     expect(isUrgentChange(held, next)).toBe(true);
   });
 
+  it("is true for the viewer's own clicks: a wall setting, a feature flag or a removed session", () => {
+    const held = base();
+    const wall = fleetReducer(held, { type: "wall", wall: { ...held.wall, showBackgroundSessions: !held.wall.showBackgroundSessions }, at: 1 });
+    expect(isUrgentChange(held, wall)).toBe(true);
+    expect(isUrgentChange(held, { ...held, features: { ...held.features, "activity-feed": false } })).toBe(true);
+    const removed = fleetReducer(held, { type: "removed", sessionId: "a", reason: "dropped" as never, at: 1 });
+    expect(isUrgentChange(held, removed)).toBe(true);
+  });
+
   it("is true when the connection phase changes", () => {
     const held = base();
     expect(isUrgentChange(held, fleetReducer(held, { type: "disconnected", at: 1 }))).toBe(true);

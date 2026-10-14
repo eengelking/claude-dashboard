@@ -19,12 +19,14 @@ export function writeUpdateEvery(every: number): void {
 }
 
 /**
- * True when `next` holds something the viewer should not wait for: a change of connection phase, a session that
+ * True when `next` holds something the viewer should not wait for: a change of connection phase, a change to the wall settings or flags or a session that left, a session that
  * starts waiting for them or goes stale, or an agent that has newly failed. Everything else waits for the interval.
  */
 export function isUrgentChange(held: FleetState, next: FleetState): boolean {
   if (held === next) return false;
   if (held.phase !== next.phase) return true;
+  // The viewer's own clicks (close a notice, remove a session, show or hide background sessions) come back as these.
+  if (held.wall !== next.wall || held.features !== next.features || Object.keys(held.gone).length !== Object.keys(next.gone).length) return true;
   for (const s of Object.values(next.sessions)) {
     const before = held.sessions[s.id];
     if ((s.status === "waiting" || s.status === "stale") && before?.status !== s.status) return true;
