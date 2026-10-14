@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  containerRunArgs, launchdPlist, maskConfig, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
+  containerRunArgs, launchdPlist, maskConfig, OWN_KEYS, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
 } from "../bin/podiumctl.mjs";
 
 const BIN = path.join(__dirname, "..", "bin", "podiumctl.mjs");
@@ -310,5 +310,31 @@ describe("podiumctl CLI", () => {
     expect(st.status).toBe(3);
     expect(st.stdout).toContain("4410");
     fs.rmSync(home, { recursive: true });
+  });
+});
+
+describe("podiumctl covers every server setting (#157)", () => {
+  // Read by the server but not a user setting: podiumctl sets it itself in the container.
+  const SET_BY_PODIUMCTL = ["PODIUM_HOST_HOME", "HOST", "PORT"];
+  const serverSrc = path.join(__dirname, "..", "server", "src");
+  function sources(dir: string): string[] {
+    return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return sources(full);
+      return e.name.endsWith(".ts") && !e.name.endsWith(".test.ts") ? [full] : [];
+    });
+  }
+  const readByServer = [...new Set(sources(serverSrc).flatMap((f) => {
+    const text = fs.readFileSync(f, "utf8");
+    return [...text.matchAll(/envMs\(env, '([A-Z_]+)'|\benv\.([A-Z][A-Z_]+)|process\.env\.([A-Z][A-Z_]+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);
+  }))];
+
+  it("finds the settings the server reads", () => {
+    expect(readByServer).toEqual(expect.arrayContaining(["STALE_AFTER_MS", "DETACHED_HIDE_AFTER_MS", "PODIUM_LOG_LEVEL"]));
+  });
+
+  it("lets `config set` take every one, or names why it does not", () => {
+    const settable = new Set<string>([...PASSTHROUGH, ...OWN_KEYS, ...SET_BY_PODIUMCTL]);
+    expect(readByServer.filter((k) => !settable.has(k))).toEqual([]);
   });
 });
