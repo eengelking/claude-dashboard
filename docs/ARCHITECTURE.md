@@ -118,7 +118,15 @@ go to stdout, warn and error to stderr. `PODIUM_LOG_LEVEL` (default `info`) filt
 is shipped. `redact.ts` is the backstop for what a record may hold: callers pass named fields and never a body, a
 field whose name contains a word such as token, secret, authorization, cookie, prompt, answer, activity, text or
 body is dropped, and every string has person tokens (`pdm_...`), the admin secret, the ship header values and a
-ship URL's password replaced with `[redacted]`, control characters removed and a 500-character cap. `shipper.ts`
+ship URL's password replaced with `[redacted]`, control characters removed and a 500-character cap. After the
+exact-match replacement, `scrubPatterns` (issue #155) replaces common secret shapes in every string, the message and
+event included: `Bearer`/`Basic` credentials, `password`, `passwd`, `pwd`, `secret`, `token`, `api_key` and
+`access_key` assignments (`=`, or `:` when the key is quoted as in JSON), URL `user:pass@`, and the key formats
+`sk-`, `ghp_`/`gho_`/..., `github_pat_`, `AKIA...`, `xox[bap]-` and JWTs. It skips numeric, boolean and null values
+and names that only contain the word (`token_count`), and reads a `Bearer`/`Basic` word as a credential only when
+it has a digit, a symbol or inner capitals. It reads only the first 4000 characters of a string, because the value
+is cut to 500 anyway and the assignment pattern backtracks. It is pattern matching: no entropy detection, so an unknown secret
+format is not caught. `shipper.ts`
 runs only when `PODIUM_LOG_SHIP_URL` is set: `push` appends the JSON line to an in-memory array and returns, a
 1 s timer (or a full batch of 100) gzips a batch as NDJSON and `fetch`es it to `<url>/insert/jsonline` with
 `_time_field=timestamp&_msg_field=message&_stream_fields=service,host`, `Content-Type: application/stream+json`

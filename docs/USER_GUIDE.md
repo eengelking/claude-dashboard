@@ -399,6 +399,13 @@ Two settings change what you get, each with `podiumctl config set KEY=VALUE` and
 
 No line carries a token, the admin secret, a ship header, a prompt, an answer or activity text.
 
+As a second guard, every piece of text in a line is scrubbed for common secret shapes, and what it finds becomes
+`[redacted]`: `Bearer` and `Basic` credentials, `password=`, `secret=`, `token=` and `api_key=` values (in text,
+query strings and JSON), the password in `https://user:pass@host`, and keys that start `sk-`, `ghp_`,
+`github_pat_`, `AKIA` or `xoxb-`, and JWTs. It recognises shapes only. A secret in a format it does not know, or
+one written as plain prose such as "the password is hunter2", is not caught, and it does not look at the Admin Log
+or stored data.
+
 ### Send the logs to VictoriaLogs
 
 Podium can push every log line to a central platform. It is off until you give it an address, and then only the
