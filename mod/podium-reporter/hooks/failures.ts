@@ -68,6 +68,9 @@ export function parseExitCode(text: string | null | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** Event fields that are the engine's own, not a tool's arguments. */
+const ENGINE_KEYS = new Set(['tool', 'tool_use_id', 'agentId', 'requestMeta']);
+
 /** A one-line summary of a tool call (SPEC 6.4): Bash -> the command; Edit/Read/Write -> tool + path. */
 export function summarizeCall(tool: string, input: Record<string, unknown>): string {
   const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? '' : JSON.stringify(v));
@@ -75,7 +78,7 @@ export function summarizeCall(tool: string, input: Record<string, unknown>): str
   if (tool === 'Bash') s = str(input.command);
   else if (tool === 'Edit' || tool === 'Read' || tool === 'Write' || tool === 'NotebookEdit' || tool === 'MultiEdit') s = `${tool} ${str(input.file_path ?? input.notebook_path)}`.trim();
   else {
-    const first = Object.entries(input).find(([k]) => k !== 'tool' && k !== 'tool_use_id' && k !== 'agentId' && k !== 'requestMeta');
+    const first = Object.entries(input).find(([k]) => !ENGINE_KEYS.has(k));
     s = first ? `${tool} ${str(first[1])}` : tool;
   }
   return clip(s.replace(/\s+/g, ' ').trim(), LIMITS.call);
@@ -84,7 +87,6 @@ export function summarizeCall(tool: string, input: Record<string, unknown>): str
 /** How much raw text an activity entry is built from: more than enough for 300 characters after redaction, and a bound on the work. */
 const ACTIVITY_RAW = 4000;
 const FILE_TOOLS = new Set(['Edit', 'Read', 'Write', 'NotebookEdit', 'MultiEdit']);
-const ENGINE_KEYS = new Set(['tool', 'tool_use_id', 'agentId', 'requestMeta']);
 
 /**
  * One activity-feed entry for a tool call (#118): the tool's name, a space, and a short summary of its arguments.
