@@ -140,6 +140,41 @@ describe('ActivityStore', () => {
     expect(store.feedOn(r.session.id)).toBeNull();
   });
 
+  it('clear() drops every lease and every entry, in every session (the Admin turned the feed off)', () => {
+    const { store } = setup();
+    const r = report([]);
+    store.watch(r.session.id, r.agents[0]!.id, 60);
+    store.watch(r.session.id, MAIN_LOOP, 60);
+    store.watch('another-session', MAIN_LOOP, 60);
+    store.ingest(report([tool(T0 + 1)]), 0);
+    store.clear();
+    expect(store.size).toBe(0);
+    expect(store.watched(r.session.id)).toEqual([]);
+    expect(store.watch(r.session.id, r.agents[0]!.id, 5).entries).toEqual([]);
+  });
+
+  it('while the feature is off it lists nothing as watched and takes no entry, and resumes when it is back on', () => {
+    let t = T0;
+    let on = true;
+    const store = new ActivityStore(() => t, () => on);
+    const r = report([]);
+    const aid = r.agents[0]!.id;
+    store.watch(r.session.id, aid, 60);
+    expect(store.on).toBe(true);
+    on = false;
+    expect(store.on).toBe(false);
+    expect(store.watched(r.session.id)).toEqual([]);
+    store.ingest(report([tool(T0 + 1)], [], true), 0);
+    on = true;
+    // the lease taken before is still there in this test (clear() is the fleet's job), but nothing came in while off
+    expect(store.watch(r.session.id, aid, 5).entries).toEqual([]);
+    // the reporter's option is still remembered while off
+    expect(store.feedOn(r.session.id)).toBe(true);
+    t += 10;
+    store.ingest(report([tool(T0 + 5)]), 0);
+    expect(store.watch(r.session.id, aid, 5).entries.map((e) => e.at)).toEqual([T0 + 5]);
+  });
+
   it('remembers whether the reporter has the option on; null until a reporter says', () => {
     const { store } = setup();
     const r = report([], [], false);

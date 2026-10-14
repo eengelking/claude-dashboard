@@ -475,6 +475,8 @@ export interface StateBody {
   /** The server's own version and the reporter range it supports, for the mismatch notice. */
   server: { version: string; reporterSupport: ReporterSupport };
   wall: WallSettingsView;
+  /** The Admin's feature flags by id (Admin > Settings > Feature flags), each on unless the Admin turned it off. */
+  features: Record<string, boolean>;
 }
 
 export type RemovedReason = 'done' | 'dropped' | 'deleted';

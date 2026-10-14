@@ -259,6 +259,61 @@ describe('the activity feed (#118)', () => {
     expect(fleet.activity.size).toBe(0);
   });
 
+  it('says enabled: true while the Admin flag is on', async () => {
+    const { app } = setup();
+    const r = live();
+    await request(app).post('/api/fleet/report').send(r);
+    expect((await request(app).get(url(r, r.agents[0]!.id))).body).toMatchObject({ enabled: true, live: true });
+    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': true });
+  });
+
+  it('with the Admin flag off: no lease, enabled: false, nothing watched, nothing kept; back on resumes', async () => {
+    const { app, fleet } = setup();
+    const r = live();
+    const aid = r.agents[0]!.id;
+    await request(app).post('/api/fleet/report').send(r);
+    await request(app).get(url(r, aid, '?every=60'));
+    await request(app).get(url(r, MAIN_LOOP, '?every=60'));
+    const at = Date.now() + 5;
+    await request(app).post('/api/fleet/report').send(live([{ at, kind: 'tool', text: 'Bash npm test' }]));
+    expect(fleet.activity.size).toBe(2);
+
+    // Turning it off drops every lease and entry at once.
+    fleet.features.setFeature('activity-feed', false);
+    expect(fleet.activity.size).toBe(0);
+    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': false });
+
+    const off = await request(app).get(url(r, aid));
+    expect(off.status).toBe(200);
+    expect(off.body).toMatchObject({ entries: [], since: null, live: true, enabled: false });
+    expect(typeof off.body.serverTime).toBe('number');
+    expect(fleet.activity.size).toBe(0);
+    // The mod is told nothing is watched, and what it sends anyway is not kept.
+    const reply = await request(app).post('/api/fleet/report').send(live([{ at: at + 10, kind: 'tool', text: 'Read secret-ish' }]));
+    expect(reply.body.watch).toEqual([]);
+    expect(fleet.activity.size).toBe(0);
+    // An unknown agent is still a 404 while off.
+    expect((await request(app).get(url(r, 'no-such-agent'))).status).toBe(404);
+
+    // Back on: the next fetch takes a lease as usual and starts empty.
+    fleet.features.setFeature('activity-feed', true);
+    const on = await request(app).get(url(r, aid));
+    expect(on.body).toMatchObject({ entries: [], live: true, enabled: true });
+    expect(typeof on.body.since).toBe('number');
+    expect((await request(app).post('/api/fleet/report').send(live())).body.watch).toEqual([aid]);
+  });
+
+  it('a flag change reaches open browsers as a fresh snapshot carrying the flags', () => {
+    const { fleet } = setup();
+    const seen: string[] = [];
+    fleet.hub.add({ write: (c: string) => void seen.push(c), end: () => {} });
+    seen.length = 0;
+    fleet.features.setFeature('activity-feed', false);
+    const all = seen.join('');
+    expect(all).toContain('event: snapshot');
+    expect(all).toContain('"features":{"activity-feed":false}');
+  });
+
   it('a session that is deleted takes its feed with it', async () => {
     const { app, fleet } = setup();
     const r = live();

@@ -12,6 +12,7 @@ import { formatSse, SseHub } from './sse.js';
 import { ModelPriceStore } from './modelPrices.js';
 import { WallSettings } from './wallSettings.js';
 import { ActivityStore } from './activity.js';
+import { ACTIVITY_FEED, FeatureFlags } from './featureFlags.js';
 
 export interface FleetConfig {
   staleAfterMs: number;
@@ -86,6 +87,8 @@ export class Fleet {
   readonly prices: ModelPriceStore;
   /** The agent activity feed (#118): in memory only, and only for loops a viewer is watching. */
   readonly activity: ActivityStore;
+  /** The Admin's feature flags. Turning the activity feed off drops what it held; any change reaches open browsers. */
+  readonly features: FeatureFlags;
   private readonly live = new Map<string, LiveEntry>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly startedAt: number;
@@ -98,7 +101,11 @@ export class Fleet {
     readonly now: () => number = Date.now,
   ) {
     this.startedAt = now();
-    this.activity = new ActivityStore(now);
+    this.features = new FeatureFlags(db.db, (id, on) => {
+      if (id === ACTIVITY_FEED && !on) this.activity.clear();
+      this.hub.broadcast('snapshot', this.state());
+    });
+    this.activity = new ActivityStore(now, () => this.features.featureOn(ACTIVITY_FEED));
     this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
     // A price change moves every cost on the wall, so open browsers get a fresh snapshot.
     this.prices = new ModelPriceStore(db.db, () => this.hub.broadcast('snapshot', this.state()));
@@ -306,6 +313,7 @@ export class Fleet {
       events: this.events({ limit: STATE_EVENTS }),
       server: { version: serverVersion(), reporterSupport: REPORTER_SUPPORT },
       wall: this.wall.view(),
+      features: this.features.view(),
     };
   }
 

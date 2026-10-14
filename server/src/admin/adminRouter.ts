@@ -8,6 +8,7 @@ import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '..
 import { safeEqualStr } from '../fleet/tokens.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
+import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
 
 export interface AdminRouterOptions {
@@ -18,6 +19,8 @@ export interface AdminRouterOptions {
   wall?: WallSettings;
   /** The Admin's model prices (issue #117). Without it the Model prices group has nothing to change. */
   prices?: ModelPriceStore;
+  /** The server-wide feature flags (#118). Without it the Feature flags group has nothing to change. */
+  features?: FeatureFlags;
   now?: () => number;
   /** Idle time before a session ends. */
   idleMs?: number;
@@ -60,7 +63,7 @@ function publicPerson(p: PersonRow, groupName: string | null) {
 }
 
 export function createAdminRouter(opts: AdminRouterOptions): Router {
-  const { people, wall, prices } = opts;
+  const { people, wall, prices, features } = opts;
   const now = opts.now ?? Date.now;
   const idleMs = opts.idleMs ?? 10 * 60_000;
   const maxFails = opts.maxFails ?? 5;
@@ -253,18 +256,20 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   // ---- settings and log -----------------------------------------------------------------------
 
+  const featureList = () => FEATURES.map((f) => ({ ...f, on: features ? features.featureOn(f.id) : true }));
   const noticeList = () => NOTICES.map((n) => ({ ...n, on: wall ? wall.noticeOn(n.id) : true }));
 
   router.get('/settings', (_req, res) => {
     res.json({
       allowAdminSecretReporting: people.adminReportingAllowed(),
+      features: featureList(),
       notices: noticeList(),
       showBackgroundSessions: wall?.showBackgroundSessions() ?? false,
       modelPrices: prices?.view() ?? { asOf: PRICES_AS_OF, models: [] },
     });
   });
 
-  // One setting per call: allowAdminSecretReporting, showBackgroundSessions, notices ({ id: boolean }),
+  // One setting per call: allowAdminSecretReporting, showBackgroundSessions, features ({ id: boolean }), notices ({ id: boolean }),
   // modelPrice ({ key, std, long? }: one model's prices) or resetModelPrice (a key).
   router.put('/settings', (req, res) => {
     const body = req.body ?? {};
@@ -281,6 +286,18 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       wall.setShowBackgroundSessions(v);
       people.log('wall_background_changed', `Background sessions ${v ? 'shown' : 'hidden'} on the wall`, sourceOf(req), now());
       return void res.json({ ok: true, showBackgroundSessions: v });
+    }
+    if ('features' in body) {
+      const f = body.features;
+      const ids = f && typeof f === 'object' && !Array.isArray(f) ? Object.keys(f) : [];
+      if (!features || ids.length === 0 || ids.some((id) => !isFeatureId(id) || typeof f[id] !== 'boolean')) {
+        return void res.status(400).json({ ok: false, error: 'features must map known feature ids to true or false' });
+      }
+      for (const id of ids) {
+        features.setFeature(id, f[id]);
+        people.log('feature_changed', `Feature ${id} turned ${f[id] ? 'on' : 'off'}`, sourceOf(req), now());
+      }
+      return void res.json({ ok: true, features: featureList() });
     }
     if ('notices' in body) {
       const n = body.notices;

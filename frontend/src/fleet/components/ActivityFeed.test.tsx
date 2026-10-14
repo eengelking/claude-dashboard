@@ -7,7 +7,7 @@ import type { SessionView } from "../types";
 
 const T0 = 1_000_000;
 const entry = (seq: number, over: Partial<ActivityReply["entries"][number]> = {}) => ({ seq, at: T0 + seq * 1000, kind: "tool" as const, text: `Read f${seq}`, ...over });
-const reply = (entries: ActivityReply["entries"], over: Partial<ActivityReply> = {}): ActivityReply => ({ entries, since: T0, live: true, serverTime: T0, ...over });
+const reply = (entries: ActivityReply["entries"], over: Partial<ActivityReply> = {}): ActivityReply => ({ entries, since: T0, live: true, enabled: true, serverTime: T0, ...over });
 
 /** A fetch that answers with each reply in turn, then keeps answering with the last one. */
 function fetcher(...replies: ActivityReply[]) {

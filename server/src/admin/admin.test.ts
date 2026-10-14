@@ -6,6 +6,7 @@ import { openDb } from '../fleet/db.js';
 import { PeopleStore } from '../fleet/people.js';
 import { WallSettings } from '../fleet/wallSettings.js';
 import { ModelPriceStore } from '../fleet/modelPrices.js';
+import { FeatureFlags } from '../fleet/featureFlags.js';
 import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
@@ -15,6 +16,7 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
   const people = new PeopleStore(db);
   const wall = new WallSettings(db);
   const prices = new ModelPriceStore(db);
+  const features = new FeatureFlags(db);
   const clock = { t: 1_000_000 };
   const lines: string[] = [];
   const app = express();
@@ -25,12 +27,13 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
       people,
       wall,
       prices,
+      features,
       now: () => clock.t,
       idleMs: over.idleMs,
       log: (l) => lines.push(l),
     }),
   );
-  return { app, people, wall, prices, clock, lines };
+  return { app, people, wall, prices, features, clock, lines };
 }
 
 const H = { 'X-Podium-Admin': '1' };
@@ -212,6 +215,51 @@ describe('groups and settings', () => {
       expect((await agent.put('/api/admin/settings').set(H).send(bad)).status).toBe(400);
     }
     expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toEqual(expect.arrayContaining(['wall_notice_changed', 'wall_background_changed']));
+  });
+
+  describe('feature flags (#118)', () => {
+    it('refuses the flags before unlocking', async () => {
+      const { app } = setup();
+      expect((await request(app).put('/api/admin/settings').set(H).send({ features: { 'activity-feed': false } })).status).toBe(401);
+    });
+
+    it('lists each flag with its name, description and switch, on by default', async () => {
+      const { agent } = await unlocked();
+      const got = (await agent.get('/api/admin/settings').set(H)).body;
+      expect(got.features).toEqual([
+        {
+          id: 'activity-feed',
+          name: 'Agent activity feed',
+          description: expect.stringContaining("Shows an agent's recent tool calls and text in its panel while someone watches."),
+          on: true,
+        },
+      ]);
+    });
+
+    it('turns a flag off and on, and logs each change', async () => {
+      const { agent, features, people } = await unlocked();
+      const res = await agent.put('/api/admin/settings').set(H).send({ features: { 'activity-feed': false } });
+      expect(res.status).toBe(200);
+      expect(res.body.features).toEqual([expect.objectContaining({ id: 'activity-feed', on: false })]);
+      expect(features.featureOn('activity-feed')).toBe(false);
+      expect((await agent.get('/api/admin/settings').set(H)).body.features[0].on).toBe(false);
+      await agent.put('/api/admin/settings').set(H).send({ features: { 'activity-feed': true } });
+      expect(features.featureOn('activity-feed')).toBe(true);
+      const log = people.listLog({ page: 1, pageSize: 50 }).rows.filter((x) => x.kind === 'feature_changed');
+      expect(log.map((x) => x.detail)).toEqual(['Feature activity-feed turned on', 'Feature activity-feed turned off']);
+    });
+
+    it.each([
+      ['an unknown id', { features: { nope: false } }],
+      ['a value that is not a boolean', { features: { 'activity-feed': 'off' } }],
+      ['an empty map', { features: {} }],
+      ['a list', { features: ['activity-feed'] }],
+    ])('rejects %s and changes nothing', async (_n, body) => {
+      const { agent, features, people } = await unlocked();
+      expect((await agent.put('/api/admin/settings').set(H).send(body)).status).toBe(400);
+      expect(features.featureOn('activity-feed')).toBe(true);
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).not.toContain('feature_changed');
+    });
   });
 
   describe('model prices (#117)', () => {

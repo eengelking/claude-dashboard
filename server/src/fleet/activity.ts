@@ -5,6 +5,9 @@
 // captures and sends a loop's entries only while it is listed. The server keeps the last 20 entries of a watched
 // loop and drops them when the lease lapses, when the session leaves the live set or is deleted, and on restart.
 // Entries from before the lease began are never kept, so a viewer who comes back starts empty.
+//
+// The Admin can turn the whole feature off (Admin > Settings > Feature flags, `activity-feed`). While it is off no lease
+// is granted, nothing is listed as watched and nothing a mod sends is kept; the fleet calls `clear()` when it goes off.
 import { LIMITS, MAIN_LOOP, type ActivityEntry, type Report } from './protocol.js';
 
 /** The refresh intervals the panel offers, in seconds. The first is the default. */
@@ -20,11 +23,15 @@ export interface ActivityEntryView extends ActivityEntry {
   seq: number;
 }
 
-/** What the activity route answers. `since` is when the current lease began; null when the session is not live. */
+/**
+ * What the activity route answers. `since` is when the current lease began; null when the session is not live or the
+ * feature is off. `enabled` is false while the Admin has the feature turned off.
+ */
 export interface ActivityReply {
   entries: ActivityEntryView[];
   since: number | null;
   live: boolean;
+  enabled: boolean;
   serverTime: number;
 }
 
@@ -47,7 +54,16 @@ export class ActivityStore {
   /** Session id -> whether its reporter has the activityFeed option on, from the last report that said. */
   private readonly feed = new Map<string, boolean>();
 
-  constructor(private readonly now: () => number) {}
+  constructor(
+    private readonly now: () => number,
+    /** Whether the Admin has the feature on (the `activity-feed` flag). */
+    private readonly isOn: () => boolean = () => true,
+  ) {}
+
+  /** Whether the feature is on for this server. The route grants no lease while it is off. */
+  get on(): boolean {
+    return this.isOn();
+  }
 
   /** Live leases across every session, for tests and the health of the store. */
   get size(): number {
@@ -76,6 +92,7 @@ export class ActivityStore {
 
   /** The loops of a session someone is watching: the report reply's `watch`. */
   watched(sessionId: string): string[] {
+    if (!this.isOn()) return [];
     this.expireSession(sessionId, this.now());
     return [...(this.leases.get(sessionId)?.keys() ?? [])];
   }
@@ -92,6 +109,7 @@ export class ActivityStore {
   ingest(report: Report, skewMs: number): void {
     const sid = report.session.id;
     if (typeof report.session.activityFeed === 'boolean') this.feed.set(sid, report.session.activityFeed);
+    if (!this.isOn()) return;
     const loops = this.leases.get(sid);
     if (!loops) return;
     this.expireSession(sid, this.now());
@@ -119,6 +137,11 @@ export class ActivityStore {
   expire(): void {
     const now = this.now();
     for (const sid of [...this.leases.keys()]) this.expireSession(sid, now);
+  }
+
+  /** The Admin turned the feature off: every lease and every entry goes, in every session. */
+  clear(): void {
+    this.leases.clear();
   }
 
   /** The session left the live set or was deleted: its leases and entries go, and what it said about the option. */

@@ -176,9 +176,11 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       res.status(404).json({ ok: false, error: 'unknown session or agent', path: '$.agentId' });
       return;
     }
+    // With the Admin's flag off (Admin > Settings > Feature flags) no lease is taken; the panel keeps asking and says so.
     let body: ActivityReply;
-    if (!fleet.isLive(id)) body = { entries: [], since: null, live: false, serverTime: fleet.now() };
-    else body = { ...fleet.activity.watch(id, agentId, everyOf(req.query.every)), live: true, serverTime: fleet.now() };
+    if (!fleet.activity.on) body = { entries: [], since: null, live: fleet.isLive(id), enabled: false, serverTime: fleet.now() };
+    else if (!fleet.isLive(id)) body = { entries: [], since: null, live: false, enabled: true, serverTime: fleet.now() };
+    else body = { ...fleet.activity.watch(id, agentId, everyOf(req.query.every)), live: true, enabled: true, serverTime: fleet.now() };
     res.set('Cache-Control', 'no-store').json(body);
   });
 

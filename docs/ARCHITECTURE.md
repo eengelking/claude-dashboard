@@ -70,8 +70,12 @@ has the option on (`SessionView.activityFeed`). `GET .../agents/:agentId/activit
 for `every` seconds plus `ACTIVITY_LEASE_SLACK_MS` (15 s); the report route answers with `watch`, the loops under
 a live lease; `Fleet.ingest` hands each validated report to the store, which merges only watched loops' entries,
 skipping any stamped (through the session's clock skew) before the lease began and any it already has. The sweeper
-expires leases every second, and a session leaving the live set or being deleted drops its leases. No table, no
-migration, nothing in the state or the stream; `ingest.ts` never sees the entries, because it copies named
+expires leases every second, and a session leaving the live set or being deleted drops its leases. The Admin's
+`activity-feed` flag (`server/src/fleet/featureFlags.ts`, a `feature.<id>` row in the settings table, on unless set to
+'0') sits above all of this: the store asks `Fleet.features` on each call, so while it is off `watched` is empty,
+`ingest` keeps only the reporter's option and no entries, and the route answers `enabled: false` without a lease. The
+flag's `onChange` in `Fleet` calls `ActivityStore.clear()` when it goes off and sends every browser a fresh snapshot,
+whose `features` map tells the panels. No table for the feed itself, no migration, no entries in the state or the stream; `ingest.ts` never sees the entries, because it copies named
 fields only. In the mod (0.13.0, option `activityFeed`), `transport.ts` keeps the reply's `watch` list and
 `flushOnce` hands it to `setWatched` in `state.ts` (an empty list when the option is off); a loop dropping off the
 list forgets its ring. `tool.call` adds an entry (`activityCall` in `failures.ts`) and a watched `turn.step` reads
