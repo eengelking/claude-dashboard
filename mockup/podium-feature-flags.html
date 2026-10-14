@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium feature flags</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mockup for the Admin feature flag on the agent activity feed (#118). Layout: Admin > Settings on the left, the agent panel it controls on the right.
+     Flip the switch and the panel changes: with the flag on, the feed works as in podium-agent-feed.html (when the reporter option is also on);
+     with it off, the Activity section says the Admin turned it off. The .setrow and switch patterns are the ones already on Admin > Settings (wall notices). -->
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --good-text: #3dbb3d; --good: #0ca30c; --switch-off: #3a3a36; --code: #141413;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --good-text: #006300; --good: #1f9d55; --switch-off: #c9c8c1; --code: #f1f0ec; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --good-text: #006300; --good: #1f9d55; --switch-off: #c9c8c1; --code: #f1f0ec; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13.5px/1.45 var(--font-ui); padding: 20px 16px 60px; }
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 17px; margin: 0 0 4px; }
+h2 { font-size: 14px; margin: 0 0 4px; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; max-width: 72ch; }
+.mono { font-family: var(--font-mono); }
+button.theme { font: inherit; font-size: 12px; color: var(--ink2); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; margin-top: 10px; }
+:focus-visible { outline: 2px solid var(--good-text); outline-offset: 2px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; margin-top: 16px; }
+@media (max-width: 800px) { .two { grid-template-columns: minmax(0, 1fr); } }
+.sec { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow: hidden; }
+.sec > .sh { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--muted); display: flex; gap: 14px; }
+.sec > .sh .tab { color: var(--muted); font-weight: 500; }
+.sec > .sh .tab.on { color: var(--ink); border-bottom: 2px solid var(--ink); padding-bottom: 7px; margin-bottom: -10px; }
+.pad { padding: 14px 16px 18px; display: grid; gap: 22px; }
+.hint { color: var(--ink2); font-size: 12.5px; margin: 0 0 8px; }
+.setrow { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--grid); }
+.setname b { font-weight: 600; }
+.setname .hint { margin: 2px 0 0; color: var(--ink2); max-width: 56ch; }
+.setname .tag { font: 500 11px var(--font-mono); color: var(--muted); margin-left: 6px; }
+.sw { display: flex; align-items: center; gap: 8px; flex: none; }
+.sw button { width: 34px; height: 20px; border-radius: 999px; background: var(--switch-off); position: relative; border: 0; cursor: pointer; transition: background .15s; }
+.sw button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.sw button[aria-checked="true"] { background: var(--good); }
+.sw button[aria-checked="true"]::after { transform: translateX(14px); }
+@media (prefers-reduced-motion: reduce) { .sw button, .sw button::after { transition: none; } }
+.sw span { min-width: 24px; font-size: 12.5px; color: var(--ink2); }
+.toast { font-size: 12px; color: var(--ink2); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+.toast[hidden] { display: none; }
+.side { padding: 14px 16px 16px; }
+.side h4 { margin: 0 0 2px; font-size: 14px; }
+.side .state { font-size: 12px; color: var(--good-text); display: inline-flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.lab { display: block; color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
+.off { border: 1px dashed var(--axis); border-radius: 6px; padding: 12px; color: var(--ink2); font-size: 12.5px; }
+.off b { color: var(--ink); }
+.off code { font: 11.5px var(--font-mono); background: var(--code); border: 1px solid var(--grid); border-radius: 4px; padding: 1px 5px; }
+.off .ghost { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+.feed { list-style: none; margin: 0; padding: 0; background: var(--code); border: 1px solid var(--grid); border-radius: 6px; font-size: 12px; }
+.feed li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--grid); }
+.feed li:last-child { border-bottom: 0; }
+.feed .at { font: 400 11px var(--font-mono); color: var(--muted); }
+.feed .t { font-family: var(--font-mono); font-size: 11.5px; } .feed .t b { color: #5cbcf0; }
+.stateline { margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Feature flag for the activity feed</h1>
+  <p class="note">Admin &gt; Settings gets a Feature flags section. The activity feed is its first flag, on by default. Turning it off stops the feature for everyone on this server: the console no longer fetches or shows activity, the server asks no mod for it and forgets what it held. The reporter option stays what it is: a machine still sends nothing until its own <span class="mono">activityFeed</span> option is on, so the feed needs both. The panel on the right changes as you flip the switch; the third state shows what it looks like when the flag is on but the reporter option is not.</p>
+  <button class="theme" id="theme" type="button">Switch theme</button>
+  <div class="two">
+    <div class="sec">
+      <div class="sh"><span class="tab">People</span><span class="tab">Groups</span><span class="tab on">Settings</span><span class="tab">Reporting</span><span class="tab">Log</span></div>
+      <div class="pad">
+        <section aria-labelledby="h-flags">
+          <h2 id="h-flags">Feature flags</h2>
+          <p class="hint">Turn a feature off for everyone on this server. A flag that is off hides the feature in the console and stops its data. New features that can be switched off appear here.</p>
+          <div class="setrow">
+            <div class="setname"><b id="n-feed">Agent activity feed</b><span class="tag">activity-feed</span>
+              <p class="hint">Shows an agent's recent tool calls and text in its panel while someone watches. Needs the reporter's activityFeed option on the machine as well. Nothing is kept after the panel closes.</p></div>
+            <div class="sw"><button type="button" id="flag" role="switch" aria-checked="true" aria-labelledby="n-feed s-feed"></button><span id="s-feed">On</span></div>
+          </div>
+        </section>
+        <div class="toast" id="toast" hidden></div>
+        <section aria-labelledby="h-wall">
+          <h2 id="h-wall">Wall notices</h2>
+          <p class="hint">Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.</p>
+          <div class="setrow"><div class="setname"><b>Background sessions</b><p class="hint">Says how many sessions nobody is attached to are set aside, with a link to show them.</p></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-label="Background sessions"></button><span>On</span></div></div>
+        </section>
+      </div>
+    </div>
+
+    <aside class="sec side" aria-label="Agent panel">
+      <h4>Rewrite PDF renderer</h4>
+      <span class="state"><span class="dot"></span>running</span>
+      <span class="lab">Report</span>
+      <span class="lab" style="margin-top:0">Activity</span>
+      <div id="panel"></div>
+      <div class="stateline"><label class="hint" for="opt">Reporter option on this machine:</label>
+        <select id="opt" style="font:inherit;font-size:12px;color:var(--ink);background:var(--raised);border:1px solid var(--border);border-radius:6px;padding:2px 6px"><option value="on">activityFeed on</option><option value="off">activityFeed off</option></select></div>
+    </aside>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const FEED = [["00:12","Edit","server/src/fleet/protocol.ts"],["00:14","Bash","npm test"],["00:16","Grep","\"promptExcerpt\" in server/src/fleet"],["00:18","Bash","curl -H \"Authorization: [redacted]\" http://localhost:4317/api/fleet/sessions"]];
+function render() {
+  const flag = $("flag").getAttribute("aria-checked") === "true", opt = $("opt").value === "on";
+  let h;
+  if (!flag) {
+    h = '<div class="off"><b>The activity feed is turned off by the Admin.</b><div class="ghost">Someone with Admin access can turn it back on in Admin &gt; Settings &gt; Feature flags. Nothing is fetched or kept while it is off.</div></div>';
+  } else if (!opt) {
+    h = '<div class="off"><b>Recent tool calls and text appear here while the agent works.</b><div class="ghost">Turn on the <code>activityFeed</code> option (Send an agent’s recent activity) of podium-reporter to see them: in Claude Code, run <code>/plugin configure podium-reporter@eengelking-marketplace</code>. Each entry is redacted and cut to 300 characters before it is sent.</div></div>';
+  } else {
+    h = '<ol class="feed" aria-label="Recent activity, newest last">' + FEED.map(r => '<li><span class="at">' + r[0] + '</span><span class="t"><b>' + r[1] + '</b> ' + r[2].replace("[redacted]", "[redacted]") + '</span></li>').join("") + '</ol>';
+  }
+  $("panel").innerHTML = h;
+}
+$("flag").addEventListener("click", () => {
+  const on = $("flag").getAttribute("aria-checked") !== "true";
+  $("flag").setAttribute("aria-checked", on); $("s-feed").textContent = on ? "On" : "Off";
+  $("toast").hidden = false;
+  $("toast").textContent = on ? "Agent activity feed turned on. Panels that are open start fetching again." : "Agent activity feed turned off for everyone. Open panels stop fetching and the server forgets what it held. This is recorded in the Log.";
+  render();
+});
+$("opt").addEventListener("change", render);
+$("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+render();
+</script>
+</body>
+</html>
