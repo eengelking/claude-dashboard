@@ -2,8 +2,7 @@ import { forwardRef } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
 import { agentElapsedSec, agentTokens, COST_HINT_AGENT, TOKENS_HINT, type Guide } from "../logic";
 import type { AgentView } from "../types";
-import { BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
-import { IconFork, IconSub } from "./Icons";
+import { BlowBadge, Cost, ContextBar, cssVar, EffortMeter, FAMILY_COLOR, ModelChip, StatusChip } from "./Chips";
 
 function Indent({ guides }: { guides: Guide[] }) {
   if (!guides.length) return null;
@@ -39,7 +38,11 @@ export const AgentRow = forwardRef<HTMLButtonElement, {
     >
       <div className="nm">
         <Indent guides={guides} />
-        {a.kind === "fork" ? <IconFork /> : <IconSub />}
+        <span
+          className={`a ${a.status === "aborted" ? "done" : a.status}${a.kind === "fork" ? " fork" : ""}`}
+          style={cssVar(FAMILY_COLOR[a.modelFamily])}
+          aria-hidden="true"
+        />
         <span className="tx" title={`${a.description} · ${a.kind === "fork" ? "fork" : a.type}`}>
           <b>{a.description}</b>
           <em>{a.kind === "fork" ? "fork" : a.type}</em>

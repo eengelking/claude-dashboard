@@ -27,6 +27,16 @@ function openFocus(sessionOver = {}) {
 }
 
 describe("orchestrator page", () => {
+  it("marks each tree row's agent like the cards: a model-coloured square, a circle for a fork, with its state", () => {
+    const { container } = openFocus();
+    const mk = (id: string) => container.querySelector(`#row-${id} .nm .a`) as HTMLElement;
+    expect(mk("k1")).toHaveClass("a", "running");
+    expect(mk("k1").style.getPropertyValue("--c")).toBe("var(--haiku)");
+    expect(mk("k1")).not.toHaveClass("fork");
+    expect(mk("f1")).toHaveClass("fork", "failed");
+    expect(mk("f1").style.getPropertyValue("--c")).toBe("var(--opus)");
+  });
+
   it("opens from a card or the rail, and Back (All orchestrators) returns to the wall", () => {
     const { container } = openFocus();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("api-refactor");
