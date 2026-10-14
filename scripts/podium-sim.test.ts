@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseArgs, Simulator } from './podium-sim.ts';
-import { validateReport, type Report } from '../server/src/fleet/protocol.ts';
+import { MAIN_LOOP, validateReport, type Report } from '../server/src/fleet/protocol.ts';
 
 function run(seed: number, ticks: number, chaos = false): Report[] {
   let t = 1_800_000_000_000;
@@ -129,6 +129,34 @@ describe('podium-sim', () => {
     }
     expect([...shapes].sort()).toEqual(['fork under subagent', 'subagent under fork', 'subagent under subagent']);
     expect(deepest).toBe(4);
+  });
+
+  it('sends a feed only for the loops the reply says are watched, and none from a reporter older than 0.13.0 (#118)', () => {
+    let t = 1_800_000_000_000;
+    const sim = new Simulator({ sessions: 2, seed: 4, chaos: false, extraAgents: 1, now: () => t, home: '/Users/sim' });
+    t += 1000;
+    const first = sim.step()[0]!;
+    expect(first.session.activityFeed).toBe(true);
+    expect(first.agents.some((a) => a.activity) || !!first.session.activity).toBe(false);
+    const running = first.agents.find((a) => a.status === 'running')!;
+    sim.watch(first.session.id, [running.id, MAIN_LOOP]);
+    let last: Report | undefined;
+    for (let i = 0; i < 25; i++) {
+      t += 1000;
+      last = sim.step().find((r) => r.session.id === first.session.id);
+    }
+    const v = validateReport(JSON.parse(JSON.stringify(last)));
+    if (!v.ok) throw new Error(`${v.path}: ${v.error}`);
+    const feed = last!.agents.find((a) => a.id === running.id)?.activity ?? [];
+    if (last!.agents.find((a) => a.id === running.id)!.status === 'running') expect(feed).toHaveLength(20);
+    expect(last!.agents.filter((a) => a.id !== running.id).every((a) => !a.activity)).toBe(true);
+    sim.watch(first.session.id, []);
+    t += 1000;
+    const after = sim.step().find((r) => r.session.id === first.session.id)!;
+    expect(after.agents.some((a) => a.activity) || !!after.session.activity).toBe(false);
+    const old = new Simulator({ sessions: 1, seed: 4, chaos: false, extraAgents: 0, reporterVersion: '0.12.0', now: () => t, home: '/Users/sim' });
+    t += 1000;
+    expect('activityFeed' in old.step()[0]!.session).toBe(false);
   });
 
   it('sends no name or machine without --person', () => {

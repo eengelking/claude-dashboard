@@ -81,7 +81,9 @@ the ring is not empty, within a 60,000-character budget per report. In the UI, `
 fetch loop (only while `ActivityFeed.tsx` is mounted, the feed is on and `usePageVisible` says the tab is shown;
 once more and then stop for a finished loop) and keeps a cursor: the first answer's highest `seq` is skipped, so a
 viewer never sees entries from before they looked, and a changed `since` means the lease was started again. The
-section sits in `AgentDetail` and `OrchestratorDetail` (loop `@orchestrator`, which is also `ORCHESTRATOR_ROW`).
+section sits in `AgentDetail` and `OrchestratorDetail` (loop `@orchestrator`, which is also `ORCHESTRATOR_ROW`). The
+simulator (`scripts/podium-sim.ts`) reads `watch` from each reply too and sends a scripted entry a second for each
+watched loop that is still working, so the panel can be seen filling without a real session.
 
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:

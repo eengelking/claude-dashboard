@@ -6,7 +6,7 @@
 // of reports (timestamps aside). The Simulator class is pure apart from its injected clock; main()
 // does the HTTP.
 import os from 'node:os';
-import type { ActivityEvent, AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, MachineInfo, Plan, Report } from '../server/src/fleet/protocol.ts';
+import { MAIN_LOOP, type ActivityEntry, type ActivityEvent, type AgentReport, ChangedFile, Effort, Failure, FilesReport, LoopReport, MachineInfo, Plan, Report } from '../server/src/fleet/protocol.ts';
 import { costOf, shortName, windowOf, type Family } from '../mod/podium-reporter/hooks/models.ts';
 
 const HELP = `podium-sim: POST simulated Claude Code session reports to a Podium server.
@@ -264,7 +264,24 @@ interface SimSession {
   silent: boolean;
   endedAt: number | null;
   doneSent: number;
+  /** The loops the server's last reply said someone is watching (#118). */
+  watch: string[];
+  /** Each watched loop's feed, the last 20, keyed like `watch`. */
+  feed: Record<string, ActivityEntry[]>;
 }
+
+/** What a watched loop "does" in the simulator (#118), in turn. One is the kind of thing the mod redacts. */
+const FEED_SCRIPT: [ActivityEntry['kind'], string][] = [
+  ['tool', 'Read docs/SPEC.md'],
+  ['text', 'The spec says entries are redacted and cut to 300 characters. Following the same pattern here.'],
+  ['tool', 'Grep "promptExcerpt" in server/src/fleet'],
+  ['tool', 'Edit server/src/fleet/protocol.ts'],
+  ['tool', 'Bash npm test -- protocol'],
+  ['text', 'Two failures in the mirrored block. Copying the same edit into the mod.'],
+  ['tool', 'Bash curl -H "Authorization: [redacted]" http://localhost:4317/api/fleet/sessions'],
+  ['tool', 'Bash npm test'],
+  ['text', 'All tests pass. Moving on to the panel.'],
+];
 
 export interface SimOptions {
   sessions: number;
@@ -412,6 +429,8 @@ export class Simulator {
       silent: false,
       endedAt: null,
       doneSent: 0,
+      watch: [],
+      feed: {},
     };
     const own = splitTokens(rng, rng.int(60_000, 220_000));
     add(s.tokens, own);
@@ -773,8 +792,10 @@ export class Simulator {
         loop: { ...s.loop, skills: [...s.loop.skills], toolCounts: { ...s.loop.toolCounts }, steps: { ...s.loop.steps } },
         files: this.filesOf(s),
         attached: this.attachedOf(s),
+        ...(this.sendsFeed() ? { activityFeed: true } : {}),
+        ...(s.feed[MAIN_LOOP]?.length ? { activity: s.feed[MAIN_LOOP].map((e) => ({ ...e })) } : {}),
       },
-      agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills] })),
+      agents: s.agents.map((a) => ({ ...a.report, tokens: { ...a.report.tokens }, skills: [...a.report.skills], ...(s.feed[a.report.id]?.length ? { activity: s.feed[a.report.id]!.map((e) => ({ ...e })) } : {}) })),
       events: s.events.slice(0, 100),
       ...(s.owner ? { userName: s.owner.name, machine: { ...s.owner.machine } } : {}),
     };
@@ -784,6 +805,7 @@ export class Simulator {
   step(): Report[] {
     this.tickN++;
     for (const s of [...this.sessions]) if (s.status !== 'done' && !s.silent) this.tickSession(s);
+    for (const s of this.sessions) if (s.status !== 'done' && !s.silent) this.tickFeed(s);
     // A finished session sends its final report until acked (at most 3 times), then leaves the sim;
     // a silent one never reports again. Either way a replacement starts after a short pause.
     const live = this.sessions.filter((s) => s.status !== 'done' && !s.silent).length;
@@ -803,6 +825,32 @@ export class Simulator {
       if (s.status === 'done' && s.doneSent >= 3 && !out.some((r) => r.session.id === s.id)) this.sessions.splice(i, 1);
     }
     return out;
+  }
+
+  /** The loops a report's reply says someone is watching (#118). A loop that drops off the list forgets its feed. */
+  watch(sessionId: string, ids: readonly string[]) {
+    const s = this.sessions.find((x) => x.id === sessionId);
+    if (!s) return;
+    s.watch = [...ids];
+    for (const k of Object.keys(s.feed)) if (!ids.includes(k)) delete s.feed[k];
+  }
+
+  /** One entry a second for each watched loop that is still working, from FEED_SCRIPT. No randomness, so a seed's run is unchanged. */
+  private tickFeed(s: SimSession) {
+    if (!this.sendsFeed()) return;
+    for (const loop of s.watch) {
+      const working = loop === MAIN_LOOP ? s.status === 'running' : s.agents.some((a) => a.report.id === loop && a.report.status === 'running');
+      if (!working) continue;
+      const list = (s.feed[loop] ??= []);
+      const [kind, text] = FEED_SCRIPT[(this.tickN + list.length) % FEED_SCRIPT.length]!;
+      list.push({ at: this.now(), kind, text });
+      if (list.length > 20) list.shift();
+    }
+  }
+
+  /** A simulated reporter older than 0.13.0 has no feed and does not say whether it is on. */
+  private sendsFeed(): boolean {
+    return !(this.opts.reporterVersion && /^0\.([0-9]|1[0-2])\./.test(this.opts.reporterVersion));
   }
 
   /** Called when the server acked `n` events of a report: drops them from the queue. */
@@ -896,7 +944,7 @@ export function parseArgs(argv: string[]): Args | 'help' {
 /** Refusals already printed, so a wrong token is reported once and not every second. */
 const refused = new Set<string>();
 
-async function post(args: Args, report: Report, token: string | null = null): Promise<number | null> {
+async function post(args: Args, report: Report, token: string | null = null): Promise<{ acked: number; watch: string[] } | null> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token ?? args.token) headers['X-Podium-Token'] = (token ?? args.token)!;
   try {
@@ -911,11 +959,11 @@ async function post(args: Args, report: Report, token: string | null = null): Pr
     if (res.status === 400) {
       const body = await res.text();
       console.error(`podium-sim: report rejected: ${body.slice(0, 200)}`);
-      return report.events.length; // never retry a 400
+      return { acked: report.events.length, watch: [] }; // never retry a 400
     }
     if (!res.ok) return null;
-    const body = (await res.json()) as { ackedEvents?: number };
-    return body.ackedEvents ?? 0;
+    const body = (await res.json()) as { ackedEvents?: number; watch?: unknown };
+    return { acked: body.ackedEvents ?? 0, watch: Array.isArray(body.watch) ? body.watch.filter((x): x is string => typeof x === 'string') : [] };
   } catch {
     return null;
   }
@@ -961,7 +1009,9 @@ async function main() {
     const acks = await Promise.all(reports.map((r) => post(a, r, sim.tokenFor(r.session.id))));
     reports.forEach((r, i) => {
       const n = acks[i];
-      if (n !== null && n !== undefined) sim.ack(r.session.id, n);
+      if (!n) return;
+      sim.ack(r.session.id, n.acked);
+      sim.watch(r.session.id, n.watch);
     });
     const failed = acks.filter((n) => n === null).length;
     if (failed && failures++ % 10 === 0) console.error(`podium-sim: ${failed} of ${reports.length} reports failed (is the server at ${a.url}?)`);
