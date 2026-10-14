@@ -368,9 +368,11 @@ rotate their own token; only the owner can.
 
 ## Logs
 
-`podiumctl logs` shows what the server did: its start (with the settings in use), reports it refused and why,
-sessions starting and ending, reporters connecting and going quiet, sessions the sweep took off the wall, Admin
-changes and errors. Each line is an event with a fixed name, so you or an agent can search for it:
+`podiumctl logs` shows what the server did. Each line is an event with a fixed name, so you or an agent can search
+for it. In the default text format you see what Podium always printed: its start, reports it rejected, errors and
+its shutdown. The other events below (sessions, reporters, sweeps, Admin changes, refused tokens) print in text only
+with `PODIUM_LOG_LEVEL=debug`. The JSON format and the copy sent to VictoriaLogs carry every event at the level in
+the table.
 
 | Event | Level | When |
 |---|---|---|
@@ -388,7 +390,8 @@ changes and errors. Each line is an event with a fixed name, so you or an agent 
 
 Two settings change what you get, each with `podiumctl config set KEY=VALUE` and then `podiumctl restart`:
 
-- `PODIUM_LOG_LEVEL`: `debug`, `info` (the default), `warn` or `error`. `warn` leaves only refusals and errors.
+- `PODIUM_LOG_LEVEL`: `debug`, `info` (the default), `warn` or `error`. In text, `debug` adds the session,
+  reporter, sweep, Admin and request lines.
 - `PODIUM_LOG_FORMAT`: `text` (the default) prints each line's message, as Podium always has. `json` prints one
   object per line with `timestamp`, `level`, `message`, `event`, `service`, `host`, `version` and the event's
   fields, such as `session_id`, `route`, `status` and `reason`. A collector such as Vector or Fluent Bit can read it

@@ -337,7 +337,8 @@ the same JSON on stdout still serves a collector such as Vector or Fluent Bit fo
 logs would leave the user's machine, a different privacy decision, so they stay out until someone asks. A line per
 request is noise for most people, and the paths already show in the events that matter.
 **Cost.** With shipping on, the server makes network calls on its own, and lines are lost when the endpoint is down
-longer than the buffer lasts (it says so once). The default text output now carries info lines it did not before
-(sessions starting and ending, reporters connecting, sweeps and Admin changes); `PODIUM_LOG_LEVEL=warn` goes back to
-errors and refusals only. Field names are checked against a deny list and strings are scrubbed, but a new field still
+longer than the buffer lasts (it says so once). The default text output stays what it was: the events added with the logger (sessions,
+reporters, sweeps, Admin changes, refused tokens, conflicts) print in text only at `debug`, which the maintainer
+chose so that turning nothing on changes nothing. They are still at their own level in `json` and in what is
+shipped, so someone reading plain text at the default level sees less than an agent reading VictoriaLogs. Field names are checked against a deny list and strings are scrubbed, but a new field still
 needs its author to think about what it carries.

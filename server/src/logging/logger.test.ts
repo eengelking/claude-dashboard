@@ -51,9 +51,9 @@ describe('the JSON format', () => {
 
   it('ships the JSON line whatever the local format', () => {
     const { logger, lines, shipped } = capture({ format: 'text' });
-    logger.info('session.started', 'podium: session s1 started', { session_id: 's1' });
-    expect(lines[0]!.line).toBe('podium: session s1 started');
-    expect(JSON.parse(shipped[0]!)).toMatchObject({ event: 'session.started', session_id: 's1', message: 'podium: session s1 started' });
+    logger.warn('report.rejected', 'podium: rejected report at $.v: bad', { path: '$.v' });
+    expect(lines[0]!.line).toBe('podium: rejected report at $.v: bad');
+    expect(JSON.parse(shipped[0]!)).toMatchObject({ event: 'report.rejected', path: '$.v', message: 'podium: rejected report at $.v: bad' });
   });
 
   it('can keep a line local, so the shipper can talk about itself without feeding its own buffer', () => {
@@ -104,6 +104,30 @@ describe('the text format', () => {
       { line: 'podium: rejected report at $.v: bad', level: 'warn' },
       { line: 'Podium server listening on http://127.0.0.1:4317', level: 'info' },
     ]);
+  });
+
+  it('shows the events added in #140 only at debug, so the default output is what it was, but still ships them at their level', () => {
+    for (const event of ['session.started', 'session.ended', 'session.deleted', 'reporter.connected', 'reporter.silent', 'sweep.removed', 'admin.unlock', 'admin.unlock_failed', 'auth.failed', 'report.conflict']) {
+      const { logger, lines, shipped } = capture();
+      logger.warn(event, `line for ${event}`);
+      expect(lines, event).toEqual([]);
+      expect(JSON.parse(shipped[0]!), event).toMatchObject({ event, level: 'warn' });
+    }
+    // The lines the server always printed stay at their level.
+    for (const event of ['server.start', 'server.console', 'server.stop', 'report.rejected', 'hook.rejected', 'ingest.failed', 'request.failed', 'sweeper.failed']) {
+      const { logger, lines } = capture();
+      logger.info(event, `line for ${event}`);
+      expect(lines.map((l) => l.line), event).toEqual([`line for ${event}`]);
+    }
+  });
+
+  it('prints those events in text at debug, and in JSON at their own level', () => {
+    const dbg = capture({ level: 'debug' });
+    dbg.logger.info('session.started', 'podium: session s1 started');
+    expect(dbg.lines).toEqual([{ line: 'podium: session s1 started', level: 'info' }]);
+    const json = capture({ format: 'json' });
+    json.logger.info('session.started', 'podium: session s1 started');
+    expect(JSON.parse(json.lines[0]!.line)).toMatchObject({ event: 'session.started', level: 'info' });
   });
 
   it('adapts a plain log(line) function, for the routers\' existing option', () => {

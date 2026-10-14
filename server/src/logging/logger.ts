@@ -1,6 +1,7 @@
 // The server's logger (#140). Each call is an event: a stable dotted name (`report.rejected`), a message for
 // people, and flat fields. Locally it prints either the message alone (`text`, what the server always printed)
-// or one JSON object per line (`json`); the JSON line is also what the shipper sends. Debug and info go to
+// or one JSON object per line (`json`); the JSON line is also what the shipper sends. In text, the events
+// added with this logger print only at debug (`quietInText`), so the default output is what it always was. Debug and info go to
 // stdout, warn and error to stderr, as before. See docs/ARCHITECTURE.md "Logging".
 import os from 'node:os';
 import { cleanFields, scrub, type FieldValue, type Fields } from './redact.js';
@@ -12,6 +13,24 @@ export type Level = (typeof LEVELS)[number];
 export type LogFormat = 'text' | 'json';
 
 const RANK: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+/**
+ * Events added with the logger (#140) that the server did not print before. In the text format they are printed
+ * only at debug, so the default output stays what it was; the JSON format and the shipper carry them at their own
+ * level. The lines the server always printed (startup, shutdown, rejections, failures) are not listed.
+ */
+export function quietInText(event: string): boolean {
+  return (
+    event.startsWith('session.') ||
+    event.startsWith('reporter.') ||
+    event.startsWith('admin.') ||
+    event === 'sweep.removed' ||
+    event === 'auth.failed' ||
+    event === 'report.conflict' ||
+    event === 'report.accepted' ||
+    event === 'http.request'
+  );
+}
+
 /** The contract fields; an event's own fields cannot overwrite them. */
 const RESERVED = new Set(['timestamp', 'level', 'message', 'event', 'service', 'host', 'version']);
 
@@ -90,7 +109,8 @@ export function createLogger(opts: LoggerOptions = {}): Logger {
         if (!RESERVED.has(k)) record[k] = v;
       }
       const json = JSON.stringify(record);
-      write(format === 'json' ? json : msg, level);
+      if (format === 'json') write(json, level);
+      else if (!quietInText(event) || isEnabled('debug')) write(msg, level);
       if (opts.ship && emit.ship !== false) opts.ship(json);
     } catch {
       // A log line must never take a request or a timer down with it.

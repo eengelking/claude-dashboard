@@ -110,7 +110,10 @@ when `userName` is set.
 makes a `Logger` whose calls are events: a stable dotted name (`report.rejected`), a message for people and flat
 fields. Every record has `timestamp` (RFC 3339, UTC), `level`, `message`, `event`, `service` (`podium`), `host`
 (`os.hostname()`, the container id under Podman) and `version`. `PODIUM_LOG_FORMAT=text`, the default, prints the
-message alone, which is what the server always printed; `json` prints the whole record as one line. Debug and info
+message alone, which is what the server always printed, and prints the events added in #140 (`quietInText`:
+`session.*`, `reporter.*`, `admin.*`, `sweep.removed`, `auth.failed`, `report.conflict`, `report.accepted`,
+`http.request`) only at debug, so the default text output is unchanged; `json` prints the whole record as one line,
+every event at its own level, and the shipper always gets that JSON record. Debug and info
 go to stdout, warn and error to stderr. `PODIUM_LOG_LEVEL` (default `info`) filters both what is printed and what
 is shipped. `redact.ts` is the backstop for what a record may hold: callers pass named fields and never a body, a
 field whose name contains a word such as token, secret, authorization, cookie, prompt, answer, activity, text or
