@@ -79,7 +79,7 @@ SQLite, the state sent to every client) are used whether or not a browser is ope
 GPU (more rows, charts, animations and updates to draw) are used by each open tab. As one example, Chrome on an
 M5 MacBook Pro used about 24% GPU with ten simulated sessions and a hundred agents on screen, against about 15%
 for a plain page. That is one machine and one browser, not a promise; `scripts/gpu-sample.sh` (macOS) measures
-your own. To lower it, keep fewer sessions on screen, leave the tab hidden (animations pause while it is), use
+your own. To lower it, choose a longer **Refresh every** (in the bar above the wall, left of Theme: the page then redraws once every 5 to 60 seconds instead of every 2, and anything that needs you still shows at once), keep fewer sessions on screen, leave the tab hidden (animations pause while it is), use
 wall mode, which hides the side panes and top bar so the browser stops drawing them, and close the dashboard
 when nobody is looking.
 

@@ -147,7 +147,7 @@ every refresh. The pulse and blink in `fleet.css` therefore read one shared `dat
 steps four times every 1.8 seconds, and the pulse ring is a pseudo-element scaled and faded instead of a
 `box-shadow`. A progress bar that slides between values redraws after each update the same way.
 `gpuLoad.test.tsx` fails on any infinite CSS animation and on a bar transition. Applying incoming data on
-the same beat was tried and gained nothing you could measure, so it is not done. To measure a change, close other tabs and windows that use the GPU, run the simulator
+the same beat was tried and gained nothing you could measure, so it is not done. The viewer's own **Refresh every** choice (#138) holds incoming data back between redraws on purpose: `useHeldState` shows the newest state once per interval, and `FleetView` is memoized so a parent render does not redraw it in between. To measure a change, close other tabs and windows that use the GPU, run the simulator
 (`npm run podium:sim -- --sessions 10 --agents 10`) and run `scripts/gpu-sample.sh`.
 
 ### A resumed session's running time starts when Podium first saw it

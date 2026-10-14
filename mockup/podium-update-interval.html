@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium update interval (#138)</title>
+<style>
+/* Mockup for #138: an "Update every" select in the fleet banner, left of the Theme controls.
+   Tokens and control styles are copied from frontend/src/fleet/fleet.css so it matches the real banner. */
+:root {
+  --page: #f4f4f2; --page-ink: #1c1c1a; --page-muted: #5d5c57;
+  --bg: #fafaf8; --raised: #f0efec; --ink: #1c1c1a; --ink2: #43423e; --muted: #6b6a64;
+  --border: rgba(0,0,0,.12); --sel: rgba(0,0,0,.07); --sonnet: #1f6fd1; --warn: #a86f00; --good-text: #0b7a0b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page: #121211; --page-ink: #f0efec; --page-muted: #a9a79f;
+    --bg: #0d0d0d; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08); --sonnet: #3987e5; --warn: #fab219; --good-text: #3dbb3d; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --page: #121211; --page-ink: #f0efec; --page-muted: #a9a79f;
+  --bg: #0d0d0d; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --border: rgba(255,255,255,.10); --sel: rgba(255,255,255,.08); --sonnet: #3987e5; --warn: #fab219; --good-text: #3dbb3d; color-scheme: dark; }
+body { margin: 0; background: var(--page); color: var(--page-ink); font: 14px/1.5 system-ui, sans-serif;
+  padding-block: 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 14px; margin: 0 0 8px; }
+p { margin: 0; color: var(--page-muted); max-width: 70ch; }
+.frame { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg); color: var(--ink); }
+.top { padding: 9px 16px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.banner { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 5px 16px; font-size: 12px; color: var(--ink2); background: var(--raised); border-bottom: 1px solid var(--border); }
+.banner b { color: var(--ink); font-weight: 600; }
+.ctl { margin-left: auto; display: inline-flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.sel { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 12px; }
+.sel:focus-visible, .seg button:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--ink2); background: var(--raised); border: 0; padding: 3px 9px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-checked="true"] { background: var(--sel); color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.body { padding: 14px 16px; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
+.list { display: inline-grid; margin-top: 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); color: var(--ink); font-size: 12px; overflow: hidden; width: 150px; }
+.list span { padding: 3px 10px; }
+.list .on { background: var(--sel); font-weight: 600; }
+.note { border-left: 3px solid var(--warn); padding: 6px 10px; color: var(--page-ink); background: var(--sel); border-radius: 0 6px 6px 0; max-width: 70ch; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 4px 14px 4px 0; vertical-align: top; }
+th { color: var(--page-muted); font-weight: 600; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Refresh every (#138)</h1>
+    <p>One new "Refresh every" select in the fleet banner, to the left of the Theme controls. It sets how often the console redraws from new data and moves its clock. The pulse and blink beat is unchanged. Fleet page only; the choice is kept per browser.</p>
+  </header>
+
+  <section>
+    <h2>In the fleet banner (default, 2 s)</h2>
+    <div class="frame">
+      <div class="top">Podium</div>
+      <div class="banner">
+        <span><b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.</span>
+        <div class="ctl">
+          <label class="field" for="ui1"><span>Refresh every</span>
+            <select class="sel" id="ui1"><option>2s</option><option>5s</option><option>10s</option><option>20s</option><option>30s</option><option>60s</option></select>
+          </label>
+          <span class="themepick" style="display:inline-flex;align-items:center;gap:8px">
+            <label class="field" for="th1"><span>Theme</span><select class="sel" id="th1"><option>Podium</option></select></label>
+            <span class="seg" role="radiogroup" aria-label="Mode"><button role="radio" aria-checked="false">Light</button><button role="radio" aria-checked="true">Dark</button><button role="radio" aria-checked="false">System</button></span>
+          </span>
+        </div>
+      </div>
+      <div class="body">Cards, KPIs, side panels and elapsed times redraw every 2s.</div>
+    </div>
+  </section>
+
+  <section class="row">
+    <div>
+      <h2>Choices</h2>
+      <div class="list" role="listbox" aria-label="Refresh every">
+        <span class="on">2s</span><span>5s</span><span>10s</span><span>20s</span><span>30s</span><span>60s</span>
+      </div>
+    </div>
+    <div>
+      <h2>At 60s</h2>
+      <div class="frame">
+        <div class="banner">
+          <span><b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.</span>
+          <div class="ctl"><label class="field"><span>Refresh every</span><select class="sel"><option>60s</option></select></label></div>
+        </div>
+        <div class="body">Anything that needs you (a session waiting, a failure, a lost connection) still shows at once.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What redraws when</h2>
+    <table>
+      <tr><th>Change</th><th>Shows</th></tr>
+      <tr><td>New tokens, cost, context, agents, activity</td><td>On the next update</td></tr>
+      <tr><td>Elapsed times and the clock</td><td>On the next update</td></tr>
+      <tr><td>A session starts waiting for you, or fails</td><td>At once</td></tr>
+      <tr><td>The connection to the server drops or returns</td><td>At once</td></tr>
+      <tr><td>Pulse ring and blinks</td><td>Unchanged (shared beat)</td></tr>
+    </table>
+  </section>
+
+  <p class="note">Decided: the label and the choices (2s to 60s) match the Activity feed's own "Refresh every" control.</p>
+</main>
+</body>
+</html>

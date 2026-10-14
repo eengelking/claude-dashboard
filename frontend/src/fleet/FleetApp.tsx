@@ -1,6 +1,6 @@
 // The Podium fleet console: top bar, the orchestrator rail, the wall or one orchestrator's page, and
 // the activity / agent panel. Data comes from useFleet; everything here is presentation state.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./fleet.css";
 import { idleOnBackground } from "./waiting";
 import { filterSessions, defaultAgentDir, sortSessions, splitDetached, type AgentSortKey, type SortKey, type StatusFilter } from "./logic";
@@ -17,6 +17,9 @@ import { Wall } from "./components/Wall";
 import { NoticeClosed, type NoticeItem } from "./components/NoticeStack";
 import { closeNotice, removeSession, setShowBackgroundSessions, useFleet, type UseFleetOptions } from "./useFleet";
 import { useNow } from "./useNow";
+import { useHeldState } from "./useHeldState";
+import { isUrgentChange, readUpdateEvery, writeUpdateEvery } from "./updateInterval";
+import { UpdateEveryPicker } from "./components/UpdateEveryPicker";
 import { useResizable } from "./useResizable";
 import { useTheme } from "./useTheme";
 import { useHotkeys } from "./useHotkeys";
@@ -57,8 +60,15 @@ export interface FleetAppProps {
 }
 
 function LiveFleetApp({ fleetOptions }: { fleetOptions?: UseFleetOptions }) {
-  const state = useFleet(fleetOptions);
-  return <FleetView state={state} />;
+  const live = useFleet(fleetOptions);
+  const [every, setEvery] = useState(readUpdateEvery);
+  // The page below redraws once per chosen interval (#138); a session needing the viewer or a failure shows at once.
+  const state = useHeldState(live, every * 1000, isUrgentChange);
+  const change = useCallback((n: number) => {
+    setEvery(n);
+    writeUpdateEvery(n);
+  }, []);
+  return <FleetView state={state} updateEvery={every} onUpdateEvery={change} />;
 }
 
 export function FleetApp(props: FleetAppProps = {}) {
@@ -69,8 +79,16 @@ export function FleetApp(props: FleetAppProps = {}) {
   return <LiveFleetApp fleetOptions={props.fleetOptions} />;
 }
 
-export function FleetView({ state }: { state: FleetState }) {
-  const now = useNow();
+interface FleetViewProps {
+  state: FleetState;
+  /** Seconds between redraws; the clock moves on the same interval. */
+  updateEvery?: number;
+  onUpdateEvery?: (seconds: number) => void;
+}
+
+// Memoized so the held state, which keeps its identity between updates, stops a parent render from redrawing it.
+export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpdateEvery }: FleetViewProps) {
+  const now = useNow(updateEvery * 1000);
   const theme = useTheme();
   const [sel, setSel] = useState<string | null>(null);
   const [selAgent, setSelAgent] = useState<string | null>(null);
@@ -339,7 +357,10 @@ export function FleetView({ state }: { state: FleetState }) {
             <span>
               <b>Live fleet.</b> Cost is an estimate from token counts and a price table, not a bill.
             </span>
-            <ThemePicker theme={theme} />
+            <div className="bannerctl">
+              <UpdateEveryPicker every={updateEvery} onChange={(n) => onUpdateEvery?.(n)} />
+              <ThemePicker theme={theme} />
+            </div>
           </div>
         )}
         <div className="cols" ref={cols} style={colStyle}>
@@ -439,6 +460,6 @@ export function FleetView({ state }: { state: FleetState }) {
       </div>
     </div>
   );
-}
+});
 
 export default FleetApp;
