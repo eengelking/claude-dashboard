@@ -1,6 +1,7 @@
 // The wire types are defined once, in the server (SPEC 7.4). The UI imports them as types, and a few pure helpers
 // that must agree with the server (`idleOnBackground`) as values.
 export type {
+  ActivityEntry,
   ActivityView,
   AgentView,
   BackgroundTask,
@@ -25,6 +26,7 @@ export type {
   StateBody,
   WallSettingsView,
 } from "../../../server/src/fleet/protocol";
+export type { ActivityEntryView, ActivityReply } from "../../../server/src/fleet/activity";
 
 /** The product name, kept in one place so it can change (SPEC 12.10). */
 export const APP_NAME = "Podium";

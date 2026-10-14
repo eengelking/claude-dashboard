@@ -59,7 +59,7 @@ accepted report (`markTextSent`); the server stores them in `agent_texts` (migra
 `SELECT` on `agents` and the SSE state stay small) and the view carries only `promptChars`/`answerChars`. The
 modal fetches the text when it opens. `Markdown.tsx` builds React elements and never an HTML string, which
 keeps SPEC 7.7's rule that reported strings reach the page only as text nodes, and it needs no dependency. The
-modal is portaled to `<body>` inside its own `.podium` wrapper (for the theme tokens), and blurs `#root`; a
+modal shell is `components/Modal.tsx`, shared with the activity feed's modal (#118); it is portaled to `<body>` inside its own `.podium` wrapper (for the theme tokens), and blurs `#root`; a
 capturing key listener keeps Esc and the shell shortcuts from reaching the page behind it.
 
 **The activity feed** (`server/src/fleet/activity.ts`, issue #118). Observed only: nothing about an agent's
@@ -77,7 +77,11 @@ fields only. In the mod (0.13.0, option `activityFeed`), `transport.ts` keeps th
 list forgets its ring. `tool.call` adds an entry (`activityCall` in `failures.ts`) and a watched `turn.step` reads
 its text chunks as they pass (`activityText`), both through `addActivity`, which does nothing for a loop that is not
 watched. `report.ts` sends `session.activityFeed` always, and a loop's `activity` only when the option is on and
-the ring is not empty, within a 60,000-character budget per report.
+the ring is not empty, within a 60,000-character budget per report. In the UI, `useActivityFeed.ts` runs the
+fetch loop (only while `ActivityFeed.tsx` is mounted, the feed is on and `usePageVisible` says the tab is shown;
+once more and then stop for a finished loop) and keeps a cursor: the first answer's highest `seq` is skipped, so a
+viewer never sees entries from before they looked, and a changed `since` means the lease was started again. The
+section sits in `AgentDetail` and `OrchestratorDetail` (loop `@orchestrator`, which is also `ORCHESTRATOR_ROW`).
 
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:

@@ -4,6 +4,8 @@ import type { SessionView } from "../types";
 import { reporterBelow, SkillChips, ToolChips } from "./AgentDetail";
 import { backgroundOf, BlowBadge, Cost, ContextBar, EffortMeter, GitLine, ModelChip, StatusChip } from "./Chips";
 import { IconBack } from "./Icons";
+import { ActivityFeed } from "./ActivityFeed";
+import { MAIN_LOOP } from "../../../../server/src/fleet/protocol";
 import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
 /** The side panel for the orchestrator's own row. Steps, tools and skills come from the report's main loop block, when the reporter sends one. */
@@ -60,6 +62,7 @@ export function OrchestratorDetail(props: { s: SessionView; now: number; onBack:
         {s.loop && <ToolChips key={s.id} counts={s.loop.toolCounts} calls={s.loop.toolCalls} lastTool={s.loop.lastTool} />}
         {s.loop && <SkillChips skills={s.loop.skills} />}
         <GitLine git={s.git} />
+        <ActivityFeed key={s.id} s={s} loop={MAIN_LOOP} title={`${s.name} · orchestrator`} startedAt={s.startedAt} active={s.status !== "done"} now={now} isMain />
         <div className="note">
           Cost and Tokens are the orchestrator’s own share; the facts bar adds its agents’.
           {s.loop && " Steps, tools and skills are the orchestrator’s own, not its agents’."}

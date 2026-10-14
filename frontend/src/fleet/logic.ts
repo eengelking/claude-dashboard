@@ -1,10 +1,12 @@
 // Pure presentation logic: sorting, filtering, plan progress, agent counts and the agent tree.
+import { MAIN_LOOP } from "../../../server/src/fleet/protocol";
 import type { AgentView, Effort, ModelFamily, Plan, SessionView } from "./types";
 
 export const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
 /** The selection value for the orchestrator's own row. Agent ids never start with "@", so it cannot collide. */
-export const ORCHESTRATOR_ROW = "@orchestrator";
+/** The orchestrator's own row in the agent tree; the same key the server uses for its main loop (MAIN_LOOP). */
+export const ORCHESTRATOR_ROW = MAIN_LOOP;
 
 export type SortKey = "status" | "model" | "blow" | "ctx" | "cost" | "newest";
 export const SORTS: Record<SortKey, string> = {

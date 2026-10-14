@@ -392,6 +392,45 @@ body.modal-open #root { filter: blur(5px); }
 .podium .modal .mb blockquote { margin: 0 0 10px; padding: 2px 12px; border-left: 2px solid var(--axis); color: var(--ink2); }
 .podium .modal .mb a { color: var(--ink); text-underline-offset: 2px; }
 .podium .modal .mb .muted, .podium .modal .mb .mnote { color: var(--muted); }
+
+/* The activity feed (issue #118, mockup/podium-agent-feed.html), in the agent and orchestrator panels and in the
+   modal. Tool calls use the delegating blue for their name; redactions the critical red. */
+.podium .det .lab.feedlab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.podium .feedlab .tools { display: inline-flex; gap: 10px; align-items: center; }
+.podium .expand { font-size: 11.5px; color: var(--ink2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; display: inline-flex; gap: 5px; align-items: center; }
+.podium .expand:hover { background: var(--hover); color: var(--ink); }
+.podium .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.podium .live .sub { color: var(--muted); }
+.podium .live select { font: inherit; font-size: 12px; color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+.podium .feedwrap { position: relative; }
+.podium .feed { list-style: none; margin: 0; padding: 0; height: 292px; overflow-y: auto; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; }
+.podium .feed li { display: grid; grid-template-columns: 42px 16px minmax(0, 1fr); gap: 0 6px; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 12px; line-height: 1.4; }
+.podium .feed li:last-child { border-bottom: 0; }
+.podium .feed li.empty { display: block; color: var(--muted); padding: 14px 12px; }
+.podium .feed .at { font: 400 11px var(--font-mono); color: var(--muted); padding-top: 1px; font-variant-numeric: tabular-nums; }
+.podium .feed .k { color: var(--muted); padding-top: 2px; }
+.podium .feed .tool .k, .podium .feed .tool .name { color: var(--deleg-text); }
+.podium .feed .body { min-width: 0; overflow-wrap: anywhere; }
+.podium .feed .tool .body { font-family: var(--font-mono); font-size: 11.5px; }
+.podium .feed .tool .name { font-weight: 600; }
+.podium .feed .tool .arg { color: var(--ink2); }
+.podium .feed .txt .body { color: var(--ink2); }
+.podium .feed .rd { background: color-mix(in srgb, var(--crit) 18%, transparent); color: var(--crit-text); border-radius: 3px; padding: 0 3px; }
+.podium .feed li.new { animation: feed-arrive 0.5s ease-out; }
+@keyframes feed-arrive { from { background: var(--sel); } to { background: transparent; } }
+.podium .jump { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 11.5px; color: var(--ink); background: var(--raised); border: 1px solid var(--axis); border-radius: 999px; padding: 3px 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); }
+.podium .feedfoot { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.podium .feedoff { border: 1px dashed var(--axis); border-radius: 6px; padding: 12px; color: var(--ink2); font-size: 12.5px; }
+.podium .feedoff b { color: var(--ink); }
+.podium .feedoff code { font: 11.5px var(--font-mono); background: var(--bg); border: 1px solid var(--grid); border-radius: 4px; padding: 1px 5px; }
+.podium .feedoff .ghost { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+.podium .modal.modal-feed { width: min(820px, 100%); height: min(78vh, 760px); }
+.podium .modal .mb.feedmb { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 14px 18px; overflow: hidden; }
+.podium .modal .mb.feedmb .feedwrap { flex: 1; min-height: 0; display: flex; }
+.podium .modal .mb.feedmb .feed { height: auto; flex: 1; }
+.podium .modal .mb.feedmb .feed li { font-size: 13px; grid-template-columns: 48px 16px minmax(0, 1fr); }
+.podium .modal .mb.feedmb .feed .tool .body { font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .podium .feed li.new { animation: none; } }
 .podium .modal .mb .mnote { font-size: 12px; margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--grid); }
 .podium .det .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
 .podium .back { display: inline-flex; gap: 6px; align-items: center; color: var(--ink2); font-size: 12px; padding: 12px 14px 4px; }

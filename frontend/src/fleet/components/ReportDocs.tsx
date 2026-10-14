@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { reporterBelow } from "../logic";
 import type { AgentView, SessionView } from "../types";
 import { Markdown } from "./Markdown";
+import { Modal } from "./Modal";
 
 // The agent panel's Report group: two buttons that open the task prompt and the final answer in a
 // modal, rendered as markdown (issue #97, mockup/podium-prompt-modal.html). The full text is fetched
@@ -117,47 +117,12 @@ export function ReportDocs(props: { s: SessionView; a: AgentView; fetchText?: Fe
 
 function DocModal(props: { kind: Kind; s: SessionView; a: AgentView; load: Load; onClose: () => void }) {
   const { kind, s, a, load } = props;
-  const dialog = useRef<HTMLDivElement>(null);
-  const closeBtn = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
-  const onClose = useRef(props.onClose);
-  onClose.current = props.onClose;
 
   const fullText = load.state === "ready" ? load.texts[kind] : null;
   const excerpt = excerptOf(a, kind);
   const text = fullText ?? excerpt;
   const isExcerpt = fullText === null && load.state !== "loading";
-
-  useEffect(() => {
-    document.body.classList.add("modal-open");
-    closeBtn.current?.focus();
-    // While the modal is open the page behind it gets no keys: Esc closes the modal (and does not leave
-    // wall mode), Tab stays inside, and the shell shortcuts are off.
-    const onKey = (e: KeyboardEvent) => {
-      e.stopImmediatePropagation();
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose.current();
-      } else if (e.key === "Tab") {
-        const f = [...(dialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], [tabindex='0']") ?? [])];
-        const first = f[0];
-        const last = f[f.length - 1];
-        if (!first || !last) return;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    document.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("keydown", onKey, true);
-      document.body.classList.remove("modal-open");
-    };
-  }, []);
 
   const copy = async () => {
     try {
@@ -180,36 +145,22 @@ function DocModal(props: { kind: Kind; s: SessionView; a: AgentView; load: Load;
     }
   }
 
-  return createPortal(
-    <div className="podium podium-modal">
-      <div
-        className="scrim"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) props.onClose();
-        }}
-      >
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="reportTitle" ref={dialog}>
-          <div className="mh">
-            <div className="ttl">
-              <h2 id="reportTitle">{TITLE[kind]}</h2>
-              <div className="sub2">
-                {a.description} · {a.type}
-              </div>
-            </div>
-            <button type="button" className="copy" onClick={copy} disabled={!text}>
-              {copied ? "Copied" : "Copy"}
-            </button>
-            <button type="button" className="x" ref={closeBtn} onClick={props.onClose} aria-label="Close (Esc)">
-              ✕
-            </button>
-          </div>
-          <div className="mb" tabIndex={0}>
-            {load.state === "loading" ? <p className="muted">Loading…</p> : text ? <Markdown source={text} /> : <p className="muted">Not available.</p>}
-            {note && <p className="mnote">{note}</p>}
-          </div>
-        </div>
+  return (
+    <Modal
+      titleId="reportTitle"
+      title={TITLE[kind]}
+      sub={`${a.description} · ${a.type}`}
+      onClose={props.onClose}
+      actions={
+        <button type="button" className="copy" onClick={copy} disabled={!text}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      }
+    >
+      <div className="mb" tabIndex={0}>
+        {load.state === "loading" ? <p className="muted">Loading…</p> : text ? <Markdown source={text} /> : <p className="muted">Not available.</p>}
+        {note && <p className="mnote">{note}</p>}
       </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

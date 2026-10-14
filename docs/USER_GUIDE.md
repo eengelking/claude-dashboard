@@ -234,9 +234,20 @@ dimmed while the agent runs. By default Podium only has the first 400 characters
 To see the whole text, turn on the mod's `fullPrompts` option (podium-reporter 0.10.0 or later); the full text then
 goes to the server, and everyone who can open the console can read it.
 
+The **Activity** section under it shows what the agent is doing: its recent tool calls (the tool and a short
+summary, such as the command or the file) and the text it writes between them, newest at the bottom. It starts
+empty when you open the panel and fills from then on, every 5 seconds by default; **Refresh every** changes that
+(10, 20, 30 or 60 seconds), and your browser remembers the choice. Scroll up to read earlier entries and the list
+stops following; **Jump to latest** brings it back. **Expand** opens the same list in a larger window, which closes
+like the Report one. Nothing is fetched while the panel is closed or the tab is hidden, and Podium keeps only the
+last 20 entries, only while someone is watching: close the panel and it is gone, and opening it again starts empty.
+It needs podium-reporter 0.13.0 or later with the mod's `activityFeed` option on; until then the section says how
+to turn it on. Everyone who can open the console can watch, which is why the option is off by default.
+
 Click the orchestrator's own row, at the top of the tree, to open its detail. It shows the same facts as an agent's
 and, with podium-reporter 0.4.0 or later, its own steps, the tools it used and the skills it loaded. Calls made by
-the agents it launched are counted in those agents' panels, not here.
+the agents it launched are counted in those agents' panels, not here. Its **Activity** section works as an agent's
+does, for the orchestrator's own calls and text.
 
 A session that ended its turn but has a background shell, monitor, agent or workflow still running, or a
 scheduled wake-up, is not waiting on you. Its card says "Waiting for 1 background shell to finish." (or
@@ -390,7 +401,10 @@ More in [GOTCHAS.md](GOTCHAS.md).
 Only to the server URL you set, and only the fields the README lists under "What leaves the session". Text
 is cut to fixed limits, and anything that looks like a secret is replaced with `[redacted]` before it is sent.
 Podium never reads transcripts or files. An agent's whole task prompt and final answer leave the session only
-if you turn on the mod's `fullPrompts` option, which is off by default.
+if you turn on the mod's `fullPrompts` option, which is off by default. What an agent is doing (its recent tool
+calls and the text it writes, each cut to 300 characters) leaves the session only if you turn on the mod's
+`activityFeed` option, also off by default, and even then only while someone has that agent's panel open in the
+console. The model's thinking is never sent.
 
 Your name and your machine leave the session only once you set the mod's `userName` option, which is empty
 by default. Then each report carries that name, the machine's short host name and a random id the mod keeps
