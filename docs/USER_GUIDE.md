@@ -132,7 +132,7 @@ name, the card adds the start of the machine's id. Sessions reported with the ad
 The left list groups the same way. Click a person or group there to show only theirs on the wall; click it
 again, **Show everyone**, or **All orchestrators** to see everyone again. On the right, **Spend today, by
 person** (or by group) shows today's estimated spend as bars, largest first, with a **Table** view that adds a
-total equal to the "Est. cost today" tile. It counts sessions that started today, so someone whose sessions
+total equal to the "Est. cost today" tile. It counts what was spent since midnight on the server, so someone whose sessions
 have all ended still has a row there, but no band on the wall.
 
 A person is shown as initials and a name, never a color: color already means the model and the status.

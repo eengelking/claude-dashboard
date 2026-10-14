@@ -20,6 +20,7 @@ const INNER_PORT = 4317;
 export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS',
   'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS',
+  'TZ',
 ];
 /** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. */
 export const OWN_KEYS = ['PODIUMCTL_MODE', 'PODIUMCTL_PORT', 'PODIUMCTL_BIND', 'PODIUM_TOKEN', 'PODIUM_DB'];
@@ -124,7 +125,8 @@ export function serverEnv(cfg, inContainer) {
   // An empty token is deliberate (auth off): pass it through so a stray PODIUM_TOKEN in the shell or .env cannot win.
   if (cfg.token !== undefined) env.PODIUM_TOKEN = cfg.token;
   // The container's own home is /home/node, so the server needs the host's to show session paths as ~/...
-  if (inContainer) Object.assign(env, { HOST: '0.0.0.0', PORT: String(INNER_PORT), PODIUM_DB: '/data/podium.sqlite', PODIUM_HOST_HOME: os.homedir() });
+  // The container runs in UTC, so without the host's zone "Est. cost today" would restart at UTC midnight (#139).
+  if (inContainer) Object.assign(env, { TZ: cfg.extra.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone, HOST: '0.0.0.0', PORT: String(INNER_PORT), PODIUM_DB: '/data/podium.sqlite', PODIUM_HOST_HOME: os.homedir() });
   else Object.assign(env, { HOST: cfg.bind, PORT: String(cfg.port), PODIUM_DB: cfg.db ?? '' });
   return env;
 }

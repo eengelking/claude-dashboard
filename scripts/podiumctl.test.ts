@@ -96,6 +96,15 @@ describe("podiumctl command construction", () => {
     expect(env).toMatchObject({ HOST: "0.0.0.0", PORT: "4317", PODIUM_DB: "/data/podium.sqlite", STALE_AFTER_MS: "9000" });
   });
 
+  it("gives a containerised server the host's timezone so its day starts at the host's midnight (#139)", () => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(serverEnv(cfg, true).TZ).toBe(zone);
+    expect(containerRunArgs(cfg, Object.keys(serverEnv(cfg, true)))).toContain("TZ");
+    // A TZ set in the config wins, and a standalone server already runs in the host's zone.
+    expect(serverEnv(resolveConfig({ TZ: "Europe/Berlin" }), true).TZ).toBe("Europe/Berlin");
+    expect(serverEnv(cfg, false)).not.toHaveProperty("TZ");
+  });
+
   it("tells a containerised server the host's home, by name only, and leaves standalone alone", () => {
     const env = serverEnv(cfg, true);
     expect(env.PODIUM_HOST_HOME).toBe(os.homedir());

@@ -357,26 +357,45 @@ export class FleetDb {
   }
 
   /**
-   * Σ cost of sessions that started at or after `since`. `cost` says what one session costs (the Admin's prices
-   * repriced from its usage); by default its stored cost_usd.
+   * What each session spent at or after `since`, with its owner and the owner's group. A session that started
+   * after `since` counts whole. One that started before counts the share of its cost that came after the ledger's
+   * last sample before `since` (samples are cumulative), so a session left running over midnight adds only today's
+   * spend, and one with no sample before `since` adds nothing. `cost` says what a session costs in all (the Admin's
+   * prices repriced from its usage); by default its stored cost_usd. That total is scaled by the ledger's share.
    */
+  private spendSince(since: number, cost: CostOf): { owner: string | null; grp: string | null; usd: number }[] {
+    const rows = this.stmt(
+      `SELECT s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json, s.started_at AS started_at,
+         (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.t < :sec AND m.cost_usd IS NOT NULL ORDER BY m.t DESC LIMIT 1) AS base
+       FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
+       WHERE s.started_at >= :since OR s.ended_at IS NULL OR s.ended_at >= :since`,
+    ).all({ since, sec: Math.floor(since / 1000) }) as unknown as (CostRow & {
+      owner: string | null;
+      grp: string | null;
+      started_at: number;
+      base: number | null;
+    })[];
+    return rows.map((r) => {
+      const total = cost(r) ?? 0;
+      if (r.started_at >= since) return { owner: r.owner, grp: r.grp, usd: total };
+      const ledger = r.cost_usd ?? 0;
+      const share = r.base === null || ledger <= 0 ? 0 : Math.max(0, ledger - r.base) / ledger;
+      return { owner: r.owner, grp: r.grp, usd: total * share };
+    });
+  }
+
+  /** Σ spend at or after `since` (see `spendSince`). */
   costSince(since: number, cost: CostOf = storedCost): number {
-    const rows = this.stmt('SELECT cost_usd, usage_json FROM sessions WHERE started_at >= ?').all(since) as unknown as CostRow[];
-    return rows.reduce((n, r) => n + (cost(r) ?? 0), 0);
+    return this.spendSince(since, cost).reduce((n, r) => n + r.usd, 0);
   }
 
   /** `costSince` split by owner, with the group each owner is in (Admin, no owner and no group give null), largest first. */
   costByOwnerSince(since: number, cost: CostOf = storedCost): { owner: string | null; group: string | null; costUsd: number }[] {
-    const rows = this.stmt(
-      `SELECT s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json
-       FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
-       WHERE s.started_at >= ?`,
-    ).all(since) as unknown as (CostRow & { owner: string | null; grp: string | null })[];
     const by = new Map<string, { owner: string | null; group: string | null; costUsd: number }>();
-    for (const r of rows) {
+    for (const r of this.spendSince(since, cost)) {
       const k = `${r.owner ?? ''}\u0000${r.grp ?? ''}`;
       const e = by.get(k) ?? { owner: r.owner, group: r.grp, costUsd: 0 };
-      e.costUsd += cost(r) ?? 0;
+      e.costUsd += r.usd;
       by.set(k, e);
     }
     return [...by.values()].sort((a, b) => b.costUsd - a.costUsd || (a.owner ?? '').localeCompare(b.owner ?? ''));

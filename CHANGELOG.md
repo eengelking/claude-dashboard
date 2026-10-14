@@ -25,6 +25,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Fixed
 
+- "Est. cost today" no longer drops to nearly zero in the evening. The container ran in UTC, so the day rolled over at UTC midnight (5pm Pacific); `podiumctl` now gives it the host's timezone (or a `TZ` set with `podiumctl config set TZ=...`), which takes effect when the container is started again. The tile, the spend panel and the per-person split also now count what was spent since midnight, so a session left running overnight adds only today's part instead of nothing (#139).
 - Admin > Settings content sat flush against the edge of its panel, and opening it moved the whole page about 7 px sideways compared with the other Admin tabs, because its long page brought a scrollbar the others did not have. Settings now has the same padding as the other tabs, and every Admin tab reserves the scrollbar's space. (#117)
 
 ### Documentation

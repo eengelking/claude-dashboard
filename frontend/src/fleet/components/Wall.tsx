@@ -10,6 +10,8 @@ import type { ComponentProps } from "react";
 import { Sparkline } from "./Sparkline";
 import { NoticeStack, type NoticeItem } from "./NoticeStack";
 
+const COST_TODAY_TITLE = "What the fleet has spent since midnight on the server, counting only the part of a session that came after midnight.";
+
 export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
   const k = kpis;
   const lvl2 = k?.sessionsAtLevel2 ?? 0;
@@ -41,7 +43,7 @@ export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
         <div className="kpi-cap">across all plans</div>
       </div>
       <div className="kpi">
-        <div className="k">Est. cost today</div>
+        <div className="k" title={COST_TODAY_TITLE}>Est. cost today</div>
         <div className="v mono">{k ? fmtUsd(k.costToday) : "–"}</div>
         {k && k.unpricedSessions > 0 ? (
           <div className="kpi-cap" title={NO_PRICE_TITLE}>

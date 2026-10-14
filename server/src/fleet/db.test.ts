@@ -104,6 +104,40 @@ describe('openDb', () => {
     f.close();
   });
 
+  describe('spend since a moment (#139)', () => {
+    const MIDNIGHT = 1_000_000; // ms
+    const sample = (f: FleetDb, id: string, tSec: number, cost: number) =>
+      f.upsertSample({ session_id: id, t: tSec, tokens_total: 0, tokens_delta: 0, peak_context: 0, running_agents: 0, cost_usd: cost });
+
+    it('counts only what a session started before the moment spent after it', () => {
+      const f = new FleetDb(openDb(':memory:'));
+      // Started yesterday, $10 at midnight, $14 now: $4 happened today.
+      f.upsertSession(session({ id: 'long', started_at: MIDNIGHT - 3_600_000, cost_usd: 14 }));
+      sample(f, 'long', MIDNIGHT / 1000 - 5, 10);
+      sample(f, 'long', MIDNIGHT / 1000 + 500, 14);
+      // Started today: all of it.
+      f.upsertSession(session({ id: 'new', started_at: MIDNIGHT + 1000, cost_usd: 2 }));
+      // Ended before midnight, nothing spent after it.
+      f.upsertSession(session({ id: 'done', started_at: MIDNIGHT - 7_200_000, ended_at: MIDNIGHT - 60_000, cost_usd: 5 }));
+      sample(f, 'done', MIDNIGHT / 1000 - 70, 5);
+      expect(f.costSince(MIDNIGHT)).toBeCloseTo(6, 9);
+    });
+
+    it('follows repricing in proportion, and the owner split adds up to the total', () => {
+      const f = new FleetDb(openDb(':memory:'));
+      f.upsertSession(session({ id: 'long', owner: 'Dana K.', started_at: MIDNIGHT - 3_600_000, cost_usd: 10 }));
+      sample(f, 'long', MIDNIGHT / 1000 - 5, 5);
+      sample(f, 'long', MIDNIGHT / 1000 + 500, 10);
+      f.upsertSession(session({ id: 'new', owner: null, started_at: MIDNIGHT + 1000, cost_usd: 1 }));
+      const doubled = (r: { cost_usd: number | null }) => (r.cost_usd ?? 0) * 2;
+      // Half of the long session's $10 (priced at $20) happened today, plus the new one's $2.
+      expect(f.costSince(MIDNIGHT, doubled)).toBeCloseTo(12, 9);
+      const by = f.costByOwnerSince(MIDNIGHT, doubled);
+      expect(by.reduce((n, r) => n + r.costUsd, 0)).toBeCloseTo(12, 9);
+      expect(by.find((r) => r.owner === 'Dana K.')?.costUsd).toBeCloseTo(10, 9);
+    });
+  });
+
   it('splits today\'s cost by owner with each owner\'s group, and finds an owner\'s group', () => {
     const f = new FleetDb(openDb(':memory:'));
     const people = new PeopleStore(f.db);
