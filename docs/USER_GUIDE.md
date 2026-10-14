@@ -241,8 +241,22 @@ empty when you open the panel and fills from then on, every 5 seconds by default
 stops following; **Jump to latest** brings it back. **Expand** opens the same list in a larger window, which closes
 like the Report one. Nothing is fetched while the panel is closed or the tab is hidden, and Podium keeps only the
 last 20 entries, only while someone is watching: close the panel and it is gone, and opening it again starts empty.
-It needs podium-reporter 0.13.0 or later with the mod's `activityFeed` option on; until then the section says how
-to turn it on. Everyone who can open the console can watch, which is why the option is off by default.
+It needs podium-reporter 0.13.0 or later with the mod's `activityFeed` option on. Everyone who can open the console
+can watch, which is why the option is off by default.
+
+To turn it on:
+
+1. Update the mod if the section says your session reports an older version (see "Updating the mod" below).
+2. In Claude Code on the machine that runs the sessions, run `/plugin configure podium-reporter@eengelking-marketplace`
+   and set **Send an agent's recent activity** (`activityFeed`) to on. The same setting is in the `/config` menu, or
+   you can set `activityFeed` to `true` under `pluginConfigs` in `~/.claude/settings.json` (the README lists where).
+3. A changed setting reloads the mod, so a session that is already running should pick it up. If the panel still
+   says the option is off, run `/reload-plugins` in that session.
+4. Open the agent's panel. The feed starts empty and fills from that moment, because nothing is sent for an agent
+   nobody is watching.
+
+The option is per machine, like the rest of the mod's options, so each person who wants the feed for their own
+sessions turns it on for themselves.
 
 Click the orchestrator's own row, at the top of the tree, to open its detail. It shows the same facts as an agent's
 and, with podium-reporter 0.4.0 or later, its own steps, the tools it used and the skills it loaded. Calls made by

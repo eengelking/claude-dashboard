@@ -193,7 +193,7 @@ export function ActivityFeed(props: { s: SessionView; loop: string; title: strin
               `The activity feed needs podium-reporter 0.13.0 or later. This session reports ${s.reporterVersion}. ${UPDATE}`
             ) : (
               <>
-                Turn on the <code>activityFeed</code> option (Send an agent’s recent activity) of podium-reporter to see them. Each entry is redacted and cut to 300 characters before it is sent.
+                Turn on the <code>activityFeed</code> option (Send an agent’s recent activity) of podium-reporter to see them: in Claude Code, run <code>/plugin configure podium-reporter@eengelking-marketplace</code>. Each entry is redacted and cut to 300 characters before it is sent.
               </>
             )}
           </div>
