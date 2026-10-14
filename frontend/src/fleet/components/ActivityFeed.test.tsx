@@ -288,4 +288,46 @@ describe("Activity modal", () => {
     await wait(5000);
     expect(fetchActivity).toHaveBeenCalledTimes(2);
   });
+
+  describe("footer (#146)", () => {
+    const footer = (c: HTMLElement) => c.querySelector(".feedfoot.stat")!;
+
+    it("words the update time the same way from the first second, so its width does not change as the clock ticks", async () => {
+      const { container } = show();
+      await flush();
+      const seen: string[] = [];
+      for (const at of [0, 1000, 2000, 3000]) {
+        vi.setSystemTime(at + Date.now() - (Date.now() % 1000));
+        await wait(at === 0 ? 0 : 1000);
+        seen.push(footer(container).children[1]!.textContent!);
+      }
+      expect(seen.some((t) => /just now/i.test(t))).toBe(false);
+      for (const t of seen) expect(t).toMatch(/^Updated \d+s ago$/);
+    });
+
+    it("keeps each text in its own single-line cell, the count one carrying the full text as a tooltip", async () => {
+      const entries = Array.from({ length: 14 }, (_, i) => entry(i + 1));
+      const { container } = show({ fetch: fetcher(reply(entries)) });
+      await flush();
+      const [count, when] = Array.from(footer(container).children) as HTMLElement[];
+      expect(footer(container).children).toHaveLength(2);
+      expect(count!.className).toContain("count");
+      expect(count!.getAttribute("title")).toBe(count!.textContent);
+      expect(when!.className).toContain("when");
+    });
+
+    it("keeps the note under the footer out of the status row", async () => {
+      const { container } = show();
+      await flush();
+      expect(container.querySelectorAll(".feedfoot")).toHaveLength(2);
+      expect(container.querySelectorAll(".feedfoot.stat")).toHaveLength(1);
+    });
+
+    it("gives the modal the same footer", async () => {
+      show();
+      await flush();
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+      expect(screen.getByRole("dialog").querySelector(".feedfoot.stat")!.children).toHaveLength(2);
+    });
+  });
 });

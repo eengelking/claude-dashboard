@@ -156,6 +156,16 @@ function EverySelect(props: { id: string; every: number; onChange: (n: number) =
   );
 }
 
+/** The status row under the feed: each text on one line, the count cut with an ellipsis (its full text is the tooltip). */
+function FeedStatus(props: { count: string; when: string }) {
+  return (
+    <div className="feedfoot stat">
+      <span className="count" title={props.count}>{props.count}</span>
+      <span className="when">{props.when}</span>
+    </div>
+  );
+}
+
 function footer(feed: FeedState, active: boolean, isMain: boolean, now: number): [string, string] {
   const count = feed.seen === 0 ? "Nothing yet" : `Last ${feed.entries.length} of ${feed.seen} since you started watching`;
   let when: string;
@@ -165,7 +175,8 @@ function footer(feed: FeedState, active: boolean, isMain: boolean, now: number):
   else if (feed.fetchedAt === null) when = "Starting";
   else {
     const ago = Math.max(0, Math.round((now - feed.fetchedAt) / 1000));
-    when = ago < 2 ? "Updated just now" : `Updated ${ago}s ago`;
+    // The same wording from the first second: "just now" is wider than "3s ago" and made the footer reflow every tick.
+    when = `Updated ${ago}s ago`;
   }
   return [count, when];
 }
@@ -247,10 +258,7 @@ export function ActivityFeed(props: { s: SessionView; loop: string; title: strin
             {active && <EverySelect id={`every-${props.loop}`} every={every} onChange={pick} />}
           </div>
           <FeedList feed={feed} startedAt={props.startedAt} empty={empty} />
-          <div className="feedfoot">
-            <span>{count}</span>
-            <span>{when}</span>
-          </div>
+          <FeedStatus count={count} when={when} />
           <div className="feedfoot">
             <span>Kept only while someone is watching. Closing this clears it. Secrets are removed before they leave the session.</span>
           </div>
@@ -264,10 +272,7 @@ export function ActivityFeed(props: { s: SessionView; loop: string; title: strin
             ) : (
               <>
                 <FeedList feed={feed} startedAt={props.startedAt} empty={empty} />
-                <div className="feedfoot">
-                  <span>{count}</span>
-                  <span>{when}</span>
-                </div>
+                <FeedStatus count={count} when={when} />
               </>
             )}
           </div>
