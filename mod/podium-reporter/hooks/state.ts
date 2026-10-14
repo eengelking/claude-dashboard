@@ -14,7 +14,7 @@ import {
 } from './failures.ts';
 import { costOf, shortName, windowOf } from './models.ts';
 import { assignOwners, emptyPlan, setTitle, taskCreate, taskUpdate, todoWrite, type PlanState } from './plan.ts';
-import { backgroundSummary, type ActivityEvent, type AgentStatus, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Failure, type FilesReport, type GitInfo, type ModelUsage, type RateLimit } from './protocol.ts';
+import { backgroundSummary, MAIN_LOOP, type ActivityEntry, type ActivityEvent, type AgentStatus, type BackgroundKind, type BackgroundTask, type BackgroundWait, type Effort, type Failure, type FilesReport, type GitInfo, type ModelUsage, type RateLimit } from './protocol.ts';
 
 export const BLOWOUT_DEDUP_MS = 2000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -22,6 +22,8 @@ export const EVENT_QUEUE_MAX = 500;
 /** Nothing changed yet (also what a session that is not in a repository reports). */
 export const NO_FILES: FilesReport = { files: [], total: 0, added: 0, removed: 0, since: 'start' };
 export const PLAN_TOOL = 'mcp__podium-reporter__plan';
+/** Activity entries a watched loop keeps (#118). */
+export const ACTIVITY_KEPT = 20;
 
 export interface Tokens {
   input: number;
@@ -121,6 +123,8 @@ export interface LoopStats {
   candidate: FailureCandidate | null;
   failedCalls: Record<string, number>;
   reads: Record<string, number>;
+  /** The loop's last 20 activity entries (#118), oldest first. Empty unless the loop is watched. */
+  activity: ActivityEntry[];
 }
 
 export interface AgentState extends LoopStats {
@@ -191,6 +195,8 @@ export interface SessionState {
   events: ActivityEvent[];
   evSeq: number;
   dirty: boolean;
+  /** The loops the server last said someone is watching (agent ids, MAIN_LOOP for the main loop); always empty with the activityFeed option off. */
+  watched: string[];
 }
 
 export function emptyLoop(model: string | null = null): LoopStats {
@@ -213,6 +219,7 @@ export function emptyLoop(model: string | null = null): LoopStats {
     candidate: null,
     failedCalls: {},
     reads: {},
+    activity: [],
   };
 }
 
@@ -246,6 +253,7 @@ export function newSession(i: { id: string; cwd: string; startedAt: number; mode
     events: [],
     evSeq: 0,
     dirty: true,
+    watched: [],
   };
 }
 
@@ -808,6 +816,37 @@ export function notification(s: SessionState, type: string, message: string, now
   }
   if (/idle/i.test(type)) return withStatus({ ...s, mainIdle: true });
   return s;
+}
+
+// ---- activity feed (#118) ----------------------------------------------------------------------
+
+/** Whether the server last said someone is watching this loop (no agent id: the main loop). */
+export function isWatched(s: SessionState, agentId: string | null | undefined): boolean {
+  return s.watched.includes(agentId || MAIN_LOOP);
+}
+
+/**
+ * The loops the server's reply says are watched. A loop that drops off the list forgets its entries, so a later
+ * watch starts empty; a loop that is listed starts keeping entries from now.
+ */
+export function setWatched(s: SessionState, ids: readonly string[]): SessionState {
+  const next = [...new Set(ids)].sort();
+  if (next.length === s.watched.length && next.every((id, i) => id === s.watched[i])) return s;
+  const keep = new Set(next);
+  const main = keep.has(MAIN_LOOP) || !s.main.activity.length ? s.main : { ...s.main, activity: [] };
+  let agents = s.agents;
+  for (const [id, a] of Object.entries(s.agents)) {
+    if (!keep.has(id) && a.activity.length) agents = { ...agents, [id]: { ...a, activity: [] } };
+  }
+  return { ...s, watched: next, main, agents };
+}
+
+/** Adds an entry to a watched loop's feed, keeping the last 20. A loop nobody watches keeps nothing. */
+export function addActivity(s: SessionState, agentId: string | null | undefined, entry: ActivityEntry): SessionState {
+  if (!isWatched(s, agentId)) return s;
+  const loop = loopOf(s, agentId);
+  if (!loop) return s;
+  return putLoop(s, agentId, { ...loop, activity: [...loop.activity, entry].slice(-ACTIVITY_KEPT) });
 }
 
 // ---- usage, end ---------------------------------------------------------------------------------

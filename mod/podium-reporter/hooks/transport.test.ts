@@ -43,6 +43,19 @@ describe('transport', () => {
     expect(t.online).toBe(true)
   })
 
+  test('reads which loops someone is watching from the reply, and nothing from a server that does not say (#118)', async () => {
+    const reply = (watch: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, watch }) })
+    const run = async (r: HttpResult) => {
+      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.13.0' })
+      await t.send(build, 0)
+      return t.watch
+    }
+    expect(await run(reply(['a1', '@orchestrator']))).toEqual(['a1', '@orchestrator'])
+    expect(await run(reply(['a1', 7, null]))).toEqual(['a1'])
+    expect(await run(reply('a1'))).toEqual([])
+    expect(await run(ok())).toEqual([])
+  })
+
   test('reads where the server places this reporter, and says what to do about it', async () => {
     const reply = (c: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, liveSessions: 2, serverVersion: '0.3.0', reporterCompat: c }) })
     const run = async (r: HttpResult) => {

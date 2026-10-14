@@ -1,10 +1,10 @@
 // SessionState -> Report (SPEC 6.2). Pure. Every free-text field passes through redaction and is cut
 // to its limit here, so nothing leaves the machine unredacted.
-import { clip, excerpt } from './failures.ts';
+import { clip, excerpt, LIMITS } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { family, windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
-import type { ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, ModelUsage, Report } from './protocol.ts';
+import type { ActivityEntry, ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, ModelUsage, Report } from './protocol.ts';
 import { mergeUsage, resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
 
 export const REPORTER_NAME = 'podium-reporter';
@@ -12,6 +12,8 @@ export const MAX_EVENTS_PER_REPORT = 100;
 export const MAX_AGENTS_PER_REPORT = 200;
 /** Full prompt and answer characters in one report; the server accepts a 512 kB body. The rest goes in later reports. */
 export const MAX_FULL_TEXT_PER_REPORT = 120_000;
+/** Activity-feed characters in one report (#118), as the server takes them: the orchestrator's first, then the agents'. */
+export const MAX_ACTIVITY_PER_REPORT = 60_000;
 
 export interface ReportMeta {
   version: string;
@@ -28,6 +30,8 @@ export interface ReportMeta {
   machine?: MachineInfo | null;
   /** The `fullPrompts` option: send each agent's whole prompt and answer, once. */
   fullText?: boolean;
+  /** The `activityFeed` option: send the feed of each loop the server says is watched (#118). */
+  activity?: boolean;
 }
 
 /** Display name (SPEC 6.6): /podium name, the option, a worktree's branch or folder, the repo folder, the id. */
@@ -82,7 +86,12 @@ function usageRows(rows: ModelUsage[]): ModelUsage[] {
   return rows.slice(0, 40).map((r) => ({ ...r, model: clip(r.model, 120) }));
 }
 
-export function agentReport(a: AgentState, fullText = false): AgentReport {
+/** A loop's feed as it is sent: every entry redacted and cut again here, like every other free-text field. */
+function feed(list: readonly ActivityEntry[]): ActivityEntry[] {
+  return list.map((e) => ({ at: e.at, kind: e.kind, text: clip(e.text, LIMITS.activity) }));
+}
+
+export function agentReport(a: AgentState, fullText = false, activity = false): AgentReport {
   const window = a.window ?? (a.model ? windowOf(a.model) : null);
   return {
     id: clip(a.id, 200),
@@ -107,6 +116,7 @@ export function agentReport(a: AgentState, fullText = false): AgentReport {
     answerExcerpt: a.answerExcerpt ? excerpt(a.answerExcerpt) : null,
     ...(fullText && a.promptText && !a.promptSent ? { promptText: a.promptText } : {}),
     ...(fullText && a.answerText && !a.answerSent ? { answerText: a.answerText } : {}),
+    ...(activity && a.activity.length ? { activity: feed(a.activity) } : {}),
     failure: cleanFailure(a.failure),
   };
 }
@@ -128,6 +138,20 @@ function withinTextBudget(reports: AgentReport[]): AgentReport[] {
   });
 }
 
+/** Leaves out the feeds past the per-report budget, the orchestrator's first, then the agents' in order, as the server would. */
+function withinActivityBudget(r: Report): Report {
+  let left = MAX_ACTIVITY_PER_REPORT;
+  const fits = (list: ActivityEntry[]) => {
+    const n = list.reduce((sum, e) => sum + e.text.length, 0);
+    if (n > left) return false;
+    left -= n;
+    return true;
+  };
+  if (r.session.activity && !fits(r.session.activity)) delete r.session.activity;
+  for (const a of r.agents) if (a.activity && !fits(a.activity)) delete a.activity;
+  return r;
+}
+
 /** A full snapshot of the session plus the events given (at most 100). */
 export function buildReport(s0: SessionState, events: readonly ActivityEvent[], meta: ReportMeta): Report {
   const s = resolveOwners(s0);
@@ -136,7 +160,8 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
   const ctxPercent = s.context.percent ?? pct(ctxTokens, ctxWindow);
   // Most recent agents win if a session ever has more than the server accepts.
   const agents = s.order.map((id) => s.agents[id]).filter((a): a is AgentState => !!a).slice(-MAX_AGENTS_PER_REPORT);
-  return {
+  const activity = meta.activity === true;
+  return withinActivityBudget({
     v: 1,
     sentAt: meta.now,
     reporter: { name: REPORTER_NAME, version: meta.version, engineVersion: meta.engineVersion, hostSurface: meta.hostSurface },
@@ -167,8 +192,10 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       attached: s.attached,
       ...(s.status === 'waiting' && s.background ? { background: s.background } : {}),
       files: { ...s.files, files: s.files.files.map((f) => ({ ...f, path: clip(f.path, 300), from: f.from === null ? null : clip(f.from, 300) })) },
+      activityFeed: activity,
+      ...(activity && s.main.activity.length ? { activity: feed(s.main.activity) } : {}),
     },
-    agents: withinTextBudget(agents.map((a) => agentReport(a, meta.fullText === true))),
+    agents: withinTextBudget(agents.map((a) => agentReport(a, meta.fullText === true, activity))),
     events: events.slice(0, MAX_EVENTS_PER_REPORT).map((e) => ({ ...e, text: clip(e.text, 240) })),
-  };
+  });
 }

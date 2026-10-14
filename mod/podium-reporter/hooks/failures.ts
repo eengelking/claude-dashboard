@@ -10,6 +10,8 @@ export const LIMITS = {
   /** The whole prompt or answer, when the fullPrompts option is on. */
   fullText: 20_000,
   text: 240,
+  /** One activity-feed entry (#118). */
+  activity: 300,
   /** A candidate older than this when its loop fails is not the cause. */
   candidateMaxAgeMs: 60_000,
 } as const;
@@ -77,6 +79,44 @@ export function summarizeCall(tool: string, input: Record<string, unknown>): str
     s = first ? `${tool} ${str(first[1])}` : tool;
   }
   return clip(s.replace(/\s+/g, ' ').trim(), LIMITS.call);
+}
+
+/** How much raw text an activity entry is built from: more than enough for 300 characters after redaction, and a bound on the work. */
+const ACTIVITY_RAW = 4000;
+const FILE_TOOLS = new Set(['Edit', 'Read', 'Write', 'NotebookEdit', 'MultiEdit']);
+const ENGINE_KEYS = new Set(['tool', 'tool_use_id', 'agentId', 'requestMeta']);
+
+/**
+ * One activity-feed entry for a tool call (#118): the tool's name, a space, and a short summary of its arguments.
+ * Bash: the command; file tools: the path; Grep: the pattern and where; Agent: the description; Skill: the skill;
+ * anything else: its first argument. Redacted, whitespace collapsed, cut to 300 characters.
+ */
+export function activityCall(tool: string, input: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? '' : JSON.stringify(v) ?? '');
+  let arg: string;
+  if (tool === 'Bash') arg = str(input.command);
+  else if (FILE_TOOLS.has(tool)) arg = str(input.file_path ?? input.notebook_path);
+  else if (tool === 'Grep' || tool === 'Glob') arg = `${tool === 'Grep' ? `"${str(input.pattern)}"` : str(input.pattern)}${input.path ? ` in ${str(input.path)}` : ''}`;
+  else if (tool === 'Agent') arg = str(input.description);
+  else if (tool === 'Skill') arg = str(input.skill);
+  else {
+    const first = Object.entries(input).find(([k]) => !ENGINE_KEYS.has(k));
+    arg = first ? str(first[1]) : '';
+  }
+  return clip(flatten(`${tool} ${arg}`), LIMITS.activity);
+}
+
+/**
+ * Whitespace collapsed first, then cut to ACTIVITY_RAW, so redaction always sees whole what the entry can show: a
+ * secret is never cut into a stub that no longer matches, even after a long run of whitespace before it.
+ */
+function flatten(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, ACTIVITY_RAW);
+}
+
+/** One activity-feed entry for the text a model request wrote: whitespace collapsed, redacted, cut to 300 characters. Empty for text that is only whitespace. */
+export function activityText(text: string): string {
+  return clip(flatten(text), LIMITS.activity);
 }
 
 export interface FailureCandidate {

@@ -208,6 +208,16 @@ Once a parent agent finishes, the engine's list drops the finished agents it lau
 every agent it has seen, and the server never deletes an agent a later report leaves out, so the console keeps
 them. A hot reload after that point rebuilds only what the list still has.
 
+### A `turn.step` hook that reads the stream loses the step's result
+
+`turn.step` is a streaming hook. `yield* next(e)` passes the chunks on and evaluates to the step's result, but
+`for await (const chunk of next(e))` throws the result away: a generator's return value is not a value of the
+loop. The activity feed (#118) has to see the text chunks, so for a watched loop the reporter keeps the stream,
+reads it with `for await`, yields each chunk on as it came, and then takes the result from `await stream.result`.
+Forget that last step and every watched step reports no usage, no stop reason and no blowout. The same applies to
+a test that drives `$.turn.step` by hand: read it with `next()` until `done`, as `stepOnce` in `register.test.ts`
+does. Only a watched loop takes this path; every other step still uses `yield* next(e)`.
+
 ### A mod fix did not reach anyone
 
 Installed copies only update when `version` in `mod/podium-reporter/.claude-plugin/plugin.json` changes.

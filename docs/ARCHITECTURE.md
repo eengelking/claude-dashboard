@@ -72,7 +72,12 @@ a live lease; `Fleet.ingest` hands each validated report to the store, which mer
 skipping any stamped (through the session's clock skew) before the lease began and any it already has. The sweeper
 expires leases every second, and a session leaving the live set or being deleted drops its leases. No table, no
 migration, nothing in the state or the stream; `ingest.ts` never sees the entries, because it copies named
-fields only.
+fields only. In the mod (0.13.0, option `activityFeed`), `transport.ts` keeps the reply's `watch` list and
+`flushOnce` hands it to `setWatched` in `state.ts` (an empty list when the option is off); a loop dropping off the
+list forgets its ring. `tool.call` adds an entry (`activityCall` in `failures.ts`) and a watched `turn.step` reads
+its text chunks as they pass (`activityText`), both through `addActivity`, which does nothing for a loop that is not
+watched. `report.ts` sends `session.activityFeed` always, and a loop's `activity` only when the option is on and
+the ring is not empty, within a 60,000-character budget per report.
 
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:

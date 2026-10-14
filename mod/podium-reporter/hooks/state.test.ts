@@ -1,11 +1,12 @@
 import { describe, test, expect } from 'claude-code/testing'
 import { agentReport, buildReport } from './report.ts'
 import { scriptedReport, scriptedState, T0 } from './scripted.ts'
-import { agentRequested, agentSpawned, blowout, compaction, describeBackground, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, setExplanation, step, toolResult, turnComplete } from './state.ts'
+import { MAIN_LOOP } from './protocol.ts'
+import { ACTIVITY_KEPT, addActivity, agentRequested, agentSpawned, isWatched, setWatched, blowout, compaction, describeBackground, markTextSent, newSession, reconcile, resetForNewId, sessionEnd, setAttached, setBackground, setExplanation, step, toolResult, turnComplete } from './state.ts'
 
 // The key sets of docs/fixtures/report.sample.json, so a built Report has the shared fixture's shape.
 const REPORT_KEYS = ['agents', 'events', 'reporter', 'sentAt', 'session', 'v']
-const SESSION_KEYS = ['attached', 'blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'usageByModel', 'waitNote', 'waitReason']
+const SESSION_KEYS = ['activityFeed', 'attached', 'blowouts', 'context', 'costUsd', 'cwd', 'effort', 'endReason', 'files', 'git', 'id', 'loop', 'model', 'name', 'plan', 'projectRoot', 'rateLimits', 'repoName', 'resumeId', 'startedAt', 'status', 'tokens', 'usageByModel', 'waitNote', 'waitReason']
 const AGENT_KEYS = ['answerExcerpt', 'blowouts', 'context', 'costUsdEst', 'description', 'effort', 'effortSource', 'endedAt', 'failure', 'id', 'kind', 'lastTool', 'model', 'name', 'parentId', 'promptExcerpt', 'skills', 'startedAt', 'status', 'steps', 'tokens', 'toolCalls', 'toolCounts', 'type', 'usageByModel']
 const FAILURE_KEYS = ['at', 'call', 'class', 'evidence', 'exitCode', 'explanation', 'outputTail', 'retriedAs', 'tool']
 const STEP_KEYS = ['activeText', 'id', 'ownerAgentId', 'ownerLabel', 'state', 'text']
@@ -500,5 +501,65 @@ describe('usage per model and prompt-size tier (#117)', () => {
   test('a step with no usage adds no row', () => {
     const s = step(base(), { model: 'claude-sonnet-5-5', usage: null, stopReason: null }, T0 + 1)
     expect(usage(buildReport(s, [], reportMeta).session)).toEqual([])
+  })
+})
+
+describe('activity feed (#118)', () => {
+  const base = () => agentSpawned(newSession({ id: 's', cwd: '/x', startedAt: T0 }), { toolUseId: 't1', agentId: 'a1', model: 'claude-sonnet-5-5', subagentType: 'Explore', description: 'Map', prompt: 'p', fork: false }, T0)
+  const entry = (i: number) => ({ at: T0 + i, kind: 'tool' as const, text: `Read f${i}` })
+
+  test('nothing is kept for a loop that is not watched', () => {
+    const s = addActivity(base(), 'a1', entry(1))
+    expect(s.agents.a1!.activity).toEqual([])
+    expect(s.main.activity).toEqual([])
+    expect(isWatched(s, 'a1')).toBe(false)
+  })
+
+  test('a watched loop keeps its last 20 entries, oldest first', () => {
+    let s = setWatched(base(), ['a1'])
+    expect(isWatched(s, 'a1')).toBe(true)
+    for (let i = 1; i <= 25; i++) s = addActivity(s, 'a1', entry(i))
+    expect(s.agents.a1!.activity).toHaveLength(ACTIVITY_KEPT)
+    expect(s.agents.a1!.activity[0]!.at).toBe(T0 + 6)
+    expect(s.agents.a1!.activity.at(-1)!.at).toBe(T0 + 25)
+    expect(s.dirty).toBe(true)
+  })
+
+  test('the orchestrator is watched as MAIN_LOOP', () => {
+    let s = setWatched(base(), [MAIN_LOOP])
+    s = addActivity(s, undefined, entry(1))
+    s = addActivity(s, 'a1', entry(2))
+    expect(s.main.activity).toEqual([entry(1)])
+    expect(s.agents.a1!.activity).toEqual([])
+  })
+
+  test('a loop that is no longer watched forgets its entries, and starts empty when watched again', () => {
+    let s = setWatched(base(), ['a1', MAIN_LOOP])
+    s = addActivity(addActivity(s, 'a1', entry(1)), undefined, entry(2))
+    s = setWatched(s, [MAIN_LOOP])
+    expect(s.agents.a1!.activity).toEqual([])
+    expect(s.main.activity).toHaveLength(1)
+    s = setWatched(s, [MAIN_LOOP, 'a1'])
+    expect(s.agents.a1!.activity).toEqual([])
+  })
+
+  test('the same watch list leaves the state as it was', () => {
+    const s = setWatched(base(), ['a1'])
+    expect(setWatched(s, ['a1'])).toBe(s)
+  })
+
+  test('a report carries the feed only with the option on and only for watched loops', () => {
+    let s = setWatched(base(), ['a1'])
+    s = addActivity(s, 'a1', entry(1))
+    const meta = { version: '0.13.0', engineVersion: null, hostSurface: null, now: T0, storedName: null, optionName: null }
+    const off = buildReport(s, [], meta)
+    expect(off.session.activityFeed).toBe(false)
+    expect('activity' in off.agents[0]!).toBe(false)
+    const on = buildReport(s, [], { ...meta, activity: true })
+    expect(on.session.activityFeed).toBe(true)
+    expect(on.agents[0]!.activity).toEqual([entry(1)])
+    expect('activity' in on.session).toBe(false)
+    const unwatched = buildReport(setWatched(s, []), [], { ...meta, activity: true })
+    expect('activity' in unwatched.agents[0]!).toBe(false)
   })
 })

@@ -34,6 +34,9 @@ import {
   markTextSent,
   type SentTexts,
   setIdentity,
+  addActivity,
+  isWatched,
+  setWatched,
   skillLoaded,
   step,
   toolResult,
@@ -45,15 +48,17 @@ import {
 } from './state.ts';
 import { nextCronAt } from './cron.ts';
 import { Transport, type FetchLike } from './transport.ts';
-import { explainPrompt } from './failures.ts';
+import { activityCall, activityText, explainPrompt } from './failures.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { MachineInfo } from './protocol.ts';
 
-export const VERSION = '0.12.0';
+export const VERSION = '0.13.0';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
 const ERRORS_KEPT = 20;
+/** Text read from one watched step before the rest is let through unread: far more than one 300-character entry needs. */
+const STEP_TEXT_MAX = 8000;
 
 type Engine = EngineInterface;
 
@@ -67,6 +72,7 @@ interface Options {
   showStatus: boolean;
   explainFailures: boolean;
   fullPrompts: boolean;
+  activityFeed: boolean;
 }
 
 interface HookStat {
@@ -109,6 +115,7 @@ export function readOptions(o: Record<string, unknown>): Options {
     showStatus: typeof o.showStatus === 'boolean' ? o.showStatus : true,
     explainFailures: o.explainFailures === true,
     fullPrompts: o.fullPrompts === true,
+    activityFeed: o.activityFeed === true,
   };
 }
 
@@ -173,6 +180,7 @@ function metaOf(r: Runtime, now: number) {
     userName: opts.userName || null,
     machine: r.machine,
     fullText: opts.fullPrompts,
+    activity: opts.activityFeed,
   };
 }
 
@@ -250,6 +258,8 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
     toastRefusalOnce($, r);
   } else if (outcome === 'ok') {
     if (opts.fullPrompts) r.state = markTextSent(r.state, sentTexts);
+    // The reply names the loops someone is watching; with the option off nothing is ever watched (#118).
+    r.state = setWatched(r.state, opts.activityFeed ? r.transport.watch : []);
     r.toastedRefusal = null; // accepted again: a later refusal is news again
     toastOnce($, r, true);
   }
@@ -604,9 +614,32 @@ export const register: Register = (on, rawOptions) => {
   }).catch(($, e, next) => next(e));
 
   on('turn.step', async function* ($, e, next) {
-    const res = yield* next(e);
+    // A loop someone is watching, with the activityFeed option on (#118): read the text chunks as they pass and keep
+    // the step's text as one entry. Every chunk is yielded on as it came, the same object, in order. Any other step
+    // takes the plain path. `for await` drops a stream's return value, so the result is `stream.result`.
+    let watching = false;
+    safe('turn.step.watch', (r) => {
+      watching = opts.activityFeed && isWatched(r.state, e.agentId);
+    });
+    let res: Awaited<ReturnType<typeof next>['result']>;
+    let text = '';
+    if (!watching) res = yield* next(e);
+    else {
+      const stream = next(e);
+      for await (const chunk of stream) {
+        if (text.length < STEP_TEXT_MAX) {
+          safe('turn.step.chunk', () => {
+            if (chunk.kind === 'text' && typeof chunk.text === 'string') text += chunk.text;
+          });
+        }
+        yield chunk;
+      }
+      res = await stream.result;
+    }
     safe('turn.step', (r) => {
       r.state = step(r.state, { agentId: e.agentId, model: e.model, effort: e.effort, usage: res?.usage ?? null, stopReason: res?.stopReason ?? null }, nowMs());
+      const said = text ? activityText(text) : '';
+      if (said) r.state = addActivity(r.state, e.agentId, { at: nowMs(), kind: 'text', text: said });
     });
     return res;
   }).catch(async function* ($, e, next) {
@@ -679,6 +712,7 @@ export const register: Register = (on, rawOptions) => {
     const input = e as unknown as Record<string, unknown>;
     safe('tool.call', (r) => {
       r.state = toolStarted(r.state, e.agentId, tool);
+      if (opts.activityFeed && isWatched(r.state, e.agentId)) r.state = addActivity(r.state, e.agentId, { at: nowMs(), kind: 'tool', text: activityCall(tool, input) });
       if (tool === 'Agent' && e.tool_use_id) r.state = agentRequested(r.state, e.tool_use_id, input, nowMs());
       if (tool === 'Skill') r.skillCalls++;
     });

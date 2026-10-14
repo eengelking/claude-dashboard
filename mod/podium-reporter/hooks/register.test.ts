@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, type Engine } from 'claude-code/testing'
-import type { AgentSpawnInput, CommandRunInput, On } from 'claude-code'
-import type { Report } from './protocol.ts'
+import type { AgentSpawnInput, CommandRunInput, On, TurnStepChunk } from 'claude-code'
+import { MAIN_LOOP, type Report } from './protocol.ts'
 
 // The test runner has a console; the hooks sandbox's declarations do not.
 declare const console: { log: (...args: unknown[]) => void }
@@ -21,6 +21,10 @@ interface World {
   surfaces: { value: ('terminal' | 'desktop' | 'vscode' | 'mobile')[]; fail: boolean }
   /** Every command the plugin ran, as its argument vector. */
   ran: string[][]
+  /** The loops the server's reply says someone is watching (#118). */
+  watch: { value: string[] }
+  /** What each model request streams before it ends. */
+  chunks: { value: TurnStepChunk[] }
 }
 
 const GIT: Record<string, string> = {
@@ -42,6 +46,8 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   const clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on, store)
   const ran: string[][] = []
+  const watch: World['watch'] = { value: [] }
+  const chunks: World['chunks'] = { value: [] }
   on('session.id', () => ({ value: sessionId.value }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.root', () => ({ value: CWD }))
@@ -71,7 +77,7 @@ function world(on: On, store: Record<string, unknown> = {}): World {
     if (fetchMode.mode === 'hang') return new Promise(() => {})
     posts.push(body)
     headers.push(e.init?.headers ?? {})
-    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ ok: true, ackedEvents: body.events.length, liveSessions: 3 }) } }
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ ok: true, ackedEvents: body.events.length, liveSessions: 3, watch: watch.value }) } }
   })
   on('session.start', () => ({ cwd: CWD }))
   on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
@@ -89,10 +95,11 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('turn.step', async function* (_$, e) {
     const big = e.agentId === 'a-fail'
+    for (const c of chunks.value) yield c
     return {
       turnId: e.turnId,
       index: e.index,
-      answer: '',
+      answer: chunks.value.map((c) => (c.kind === 'text' ? c.text : '')).join(''),
       toolUses: [],
       stopReason: big ? 'model_context_window_exceeded' : 'end_turn',
       usage: { input_tokens: big ? 990_000 : 2000, output_tokens: 300, cache_read_input_tokens: 40_000, cache_creation_input_tokens: 1000, model: e.model },
@@ -100,7 +107,7 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('classic.PermissionRequest', () => ({}))
   on('classic.Notification', () => ({}))
-  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran }
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran, watch, chunks }
 }
 
 type StepArgs = Parameters<Engine['turn']['step']>[0]
@@ -527,5 +534,97 @@ describe('podium-reporter end to end', () => {
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
     await w.clock.advance(1000)
     expect(w.posts[0]!.session.name).toBe('from-option')
+  })
+
+  describe('activity feed (#118)', () => {
+    /** Starts a session with one subagent (a-sub) and posts once, so the reply's watch list reaches the mod. */
+    async function started($: Engine, on: On, watch: string[]) {
+      const w = world(on)
+      w.watch.value = watch
+      await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+      await $.agent.spawn(spawnInput({ tool_use_id: 'f1' }))
+      await w.clock.advance(1000)
+      return w
+    }
+    /** A tool call made inside an agent's loop: the engine sets agentId, which the typed input does not list. */
+    const inAgent = <const T extends object>(input: T, agentId = 'a-sub'): T => ({ ...input, agentId })
+    const SECRET = 'sk-ant-api03-abcdefghijklmnop'
+    const text = (t: string): TurnStepChunk => ({ kind: 'text', index: 0, text: t })
+    /** Work in the subagent and in the orchestrator: a tool call each and a step that writes text. */
+    async function work($: Engine, w: World) {
+      await $.tool.call(inAgent({ tool: 'Bash', command: `curl -H "x-api-key: ${SECRET}" http://localhost` }))
+      w.chunks.value = [text('Two failures. '), { kind: 'thinking', index: 1, text: 'private thoughts' }, text(`The key ${SECRET} works.`)]
+      await stepOnce($, { turnId: 'ta', index: 0, model: 'claude-sonnet-5-5', messageCount: 2, agentId: 'a-sub' })
+      w.chunks.value = []
+      await $.tool.call({ tool: 'Read', file_path: 'docs/SPEC.md' })
+      await w.clock.advance(1000)
+    }
+    const sent = (w: World) => JSON.stringify(w.posts)
+
+    test('off (default): nothing is captured or sent, even for a loop the server says is watched', async ($, on) => {
+      const w = await started($, on, ['a-sub', MAIN_LOOP])
+      await work($, w)
+      await w.clock.advance(5000)
+      expect(w.posts.every((p) => p.session.activityFeed === false)).toBe(true)
+      expect(w.posts.some((p) => 'activity' in p.session || p.agents.some((a) => 'activity' in a))).toBe(false)
+      expect(sent(w)).not.toContain('Two failures')
+    })
+
+    test('on but nobody watching: nothing is sent', { options: { activityFeed: true } }, async ($, on) => {
+      const w = await started($, on, [])
+      await work($, w)
+      expect(w.posts.at(-1)!.session.activityFeed).toBe(true)
+      expect(w.posts.some((p) => 'activity' in p.session || p.agents.some((a) => 'activity' in a))).toBe(false)
+      expect(sent(w)).not.toContain('Two failures')
+    })
+
+    test('on and watched: the tool calls and text are sent, redacted, and thinking is not', { options: { activityFeed: true } }, async ($, on) => {
+      const w = await started($, on, ['a-sub', MAIN_LOOP])
+      await work($, w)
+      const r = w.posts.at(-1)!
+      const sub = r.agents.find((a) => a.id === 'a-sub')!
+      expect(sub.activity!.map((e) => e.kind)).toEqual(['tool', 'text'])
+      expect(sub.activity![0]!.text).toMatch(/^Bash curl -H "x-api-key: \[redacted\]/)
+      expect(sub.activity![1]!.text).toBe('Two failures. The key [redacted] works.')
+      expect(r.session.activity!.map((e) => e.text)).toEqual(['Read docs/SPEC.md'])
+      expect(sent(w)).not.toContain(SECRET)
+      expect(sent(w)).not.toContain('private thoughts')
+    })
+
+    test('only the watched loop is sent, and a loop that stops being watched is dropped', { options: { activityFeed: true } }, async ($, on) => {
+      const w = await started($, on, ['a-sub'])
+      await work($, w)
+      expect('activity' in w.posts.at(-1)!.session).toBe(false)
+      expect(w.posts.at(-1)!.agents[0]!.activity).toHaveLength(2)
+      w.watch.value = []
+      await w.clock.advance(5000) // the heartbeat's reply takes it off the list
+      await $.tool.call(inAgent({ tool: 'Read', file_path: '/x' }))
+      await w.clock.advance(1000)
+      expect('activity' in w.posts.at(-1)!.agents[0]!).toBe(false)
+    })
+
+    test('a loop keeps only its last 20 entries', { options: { activityFeed: true } }, async ($, on) => {
+      const w = await started($, on, ['a-sub'])
+      for (let i = 0; i < 25; i++) await $.tool.call(inAgent({ tool: 'Read', file_path: `/f${i}` }))
+      await w.clock.advance(1000)
+      const got = w.posts.at(-1)!.agents[0]!.activity!
+      expect(got).toHaveLength(20)
+      expect(got[0]!.text).toBe('Read /f5')
+    })
+
+    test('a watched step passes every chunk on unchanged, in order, and its result', { options: { activityFeed: true } }, async ($, on) => {
+      const w = await started($, on, ['a-sub'])
+      const chunks: TurnStepChunk[] = [text('a'), { kind: 'thinking', index: 1, text: 't' }, { kind: 'tool', index: 2, id: 'tu1', name: 'Read' }, { kind: 'input', index: 2, json: '{"file_path":"/x"}' }, text('b')]
+      w.chunks.value = chunks
+      const seen: TurnStepChunk[] = []
+      const s = $.turn.step({ turnId: 'ta', index: 0, model: 'claude-sonnet-5-5', messageCount: 2, agentId: 'a-sub' })
+      let r = await s.next()
+      while (!r.done) {
+        seen.push(r.value)
+        r = await s.next()
+      }
+      expect(seen).toEqual(chunks)
+      expect(r.value).toMatchObject({ answer: 'ab', stopReason: 'end_turn' })
+    })
   })
 })

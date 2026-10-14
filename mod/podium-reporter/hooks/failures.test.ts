@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'claude-code/testing'
-import { candidateFrom, classify, evidence, excerpt, LIMITS, parseExitCode, redact, summarizeCall, tailLines, type ClassifyInput, type FailureCandidate } from './failures.ts'
+import { activityCall, activityText, candidateFrom, classify, evidence, excerpt, LIMITS, parseExitCode, redact, summarizeCall, tailLines, type ClassifyInput, type FailureCandidate } from './failures.ts'
 
 const NOW = 1_000_000
 const cand = (over: Partial<FailureCandidate> = {}): FailureCandidate => ({ at: NOW - 1000, tool: 'Bash', call: 'npm test', exitCode: 1, outputTail: ['FAIL'], denied: false, denyText: null, ...over })
@@ -90,5 +90,46 @@ describe('redaction and limits', () => {
     expect(ev[0]).toContain('exceeded the context window 2 times')
     expect(ev[1]).toBe('same call failed 3 times: npm test')
     expect(ev.some((l) => l.includes(' ls'))).toBe(false)
+  })
+})
+
+describe('activity entries (#118)', () => {
+  test('a tool call is its name and a short summary of its arguments', () => {
+    expect(activityCall('Bash', { command: 'npm   test\n-- people' })).toBe('Bash npm test -- people')
+    expect(activityCall('Read', { file_path: 'docs/SPEC.md', offset: 560 })).toBe('Read docs/SPEC.md')
+    expect(activityCall('Grep', { pattern: 'promptExcerpt', path: 'server/src/fleet' })).toBe('Grep "promptExcerpt" in server/src/fleet')
+    expect(activityCall('Agent', { description: 'Map call sites', prompt: 'long prompt' })).toBe('Agent Map call sites')
+    expect(activityCall('TaskList', { tool: 'TaskList', tool_use_id: 'x', agentId: 'a' })).toBe('TaskList')
+  })
+
+  test('a secret in a tool argument is redacted', () => {
+    const e = activityCall('Bash', { command: 'curl -H "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123" -d password=hunter2 http://x' })
+    expect(e).not.toContain('abcdefghijklmnopqrstuvwxyz123')
+    expect(e).not.toContain('hunter2')
+    expect(e).toContain('[redacted]')
+  })
+
+  test('a secret in the text is redacted, and the text is cut to 300 characters', () => {
+    const t = activityText(`Using sk-ant-api03-abcdefghijklmnop to call it.\n\n${'word '.repeat(200)}`)
+    expect(t).not.toContain('sk-ant-api03')
+    expect(t.startsWith('Using [redacted] to call it. word')).toBe(true)
+    expect(t).toHaveLength(LIMITS.activity)
+    expect(activityCall('Bash', { command: 'x'.repeat(1000) })).toHaveLength(LIMITS.activity)
+  })
+
+  test('a secret cut in half by the limit is still redacted, never left as a stub', () => {
+    const t = activityText(`${'a'.repeat(290)} ghp_${'Z'.repeat(30)}`)
+    expect(t).not.toContain('ghp_')
+  })
+
+  test('text that is only whitespace is no entry', () => {
+    expect(activityText('  \n\t ')).toBe('')
+  })
+})
+
+describe('activity entries, long input', () => {
+  test('a secret after a long run of whitespace is still whole when it is redacted', () => {
+    expect(activityText(`${' '.repeat(5000)}ghp_${'Z'.repeat(30)} done`)).toBe('[redacted] done')
+    expect(activityCall('Bash', { command: `${'\n'.repeat(5000)}echo ghp_${'Z'.repeat(30)}` })).toBe('Bash echo [redacted]')
   })
 })

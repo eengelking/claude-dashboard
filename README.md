@@ -181,6 +181,7 @@ instead. Everything except `token` also has a row in the `/config` menu.
 | `sessionName` | empty | Display name override |
 | `showStatus` | `true` | Show the status line entry |
 | `fullPrompts` | `false` | Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can open them in a modal. Off by default: only the first 400 characters leave the session. Everyone who can open the console can read them |
+| `activityFeed` | `false` | Send an agent's recent activity: while someone has that agent's panel open in the console, its last 20 tool calls (the tool's name and a short summary of its arguments) and the text it writes between them, each cut to 300 characters with secrets redacted. Nothing is sent for an agent nobody is watching, and the server keeps it in memory only. The orchestrator's own loop works the same way. Everyone who can open the console can watch |
 | `explainFailures` | `false` | Ask a small model (Haiku, low effort) for a two-sentence explanation of each failed agent, from the redacted failure record only. Costs a little; off by default |
 
 ### What leaves the session
@@ -202,6 +203,11 @@ Only to the server URL above, and only this:
   path), its exit code and the last 12 lines of its output;
 - when a session is idle on background work or a scheduled wake-up: each task's type (shell, agent, monitor, workflow, wake-up), a short description of at most 120 characters, its status and when the wake-up fires. A shell's command is never sent;
 - short activity lines ("spawned Explore (Haiku low): Map call sites");
+- whether `activityFeed` is on, and only when you have turned it on and someone is watching an agent's (or
+  the orchestrator's) panel right now: that loop's last 20 tool calls, each the tool's name and a short
+  summary of its arguments (a Bash command, a file path, a search pattern), and the text the model wrote
+  between them, each cut to 300 characters. The model's thinking is never sent. When nobody is watching,
+  nothing of it is read or sent, and the server forgets it soon after the panel closes;
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
   and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two
@@ -211,7 +217,8 @@ Only to the server URL above, and only this:
 Before anything is sent, text is cut to those limits and anything that looks like a secret is replaced
 with `[redacted]`: `sk-ant-...` keys, `ghp_...` tokens, `AKIA...` keys, `Bearer ...` values, and the
 values after `password=`, `token=`, `secret=`, `apikey=` and `api_key=`. Podium never reads transcripts or
-files, and sends a whole prompt or answer only for `fullPrompts`.
+files, sends a whole prompt or answer only for `fullPrompts`, and sends what an agent is doing only for
+`activityFeed`, while someone watches.
 
 ### Sessions without the mod
 

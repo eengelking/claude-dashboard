@@ -8,6 +8,8 @@ export const BACKOFF_MS = [1000, 2000, 5000, 10_000] as const;
 export const EVENTS_PER_REPORT = 100;
 /** How long to wait after the server refuses the token or name: it will not change until the settings do. */
 export const REFUSED_RETRY_MS = 60_000;
+/** More watched loops than a report can carry agents is not a list the mod takes whole. */
+const MAX_WATCHED = 201;
 
 export interface HttpResult {
   status: number;
@@ -56,6 +58,8 @@ export class Transport {
   serverVersion: string | null = null;
   /** What the server reads correctly; null until a reply says (an older server never does). */
   support: ReporterSupport | null = null;
+  /** The loops the last accepted report's reply says someone is watching (#118); empty from a server that predates it. */
+  watch: string[] = [];
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
@@ -123,13 +127,14 @@ export class Transport {
       if (res.ok) {
         let acked = events.length;
         try {
-          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown; reporterSupport?: unknown };
+          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown; reporterSupport?: unknown; watch?: unknown };
           if (typeof body.ackedEvents === 'number') acked = Math.max(0, Math.min(events.length, body.ackedEvents));
           if (typeof body.liveSessions === 'number') this.liveSessions = body.liveSessions;
           this.compat = body.reporterCompat === 'outdated' || body.reporterCompat === 'newer' || body.reporterCompat === 'ok' ? body.reporterCompat : null;
           this.serverVersion = typeof body.serverVersion === 'string' ? body.serverVersion : null;
           const sup = body.reporterSupport as Partial<ReporterSupport> | null | undefined;
           this.support = sup && typeof sup.min === 'string' && typeof sup.max === 'string' ? { min: sup.min, max: sup.max } : null;
+          this.watch = Array.isArray(body.watch) ? body.watch.filter((id): id is string => typeof id === 'string').slice(0, MAX_WATCHED) : [];
         } catch {
           // a 200 without a JSON body still acks what was sent
         }
