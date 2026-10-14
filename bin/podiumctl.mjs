@@ -43,7 +43,7 @@ Commands:
   health              Exit 0 when the server answers, 1 when it does not
   url                 Print the dashboard URL
   token               Print the admin secret (--rotate makes a new one; restart to apply)
-  config              Show the settings; \`config set KEY=VALUE\` and \`config unset KEY\` change them
+  config              Show the settings; \`config set KEY=VALUE [KEY=VALUE ...]\` and \`config unset KEY [KEY ...]\` change them
   enable              Start on boot / login (launchd on macOS, a systemd user unit on Linux)
   disable             Stop starting on boot
   shell               Open a shell in the container (container mode)
@@ -470,19 +470,26 @@ function cmdToken(flags) {
 function cmdConfig(cfg, args, flags) {
   const file = readConfigFile();
   if (args[0] === 'set' || args[0] === 'unset') {
-    const pair = args.slice(1).join(' ');
-    const [k, ...v] = pair.split('=');
-    const key = k.trim();
-    if (RETIRED_KEYS.includes(key)) {
-      if (args[0] === 'set') fail(`${key} is no longer used (the usage dashboard was removed). Use \`podiumctl config unset ${key}\` to clear an old value.`);
-    } else if (!ALL_KEYS.includes(key)) fail(`unknown key "${key}". Keys: ${ALL_KEYS.join(', ')}`);
-    if (args[0] === 'set') {
-      if (!pair.includes('=')) fail('usage: podiumctl config set KEY=VALUE');
-      file[key] = v.join('=');
-      resolveConfig(file); // validate mode/port
-    } else delete file[key];
-    writeConfigFile(file);
-    say(`${args[0] === 'set' ? 'Set' : 'Unset'} ${key}. Run \`podiumctl restart\` to apply.`);
+    const set = args[0] === 'set';
+    const items = args.slice(1);
+    if (!items.length) fail(set ? 'usage: podiumctl config set KEY=VALUE [KEY=VALUE ...]' : 'usage: podiumctl config unset KEY [KEY ...]');
+    // Each argument is one pair (set) or one key (unset). Check all of them before changing anything.
+    const next = { ...file };
+    const keys = [];
+    for (const item of items) {
+      const eq = item.indexOf('=');
+      if (set && eq < 0) fail(`"${item}" is not KEY=VALUE. usage: podiumctl config set KEY=VALUE [KEY=VALUE ...]`);
+      const key = (set ? item.slice(0, eq) : item).trim();
+      if (RETIRED_KEYS.includes(key)) {
+        if (set) fail(`${key} is no longer used (the usage dashboard was removed). Use \`podiumctl config unset ${key}\` to clear an old value.`);
+      } else if (!ALL_KEYS.includes(key)) fail(`unknown key "${key}". Keys: ${ALL_KEYS.join(', ')}`);
+      if (set) next[key] = item.slice(eq + 1);
+      else delete next[key];
+      if (!keys.includes(key)) keys.push(key);
+    }
+    if (set) resolveConfig(next); // validate mode/port
+    writeConfigFile(next);
+    say(`${set ? 'Set' : 'Unset'} ${keys.join(', ')}. Run \`podiumctl restart\` to apply.`);
     return;
   }
   const shown = flags['show-token'] ? { ...file } : maskConfig(file);

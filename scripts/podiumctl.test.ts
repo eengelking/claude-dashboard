@@ -47,6 +47,58 @@ describe("podiumctl config", () => {
   });
 });
 
+describe("podiumctl config set and unset with several arguments (#156)", () => {
+  const read = (home: string) => parseEnvFile(fs.readFileSync(path.join(home, "config.env"), "utf8")) as Record<string, string>;
+  function withHome(body: (home: string) => void) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));
+    try { body(home); } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  }
+
+  it("sets one pair", () => withHome((home) => {
+    expect(ctl(home, "config", "set", "PODIUMCTL_PORT=4410").status).toBe(0);
+    expect(read(home)).toEqual({ PODIUMCTL_PORT: "4410" });
+  }));
+
+  it("sets each pair when given two", () => withHome((home) => {
+    const r = ctl(home, "config", "set", "PODIUM_LOG_FORMAT=json", "PODIUM_LOG_SHIP_URL=http://host:9428");
+    expect(r.status).toBe(0);
+    expect(read(home)).toEqual({ PODIUM_LOG_FORMAT: "json", PODIUM_LOG_SHIP_URL: "http://host:9428" });
+  }));
+
+  it("keeps '=' and spaces inside a quoted value", () => withHome((home) => {
+    expect(ctl(home, "config", "set", "PODIUM_LOG_SHIP_HEADERS=Authorization=Basic a b==").status).toBe(0);
+    expect(read(home)).toEqual({ PODIUM_LOG_SHIP_HEADERS: "Authorization=Basic a b==" });
+  }));
+
+  it("fails on an argument with no '=' and leaves the file unchanged", () => withHome((home) => {
+    expect(ctl(home, "config", "set", "PODIUMCTL_PORT=4410").status).toBe(0);
+    const before = fs.readFileSync(path.join(home, "config.env"), "utf8");
+    const r = ctl(home, "config", "set", "PODIUM_LOG_FORMAT=json", "PODIUM_LOG_SHIP_URL");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/usage/);
+    expect(fs.readFileSync(path.join(home, "config.env"), "utf8")).toBe(before);
+  }));
+
+  it("fails on one unknown key among several and leaves the file unchanged", () => withHome((home) => {
+    const r = ctl(home, "config", "set", "PODIUM_LOG_FORMAT=json", "NOPE=1");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/unknown key "NOPE"/);
+    expect(fs.existsSync(path.join(home, "config.env"))).toBe(false);
+  }));
+
+  it("fails with a usage message when no pair is given", () => withHome((home) => {
+    const r = ctl(home, "config", "set");
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/usage/);
+  }));
+
+  it("unsets several keys", () => withHome((home) => {
+    expect(ctl(home, "config", "set", "PODIUM_LOG_FORMAT=json", "PODIUMCTL_PORT=4410").status).toBe(0);
+    expect(ctl(home, "config", "unset", "PODIUM_LOG_FORMAT", "PODIUMCTL_PORT").status).toBe(0);
+    expect(read(home)).toEqual({});
+  }));
+});
+
 describe("podiumctl with a retired ANTHROPIC_ADMIN_API_KEY left in the config", () => {
   function homeWithOldKey() {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "podiumctl-"));

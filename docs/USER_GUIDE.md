@@ -361,7 +361,7 @@ rotate their own token; only the owner can.
 | `podiumctl restart` | Apply a config change |
 | `podiumctl stop` | Stop it; your data is kept |
 | `podiumctl token` | Print the admin secret (`--rotate` makes a new one and ends every open Admin session after a restart; people's own tokens keep working) |
-| `podiumctl config` | Show the saved settings (`config set KEY=VALUE` changes one) |
+| `podiumctl config` | Show the saved settings (`config set KEY=VALUE ...` changes one or more, `config unset KEY ...` removes them; quote a value that has spaces) |
 | `podiumctl enable` / `disable` | Start on boot or not |
 
 `podiumctl --help` lists the rest.
