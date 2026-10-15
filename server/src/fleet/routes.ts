@@ -6,6 +6,7 @@ import { MAIN_LOOP, validateReport } from './protocol.js';
 import { everyOf, type ActivityReply } from './activity.js';
 import { OwnerConflict } from './ingest.js';
 import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow } from './people.js';
+import type { ReporterStore } from './reporters.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
 
@@ -14,6 +15,8 @@ export interface FleetRouterOptions {
   token?: string | null;
   /** Per-person tokens. Without it only the admin secret works. */
   people?: PeopleStore | null;
+  /** Where every accepted report's sender is recorded, for the Admin's Reporters page (#142). */
+  reporters?: ReporterStore | null;
   /** The server's logger (#140). Never given a report body, a token or typed text. */
   logger?: Logger;
   /** A plain line sink, kept for callers from before the logger: text lines, as `logger` would print them. */
@@ -48,6 +51,9 @@ function identify(opts: FleetRouterOptions, given: unknown): Identity | { refuse
 /** The address a report came from, as the Machines column shows it. */
 const machineOf = (req: Request): string | null => (req.ip ? sourceAddress(req.ip) : null);
 
+/** How the Reporters page names the credential: a person's token by its key id (never the token), or the admin secret. */
+const credentialOf = (id: Identity): string | null => (id.kind === 'person' ? `pdm_${id.person.keyId}` : id.kind === 'admin' ? 'admin secret' : null);
+
 const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
 
 function intParam(v: unknown): number | null | 'bad' {
@@ -78,6 +84,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       reason: id.refused,
       source: machineOf(req),
     });
+    opts.reporters?.rejected(machineOf(req), id.refused, fleet.now());
     res.status(401).json({ ok: false, error: 'missing or wrong X-Podium-Token', path: '$' });
   };
   const identityOf = (res: Response): Identity => res.locals.identity as Identity;
@@ -91,6 +98,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
         status: 400,
         source: machineOf(req),
       });
+      opts.reporters?.rejected(machineOf(req), `${result.error} (${result.path})`, fleet.now());
       res.status(400).json({ ok: false, error: result.error, path: result.path });
       return;
     }
@@ -106,12 +114,28 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
         source: machineOf(req),
         session_id: result.report.session.id,
       });
+      opts.reporters?.rejected(machineOf(req), 'the token does not belong to that name', fleet.now());
       res.status(401).json({ ok: false, error: 'the token does not belong to that name', path: '$.userName' });
       return;
     }
     try {
       const out = fleet.ingest(result.report, ownerOf(id));
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
+      const r = result.report;
+      opts.reporters?.record(
+        {
+          kind: r.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
+          machineId: r.machine?.id ?? null,
+          machineName: r.machine?.name ?? null,
+          source: machineOf(req),
+          owner: ownerOf(id),
+          credential: credentialOf(id),
+          version: r.reporter.version,
+          engineVersion: r.reporter.engineVersion,
+          sessionId: out.sessionId,
+        },
+        fleet.now(),
+      );
       logger.debug('report.accepted', `podium: report for session ${out.sessionId}`, {
         session_id: out.sessionId,
         owner: ownerOf(id),
@@ -155,10 +179,15 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
           status: 400,
           source: machineOf(req),
         });
+        opts.reporters?.rejected(machineOf(req), `${out.error} (${out.path})`, fleet.now());
         res.status(400).json(out);
         return;
       }
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now());
+      opts.reporters?.record(
+        { kind: 'hooks', machineId: null, machineName: null, source: machineOf(req), owner: ownerOf(id), credential: credentialOf(id), version: 'hooks', engineVersion: null, sessionId: out.sessionId },
+        fleet.now(),
+      );
       res.json({ ok: true, sessionId: out.sessionId });
     } catch (err) {
       if (err instanceof OwnerConflict) {

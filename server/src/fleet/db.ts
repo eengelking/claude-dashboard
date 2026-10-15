@@ -127,6 +127,21 @@ ALTER TABLE sessions ADD COLUMN owner TEXT;
     // prices when it reads; NULL for rows and reporters from before it existed (their stored cost stands).
     sql: 'ALTER TABLE sessions ADD COLUMN usage_json TEXT; ALTER TABLE agents ADD COLUMN usage_json TEXT;',
   },
+  {
+    version: 11,
+    // Every reporter the server has heard from (issue #142), kept after its sessions are removed. The key is the
+    // machine id the reporter sends, or its source address when it sends none. reporter_sessions links it to the
+    // sessions it reported, only to count them and to list the recent ones that still exist.
+    sql: `CREATE TABLE reporters (
+  key TEXT PRIMARY KEY, kind TEXT NOT NULL, machine_id TEXT, machine_name TEXT, source_address TEXT,
+  owner TEXT, credential TEXT, reporter_version TEXT NOT NULL, engine_version TEXT,
+  first_seen_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL
+);
+CREATE TABLE reporter_sessions (
+  reporter_key TEXT NOT NULL REFERENCES reporters(key) ON DELETE CASCADE, session_id TEXT NOT NULL,
+  PRIMARY KEY (reporter_key, session_id)
+);`,
+  },
 ];
 
 export interface SessionRow {

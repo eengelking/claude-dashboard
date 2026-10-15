@@ -14,6 +14,7 @@ import { configFromEnv, Fleet } from "./fleet/fleet.js";
 import { createFleetRouter } from "./fleet/routes.js";
 import { createAdminRouter } from "./admin/adminRouter.js";
 import { PeopleStore } from "./fleet/people.js";
+import { ReporterStore } from "./fleet/reporters.js";
 import { startSweeper } from "./fleet/sweeper.js";
 import { REPORTER_SUPPORT } from "./fleet/compat.js";
 import { createServerLogging } from "./logging/setup.js";
@@ -32,13 +33,14 @@ const fleetDb = new FleetDb(openDb(DB_PATH));
 const fleetConfig = configFromEnv(process.env, { home: os.homedir(), dbPath: DB_PATH });
 const fleet = new Fleet(fleetDb, fleetConfig, Date.now, logger);
 const people = new PeopleStore(fleetDb.db);
+const reporters = new ReporterStore(fleetDb.db, Date.now());
 const stopSweeper = startSweeper(fleet, undefined, logger);
 
 const app = express();
 app.disable("x-powered-by");
 app.use(requestLog(logger));
-app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, logger }));
-app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger }));
+app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger }));
+app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger }));
 app.use(createRouter());
 
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");

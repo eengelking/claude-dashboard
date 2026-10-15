@@ -4,6 +4,7 @@ import express from 'express';
 import request from 'supertest';
 import { openDb } from '../fleet/db.js';
 import { PeopleStore } from '../fleet/people.js';
+import { ReporterStore } from '../fleet/reporters.js';
 import { WallSettings } from '../fleet/wallSettings.js';
 import { ModelPriceStore } from '../fleet/modelPrices.js';
 import { FeatureFlags } from '../fleet/featureFlags.js';
@@ -17,6 +18,7 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
   const wall = new WallSettings(db);
   const prices = new ModelPriceStore(db);
   const features = new FeatureFlags(db);
+  const reporters = new ReporterStore(db, 0);
   const clock = { t: 1_000_000 };
   const lines: string[] = [];
   const app = express();
@@ -28,12 +30,13 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
       wall,
       prices,
       features,
+      reporters,
       now: () => clock.t,
       idleMs: over.idleMs,
       log: (l) => lines.push(l),
     }),
   );
-  return { app, people, wall, prices, features, clock, lines };
+  return { app, people, wall, prices, features, reporters, clock, lines };
 }
 
 const H = { 'X-Podium-Admin': '1' };
@@ -49,7 +52,7 @@ async function unlocked(over: Parameters<typeof setup>[0] = {}) {
 describe('unlocking', () => {
   it('refuses every other endpoint until unlocked, and the right secret unlocks with an HttpOnly SameSite=Strict cookie', async () => {
     const { app } = setup();
-    for (const [m, p] of [['get', '/people'], ['post', '/people'], ['get', '/groups'], ['get', '/log'], ['get', '/settings']] as const) {
+    for (const [m, p] of [['get', '/people'], ['post', '/people'], ['get', '/groups'], ['get', '/log'], ['get', '/settings'], ['get', '/reporters'], ['get', '/reporters/x'], ['delete', '/reporters/x']] as const) {
       expect((await request(app)[m](`/api/admin${p}`).set(H)).status).toBe(401);
     }
     const res = await request(app).post('/api/admin/unlock').set(H).send({ secret: SECRET });
@@ -336,5 +339,59 @@ describe('groups and settings', () => {
     expect(res.body.total).toBeGreaterThanOrEqual(60);
     expect(res.body.rows).toHaveLength(50);
     expect(res.body.rows[0].detail).toBe('n59');
+  });
+});
+
+describe('reporters (#142)', () => {
+  const seen = (over: Record<string, unknown> = {}) => ({
+    kind: 'mod' as const,
+    machineId: '9f3a1c7d2e40',
+    machineName: 'studio-m2',
+    source: '192.168.1.24',
+    owner: 'Dana',
+    credential: 'pdm_3f9a1c07b2e4',
+    version: '0.13.0',
+    engineVersion: '2.1.299',
+    sessionId: 's1',
+    ...over,
+  });
+
+  it('lists reporters with the state counts, and takes paging, search, state and sort from the query', async () => {
+    const { agent, reporters } = await unlocked();
+    const now = Date.now();
+    reporters.record(seen(), now);
+    reporters.record(seen({ machineId: 'bbbbbbbbbbbb', machineName: 'ci', owner: 'Sam', source: '10.0.0.9' }), now);
+    const res = await agent.get('/api/admin/reporters').set(H);
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(2);
+    expect(res.body.counts).toMatchObject({ all: 2, reporting: 2 });
+    expect((await agent.get('/api/admin/reporters?q=sam').set(H)).body.rows.map((r: { name: string }) => r.name)).toEqual(['ci']);
+    expect((await agent.get('/api/admin/reporters?sort=name&dir=1').set(H)).body.rows.map((r: { name: string }) => r.name)).toEqual(['ci', 'studio-m2']);
+    expect((await agent.get('/api/admin/reporters?state=silent').set(H)).body.total).toBe(0);
+    expect((await agent.get('/api/admin/reporters?page=2&pageSize=1&sort=name&dir=1').set(H)).body.rows).toHaveLength(1);
+  });
+
+  it('shows one reporter by key, including an address key, and answers 404 for an unknown one', async () => {
+    const { agent, reporters } = await unlocked();
+    reporters.record(seen(), Date.now());
+    reporters.record(seen({ machineId: null, machineName: null, source: '::1' }), Date.now());
+    const d = await agent.get('/api/admin/reporters/9f3a1c7d2e40').set(H);
+    expect(d.status).toBe(200);
+    expect(d.body).toMatchObject({ name: 'studio-m2', credential: 'pdm_3f9a1c07b2e4', source: '192.168.1.24' });
+    expect((await agent.get(`/api/admin/reporters/${encodeURIComponent('addr:::1')}`).set(H)).status).toBe(200);
+    expect((await agent.get('/api/admin/reporters/nope').set(H)).status).toBe(404);
+    expect((await agent.get('/api/admin/reporters/' + 'x'.repeat(200)).set(H)).status).toBe(400);
+  });
+
+  it('removes a reporter, writes it to the admin log, and refuses a write without the Admin header', async () => {
+    const { agent, reporters, people } = await unlocked();
+    reporters.record(seen(), Date.now());
+    expect((await agent.delete('/api/admin/reporters/9f3a1c7d2e40')).status).toBe(403);
+    expect(reporters.list({}, Date.now()).total).toBe(1);
+    expect((await agent.delete('/api/admin/reporters/9f3a1c7d2e40').set(H)).status).toBe(200);
+    expect(reporters.list({}, Date.now()).total).toBe(0);
+    expect((await agent.delete('/api/admin/reporters/9f3a1c7d2e40').set(H)).status).toBe(404);
+    const log = people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'reporter_removed');
+    expect(log?.detail).toContain('studio-m2');
   });
 });

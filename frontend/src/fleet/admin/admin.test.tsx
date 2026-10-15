@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AdminView } from "./AdminView";
+import { REFRESH_MS } from "./ReportersTab";
 
 interface PriceSet {
   input: number;
@@ -35,6 +36,10 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     } as Record<string, { std: PriceSet; long?: PriceSet }>,
     builtin: { "sonnet-5-5": 2, "haiku-5-5": 0.1 } as Record<string, number>,
     priceError: "" as string,
+    reporters: [
+      { key: "9f3a1c7d2e40", state: "reporting", name: "studio-m2", who: "Dana", version: "0.13.0", compat: "ok", firstSeenAt: 1_000, lastSeenAt: 40_000, sessions: 142, live: 3 },
+      { key: "addr:10.4.0.52", state: "silent", name: "Unnamed reporter", who: "Admin", version: "0.9.2", compat: "outdated", firstSeenAt: 1_000, lastSeenAt: 1_000, sessions: 9, live: 0 },
+    ] as { key: string; state: string; name: string; who: string; version: string; compat: string; firstSeenAt: number; lastSeenAt: number; sessions: number; live: number }[],
   };
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   const row = (p: P) => ({ id: p.id, name: p.name, last4: "ab12", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
@@ -69,6 +74,24 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       const p = { id: state.people.length + 1, name, groupId: null, revokedAt: null };
       state.people.push(p);
       return json(201, { ok: true, person: row(p), token: "pdm_aaaaaaaaaaaa_" + "b".repeat(48) });
+    }
+    if (path === "/reporters" && method === "GET") {
+      const st = url.searchParams.get("state") ?? "";
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      const rows = state.reporters.filter((r) => (!st || r.state === st) && (!q || r.name.toLowerCase().includes(q)));
+      const counts = { all: state.reporters.length, reporting: 0, idle: 0, silent: 0, restart: 0 } as Record<string, number>;
+      for (const r of state.reporters) counts[r.state]! += 1;
+      return json(200, { total: rows.length, page: 1, pageSize: 50, rows, counts, serverTime: 100_000 });
+    }
+    if (path.startsWith("/reporters/")) {
+      const key = decodeURIComponent(path.slice("/reporters/".length));
+      const r = state.reporters.find((x) => x.key === key);
+      if (!r) return json(404, { ok: false, error: "unknown reporter" });
+      if (method === "DELETE") {
+        state.reporters = state.reporters.filter((x) => x.key !== key);
+        return json(200, { ok: true });
+      }
+      return json(200, { ...r, kind: "mod", machineId: key.includes(":") ? null : key, source: "192.168.1.24", credential: "pdm_3f9a1c07b2e4", engineVersion: "2.1.299", recent: [{ id: "s1", name: "api-gateway", status: "running", lastSeenAt: 99_000, costUsd: 1.84 }], rejected: [{ t: 50_000, reason: "wrong token" }], serverTime: 100_000 });
     }
     if (path === "/groups") return json(200, { total: 0, page: 1, pageSize: 50, rows: [] });
     if (path === "/log") return json(200, { total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
@@ -243,7 +266,7 @@ describe("tabs", () => {
     render(<AdminView />);
     await unlock();
     const tabs = within(screen.getByRole("tablist", { name: "Admin sections" })).getAllByRole("tab");
-    expect(tabs).toHaveLength(5);
+    expect(tabs).toHaveLength(6);
     tabs[0]!.focus();
     fireEvent.keyDown(tabs[0]!, { key: "ArrowRight" });
     expect(screen.getByRole("tab", { name: /Groups/ })).toHaveAttribute("aria-selected", "true");
@@ -400,5 +423,90 @@ describe("Model prices (#117)", () => {
     fireEvent.change(screen.getByLabelText("Add a model by its id"), { target: { value: "sonnet-5-5" } });
     fireEvent.click(screen.getByRole("button", { name: "Add model" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/already/);
+  });
+});
+
+describe("Reporters tab (#142)", () => {
+  async function openReporters() {
+    const state = fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(screen.getByRole("tab", { name: /Reporters/ }));
+    await screen.findByRole("table");
+    return state;
+  }
+
+  it("lists reporters with a count on the tab, the state strip and the versions, and says what Silent means", async () => {
+    await openReporters();
+    expect(screen.getByRole("tab", { name: /Reporters/ })).toHaveTextContent("2");
+    const rows = within(screen.getByRole("table")).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(rows[1]).toHaveTextContent("studio-m2");
+    expect(rows[1]).toHaveTextContent("1 min ago");
+    expect(rows[1]).toHaveTextContent("142");
+    expect(rows[1]).toHaveTextContent("3 live");
+    expect(rows[2]).toHaveTextContent("no machine id, matched by address 10.4.0.52");
+    expect(rows[2]).toHaveTextContent("0.9.2 outdated");
+    expect(screen.getByText(/does not mean the reporter is turned off/)).toBeInTheDocument();
+    const strip = screen.getByRole("group", { name: "Filter by state" });
+    expect(within(strip).getByRole("button", { name: /Silent/ })).toHaveTextContent("1");
+  });
+
+  it("filters by state through the server, and searches after a pause", async () => {
+    const state = await openReporters();
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
+    await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2));
+    expect(state.calls.some((c) => c.includes("/reporters") && c.includes("state=silent"))).toBe(true);
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /All reporters/ }));
+    fireEvent.change(screen.getByLabelText("Find a reporter"), { target: { value: "studio" } });
+    await waitFor(() => expect(state.calls.some((c) => c.includes("q=studio"))).toBe(true));
+  });
+
+  it("opens a reporter with its details and no secret, and goes back to the list", async () => {
+    const state = await openReporters();
+    fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
+    expect(await screen.findByRole("heading", { name: /studio-m2/ })).toBeInTheDocument();
+    expect(state.calls).toContain("GET /reporters/9f3a1c7d2e40");
+    expect(screen.getByText("pdm_3f9a1c07b2e4")).toBeInTheDocument();
+    expect(screen.getByText("192.168.1.24")).toBeInTheDocument();
+    expect(screen.getByText("api-gateway")).toBeInTheDocument();
+    expect(screen.getByText("wrong token")).toBeInTheDocument();
+    expect(screen.getByText("Supported")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /All reporters/ }));
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+  });
+
+  it("removes a reporter only after a confirmation, then shows the list without it", async () => {
+    const state = await openReporters();
+    fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from list" }));
+    expect(state.calls.some((c) => c.startsWith("DELETE"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove from list" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove reporter" }));
+    await waitFor(() => expect(state.calls).toContain("DELETE /reporters/9f3a1c7d2e40"));
+    await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2));
+    expect(screen.queryByText("studio-m2")).toBeNull();
+  });
+
+  it("asks the server again on its own, so a state that changed shows without a reload", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const state = await openReporters();
+      const first = state.calls.filter((c) => c.startsWith("GET /reporters")).length;
+      state.reporters[0]!.state = "silent";
+      await vi.advanceTimersByTimeAsync(REFRESH_MS + 100);
+      await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row")[1]).toHaveTextContent("Silent"));
+      expect(state.calls.filter((c) => c.startsWith("GET /reporters")).length).toBeGreaterThan(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("locks Admin again when the session has ended", async () => {
+    const state = await openReporters();
+    state.expire = true;
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
+    expect(await screen.findByLabelText("Admin secret")).toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '..
 import { safeEqualStr } from '../fleet/tokens.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
+import type { ReporterStore } from '../fleet/reporters.js';
 import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
 import { createLogger, loggerFromLine, type Fields, type Logger } from '../logging/logger.js';
@@ -22,6 +23,8 @@ export interface AdminRouterOptions {
   prices?: ModelPriceStore;
   /** The server-wide feature flags (#118). Without it the Feature flags group has nothing to change. */
   features?: FeatureFlags;
+  /** Every reporter the server has heard from (#142). Without it the Reporters tab has nothing to list. */
+  reporters?: ReporterStore;
   now?: () => number;
   /** Idle time before a session ends. */
   idleMs?: number;
@@ -67,7 +70,7 @@ function publicPerson(p: PersonRow, groupName: string | null) {
 }
 
 export function createAdminRouter(opts: AdminRouterOptions): Router {
-  const { people, wall, prices, features } = opts;
+  const { people, wall, prices, features, reporters } = opts;
   const now = opts.now ?? Date.now;
   const idleMs = opts.idleMs ?? 10 * 60_000;
   const maxFails = opts.maxFails ?? 5;
@@ -265,6 +268,39 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     const g = people.getGroup(id);
     if (!g || !people.deleteGroup(id)) return void res.status(404).json({ ok: false, error: 'unknown group' });
     audit(req, 'group_deleted', `Deleted the group ${g.name}`, { group_id: id });
+    res.json({ ok: true });
+  });
+
+  // ---- reporters (#142) -----------------------------------------------------------------------
+
+  const reporterKey = (v: string): string | null => (/^[A-Za-z0-9_.:-]{1,150}$/.test(v) ? v : null);
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+
+  router.get('/reporters', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const dir = Number(req.query.dir);
+    res.json({
+      ...reporters.list({ ...paging(req), q: str(req.query.q), state: str(req.query.state), sort: str(req.query.sort), dir: Number.isFinite(dir) && dir !== 0 ? dir : undefined }, now()),
+      serverTime: now(),
+    });
+  });
+
+  router.get('/reporters/:key', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const key = reporterKey(req.params.key);
+    if (key === null) return void res.status(400).json({ ok: false, error: 'bad key' });
+    const d = reporters.get(key, now());
+    if (!d) return void res.status(404).json({ ok: false, error: 'unknown reporter' });
+    res.json({ ...d, serverTime: now() });
+  });
+
+  router.delete('/reporters/:key', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const key = reporterKey(req.params.key);
+    if (key === null) return void res.status(400).json({ ok: false, error: 'bad key' });
+    const d = reporters.get(key, now());
+    if (!d || !reporters.remove(key)) return void res.status(404).json({ ok: false, error: 'unknown reporter' });
+    audit(req, 'reporter_removed', `Removed the reporter ${d.name} from the list`, { reporter: key });
     res.json({ ok: true });
   });
 

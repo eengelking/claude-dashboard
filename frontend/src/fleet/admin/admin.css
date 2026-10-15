@@ -88,3 +88,49 @@
 .adminv .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .adminv .addrow .f { max-width: 260px; }
 .adminv form.addrow { padding: 12px 14px; border-top: 1px solid var(--border); justify-content: flex-start; }
+
+/* Reporters tab (#142, mockup/podium-reporters.html) */
+.adminv .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+.adminv .sbtn { background: var(--surface); padding: 10px 14px; display: grid; gap: 2px; min-width: 0; text-align: left; }
+.adminv .sbtn:hover { background: var(--hover); }
+.adminv .sbtn[aria-pressed="true"] { background: var(--sel); box-shadow: inset 0 -2px 0 var(--ink); }
+.adminv .sbtn .k { display: flex; align-items: center; gap: 7px; color: var(--ink2); font-size: 12px; }
+.adminv .sbtn .v { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+.adminv .ptool.inline { align-items: center; justify-content: flex-start; flex-wrap: nowrap; }
+.adminv .ptool.inline .field { flex: 1 1 auto; min-width: 0; width: auto; }
+.adminv .rdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; display: inline-block; }
+.adminv .rdot.reporting { background: var(--good); }
+.adminv .rdot.idle { background: transparent; border: 2px solid var(--good); }
+.adminv .rdot.silent { background: var(--serious); }
+.adminv .rdot.restart { background: transparent; border: 2px solid var(--muted); }
+.adminv .rstate { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12.5px; font-weight: 400; }
+.adminv .rstate.reporting, .adminv .rstate.idle { color: var(--good-text); }
+.adminv .rstate.silent { color: var(--serious); }
+.adminv .rstate.restart { color: var(--muted); }
+.adminv .thbtn { display: inline-flex; gap: 4px; align-items: center; color: inherit; font-weight: inherit; }
+.adminv .thbtn:hover { color: var(--ink); }
+.adminv .ptab tr.rw { cursor: pointer; }
+.adminv .ptab tr.rw:hover td { background: var(--hover); }
+.adminv .rname { font-weight: 600; display: block; }
+.adminv .sub { display: block; color: var(--muted); font-size: 11.5px; }
+.adminv .compat { display: inline-flex; align-items: center; font-size: 12px; white-space: nowrap; color: var(--ink2); }
+.adminv .compat.outdated, .adminv .compat.newer { color: var(--warn); }
+.adminv .compat.unknown { color: var(--muted); }
+.adminv .rnote { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.adminv .rnote b { color: var(--ink2); font-weight: 600; }
+.adminv .back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12.5px; padding: 12px 14px 0; }
+.adminv .back:hover { color: var(--ink); }
+.adminv .dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 10px 14px 14px; border-bottom: 1px solid var(--border); }
+.adminv .dhead h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.adminv .dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1px; background: var(--border); }
+.adminv .dsec { background: var(--surface); padding: 12px 14px 14px; min-width: 0; }
+.adminv .dsec h3, .adminv .dwide h3 { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--axis); font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--ink); }
+.adminv .dwide { grid-column: 1 / -1; background: var(--surface); padding: 12px 0 0; }
+.adminv .dwide h3 { margin: 0 14px 10px; }
+.adminv .kv { display: grid; gap: 6px; margin: 0; }
+.adminv .kvrow { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr); gap: 12px; }
+.adminv .kv dt { color: var(--muted); }
+.adminv .kv dd { margin: 0; color: var(--ink); word-break: break-word; }
+.adminv .tt { border-bottom: 1px dotted var(--muted); cursor: help; }
+.adminv .rej { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.adminv .rej li { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 7px 14px; border-top: 1px solid var(--grid); }

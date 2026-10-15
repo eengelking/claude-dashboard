@@ -32,6 +32,35 @@ export interface LogRow {
   detail: string;
   source: string;
 }
+export type ReporterState = "reporting" | "idle" | "silent" | "restart";
+export type ReporterSort = "state" | "name" | "who" | "ver" | "last" | "sessions";
+/** Issue #142: one row per machine that has reported, kept after its sessions are deleted. */
+export interface ReporterRow {
+  key: string;
+  state: ReporterState;
+  name: string;
+  who: string;
+  version: string;
+  compat: "ok" | "outdated" | "newer" | "unknown";
+  firstSeenAt: number;
+  lastSeenAt: number;
+  sessions: number;
+  live: number;
+}
+export interface ReporterList extends Paged<ReporterRow> {
+  counts: Record<"all" | ReporterState, number>;
+  serverTime: number;
+}
+export interface ReporterDetail extends ReporterRow {
+  kind: "mod" | "hooks";
+  machineId: string | null;
+  source: string | null;
+  credential: string | null;
+  engineVersion: string | null;
+  recent: { id: string; name: string; status: string; lastSeenAt: number; costUsd: number | null }[];
+  rejected: { t: number; reason: string }[];
+  serverTime: number;
+}
 export interface GroupChoice {
   id: number;
   name: string;

@@ -12,14 +12,16 @@ import { AdminError, makeApi } from "./adminApi";
 import { GroupsTab } from "./GroupsTab";
 import { LogTab } from "./LogTab";
 import { PeopleTab, type Created } from "./PeopleTab";
+import { ReportersTab, type ReporterPaging } from "./ReportersTab";
 import { ReportingTab } from "./ReportingTab";
 import { SettingsTab } from "./SettingsTab";
 
 type Status = "checking" | "locked" | "open" | "disabled";
-type TabId = "people" | "groups" | "reporting" | "settings" | "log";
+type TabId = "people" | "groups" | "reporters" | "reporting" | "settings" | "log";
 const TABS: { id: TabId; name: string }[] = [
   { id: "people", name: "People" },
   { id: "groups", name: "Groups" },
+  { id: "reporters", name: "Reporters" },
   { id: "reporting", name: "Reporting and security" },
   { id: "settings", name: "Settings" },
   { id: "log", name: "Admin log" },
@@ -36,6 +38,7 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   const [paging, setPaging] = useState({
     people: { page: 1, pageSize: 50, q: "" },
     groups: { page: 1, pageSize: 50 },
+    reporters: { page: 1, pageSize: 50, q: "", state: "", sort: "last", dir: -1 } as ReporterPaging,
     log: { page: 1, pageSize: 50 },
   });
 
@@ -73,9 +76,11 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   const setCount = (id: TabId) => (n: number) => setCounts((c) => (c[id] === n ? c : { ...c, [id]: n }));
   const onCountPeople = useMemo(() => setCount("people"), []);
   const onCountGroups = useMemo(() => setCount("groups"), []);
+  const onCountReporters = useMemo(() => setCount("reporters"), []);
   const onCountLog = useMemo(() => setCount("log"), []);
   const onPeoplePaging = useCallback((p: { page?: number; pageSize?: number; q?: string }) => setPaging((s) => ({ ...s, people: { ...s.people, ...p } })), []);
   const onGroupPaging = useCallback((p: { page?: number; pageSize?: number }) => setPaging((s) => ({ ...s, groups: { ...s.groups, ...p } })), []);
+  const onReportersPaging = useCallback((p: Partial<ReporterPaging>) => setPaging((s) => ({ ...s, reporters: { ...s.reporters, ...p } })), []);
   const onLogPaging = useCallback((p: { page?: number; pageSize?: number }) => setPaging((s) => ({ ...s, log: { ...s.log, ...p } })), []);
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
@@ -150,6 +155,7 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
                     <PeopleTab api={api} {...paging.people} onPaging={onPeoplePaging} onCreated={setCreated} onCount={onCountPeople} onLocked={onLocked} />
                   )}
                   {tab === "groups" && <GroupsTab api={api} {...paging.groups} onPaging={onGroupPaging} onCount={onCountGroups} onLocked={onLocked} />}
+                  {tab === "reporters" && <ReportersTab api={api} paging={paging.reporters} onPaging={onReportersPaging} onCount={onCountReporters} onLocked={onLocked} />}
                   {tab === "reporting" && <ReportingTab api={api} onLocked={onLocked} />}
                   {tab === "settings" && <SettingsTab api={api} onLocked={onLocked} />}
                   {tab === "log" && <LogTab api={api} {...paging.log} onPaging={onLogPaging} onCount={onCountLog} onLocked={onLocked} />}

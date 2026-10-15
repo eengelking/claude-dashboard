@@ -83,7 +83,7 @@ function cleanName(raw: string, max: number, what: string): string {
 }
 
 /** Escapes LIKE wildcards so a search for `%` finds a literal percent sign and not everything. */
-function likeTerm(q: string): string {
+export function likeTerm(q: string): string {
   return `%${q.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
