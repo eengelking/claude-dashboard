@@ -847,3 +847,137 @@ body.modal-open #root { filter: blur(5px); }
 .podium .spendp .tv td, .podium .spendp .tv tfoot th { padding: 5px 0; border-bottom: 1px solid var(--grid); }
 .podium .spendp .tv tfoot th, .podium .spendp .tv tfoot td { color: var(--ink); font-weight: 600; border-bottom: 0; }
 .podium .spendp .tv .n { text-align: right; padding-left: 8px; }
+
+/* Responding to a waiting session from Podium (#206, mockup/podium-respond.html). Respond at the right end of the amber
+   band; the Activity modal's answer panel and message box; signing in. Every color is a theme token. */
+.podium { --warn-text: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
+.podium .respond-wrap { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 9px; }
+.podium .respond { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); border-radius: 7px; padding: 6px 11px 6px 9px; cursor: pointer; }
+.podium .respond:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); }
+.podium .respond .n { font: 500 11px var(--font-mono); color: var(--warn-text); }
+.podium .respond:disabled { cursor: not-allowed; color: var(--muted); border-color: var(--border); border-style: dashed; background: none; }
+.podium .respond:disabled .n { color: var(--muted); }
+.podium .respond-wrap .why { font-size: 11.5px; color: var(--ink2); max-width: 22ch; text-align: right; line-height: 1.3; }
+.podium .card-slot.has-respond > .respond-bar { position: absolute; right: 10px; bottom: 1px; height: 52px; display: flex; align-items: center; }
+.podium .card-slot.has-respond .band { padding-right: 132px; }
+.podium .card-slot.has-respond.dimmed .band { padding-right: 230px; }
+.podium .osum .band .respond-wrap { margin-left: auto; }
+
+.podium .tb-sep { align-self: stretch; width: 1px; min-height: 22px; background: var(--axis); }
+.podium .tb-me { display: inline-flex; align-items: center; gap: 8px; }
+.podium .tb-who { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12.5px; }
+.podium .tb-who b { color: var(--ink); font-weight: 600; }
+
+.podium .modal.modal-respond { height: min(88vh, 900px); max-height: min(88vh, 900px); }
+.podium .modal .mb.respondmb { gap: 12px; padding: 14px 18px 0; }
+.podium .modal .mb.respondmb .feedwrap { flex: 1 1 140px; min-height: 96px; }
+.podium .modal .mb.respondmb .feedfoot.stat { margin-top: -6px; }
+.podium .modal .mb.respondmb .mpad { height: 14px; flex: none; }
+.podium .feed .you { background: color-mix(in srgb, var(--sonnet) 7%, transparent); }
+.podium .feed .you .k, .podium .feed .you .who { color: var(--sonnet); }
+.podium .feed .you .who { font-weight: 600; }
+.podium .feed .you .q { color: var(--muted); }
+
+.podium .ask { flex: 0 1 auto; max-height: 64%; min-height: 0; display: flex; flex-direction: column; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--warn) 6%, var(--surface)); overflow: hidden; line-height: 1.45; }
+.podium .ask .ah { flex: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 12.5px; }
+.podium .ask .ah .bi { color: var(--warn-text); display: inline-flex; }
+.podium .ask .ah b { font-weight: 600; }
+.podium .ask .ah .ago { color: var(--muted); font-size: 12px; }
+.podium .ask .ah .also { margin-left: auto; color: var(--muted); font-size: 11.5px; text-align: right; }
+.podium .ask .ab { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 4px; font-size: 13px; }
+.podium .ask .af { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--grid); flex-wrap: wrap; }
+.podium .ask .af .grow { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
+.podium .ask .btn, .podium .compose .btn, .podium .modal.sm .btn { font-size: 12.5px; font-weight: 600; border-radius: 6px; padding: 6px 12px; color: var(--ink); }
+.podium .btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.podium .btn.pri:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--bg)); }
+.podium .btn.bad { color: var(--crit-text); border-color: color-mix(in srgb, var(--crit) 45%, transparent); background: none; }
+.podium .ask .btn:disabled, .podium .compose .btn:disabled, .podium .modal.sm .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.podium .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.podium .tab { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; }
+.podium .tab[aria-selected="true"] { color: var(--ink); background: var(--sel); border-color: var(--axis); font-weight: 600; }
+.podium .tab .box { width: 11px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; display: grid; place-items: center; opacity: 0.7; }
+.podium .tab.done .box { background: var(--good); border-color: var(--good); opacity: 1; }
+.podium .tab.done .box::after { content: ""; width: 5px; height: 3px; border: solid var(--on-good, #fff); border-width: 0 0 1.5px 1.5px; transform: translateY(-1px) rotate(-45deg); }
+.podium .ask .qh { font-size: 14px; font-weight: 600; margin: 0 0 10px; max-width: 70ch; text-wrap: balance; }
+.podium .ask .qhint { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
+.podium .qgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.podium .qgrid.pv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 640px) { .podium .qgrid.pv { grid-template-columns: minmax(0, 1fr); } }
+.podium .opts { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.podium .opt { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.podium .opt:hover { background: var(--hover); }
+.podium .opt:has(input:checked) { background: var(--sel); border-color: var(--axis); }
+.podium .opt > input[type="radio"], .podium .opt > input[type="checkbox"] { margin: 3px 0 0; accent-color: var(--sonnet); }
+.podium .opt .ol { font-weight: 600; font-size: 13px; }
+.podium .opt .od { grid-column: 2; font-size: 12px; color: var(--muted); }
+.podium .opt .rec { font-weight: 500; font-size: 11px; color: var(--good-text); border: 1px solid color-mix(in srgb, var(--good) 45%, transparent); border-radius: 4px; padding: 0 5px; margin-left: 6px; white-space: nowrap; }
+.podium .opt input[type="text"], .podium .opt textarea { grid-column: 2; margin-top: 4px; width: 100%; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--grid); border-radius: 5px; padding: 5px 8px; resize: vertical; }
+.podium .preview { min-width: 0; }
+.podium .preview .pl { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.podium .preview pre { margin: 0; font: 11.5px/1.45 var(--font-mono); background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre; color: var(--ink2); }
+.podium .review { display: grid; gap: 8px; margin: 0; }
+.podium .review div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; }
+.podium .review dt { font-size: 12px; color: var(--muted); }
+.podium .review dd { margin: 0; font-weight: 600; font-size: 13px; }
+.podium .review dd.blank { color: var(--warn-text); font-weight: 500; }
+.podium .planbox { max-height: 230px; overflow: auto; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+.podium .planbox h1, .podium .planbox h2, .podium .planbox h3, .podium .planbox h4 { margin: 8px 0 6px; font-size: 14px; }
+.podium .planbox h5, .podium .planbox h6 { margin: 12px 0 4px; font-size: 12.5px; }
+.podium .planbox ol, .podium .planbox ul { margin: 0 0 6px; padding-left: 20px; }
+.podium .planbox p { margin: 0 0 8px; max-width: 70ch; }
+.podium .planbox code { font: 12px var(--font-mono); background: var(--raised); border: 1px solid var(--grid); border-radius: 4px; padding: 0 4px; }
+.podium .planfile { font: 11.5px var(--font-mono); color: var(--muted); margin: -6px 0 10px; overflow-wrap: anywhere; }
+.podium .cmd { font: 12.5px var(--font-mono); background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 9px 12px; margin: 0 0 6px; overflow-x: auto; white-space: pre; }
+.podium .cmdd { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+.podium .out { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 10px; padding: 2px 0 10px; font-size: 13px; }
+.podium .out .oi { padding-top: 1px; display: inline-flex; }
+.podium .out b { font-weight: 600; }
+.podium .out .od { grid-column: 2; color: var(--ink2); font-size: 12.5px; }
+.podium .out .od q { color: var(--ink); font-weight: 600; quotes: none; }
+.podium .out .od .nt { display: block; margin-top: 6px; color: var(--warn-text); font-weight: 600; }
+.podium .out.ok .oi { color: var(--good-text); }
+.podium .out.info .oi { color: var(--deleg-text); }
+.podium .out.bad .oi { color: var(--crit-text); }
+.podium .out.wait .oi { color: var(--warn-text); }
+.podium .out .acts { grid-column: 2; display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+/* The sending spinner turns on the console's shared beat, a quarter turn at a time, never with an infinite animation. */
+.podium .spin { width: 14px; height: 14px; border: 2px solid var(--axis); border-top-color: var(--warn); border-radius: 50%; }
+.podium[data-beat="1"] .spin { transform: rotate(90deg); }
+.podium[data-beat="2"] .spin { transform: rotate(180deg); }
+.podium[data-beat="3"] .spin { transform: rotate(270deg); }
+
+.podium .compose { flex: none; position: relative; border-top: 1px solid var(--border); margin: 0 -18px; padding: 10px 18px 14px; display: grid; gap: 6px; background: var(--surface); }
+.podium .compose .crow { display: flex; gap: 8px; align-items: flex-end; }
+.podium .compose textarea { flex: 1; min-width: 0; min-height: 38px; max-height: 140px; resize: vertical; font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--axis); border-radius: 7px; padding: 8px 10px; line-height: 1.4; }
+.podium .compose textarea:focus { outline: none; border-color: var(--sonnet); box-shadow: 0 0 0 1px var(--sonnet); }
+.podium .compose .hint { font-size: 11.5px; color: var(--muted); display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.podium .compose .warnline { font-size: 12px; color: var(--warn-text); }
+.podium .compose .err { font-size: 12px; color: var(--crit-text); }
+.podium .typeahead { position: absolute; left: 18px; right: 18px; bottom: calc(100% - 4px); background: var(--raised); border: 1px solid var(--axis); border-radius: 8px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); padding: 4px; display: grid; gap: 2px; z-index: 2; }
+.podium .typeahead button { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; text-align: left; background: none; border: 0; border-radius: 5px; padding: 6px 8px; font-size: 12.5px; color: var(--ink); }
+.podium .typeahead button:hover, .podium .typeahead button.on { background: var(--sel); }
+.podium .typeahead .cn { font-family: var(--font-mono); font-weight: 600; }
+.podium .typeahead .cd { color: var(--muted); }
+.podium .typeahead .tf { font-size: 11.5px; color: var(--muted); padding: 6px 8px 4px; border-top: 1px solid var(--grid); }
+.podium .confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--warn) 8%, var(--surface)); font-size: 12.5px; }
+.podium .confirm .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.podium .offnote { flex: none; margin-bottom: 14px; padding: 12px 14px; border: 1px dashed var(--axis); border-radius: 7px; font-size: 12.5px; color: var(--ink2); display: grid; gap: 4px; }
+.podium .offnote b { color: var(--ink); }
+.podium .offnote code, .podium .signlead code { font: 12px var(--font-mono); background: var(--raised); border: 1px solid var(--grid); border-radius: 4px; padding: 0 4px; }
+
+.podium .signnote { font-size: 12.5px; color: var(--ink2); margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--grid); border-radius: 6px; background: var(--bg); }
+.podium .signlead { font-size: 12.5px; color: var(--ink2); margin: -4px 0 12px; max-width: 70ch; }
+.podium .signin { display: grid; grid-template-columns: 70px minmax(0, 300px); gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+.podium .signin label { font-size: 12.5px; font-weight: 600; }
+.podium .signin input { width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 9px; }
+.podium .signin input.mono { font-family: var(--font-mono); }
+.podium .signin input:disabled { opacity: 0.5; cursor: not-allowed; }
+.podium .signerr { font-size: 12.5px; color: var(--crit-text); margin: 0 0 10px; }
+@media (max-width: 560px) { .podium .signin { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.podium .modal.sm { width: min(440px, 100%); height: auto; }
+.podium .modal.sm .sbody { padding: 14px 18px 4px; }
+.podium .modal.sm .sfoot { display: flex; align-items: center; gap: 8px; padding: 10px 18px 14px; flex-wrap: wrap; }
+.podium .modal.sm .sfoot .grow { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
+.podium .modal.sm .signin { grid-template-columns: 70px minmax(0, 1fr); }

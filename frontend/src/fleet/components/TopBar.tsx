@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Phase } from "../store";
 import { BrandLink } from "./BrandLink";
 import { ConnectionPill } from "./ConnectionPill";
+import { TopBarSignIn } from "./SignIn";
 
 export function TopBar(props: { phase: Phase; reporters: number; outdated?: number; newer?: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters } = props;
@@ -37,6 +38,8 @@ export function TopBar(props: { phase: Phase; reporters: number; outdated?: numb
       <a className="btn" href="#/admin" title="Tokens, groups and the admin log">
         Admin
       </a>
+      {/* Sign in to respond (#206) stays at the far end, after a divider, so nothing before it moves on signing in or out. */}
+      <TopBarSignIn />
     </header>
   );
 }

@@ -34,9 +34,22 @@ import type { WallPeople } from "./components/Wall";
 import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
 import { reportersLive, type FleetState } from "./store";
+import { RespondProvider, useRespond } from "./useRespond";
+import { RespondModal } from "./components/Respond";
+import type { SessionView } from "./types";
 
 
 const ENTER_MS = 1000;
+
+/** The Respond modal (#206), for whichever live session it was opened on; it closes by itself if that session leaves. */
+function RespondHost(props: { sessions: Record<string, SessionView>; now: number; adminFeedOn: boolean }) {
+  const ctx = useRespond();
+  const s = ctx?.openFor ? props.sessions[ctx.openFor] : undefined;
+  useEffect(() => {
+    if (ctx?.openFor && !s) ctx.close();
+  }, [ctx, s]);
+  return s ? <RespondModal s={s} now={props.now} adminFeedOn={props.adminFeedOn} /> : null;
+}
 
 /** Marks ids that appeared after the first render, for one second, so they play the enter animation. */
 function useEntering(ids: readonly string[], ready: boolean): (id: string) => boolean {
@@ -318,7 +331,9 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
     else if (e.key === "Escape" && panes.wall) stopWall();
   });
 
+  const respondFlags = state.features.respond === true && state.features["activity-feed"] !== false;
   return (
+    <RespondProvider flagsOn={respondFlags}>
     <div ref={root} className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}${visible ? "" : " paused"}`}>
       {panes.collapsed.top && (
         <div className="wall-ctl" data-wall-control>
@@ -456,7 +471,9 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
           {!panes.collapsed.right && <ResizeHandle panel="side" r={resize} container={container} label="Resize activity panel" />}
         </div>
       </div>
+      <RespondHost sessions={state.sessions} now={now} adminFeedOn={state.features["activity-feed"] !== false} />
     </div>
+    </RespondProvider>
   );
 });
 

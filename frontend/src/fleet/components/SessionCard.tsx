@@ -1,4 +1,7 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
+import { useRespond } from "../useRespond";
+import { respondGate } from "../respond";
+import { RespondButton } from "./Respond";
 import { COST_HINT_SESSION, currentStep, dropAtOf, inferredStep, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
@@ -58,6 +61,9 @@ export function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now:
 
 export function SessionCard(props: { s: SessionView; now: number; config: LifecycleConfig; entering: boolean; leaving: boolean; onOpen: () => void; onRemove?: () => void; owner?: CardOwner }) {
   const { s, now, config } = props;
+  const respond = useRespond();
+  // Respond (#206) sits at the right end of the band. The card is one big button, so it is laid over the band from the slot.
+  const gate = respond ? respondGate(s, respond.me, respond.flagsOn) : ({ show: "none" } as const);
   const p = planProgress(s.plan);
   const c = sessionCounts(s);
   const byId = new Map(s.agents.map((a) => [a.id, a]));
@@ -76,7 +82,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const hasNotes = detached || hooks || vNote !== null;
   // The card is one big button, so Remove sits beside it in a slot rather than inside it.
   return (
-    <div className={`card-slot${s.status === "stale" && props.onRemove ? " has-remove" : ""}`}>
+    <div className={`card-slot${s.status === "stale" && props.onRemove ? " has-remove" : ""}${gate.show !== "none" ? ` has-respond${gate.show === "dimmed" ? " dimmed" : ""}` : ""}`}>
     <button type="button" className={cls} onClick={props.onOpen} disabled={props.leaving} data-session={s.id}>
       {/* Four layers, always in this order (#144): who, what it is doing, cost and health, then the status band. */}
       <div className="z1">
@@ -180,6 +186,11 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
         {bandLine(s, kind, sinceSeen, now, config)}
       </div>
     </button>
+    {gate.show !== "none" && (
+      <div className="respond-bar">
+        <RespondButton s={s} />
+      </div>
+    )}
     {s.status === "stale" && props.onRemove && (
       <div className="remove-bar">
       <button type="button" className="btn remove" onClick={props.onRemove} disabled={props.leaving} aria-label={`Remove ${s.name} from the fleet`}>

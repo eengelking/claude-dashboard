@@ -7,7 +7,9 @@ import { createPortal } from "react-dom";
 // inside, and the caller returns focus to whatever opened it. While it is open the page behind gets no keys, so
 // Esc does not leave wall mode and the shell shortcuts are off.
 
-const FOCUSABLE = "button:not([disabled]), a[href], select:not([disabled]), [tabindex='0']";
+const FOCUSABLE = "button:not([disabled]), a[href], select:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex='0']";
+/** Fields inside the dialog keep their own keys (Enter to send, arrows in a list); the shell's shortcuts already skip fields. */
+const FIELD = "input, textarea, select";
 
 export function Modal(props: {
   titleId: string;
@@ -15,6 +17,8 @@ export function Modal(props: {
   sub?: ReactNode;
   /** Controls in the header, before the X. */
   actions?: ReactNode;
+  /** Esc goes here first; returning true means it was used (a confirmation closed), and the modal stays open. */
+  onEscape?: () => boolean;
   onClose: () => void;
   className?: string;
   children: ReactNode;
@@ -23,14 +27,20 @@ export function Modal(props: {
   const closeBtn = useRef<HTMLButtonElement>(null);
   const onClose = useRef(props.onClose);
   onClose.current = props.onClose;
+  const onEscape = useRef(props.onEscape);
+  onEscape.current = props.onEscape;
 
   useEffect(() => {
     document.body.classList.add("modal-open");
     closeBtn.current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      const inField = e.target instanceof Element && dialog.current?.contains(e.target) && e.target.closest(FIELD) !== null;
+      // A field that offers a choice with Tab (the message box's command list) says so with data-keeps-tab.
+      if (inField && e.key !== "Escape" && (e.key !== "Tab" || (e.target as Element).hasAttribute("data-keeps-tab"))) return;
       e.stopImmediatePropagation();
       if (e.key === "Escape") {
         e.preventDefault();
+        if (onEscape.current?.()) return;
         onClose.current();
       } else if (e.key === "Tab") {
         const f = [...(dialog.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];

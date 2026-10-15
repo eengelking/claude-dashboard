@@ -25,6 +25,20 @@ export type {
   SessionView,
   StateBody,
   WallSettingsView,
+  Ask,
+  AskDetail,
+  AskKind,
+  AskQuestion,
+  AskState,
+  AskSummary,
+  Delivery,
+  DeliveryKind,
+  DeliveryView,
+  PlanMode,
+  QuestionAnswer,
+  RespondInfo,
+  RespondKind,
+  RespondMe,
 } from "../../../server/src/fleet/protocol";
 export type { ActivityEntryView, ActivityReply } from "../../../server/src/fleet/activity";
 

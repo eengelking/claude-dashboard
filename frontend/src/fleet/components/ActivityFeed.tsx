@@ -3,6 +3,7 @@ import { reporterBelow } from "../logic";
 import type { ActivityEntryView, SessionView } from "../types";
 import { EVERY_CHOICES, readEvery, useActivityFeed, writeEvery, type FeedState, type FetchActivity } from "../useActivityFeed";
 import { Modal } from "./Modal";
+import { useRespond } from "../useRespond";
 
 // The Activity section of the agent and orchestrator panels (#118, mockup/podium-agent-feed.html): the loop's recent
 // tool calls and the text it writes, newest at the bottom, fetched on the viewer's interval while the panel is open.
@@ -80,9 +81,18 @@ function Redacted(props: { text: string }) {
   );
 }
 
+/** Who sent an answer or message from Podium, as the feed names them: "You" for the signed-in person (#206). */
+function senderOf(by: string | undefined, me: string | null): string {
+  const key = (n: string) => n.trim().toLowerCase();
+  if (!by) return "Someone";
+  return me && key(by) === key(me) ? "You" : by;
+}
+
 function Entry(props: { e: ActivityEntryView; startedAt: number; fresh: boolean }) {
   const { e } = props;
   const k = KIND[e.kind];
+  const respond = useRespond();
+  const me = respond?.me?.signedIn ? respond.me.name : null;
   const space = e.text.indexOf(" ");
   const name = e.kind === "tool" ? (space < 0 ? e.text : e.text.slice(0, space)) : "";
   const arg = e.kind === "tool" && space >= 0 ? e.text.slice(space + 1) : "";
@@ -99,6 +109,11 @@ function Entry(props: { e: ActivityEntryView; startedAt: number; fresh: boolean 
           <>
             <span className="name">{name}</span> <span className="arg"><Redacted text={arg} /></span>
           </>
+        ) : e.kind === "podium" ? (
+          <>
+            <span className="who">{senderOf(e.by, me)}, from Podium:</span> {e.text}
+            {e.note && <span className="q"> {e.note}</span>}
+          </>
         ) : (
           <Redacted text={e.text} />
         )}
@@ -108,7 +123,7 @@ function Entry(props: { e: ActivityEntryView; startedAt: number; fresh: boolean 
 }
 
 /** The list with its follow-the-latest behaviour: it stays at the bottom until the viewer scrolls up, and a pill brings it back. */
-function FeedList(props: { feed: FeedState; startedAt: number; empty: string }) {
+export function FeedList(props: { feed: FeedState; startedAt: number; empty: string }) {
   const list = useRef<HTMLOListElement>(null);
   const [following, setFollowing] = useState(true);
   const lastSeq = useRef(0);
@@ -146,7 +161,7 @@ function FeedList(props: { feed: FeedState; startedAt: number; empty: string }) 
   );
 }
 
-function EverySelect(props: { id: string; every: number; onChange: (n: number) => void }) {
+export function EverySelect(props: { id: string; every: number; onChange: (n: number) => void }) {
   return (
     <span className="live">
       <label htmlFor={props.id} className="sub">
@@ -164,7 +179,7 @@ function EverySelect(props: { id: string; every: number; onChange: (n: number) =
 }
 
 /** The status row under the feed: each text on one line, the count cut with an ellipsis (its full text is the tooltip). */
-function FeedStatus(props: { count: string; when: string }) {
+export function FeedStatus(props: { count: string; when: string }) {
   return (
     <div className="feedfoot stat">
       <span className="count" title={props.count}>{props.count}</span>
@@ -173,7 +188,7 @@ function FeedStatus(props: { count: string; when: string }) {
   );
 }
 
-function footer(feed: FeedState, active: boolean, isMain: boolean, now: number): [string, string] {
+export function footer(feed: FeedState, active: boolean, isMain: boolean, now: number): [string, string] {
   const count = feed.seen === 0 ? "Nothing yet" : `Last ${feed.entries.length} of ${feed.seen} since you started watching`;
   let when: string;
   if (!feed.live) when = "No more updates";
@@ -201,6 +216,7 @@ export function ActivityFeed(props: { s: SessionView; loop: string; title: strin
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
   const feed = useActivityFeed({ sessionId: s.id, loop: props.loop, enabled, active, every, adminOn: props.adminOn, fetchActivity: props.fetchActivity });
+  const respond = useRespond();
 
   const pick = useCallback((n: number) => {
     setEvery(n);
@@ -257,7 +273,14 @@ export function ActivityFeed(props: { s: SessionView; loop: string; title: strin
           <div className="lab feedlab">
             <span className="tools">
               <span>Activity</span>
-              <button type="button" className="expand" ref={opener} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+              <button
+                type="button"
+                className="expand"
+                ref={opener}
+                aria-haspopup="dialog"
+                // The orchestrator's Expand opens the Respond modal (#206): the same feed, with the answer panel and the message box.
+                onClick={() => (props.isMain && respond ? respond.open(s.id, opener.current) : setOpen(true))}
+              >
                 {ICON_EXPAND}
                 Expand
               </button>

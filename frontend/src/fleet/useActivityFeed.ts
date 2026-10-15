@@ -67,6 +67,8 @@ export function useActivityFeed(opts: {
    * asks again at once, so the panel follows a flip without waiting out the interval.
    */
   adminOn?: boolean;
+  /** Changed by the caller to ask again at once: after sending from Podium, so its entry shows without waiting (#206). */
+  nudge?: number;
   fetchActivity?: FetchActivity;
 }): FeedState {
   const { sessionId, loop, enabled, active, every } = opts;
@@ -107,8 +109,13 @@ export function useActivityFeed(opts: {
         }
         const fresh = r.entries.filter((e) => e.seq > c.seq);
         cursor.current = { since: r.since, seq: Math.max(c.seq, top) };
+        // An entry sent from Podium can change after it arrives (its note) or go (discarded, or never taken): follow
+        // the server for those still in its window.
+        const bySeq = new Map(r.entries.map((e) => [e.seq, e]));
+        const low = r.entries.length ? r.entries[0]!.seq : Infinity;
+        const synced = (list: ActivityEntryView[]) => list.filter((e) => e.kind !== "podium" || e.seq < low || bySeq.has(e.seq)).map((e) => (e.kind === "podium" ? (bySeq.get(e.seq) ?? e) : e));
         setState((st) => ({
-          entries: fresh.length ? [...st.entries, ...fresh].slice(-FEED_KEPT) : st.entries,
+          entries: [...synced(st.entries), ...fresh].slice(-FEED_KEPT),
           seen: st.seen + fresh.length,
           fetchedAt: Date.now(),
           failed: false,
@@ -125,7 +132,7 @@ export function useActivityFeed(opts: {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [sessionId, loop, enabled, visible, active, every, adminOn]);
+  }, [sessionId, loop, enabled, visible, active, every, adminOn, opts.nudge]);
 
   return state;
 }

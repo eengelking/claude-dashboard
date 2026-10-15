@@ -5,6 +5,9 @@ import type { AgentView, LifecycleConfig, SessionView } from "../types";
 import { backgroundDetail, backgroundTitle } from "../waiting";
 import { cardKind, StateIcon, type StateKind } from "./Chips";
 import { bandLine, waitSummary } from "./SessionCard";
+import { RespondButton } from "./Respond";
+import { respondGate } from "../respond";
+import { useRespond } from "../useRespond";
 
 /** The card's states plus delegating, which SPEC 8.1 (#98) shows on this page and not on the cards. */
 export function pageKind(s: SessionView, delegates: readonly AgentView[]): StateKind {
@@ -33,6 +36,8 @@ export function StatusBand({
   onRemove?: (id: string) => void;
 }) {
   const hot = kind === "waiting" || kind === "stale";
+  const respond = useRespond();
+  const canRespond = !!respond && respondGate(s, respond.me, respond.flagsOn).show !== "none";
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
   let lead: ReactNode;
   let detail: string | null = null;
@@ -53,7 +58,8 @@ export function StatusBand({
     lead = bandLine(s, kind, sinceSeen, now, config);
     if (kind === "waiting") {
       const w = waitSummary(s);
-      detail = w.detail ? `Answer in its terminal. ${w.detail}` : "Answer in its terminal.";
+      // With Respond on the band, the terminal is no longer the only place to answer.
+      detail = canRespond ? w.detail : w.detail ? `Answer in its terminal. ${w.detail}` : "Answer in its terminal.";
     } else if (kind === "bg" && s.background) {
       detail = backgroundDetail(s.background);
       title = backgroundTitle(s.background);
@@ -73,6 +79,7 @@ export function StatusBand({
           </span>
         )}
       </span>
+      {canRespond && <RespondButton s={s} />}
       {remove && (
         <button type="button" className="btn rm" onClick={() => remove(s.id)}>
           Remove now
