@@ -85,7 +85,7 @@ when nobody is looking.
 
 ### The wall
 
-The default view (`#/`) is a card per session. At the top are six tiles: sessions live, agents running,
+The default view (`#/`) is a card per session. At the top are six tiles: sessions live, subagents running,
 context blowouts, plan steps done, estimated cost today and tokens in the last minute. Below them you can:
 
 - filter by status (All, Running, Waiting, Stale, Blowouts),
@@ -189,7 +189,7 @@ accept part of the name, but `stop` and `rm` need the id. These are Claude Code'
 ### One session
 
 Click a card or a rail item. You get the session's goal and working directory, three charts for the last
-minute (tokens per second, the largest context fill in any loop with blowout markers, and agents running),
+minute (tokens per second, the largest context fill in any loop with blowout markers, and subagents running),
 and a bar of facts: agents (the orchestrator counts as one; a red "N failed" button opens the first
 failure), estimated cost for the whole session, tokens, running time, and agent time (the orchestrator's time
 plus every agent's, which is longer than running time when agents run at once), and the reporter: the

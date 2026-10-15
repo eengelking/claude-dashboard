@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
-import { MiniChart } from "./components/MiniCharts";
+import { MiniChart, MiniCharts } from "./components/MiniCharts";
 import { PlanPanel } from "./components/PlanPanel";
 import { ContextBar } from "./components/Chips";
 import { fleetReducer } from "./store";
@@ -277,6 +277,15 @@ describe("orchestrator page", () => {
   });
 });
 
+describe("MiniCharts (#169)", () => {
+  it("titles the running-agents chart Subagents running", () => {
+    const { container } = render(<MiniCharts s={makeSession()} now={Date.now()} />);
+    const labels = [...container.querySelectorAll(".ht .hl")].map((e) => e.textContent);
+    expect(labels).toContain("Subagents running");
+    expect(labels).not.toContain("Agents running");
+  });
+});
+
 describe("MiniChart", () => {
   const values = Array.from({ length: 60 }, (_, i) => i / 100);
   it("draws 60 points, markers per blowout, the caption and the limit line", () => {
@@ -288,7 +297,7 @@ describe("MiniChart", () => {
     expect(screen.getByRole("img")).toHaveAccessibleName(/Peak context, any loop, last 60 seconds: now 59%/);
   });
   it("shows a crosshair and the value under the pointer, then the live value again", () => {
-    const { container } = render(<MiniChart label="Agents running" values={values.map((_, i) => i)} max={59} format={(v) => String(v)} endTime={new Date(2026, 0, 1, 10, 0, 59).getTime()} />);
+    const { container } = render(<MiniChart label="Subagents running" values={values.map((_, i) => i)} max={59} format={(v) => String(v)} endTime={new Date(2026, 0, 1, 10, 0, 59).getTime()} />);
     const svg = container.querySelector("svg")!;
     svg.getBoundingClientRect = () => ({ left: 0, width: 118, top: 0, height: 46, right: 118, bottom: 46, x: 0, y: 0, toJSON: () => ({}) });
     fireEvent.mouseMove(svg, { clientX: 20 });

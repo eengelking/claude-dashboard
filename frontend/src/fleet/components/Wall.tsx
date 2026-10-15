@@ -24,12 +24,12 @@ export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
         <div className="kpi-cap">{splitText(split)}</div>
       </div>
       <div className="kpi">
-        <div className="k">Agents running</div>
+        <div className="k">Subagents running</div>
         <div className="v mono">
           <span>{k?.agentsRunning ?? "–"}</span>
           <small>of {k?.agentsTotal ?? 0} this run</small>
         </div>
-        <div className="kpi-cap">subagents and forks</div>
+        <div className="kpi-cap">forks included</div>
       </div>
       <div className="kpi">
         <div className="k">Context blowouts</div>

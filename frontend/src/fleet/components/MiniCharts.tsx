@@ -83,7 +83,7 @@ export function MiniCharts({ s, now }: { s: SessionView; now: number }) {
         limit
         endTime={end}
       />
-      <MiniChart label="Agents running" values={s.series.running} max={Math.max(3, ...s.series.running)} format={(v) => String(v)} endTime={end} />
+      <MiniChart label="Subagents running" values={s.series.running} max={Math.max(3, ...s.series.running)} format={(v) => String(v)} endTime={end} />
     </div>
   );
 }
