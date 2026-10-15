@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Podium Respond</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mockup for answering a waiting session from Podium (rethink of #21). Uses Podium's own tokens (fleet.css), the
+     card's status band, and the Activity modal from #118, so nothing here is a new visual language.
+     A Respond button sits at the right end of the amber band on the card and on the orchestrator page. It opens the
+     Activity modal, which gains an answer panel above the feed's footer and a message box at the bottom.
+     Everything that reaches Claude Code goes through podium-reporter; nothing here types into a terminal. -->
+<style>
+/* Layout: one reading column of numbered mockup sections; the modal floats over a blurred page. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70;
+  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --warn-text: color-mix(in srgb, #fab219 60%, #f0efec);
+  --deleg: #2fa4e0; --deleg-text: #5cbcf0; --serious: #ec835a; --crit: #d03b3b; --crit-text: #ee6a6a;
+  --scrim: rgba(8,8,8,0.55); --shadow: 0 24px 60px rgba(0,0,0,.55); --term: #101010; --term-ink: #e6e5df;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --opus: #6250d6; --sonnet: #2a78d6; --good-text: #006300; --warn-text: #8a5d00; --deleg: #0a7fb8; --deleg-text: #07608c; --crit-text: #b52a2a;
+    --scrim: rgba(249,249,247,0.55); --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --opus: #6250d6; --sonnet: #2a78d6; --good-text: #006300; --warn-text: #8a5d00; --deleg: #0a7fb8; --deleg-text: #07608c; --crit-text: #b52a2a;
+  --scrim: rgba(249,249,247,0.55); --shadow: 0 24px 60px rgba(11,11,11,.22); color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--ink); font: 13.5px/1.45 var(--font-ui); padding-block: 20px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: 18px; margin: 0 0 4px; text-wrap: balance; }
+h2.s { font-size: 14px; margin: 40px 0 4px; text-wrap: balance; }
+p.note { color: var(--muted); font-size: 12.5px; margin: 4px 0 12px; max-width: 74ch; }
+p.note b { color: var(--ink2); font-weight: 600; }
+code { font: 12px var(--font-mono); background: var(--raised); border: 1px solid var(--grid); border-radius: 4px; padding: 0 4px; }
+
+/* the mockup controls */
+.controls { display: grid; gap: 10px; margin-top: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.controls .row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.controls .rl { width: 92px; flex: none; font-size: 12px; color: var(--muted); }
+.seg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink2); padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
+.seg:has(input:checked) { color: var(--ink); background: var(--sel); border-color: var(--axis); }
+.seg input { margin: 0; accent-color: var(--sonnet); }
+.chipbtn { font-size: 12px; color: var(--ink2); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; }
+.chipbtn:hover { background: var(--hover); color: var(--ink); }
+@media (max-width: 560px) { .controls .rl { width: 100%; } }
+
+/* page behind the modal */
+#app { transition: filter .15s ease; }
+body.modal-open #app { filter: blur(5px); }
+body.modal-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { #app { transition: none; } }
+
+/* status band: the card's last row and the orchestrator page's summary row (fleet.css .band) */
+.band { --c: var(--warn); --c-text: var(--warn-text); display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 8px 10px 8px 12px; font-size: 13px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.band .bi { flex: none; display: inline-flex; color: var(--c-text); }
+.band .bl { font-weight: 600; min-width: 0; flex: 1; }
+.band .bs { display: block; font-weight: 400; font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.respond { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); border-radius: 7px; padding: 6px 11px 6px 9px; }
+.respond:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); }
+.respond .n { font: 500 11px var(--font-mono); color: var(--warn-text); }
+.respond:disabled { cursor: not-allowed; color: var(--muted); border-color: var(--border); border-style: dashed; background: none; }
+.respond:disabled .n { color: var(--muted); }
+.band .why { font-size: 11.5px; color: var(--ink2); max-width: 22ch; text-align: right; line-height: 1.3; }
+
+/* the fleet card */
+.pair { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.card .z1 { padding: 12px 12px 10px; display: grid; gap: 3px; }
+.card .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14.5px; }
+.card .nm .w { color: var(--warn-text); display: inline-flex; }
+.card .model { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; font-size: 11.5px; font-weight: 500; padding: 2px 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--ink2); }
+.card .model i { width: 7px; height: 7px; border-radius: 2px; background: var(--opus); }
+.card .path, .card .br { font: 11.5px var(--font-mono); color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.card .br .clean { margin-left: auto; color: var(--ink2); }
+.card .z2 { padding: 10px 12px; border-top: 1px solid var(--grid); font-size: 12.5px; color: var(--ink2); display: grid; gap: 8px; }
+.card .z2 .ag { font: 12px var(--font-mono); display: flex; gap: 8px; align-items: center; }
+.card .z2 .ag i { width: 9px; height: 9px; border-radius: 2px; background: var(--haiku); opacity: .5; }
+.card .z3 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--grid); }
+.card .z3 .c { padding: 8px 10px; }
+.card .z3 .c + .c { border-left: 1px solid var(--grid); }
+.card .z3 .k { font-size: 11px; color: var(--muted); }
+.card .z3 .v { font-size: 13px; font-weight: 600; font-family: var(--font-mono); }
+.card .z3 .bar { height: 3px; margin-top: 4px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.card .z3 .bar i { display: block; height: 100%; width: 12%; background: var(--sonnet); }
+.aside-note { font-size: 12.5px; color: var(--ink2); display: grid; gap: 10px; }
+.aside-note h3 { margin: 0; font-size: 12.5px; }
+.aside-note ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+/* orchestrator page summary */
+.sum { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.sum .hd { padding: 14px 16px 10px; display: grid; gap: 4px; }
+.sum .hd h3 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.sum .hd .pl { font-size: 13px; color: var(--ink2); }
+.sum .hd .pl b { color: var(--ink); }
+.sum .hd .meta { font: 11.5px var(--font-mono); color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.sum .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--grid); }
+.sum .facts div { padding: 8px 14px; font-size: 11px; color: var(--muted); }
+.sum .facts div + div { border-left: 1px solid var(--grid); }
+.sum .facts b { display: block; font: 600 13px var(--font-mono); color: var(--ink); }
+@media (max-width: 560px) { .sum .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sum .facts div:nth-child(3) { border-left: 0; } }
+
+/* modal (fleet.css .modal, widened for the answer panel) */
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); z-index: 10; }
+.scrim[hidden] { display: none; }
+.modal { width: min(820px, 100%); height: min(88vh, 900px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--axis); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+.mh { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--border); }
+.mh .ttl { flex: 1; min-width: 0; }
+.mh h2 { margin: 0; font-size: 14px; }
+.mh .sub2 { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh .live { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.mh select { font-size: 12px; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+.mh .x { width: 30px; height: 30px; display: grid; place-items: center; font-size: 16px; line-height: 1; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; }
+.mh .x:hover { background: var(--hover); color: var(--ink); }
+.mbody { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 14px 18px 0; gap: 12px; }
+
+/* the activity feed (fleet.css .feed) */
+.feed { flex: 1 1 140px; min-height: 96px; list-style: none; margin: 0; padding: 0; overflow-y: auto; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; }
+.feed li { display: grid; grid-template-columns: 42px 16px minmax(0, 1fr); gap: 0 6px; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-size: 12px; line-height: 1.4; }
+.feed li:last-child { border-bottom: 0; }
+.feed .at { font: 400 11px var(--font-mono); color: var(--muted); padding-top: 1px; }
+.feed .k { color: var(--muted); padding-top: 2px; }
+.feed .tool .k, .feed .tool .name { color: var(--deleg-text); }
+.feed .tool .name { font-weight: 600; }
+.feed .wait .k, .feed .wait .body b { color: var(--warn-text); }
+.feed .you { background: color-mix(in srgb, var(--sonnet) 7%, transparent); }
+.feed .you .k, .feed .you .who { color: var(--sonnet); }
+.feed .you .who { font-weight: 600; }
+.feed .you .q { color: var(--muted); }
+.feed .body { min-width: 0; overflow-wrap: anywhere; }
+.feedstat { flex: none; display: flex; justify-content: space-between; gap: 12px; font-size: 11.5px; color: var(--muted); margin-top: -6px; }
+
+/* the answer panel */
+.ask { flex: 0 1 auto; max-height: 64%; min-height: 0; display: flex; flex-direction: column; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--warn) 6%, var(--surface)); overflow: hidden; }
+.ask[hidden] { display: none; }
+.ask .ah { flex: none; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 12.5px; }
+.ask .ah .bi { color: var(--warn-text); display: inline-flex; }
+.ask .ah b { font-weight: 600; }
+.ask .ah .ago { color: var(--muted); font-size: 12px; }
+.ask .ah .also { margin-left: auto; color: var(--muted); font-size: 11.5px; text-align: right; }
+.ask .ab { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 4px; }
+.ask .af { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--grid); flex-wrap: wrap; }
+.ask .af .grow { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
+.btn { font-size: 12.5px; font-weight: 600; border-radius: 6px; padding: 6px 12px; border: 1px solid var(--border); background: var(--raised); color: var(--ink); }
+.btn:hover:not(:disabled) { background: var(--sel); border-color: var(--axis); }
+.btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.pri:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 85%, var(--bg)); }
+.btn.bad { color: var(--crit-text); border-color: color-mix(in srgb, var(--crit) 45%, transparent); background: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* question tabs, like Claude Code's own row: one per question, then Review */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; }
+.tab[aria-selected="true"] { color: var(--ink); background: var(--sel); border-color: var(--axis); font-weight: 600; }
+.tab .box { width: 11px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; display: grid; place-items: center; opacity: .7; }
+.tab.done .box { background: var(--good); border-color: var(--good); opacity: 1; }
+.tab.done .box::after { content: ""; width: 5px; height: 3px; border: solid #fff; border-width: 0 0 1.5px 1.5px; transform: translateY(-1px) rotate(-45deg); }
+.qh { font-size: 14px; font-weight: 600; margin: 0 0 10px; max-width: 70ch; text-wrap: balance; }
+.qhint { font-size: 12px; color: var(--muted); margin: -6px 0 10px; }
+.qgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.qgrid.pv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 640px) { .qgrid.pv { grid-template-columns: minmax(0, 1fr); } }
+.opts { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.opt { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.opt:hover { background: var(--hover); }
+.opt:has(input:checked) { background: var(--sel); border-color: var(--axis); }
+.opt input { margin: 3px 0 0; accent-color: var(--sonnet); }
+.opt .ol { font-weight: 600; font-size: 13px; }
+.opt .od { grid-column: 2; font-size: 12px; color: var(--muted); }
+.opt .rec { font-weight: 500; font-size: 11px; color: var(--good-text); border: 1px solid color-mix(in srgb, var(--good) 45%, transparent); border-radius: 4px; padding: 0 5px; margin-left: 6px; white-space: nowrap; }
+.opt input[type="text"], .opt textarea { grid-column: 2; margin-top: 4px; width: 100%; font-size: 12.5px; background: var(--bg); border: 1px solid var(--grid); border-radius: 5px; padding: 5px 8px; resize: vertical; }
+.preview { min-width: 0; }
+.preview .pl { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.preview pre { margin: 0; font: 11.5px/1.45 var(--font-mono); background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre; color: var(--ink2); }
+.review { display: grid; gap: 8px; margin: 0; }
+.review div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; }
+.review dt { font-size: 12px; color: var(--muted); }
+.review dd { margin: 0; font-weight: 600; font-size: 13px; }
+.review dd.blank { color: var(--warn-text); font-weight: 500; }
+.planbox { max-height: 230px; overflow: auto; background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+.planbox h4 { margin: 4px 0 6px; font-size: 14px; }
+.planbox h5 { margin: 12px 0 4px; font-size: 12.5px; }
+.planbox ol, .planbox ul { margin: 0 0 6px; padding-left: 20px; }
+.planbox p { margin: 0 0 8px; max-width: 70ch; }
+.planfile { font: 11.5px var(--font-mono); color: var(--muted); margin: -6px 0 10px; }
+.cmd { font: 12.5px var(--font-mono); background: var(--bg); border: 1px solid var(--grid); border-radius: 6px; padding: 9px 12px; margin: 0 0 6px; overflow-x: auto; white-space: pre; }
+.cmdd { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+
+/* outcomes that replace the form */
+.out { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 10px; padding: 14px; font-size: 13px; }
+.out .oi { padding-top: 1px; }
+.out b { font-weight: 600; }
+.out .od { grid-column: 2; color: var(--ink2); font-size: 12.5px; }
+.out .od q { color: var(--ink); font-weight: 600; quotes: none; }
+.out.ok .oi { color: var(--good-text); } .out.info .oi { color: var(--deleg-text); } .out.bad .oi { color: var(--crit-text); } .out.wait .oi { color: var(--warn-text); }
+.out .acts { grid-column: 2; display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.spin { width: 14px; height: 14px; border: 2px solid var(--axis); border-top-color: var(--warn); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+/* message box */
+.compose { flex: none; position: relative; border-top: 1px solid var(--border); margin: 0 -18px; padding: 10px 18px 14px; display: grid; gap: 6px; background: var(--surface); }
+.compose .crow { display: flex; gap: 8px; align-items: flex-end; }
+.compose textarea { flex: 1; min-width: 0; min-height: 38px; max-height: 140px; resize: vertical; font-size: 13px; background: var(--bg); border: 1px solid var(--axis); border-radius: 7px; padding: 8px 10px; line-height: 1.4; }
+.compose textarea:focus { outline: none; border-color: var(--sonnet); box-shadow: 0 0 0 1px var(--sonnet); }
+.compose .hint { font-size: 11.5px; color: var(--muted); display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.compose .warnline { font-size: 12px; color: var(--warn-text); }
+.compose .err { font-size: 12px; color: var(--crit-text); }
+.typeahead { position: absolute; left: 18px; right: 18px; bottom: calc(100% - 4px); background: var(--raised); border: 1px solid var(--axis); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; display: grid; gap: 2px; z-index: 2; }
+.typeahead button { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; text-align: left; background: none; border: 0; border-radius: 5px; padding: 6px 8px; font-size: 12.5px; }
+.typeahead button:hover, .typeahead button.on { background: var(--sel); }
+.typeahead .cn { font-family: var(--font-mono); font-weight: 600; }
+.typeahead .cd { color: var(--muted); }
+.typeahead .tf { font-size: 11.5px; color: var(--muted); padding: 6px 8px 4px; border-top: 1px solid var(--grid); }
+.confirm { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--warn) 8%, var(--surface)); font-size: 12.5px; }
+.confirm .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.offnote { padding: 12px 14px; border: 1px dashed var(--axis); border-radius: 7px; font-size: 12.5px; color: var(--ink2); display: grid; gap: 4px; }
+.offnote b { color: var(--ink); }
+
+/* terminal stand-in */
+.term { background: var(--term); color: var(--term-ink); border: 1px solid #2a2a28; border-radius: 8px; font: 12px/1.55 var(--font-mono); padding: 12px 14px; overflow-x: auto; white-space: pre; }
+.term .dim { color: #8b8a84; } .term .am { color: #f5b73b; } .term .gr { color: #59c25c; } .term .bl { color: #7db8f0; } .term .hl { background: #3d3a7a; color: #fff; }
+.terms { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 760px) { .terms { grid-template-columns: minmax(0, 1fr); } }
+.cap { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+
+/* settings mock (Admin > Settings > Feature flags, and the reporter option) */
+.flags { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.flag { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 12px 14px; align-items: center; }
+.flag + .flag { border-top: 1px solid var(--grid); }
+.flag .ft { font-weight: 600; font-size: 13px; }
+.flag .fd { grid-column: 1; font-size: 12px; color: var(--muted); max-width: 70ch; }
+.flag .fc { grid-row: 1 / span 2; grid-column: 2; }
+.sw { width: 36px; height: 20px; border-radius: 999px; background: var(--axis); position: relative; border: 0; padding: 0; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .12s; }
+.sw[aria-checked="true"] { background: var(--good); }
+.sw[aria-checked="true"]::after { transform: translateX(16px); }
+.flag select { font-size: 12.5px; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; max-width: 100%; }
+.levels { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12px; color: var(--ink2); }
+.levels li { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 10px; }
+.levels li b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+@media (max-width: 560px) { .levels li { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+
+/* gallery: the modal drawn once per case, on a stand-in for the blurred page */
+.casenav { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 20px; }
+.casenav a { text-decoration: none; }
+.gallery { display: grid; gap: 28px; }
+.cg { font-size: 13.5px; margin: 14px 0 -14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.case { margin: 0; display: grid; gap: 8px; scroll-margin-top: 16px; min-width: 0; }
+.case figcaption { display: grid; gap: 2px; font-size: 12.5px; max-width: 76ch; }
+.case figcaption span { color: var(--muted); }
+.stage { padding: 22px; border-radius: 12px; background: color-mix(in srgb, var(--raised) 55%, var(--bg)); border: 1px dashed var(--axis); min-width: 0; }
+.stage .modal { width: min(820px, 100%); height: auto; max-height: none; margin: 0 auto; }
+.stage .feed { flex: none; max-height: 136px; overflow: hidden; }
+.stage .ask { max-height: none; }
+.stage .ab { overflow: visible; }
+.stage .mpad { height: 14px; }
+@media (max-width: 560px) { .stage { padding: 10px; } }
+
+.tests { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 12.5px; color: var(--ink2); max-width: 80ch; }
+.tests b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-wait" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.8v3.6M8 10.6v.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-reply" viewBox="0 0 16 16"><path d="M6.5 4 2.5 8l4 4M3 8h6.5a4 4 0 0 1 4 4v.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 16 16"><path d="m3 4 4 4-4 4M8.5 12.5H13" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-text" viewBox="0 0 16 16"><path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-you" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2.8 13.5c.7-2.6 2.8-4 5.2-4s4.5 1.4 5.2 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v4M8 4.8v.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m5.8 5.8 4.4 4.4M10.2 5.8l-4.4 4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="4.5" cy="12.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="11.5" cy="5.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.5 5.1v5.8M11.5 7.1c0 2.4-3 2.2-6.4 4" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+</svg>
+
+<div id="app">
+<div class="wrap">
+  <h1>Respond to a waiting session from Podium</h1>
+  <p class="note">When a session stops to ask something, the amber band gets a <b>Respond</b> button. It opens the Activity modal, where you can answer the question, approve or reject a plan, allow or deny a tool, or send a new message or <code>/clear</code>. The answer goes to the session through podium-reporter. The terminal or desktop app still works the whole time, and whichever answers first wins. Section 3 shows the modal in every case. To click through one yourself, pick a kind of wait and a state, then press Respond on the card.</p>
+
+  <div class="controls" role="group" aria-label="Mockup controls">
+    <div class="row" role="radiogroup" aria-label="What the session waits on">
+      <span class="rl">Waiting on</span>
+      <label class="seg"><input type="radio" name="kind" value="question" checked> A question</label>
+      <label class="seg"><input type="radio" name="kind" value="plan"> Plan approval</label>
+      <label class="seg"><input type="radio" name="kind" value="permission"> A tool permission</label>
+      <label class="seg"><input type="radio" name="kind" value="idle"> Its turn ended</label>
+    </div>
+    <div class="row" role="radiogroup" aria-label="State">
+      <span class="rl">State</span>
+      <label class="seg"><input type="radio" name="edge" value="ready" checked> Ready to answer</label>
+      <label class="seg"><input type="radio" name="edge" value="sending"> Sent, not confirmed yet</label>
+      <label class="seg"><input type="radio" name="edge" value="terminal"> Answered in the terminal</label>
+      <label class="seg"><input type="radio" name="edge" value="other"> Answered by someone else</label>
+      <label class="seg"><input type="radio" name="edge" value="closed"> Closed in the session</label>
+      <label class="seg"><input type="radio" name="edge" value="undelivered"> Session not checking in</label>
+      <label class="seg"><input type="radio" name="edge" value="old"> Reporter can't answer</label>
+      <label class="seg"><input type="radio" name="edge" value="off"> Turned off</label>
+      <label class="seg"><input type="radio" name="edge" value="owner"> Someone else's session</label>
+    </div>
+    <div class="row"><span class="rl">Theme</span><button class="chipbtn" id="theme" type="button">Switch theme</button></div>
+  </div>
+
+  <h2 class="s">1. The card on the wall</h2>
+  <p class="note">The button sits where you circled it, at the right end of the band. The count says how many questions are open in one ask (Claude Code sends up to four at a time). In the states where Podium can't send anything, the button is gone or dimmed with the reason beside it, and the band reads as it does today.</p>
+  <div class="pair">
+    <article class="card" aria-label="claude-dashboard">
+      <div class="z1">
+        <div class="nm"><span class="w"><svg width="16" height="16"><use href="#i-wait"/></svg></span>claude-dashboard<span class="model"><i></i>Opus 5.5</span></div>
+        <div class="path">~/dev/claude-dashboard</div>
+        <div class="br"><svg width="13" height="13"><use href="#i-branch"/></svg>issue/195-history-pages<span class="clean">clean</span></div>
+      </div>
+      <div class="z2">
+        <div id="cardPlan">Plan: Paginate the History page (#195) · 0/5</div>
+        <div class="ag"><i></i>1 running · 1 done</div>
+      </div>
+      <div class="z3">
+        <div class="c"><div class="k">Cost</div><div class="v">$1.55</div></div>
+        <div class="c"><div class="k">Tokens</div><div class="v">330k</div></div>
+        <div class="c"><div class="k">Time</div><div class="v">49:56</div></div>
+        <div class="c"><div class="k">Context</div><div class="v">12%</div><div class="bar"><i></i></div></div>
+      </div>
+      <div class="band" data-band>
+        <span class="bi"><svg width="16" height="16"><use href="#i-wait"/></svg></span>
+        <span class="bl" data-lead>Waiting for your input.</span>
+        <span class="why" data-why hidden></span>
+        <button type="button" class="respond" data-respond aria-haspopup="dialog"><svg width="14" height="14"><use href="#i-reply"/></svg>Respond<span class="n" data-count>3</span></button>
+      </div>
+    </article>
+    <div class="aside-note">
+      <h3>Rules for the button</h3>
+      <ul>
+        <li>Shown only while the session waits on you, and only when every switch in section 5 is on.</li>
+        <li>One name in every case: <b>Respond</b>. The modal says what kind of answer is needed.</li>
+        <li>Not on a card that waits on background work (blue band), since nothing there needs you.</li>
+        <li>The card's own click target is unchanged: it still opens the orchestrator page. Respond opens the modal straight from the wall.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="s">2. The orchestrator page</h2>
+  <p class="note">The same band, and the same button, is the last row of the summary at the top of the page. The Expand button on the orchestrator's Activity panel opens the same modal, so you can send a message even while the session is still running (it waits in a queue until the session is idle).</p>
+  <section class="sum" aria-label="Orchestrator summary">
+    <div class="hd">
+      <h3><span style="color:var(--warn-text);display:inline-flex"><svg width="16" height="16"><use href="#i-wait"/></svg></span>claude-dashboard</h3>
+      <div class="pl" id="pagePlan"><b>Plan</b> · now: Ask how History pages should work</div>
+      <div class="meta"><span>~/dev/claude-dashboard</span><span>session 238da512</span><span>eengelking/podium</span></div>
+    </div>
+    <div class="facts">
+      <div>Agents<b>1 running / 1 done</b></div>
+      <div>Est. cost<b>$1.55</b></div>
+      <div>Tokens<b>330k</b></div>
+      <div>Running for<b>49:56</b></div>
+    </div>
+    <div class="band" data-band>
+      <span class="bi"><svg width="16" height="16"><use href="#i-wait"/></svg></span>
+      <span class="bl"><span data-lead>Waiting for your input.</span><span class="bs" data-sub>AskUserQuestion: 3 questions about History paging</span></span>
+      <span class="why" data-why hidden></span>
+      <button type="button" class="respond" data-respond aria-haspopup="dialog"><svg width="14" height="14"><use href="#i-reply"/></svg>Respond<span class="n" data-count>3</span></button>
+    </div>
+  </section>
+
+  <h2 class="s">3. The modal, case by case</h2>
+  <p class="note">Each frame is the modal as it opens from Respond in that case, with the feed cut to its last few rows. The page behind it is blurred in the real thing. To click through one, use the controls at the top and press Respond on the card.</p>
+  <nav class="casenav" id="caseNav" aria-label="Jump to a case"></nav>
+  <div class="gallery" id="gallery"></div>
+
+  <h2 class="s">4. What the terminal shows</h2>
+  <p class="note">podium-reporter writes one line above the prompt while the question is also open in Podium, and one line in the transcript when it was answered from there, naming who answered. Someone at the terminal is never surprised by an answer they didn't give.</p>
+  <div class="terms">
+    <div>
+      <div class="term" id="termOpen"></div>
+      <p class="cap">While the question is open. The terminal dialog works as usual.</p>
+    </div>
+    <div>
+      <div class="term" id="termDone"></div>
+      <p class="cap">After an answer from Podium. The dialog closes by itself.</p>
+    </div>
+  </div>
+
+  <h2 class="s">5. The switches</h2>
+  <p class="note">Off by default, and every one is needed. The Admin decides whether this server may send anything; the person running the session decides how much their session accepts, and can always say no. Answering also needs the activity feed, which already has both kinds of switch.</p>
+  <div class="flags">
+    <div class="flag">
+      <span class="ft">Respond from Podium</span>
+      <span class="fd">Admin &gt; Settings &gt; Feature flags. Lets people answer and message the sessions they own. Each answer is written to the admin log with who sent it.</span>
+      <span class="fc"><button class="sw" type="button" role="switch" aria-checked="false" aria-label="Respond from Podium" id="flagSw"></button></span>
+    </div>
+    <div class="flag">
+      <span class="ft">podium-reporter option <code>respond</code></span>
+      <span class="fd">Set in Claude Code with <code>/plugin configure podium-reporter@eengelking-marketplace</code>. What this session accepts from Podium:
+        <ul class="levels">
+          <li><b>off</b><span>Nothing. The default.</span></li>
+          <li><b>questions</b><span>Answers to questions, and new messages while idle.</span></li>
+          <li><b>questions-and-plans</b><span>The above, plus approving or rejecting a plan.</span></li>
+          <li><b>everything</b><span>The above, plus allowing or denying a tool (allow once only), and <code>/clear</code>, <code>/compact</code>, <code>/model</code>, <code>/effort</code>.</span></li>
+        </ul>
+      </span>
+      <span class="fc"><select aria-label="respond option" id="optSel"><option>off</option><option>questions</option><option>questions-and-plans</option><option selected>everything</option></select></span>
+    </div>
+  </div>
+
+  <h2 class="s">6. Still to test before any code</h2>
+  <ol class="tests">
+    <li><b>Answering a question from a mod.</b> Whether a <code>tool.call</code> hook on AskUserQuestion can return the answer and close the open terminal dialog at the same moment.</li>
+    <li><b>Messages in place of an answer.</b> How a message sent in place of an answer, and a typed answer, reach Claude (the tool's <code>response</code> and <code>answers</code> fields).</li>
+    <li><b>Plan approval.</b> Whether the mode can be chosen on approval, and whether "keep planning" can carry your feedback.</li>
+    <li><b><code>/clear</code> from a mod.</b> Whether <code>$.command.run</code> runs it, and how Podium follows the session to its new id.</li>
+    <li><b>Tool permissions.</b> Whether a permission prompt can be raced the same way, and with what reply.</li>
+  </ol>
+</div>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle" id="modal">
+    <div class="mh">
+      <div class="ttl"><h2 id="mTitle">Activity</h2><div class="sub2">claude-dashboard · orchestrator · Opus 5.5</div></div>
+      <span class="live"><label for="every">Refresh every</label><select id="every"><option>2s</option><option>5s</option><option>10s</option></select></span>
+      <button type="button" class="x" id="close" aria-label="Close (Esc)">&#x2715;</button>
+    </div>
+    <div class="mbody">
+      <ol class="feed" id="feed" aria-label="Recent activity, newest last" tabindex="0"></ol>
+      <div class="feedstat"><span>Last 9 of 41 since you started watching</span><span>Updated 1s ago</span></div>
+      <section class="ask" id="ask" aria-labelledby="askLead">
+        <div class="ah">
+          <span class="bi"><svg width="16" height="16"><use href="#i-wait"/></svg></span>
+          <b id="askLead">Waiting for your input.</b><span class="ago" id="askAgo">asked 0:42 ago</span>
+          <span class="also" id="askAlso">Also open in the terminal</span>
+        </div>
+        <div class="ab" id="askBody"></div>
+        <div class="af" id="askFoot"></div>
+      </section>
+      <div class="compose" id="compose"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const icon = (id, n = 16) => `<svg width="${n}" height="${n}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+
+// The questions from the screenshot, plus the two that came with them.
+const QUESTIONS = [
+  { header: "Page size", question: "How many History rows per page, and can the user change it?", multi: false, options: [
+    { label: "25/50/100, default 50", rec: true, description: "Same Pager and choices as Admin > Reporters (#167); default 50." },
+    { label: "Fixed 50, no choice", description: "No rows-per-page control; just Previous and Next." } ] },
+  { header: "Day selector", question: "Should History keep its day selector once it is paged?", multi: false, options: [
+    { label: "Keep it, page within the day", rec: true, description: "The pager restarts at page 1 when the day changes.",
+      preview: "History                 [Today ▾]\n─────────────────────────────────\n claude-dashboard   12:04  $1.55\n podium-reporter    11:40  $0.38\n ...\n─────────────────────────────────\n ‹ Previous   Page 1 of 3   Next ›" },
+    { label: "One paged list, newest first", description: "Drop the day selector; dates become group rows.",
+      preview: "History\n─────────────────────────────────\n Today\n claude-dashboard   12:04  $1.55\n Yesterday\n podium-reporter    18:21  $0.92\n─────────────────────────────────\n ‹ Previous   Page 1 of 9   Next ›" } ] },
+  { header: "Back state", question: "When someone opens a session from History and comes back, what should Back restore?", multi: true, options: [
+    { label: "The page number", description: "Return to page 3, not page 1." },
+    { label: "The rows-per-page choice", description: "Keep 100 if they picked 100." },
+    { label: "The scroll position", description: "Land on the row they opened." } ] }
+];
+
+const PLAN = `<h4>Paginate the History page (#195)</h4>
+<p>History loads every session for the selected day at once. On busy days that is several hundred rows. Page it on the server with the same Pager as Admin &gt; Reporters.</p>
+<h5>Steps</h5>
+<ol><li>Add <code>page</code> and <code>pageSize</code> to <code>GET /api/fleet/history</code>, with a total.</li>
+<li>Reuse the Pager from Admin &gt; Reporters; 25, 50 or 100 rows, default 50.</li>
+<li>Restore the page and rows-per-page on Back.</li>
+<li>Tests for the route's paging and the Pager's state.</li>
+<li>CHANGELOG and the user guide.</li></ol>
+<h5>Not in this change</h5>
+<ul><li>Search across days.</li><li>Changing the day selector.</li></ul>`;
+
+const KIND = {
+  question: { lead: "Waiting for your input.", sub: "AskUserQuestion: 3 questions about History paging", count: "3", plan: "Plan: Paginate the History page (#195) · 0/5", now: "Ask how History pages should work" },
+  plan: { lead: "Waiting for your approval.", sub: "ExitPlanMode: the plan for #195 is ready", count: "", plan: "Plan: Paginate the History page (#195) · 0/5", now: "Ready to code?" },
+  permission: { lead: "Waiting for your approval.", sub: "Bash(git push -u origin issue/195-history-pages)", count: "", plan: "Plan: Paginate the History page (#195) · 5/5", now: "Push the branch" },
+  idle: { lead: "Waiting for your input.", sub: "Finished its turn: PR #204 is open", count: "", plan: "Plan: Paginate the History page (#195) · 5/5", now: "Done" }
+};
+
+const FEED_BASE = [
+  ["11:02", "tool", "Read", "docs/SPEC.md (lines 410-470)"],
+  ["11:20", "tool", "Grep", "\"Pager\" frontend/src/fleet"],
+  ["11:41", "tool", "Read", "frontend/src/fleet/admin/Reporters.tsx"],
+  ["12:03", "text", "", "The Admin > Reporters page already has a Pager with 25/50/100 rows. I can reuse it for History."]
+];
+const FEED_KIND = {
+  question: [["12:20", "text", "", "Three decisions before I write the plan: page size, the day selector and what Back restores."], ["12:22", "wait", "", "Waiting for your input: AskUserQuestion (3 questions)"]],
+  plan: [["14:40", "tool", "Write", "~/.claude/plans/wise-beaming-token.md"], ["14:41", "wait", "", "Waiting for your approval: ExitPlanMode"]],
+  permission: [["48:10", "tool", "Bash", "npm test"], ["48:55", "text", "", "All 518 tests pass. Pushing the branch so I can open the PR."], ["49:02", "wait", "", "Waiting for your approval: Bash(git push -u origin issue/195-history-pages)"]],
+  running: [["31:10", "tool", "Edit", "frontend/src/fleet/HistoryView.tsx"], ["31:42", "tool", "Bash", "npm test --workspace frontend"]],
+  idle: [["49:30", "tool", "Bash", "gh pr create --title \"feat: paginate the History page (closes #195)\""], ["49:56", "text", "", "PR #204 is open: feat: paginate the History page. CI is running. Merging is your call."]]
+};
+
+// Every piece of the modal is a pure function of a state object `st`, so the live modal and the gallery of cases
+// draw from the same code. `st.p` prefixes ids and radio names, so the gallery's copies never collide with the live one.
+const BASE = { kind: "question", edge: "ready", tab: 0, answers: {}, other: {}, plan: "auto", planFb: "", perm: "allow", permFb: "", draft: "", sent: [], confirmClear: false, ta: 0, submitted: false, p: "", feed: null, tail: 0 };
+let S = { ...BASE, answers: {}, other: {}, sent: [] };
+
+/* ---------- the band on the card and the page ---------- */
+function renderBands() {
+  const k = KIND[S.kind];
+  const off = S.edge === "off" || S.edge === "old";
+  $$("[data-band]").forEach(b => {
+    $("[data-lead]", b).textContent = k.lead;
+    const sub = $("[data-sub]", b); if (sub) sub.textContent = k.sub;
+    const btn = $("[data-respond]", b), why = $("[data-why]", b);
+    btn.hidden = off;
+    btn.disabled = S.edge === "owner";
+    btn.title = S.edge === "owner" ? "Only Alex, who owns this session, or an Admin can respond." : "";
+    why.hidden = S.edge !== "owner";
+    why.textContent = "Alex's session";
+    const n = $("[data-count]", b); n.textContent = k.count; n.hidden = !k.count;
+  });
+  $("#cardPlan").textContent = k.plan;
+  $("#pagePlan").innerHTML = `<b>Plan</b> · now: ${esc(k.now)}`;
+}
+
+/* ---------- the feed ---------- */
+function feedHTML(st) {
+  let rows = [...FEED_BASE, ...FEED_KIND[st.feed || st.kind]].map(([at, kind, name, text]) => {
+    if (kind === "tool") return `<li class="tool"><span class="at">${at}</span><span class="k" title="Tool call">${icon("tool", 12)}</span><span class="body"><span class="name">${esc(name)}</span> ${esc(text)}</span></li>`;
+    if (kind === "wait") return `<li class="wait"><span class="at">${at}</span><span class="k" title="Waiting on you">${icon("wait", 12)}</span><span class="body"><b>${esc(text)}</b></span></li>`;
+    return `<li class="txt"><span class="at">${at}</span><span class="k" title="Text">${icon("text", 12)}</span><span class="body">${esc(text)}</span></li>`;
+  });
+  for (const m of st.sent) {
+    rows.push(`<li class="you"><span class="at">${m.at}</span><span class="k" title="Sent from Podium">${icon("you", 12)}</span><span class="body"><span class="who">You, from Podium:</span> ${esc(m.text)}${m.note ? ` <span class="q">${esc(m.note)}</span>` : ""}</span></li>`);
+    if (m.then) rows.push(`<li class="txt"><span class="at">${m.thenAt}</span><span class="k" title="Text">${icon("text", 12)}</span><span class="body">${esc(m.then)}</span></li>`);
+  }
+  if (st.tail) rows = rows.slice(-st.tail);
+  return rows.join("");
+}
+
+/* ---------- the answer panel ---------- */
+function outcome(cls, ic, title, detail, acts = "") {
+  return `<div class="out ${cls}"><span class="oi">${ic}</span><b>${title}</b><span class="od">${detail}</span>${acts ? `<span class="acts">${acts}</span>` : ""}</div>`;
+}
+function answerOf(st, q) {
+  const a = st.answers[q.header];
+  if (a === undefined || (Array.isArray(a) && !a.length)) return "";
+  if (a === "__other") return (st.other[q.header] || "").trim();
+  return Array.isArray(a) ? a.join(", ") : a;
+}
+function planLabel(st) { return { auto: "Yes, and use auto mode", edits: "Yes, auto-accept edits", manual: "Yes, manually approve edits", keep: "No, keep planning" }[st.plan]; }
+function answerSummary(st) {
+  if (st.kind === "question") return QUESTIONS.map(q => answerOf(st, q)).filter(Boolean).join("; ") || "25/50/100, default 50";
+  if (st.kind === "plan") return planLabel(st);
+  if (st.kind === "permission") return st.perm === "allow" ? "Allow once" : "Deny";
+  return "";
+}
+const WHAT = { question: "question", plan: "plan", permission: "request", idle: "message" };
+
+/** The panel's parts: whether it shows, its header and its body and footer markup. */
+function askParts(st) {
+  const k = KIND[st.kind];
+  const r = { hidden: st.kind === "idle" || st.edge === "off" || st.edge === "old", lead: k.lead, ago: st.kind === "permission" ? "asked 0:54 ago" : "asked 0:42 ago", also: "Also open in the terminal", body: "", foot: "" };
+  if (r.hidden) return r;
+  const what = WHAT[st.kind];
+  if (st.edge === "sending" || st.submitted) {
+    r.also = "";
+    r.body = outcome("wait", `<span class="spin" role="img" aria-label="Sending"></span>`, "Sending to claude-dashboard.", `Your answer, <q>${esc(answerSummary(st))}</q>, goes out with the reporter's next check-in. It counts as answered once the session confirms it, usually within 2 seconds.`);
+    r.foot = `<span class="grow">If the terminal answers first, that answer stands and this one is dropped.</span>`;
+  } else if (st.edge === "terminal") {
+    r.also = "";
+    r.body = outcome("info", icon("info"), "Answered in the terminal at 12:23.", `The answer there was <q>${esc(st.kind === "question" ? "25/50/100, default 50; Keep it, page within the day; The page number" : st.kind === "plan" ? "Yes, manually approve edits" : "Allow once")}</q>. Nothing from here was sent, and your draft was dropped.`);
+    r.foot = `<span class="grow">The session has moved on.</span>`;
+  } else if (st.edge === "other") {
+    r.also = "";
+    r.body = outcome("info", icon("info"), "Alex answered from Podium at 12:23.", `Their answer was taken first: <q>${esc(st.kind === "question" ? "Fixed 50, no choice; One paged list, newest first; The page number" : st.kind === "plan" ? "No, keep planning" : "Deny")}</q>. Yours was not sent.`);
+    r.foot = `<span class="grow">Only the first answer to a ${what} is accepted.</span>`;
+  } else if (st.edge === "closed") {
+    r.also = "";
+    r.body = outcome("bad", icon("x"), `This ${what} was closed in the session before you answered.`, "Someone pressed Esc in the terminal at 12:23, so Claude stopped waiting. Nothing was sent. Send a message below if you want to pick it up again.");
+    r.foot = `<span class="grow">The session is now waiting for a new message.</span>`;
+  } else if (st.edge === "undelivered") {
+    r.also = "Last check-in 0:45 ago";
+    r.body = outcome("bad", icon("x"), "Not delivered yet.", `claude-dashboard has not checked in for 45 seconds, so your answer, <q>${esc(answerSummary(st))}</q>, is waiting here. It is sent when the session reports again, unless it was answered in the terminal by then.`, `<button class="btn" type="button" data-act="discard">Discard my answer</button>`);
+    r.foot = `<span class="grow">The session may be busy, asleep or closed. Its terminal can still answer.</span>`;
+  } else if (st.edge === "owner") {
+    r.also = "";
+    r.body = outcome("info", icon("info"), "This is Alex's session.", "Only Alex, or an Admin, can respond to it from Podium. You can still watch its activity.");
+  } else if (st.kind === "question") questionParts(st, r);
+  else if (st.kind === "plan") planParts(st, r);
+  else permissionParts(st, r);
+  return r;
+}
+
+function questionParts(st, r) {
+  const p = st.p, n = QUESTIONS.length, onReview = st.tab === n;
+  const tabs = QUESTIONS.map((q, i) => `<button type="button" role="tab" class="tab${answerOf(st, q) ? " done" : ""}" aria-selected="${st.tab === i}" data-tab="${i}"><span class="box"></span>${esc(q.header)}</button>`).join("")
+    + `<button type="button" role="tab" class="tab" aria-selected="${onReview}" data-tab="${n}">Review</button>`;
+  let inner;
+  if (onReview) {
+    inner = `<p class="qh">Review your answers</p><dl class="review">${QUESTIONS.map(q => { const a = answerOf(st, q); return `<div><dt>${esc(q.question)}</dt><dd class="${a ? "" : "blank"}">${a ? esc(a) : "Not answered. Claude sees it as skipped."}</dd></div>`; }).join("")}</dl>`;
+  } else {
+    const q = QUESTIONS[st.tab], a = st.answers[q.header], type = q.multi ? "checkbox" : "radio";
+    const chosen = o => q.multi ? (Array.isArray(a) && a.includes(o.label)) : a === o.label;
+    const sel = q.options.find(o => chosen(o) && o.preview) || (q.options.some(o => o.preview) ? q.options[0] : null);
+    const opts = q.options.map((o, i) => `<label class="opt"><input type="${type}" name="${p}q${st.tab}" value="${esc(o.label)}" ${chosen(o) ? "checked" : ""} id="${p}q${st.tab}o${i}"><span class="ol">${esc(o.label)}${o.rec ? `<span class="rec">Recommended</span>` : ""}</span><span class="od">${esc(o.description)}</span></label>`).join("")
+      + (q.multi ? "" : `<label class="opt"><input type="radio" name="${p}q${st.tab}" value="__other" ${a === "__other" ? "checked" : ""} id="${p}q${st.tab}other"><span class="ol">Type something</span><input type="text" id="${p}q${st.tab}text" placeholder="Your own answer" value="${esc(st.other[q.header] || "")}" aria-label="Your own answer"></label>`);
+    inner = `<p class="qh" id="${p}qh">${esc(q.question)}</p>${q.multi ? `<p class="qhint">Pick any that apply.</p>` : ""}
+      <div class="qgrid${sel ? " pv" : ""}"><fieldset class="opts" aria-labelledby="${p}qh">${opts}</fieldset>${sel ? `<div class="preview"><div class="pl">Preview: ${esc(sel.label)}</div><pre>${esc(sel.preview)}</pre></div>` : ""}</div>`;
+  }
+  r.body = `<div class="tabs" role="tablist" aria-label="Questions">${tabs}</div>${inner}`;
+  r.foot = `<span class="grow">${onReview ? "Submitting sends all three at once, as Claude Code does." : `Question ${st.tab + 1} of ${n}`}</span>`
+    + (st.tab > 0 ? `<button class="btn" type="button" data-act="back">Back</button>` : "")
+    + (onReview ? `<button class="btn pri" type="button" data-act="submit">Submit answers</button>` : `<button class="btn pri" type="button" data-act="next">Next</button>`);
+}
+
+function planParts(st, r) {
+  const p = st.p;
+  const o = (v, label, d) => `<label class="opt"><input type="radio" name="${p}plan" value="${v}" ${st.plan === v ? "checked" : ""} id="${p}plan-${v}"><span class="ol">${label}</span>${d ? `<span class="od">${d}</span>` : ""}${v === "keep" && st.plan === "keep" ? `<textarea id="${p}planFb" rows="2" placeholder="Tell Claude what to change" aria-label="Tell Claude what to change">${esc(st.planFb)}</textarea>` : ""}</label>`;
+  r.body = `<p class="qh">Ready to code?</p><p class="planfile">~/.claude/plans/wise-beaming-token.md</p><div class="planbox">${PLAN}</div>
+    <fieldset class="opts" aria-label="Approve the plan">${o("auto", "Yes, and use auto mode", "Claude decides which tools need asking.")}${o("edits", "Yes, auto-accept edits", "File edits run without asking; commands still ask.")}${o("manual", "Yes, manually approve edits", "Every edit asks first.")}${o("keep", "No, keep planning", "")}</fieldset>`;
+  r.foot = `<span class="grow">Editing the plan text (Ctrl+G) is only in the terminal.</span><button class="btn pri" type="button" data-act="submit">${st.plan === "keep" ? "Send feedback" : "Approve plan"}</button>`;
+}
+
+function permissionParts(st, r) {
+  const p = st.p;
+  r.body = `<p class="qh">Bash wants to run a command</p><div class="cmd">git push -u origin issue/195-history-pages</div><p class="cmdd">Push the branch to GitHub</p>
+    <fieldset class="opts" aria-label="Allow or deny">
+      <label class="opt"><input type="radio" name="${p}perm" value="allow" ${st.perm === "allow" ? "checked" : ""} id="${p}perm-allow"><span class="ol">Allow once</span><span class="od">Runs this command now. The next one asks again.</span></label>
+      <label class="opt"><input type="radio" name="${p}perm" value="deny" ${st.perm === "deny" ? "checked" : ""} id="${p}perm-deny"><span class="ol">Deny</span><span class="od">Claude is told no and keeps going.</span>${st.perm === "deny" ? `<textarea id="${p}permFb" rows="2" placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why">${esc(st.permFb)}</textarea>` : ""}</label>
+    </fieldset>`;
+  r.foot = `<span class="grow">"Always allow" changes the session's rules, so it is only in the terminal.</span><button class="btn ${st.perm === "deny" ? "bad" : "pri"}" type="button" data-act="submit">${st.perm === "deny" ? "Deny" : "Allow once"}</button>`;
+}
+
+/* ---------- the message box ---------- */
+const COMMANDS = [
+  { name: "/clear", desc: "Start over with an empty conversation" },
+  { name: "/compact", desc: "Summarize the conversation to free context" },
+  { name: "/model", desc: "Switch model, for example /model sonnet" },
+  { name: "/effort", desc: "Set effort, for example /effort high" }
+];
+function composeHTML(st) {
+  if (st.edge === "off") return `<div class="offnote"><b>Responding from Podium is turned off.</b><span>The Admin's Respond from Podium switch, this session's <code>respond</code> option, or the activity feed is off. Answer in the terminal or desktop app. Admin &gt; Settings &gt; Feature flags has the server's switch.</span></div>`;
+  if (st.edge === "old") return `<div class="offnote"><b>This session can't be answered from Podium.</b><span>It reports with podium-reporter 0.13.0. Responding needs a newer reporter with the <code>respond</code> option on: run <code>claude plugin update podium-reporter@eengelking-marketplace</code>, then <code>/reload-plugins</code> in that session. Sessions reported by the settings hooks or run with <code>claude -p</code> can't be answered at all.</span></div>`;
+  if (st.edge === "owner") return "";
+  const pending = st.kind !== "idle" && st.edge === "ready" && !st.submitted;
+  const val = st.draft;
+  const slash = val.startsWith("/") ? val.split(/\s/)[0] : null;
+  const known = slash && COMMANDS.find(x => x.name === slash);
+  const matches = slash !== null && !val.includes(" ") && !known ? COMMANDS.filter(x => x.name.startsWith(slash)) : [];
+  let extra = "";
+  if (st.confirmClear) {
+    extra = `<div class="confirm" role="alertdialog" aria-label="Clear the conversation?"><span><b>Clear the conversation?</b> claude-dashboard starts over with an empty context. Podium shows the cleared part as its own session in History, linked to this one.</span><span class="acts"><button class="btn" type="button" data-act="cancel-clear">Cancel</button><button class="btn bad" type="button" data-act="do-clear">Clear conversation</button></span></div>`;
+  } else if (slash && !known && val.length > 1 && !matches.length) {
+    extra = `<div class="err">${esc(slash)} runs only in the terminal. From here you can send /clear, /compact, /model and /effort.</div>`;
+  } else if (pending && val.trim() && !slash) {
+    extra = `<div class="warnline">Sending this closes the ${WHAT[st.kind]} without an answer and gives Claude your message instead, like "Chat about this" in the terminal.</div>`;
+  }
+  const ph = pending ? (st.kind === "question" ? "Chat about this instead of answering" : "Reply instead, for example: hold off, I want to look first") : "Message claude-dashboard, or type / for a command";
+  return `${matches.length && !st.confirmClear ? `<div class="typeahead" role="listbox" aria-label="Commands">${matches.map((m, i) => `<button type="button" role="option" class="${i === st.ta ? "on" : ""}" data-cmd="${m.name}"><span class="cn">${m.name}</span><span class="cd">${m.desc}</span></button>`).join("")}<div class="tf">Other commands run only in the terminal.</div></div>` : ""}
+    ${extra}
+    <div class="crow"><textarea id="${st.p}draft" rows="1" placeholder="${esc(ph)}" aria-label="Message to claude-dashboard">${esc(val)}</textarea><button class="btn pri" type="button" data-act="send" ${val.trim() ? "" : "disabled"}>Send</button></div>
+    <div class="hint"><span>Sent as you, through podium-reporter. The session reads it as a message from Podium.</span><span>Enter sends · Shift+Enter for a new line</span></div>`;
+}
+
+/* ---------- the live modal ---------- */
+function renderFeed() { const f = $("#feed"); f.innerHTML = feedHTML(S); f.scrollTop = f.scrollHeight; }
+function renderAsk() {
+  const r = askParts(S);
+  $("#ask").hidden = r.hidden;
+  $("#askLead").textContent = r.lead; $("#askAgo").textContent = r.ago; $("#askAlso").textContent = r.also;
+  $("#askBody").innerHTML = r.body;
+  $("#askFoot").innerHTML = r.foot; $("#askFoot").hidden = !r.foot;
+}
+function renderCompose() { const c = $("#compose"); c.innerHTML = composeHTML(S); c.hidden = !c.innerHTML.trim(); }
+
+/* ---------- the gallery: the same modal, drawn once per case ---------- */
+const PS = "25/50/100, default 50", DS = "Keep it, page within the day";
+const CASES = [
+  { group: "A question" },
+  { id: "q-first", title: "Opened from Respond", cap: "The questions Claude Code shows as tabs in the terminal show as tabs here. The recommended option is marked, and Type something takes your own answer.", st: { kind: "question" } },
+  { id: "q-preview", title: "An option with a preview", cap: "When the options come with a preview, it shows beside them for the one selected.", st: { kind: "question", tab: 1, answers: { "Page size": PS, "Day selector": "One paged list, newest first" } } },
+  { id: "q-multi", title: "Pick any that apply", cap: "A multi-select question has checkboxes. Answered questions get a tick on their tab.", st: { kind: "question", tab: 2, answers: { "Page size": PS, "Day selector": DS, "Back state": ["The page number", "The rows-per-page choice"] } } },
+  { id: "q-own", title: "Your own answer", cap: "Typing in the box selects Type something. The text goes to Claude as the answer to that question.", st: { kind: "question", answers: { "Page size": "__other" }, other: { "Page size": "50, and remember each person's choice" } } },
+  { id: "q-review", title: "Review before sending", cap: "Review lists every answer. A question left blank is marked, and Claude sees it as skipped.", st: { kind: "question", tab: 3, answers: { "Page size": PS, "Day selector": DS } } },
+  { id: "q-chat", title: "Chat about this instead", cap: "Writing in the message box while a question is open replaces the answer, like Chat about this in the terminal. The warning says so before you send.", st: { kind: "question", draft: "Before you pick: how many sessions does History hold on a busy day?" } },
+  { group: "Plan approval" },
+  { id: "p-approve", title: "Approve the plan", cap: "The plan is shown whole, with the three ways to approve it from Claude Code.", st: { kind: "plan" } },
+  { id: "p-keep", title: "Keep planning, with feedback", cap: "No, keep planning opens a box for what to change. The button says what happens.", st: { kind: "plan", plan: "keep", planFb: "Also cover search across days. People will ask for it next." } },
+  { group: "A tool permission" },
+  { id: "t-allow", title: "Allow once", cap: "The command and Claude's description of it. Only Allow once is offered here.", st: { kind: "permission" } },
+  { id: "t-deny", title: "Deny, with a reason", cap: "The reason is optional and goes to Claude with the denial.", st: { kind: "permission", perm: "deny", permFb: "Not yet. Run npm run build first." } },
+  { group: "Its turn ended" },
+  { id: "i-message", title: "Send a new message", cap: "No answer panel, only the message box. The message starts Claude's next turn.", st: { kind: "idle", draft: "Start on issue #205." } },
+  { id: "i-commands", title: "Commands", cap: "Typing / lists the commands Podium can send. Anything else runs only in the terminal.", st: { kind: "idle", draft: "/c" } },
+  { id: "i-clear", title: "Confirm /clear", cap: "Clearing asks first, because it empties the session's context.", st: { kind: "idle", draft: "/clear", confirmClear: true } },
+  { id: "i-after", title: "After you answer", cap: "Your answer becomes a feed entry marked as yours, and the panel goes away until the session asks again.", st: { kind: "idle", feed: "question", sent: [{ at: "12:23", text: `answered: ${PS}; ${DS}; The page number, The rows-per-page choice`, then: "Thanks. Writing the plan now.", thenAt: "12:24" }] } },
+  { id: "i-running", title: "While it is still running", cap: "Expand on the Activity panel opens the modal without a wait. A message sent now is queued until the session is idle.", st: { kind: "idle", feed: "running", sent: [{ at: "31:50", text: "Also update the user guide.", note: "(queued until the session is idle)" }] } },
+  { group: "When Podium can't send the answer" },
+  { id: "e-sending", title: "Sent, not confirmed yet", cap: "Counted as answered only when the session confirms it, not when the server has it.", st: { kind: "question", edge: "sending", answers: { "Page size": PS, "Day selector": DS, "Back state": ["The page number"] } } },
+  { id: "e-terminal", title: "Answered in the terminal", cap: "The terminal answered first. What was chosen there replaces the form.", st: { kind: "question", edge: "terminal" } },
+  { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted.", st: { kind: "question", edge: "other" } },
+  { id: "e-closed", title: "Closed in the session", cap: "Esc, an interrupted turn or the end of the session closed the question before you sent anything.", st: { kind: "question", edge: "closed" } },
+  { id: "e-undelivered", title: "Session not checking in", cap: "Your answer is kept and sent when the reporter checks in again, unless the terminal answered by then.", st: { kind: "question", edge: "undelivered", answers: { "Page size": PS } } },
+  { id: "e-old", title: "Reporter can't answer", cap: "An older podium-reporter, the settings hooks, or a claude -p run. The card has no Respond button; Expand still opens the feed.", st: { kind: "question", edge: "old" } },
+  { id: "e-off", title: "Turned off", cap: "Any switch in section 5 is off. The card has no Respond button, and the modal is the feed it is today.", st: { kind: "question", edge: "off" } },
+  { id: "e-owner", title: "Someone else's session", cap: "Only the session's owner or an Admin can respond. Everyone else can watch.", st: { kind: "question", edge: "owner" } }
+];
+function frameHTML(c) {
+  const st = { ...BASE, ...c.st, p: `g-${c.id}-`, tail: 4 };
+  const a = askParts(st);
+  const comp = composeHTML(st);
+  return `<div class="modal" aria-hidden="true">
+    <div class="mh"><div class="ttl"><h2>Activity</h2><div class="sub2">claude-dashboard · orchestrator · Opus 5.5</div></div><span class="live">Refresh every <select tabindex="-1"><option>2s</option></select></span><span class="x">&#x2715;</span></div>
+    <div class="mbody">
+      <ol class="feed">${feedHTML(st)}</ol>
+      <div class="feedstat"><span>Last 4 shown here</span><span>Updated 1s ago</span></div>
+      ${a.hidden ? "" : `<section class="ask"><div class="ah"><span class="bi">${icon("wait")}</span><b>${a.lead}</b><span class="ago">${a.ago}</span><span class="also">${a.also}</span></div><div class="ab">${a.body}</div>${a.foot ? `<div class="af">${a.foot}</div>` : ""}</section>`}
+      ${comp ? `<div class="compose">${comp}</div>` : `<div class="mpad"></div>`}
+    </div></div>`;
+}
+function renderGallery() {
+  $("#caseNav").innerHTML = CASES.filter(c => c.id).map(c => `<a class="seg" href="#case-${c.id}">${esc(c.title)}</a>`).join("");
+  $("#gallery").innerHTML = CASES.map(c => c.group
+    ? `<h3 class="cg">${esc(c.group)}</h3>`
+    : `<figure class="case" id="case-${c.id}"><figcaption><b>${esc(c.title)}</b><span>${esc(c.cap)}</span></figcaption><div class="stage" inert>${frameHTML(c)}</div></figure>`).join("");
+}
+
+function renderTerms() {
+  const k = S.kind;
+  const open = {
+    question: `<span class="dim">Planning: /Users/eengelking/.claude/plans/wise-beaming-token.md</span>\n\n<span class="dim">←</span> <span class="hl"> ☐ Page size </span> ☐ Day selector  ☐ Back state  ✔ Submit <span class="dim">→</span>\n\n<b>How many History rows per page, and can the user change it?</b>\n\n<span class="bl">❯ 1. 25/50/100, default 50 (Recommended)</span>\n     <span class="dim">Same Pager and choices as Admin > Reporters (#167)</span>\n  2. Fixed 50, no choice\n  3. Type something.\n\n  4. Chat about this\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
+    plan: `<b>Ready to code?</b>\n\n<span class="dim">Here is Claude's plan:</span>\n Paginate the History page (#195)\n ...\n\n<span class="bl">❯ 1. Yes, and use auto mode</span>\n  2. Yes, auto-accept edits\n  3. Yes, manually approve edits\n  4. No, keep planning\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
+    permission: `<b>Bash command</b>\n\n  git push -u origin issue/195-history-pages\n  <span class="dim">Push the branch to GitHub</span>\n\nDo you want to proceed?\n<span class="bl">❯ 1. Yes</span>\n  2. Yes, and don't ask again for git push\n  3. No, and tell Claude what to do differently\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
+    idle: `<span class="gr">●</span> PR #204 is open: feat: paginate the History page.\n  CI is running. Merging is your call.\n\n<span class="dim">───────────────────────────────────────────</span>\n<span class="bl">❯</span> \n<span class="dim">───────────────────────────────────────────</span>\n<span class="am">▌ podium-reporter: messages from Podium are on.</span>`
+  }[k];
+  const done = {
+    question: `<span class="gr">●</span> User answered Claude's questions:\n  <span class="dim">⎿</span>  · How many History rows per page...? → 25/50/100, default 50\n     · Should History keep its day selector...? → Keep it, page within the day\n     · What should Back restore? → The page number, The rows-per-page choice\n     <span class="am">Answered from Podium by Ed at 12:23</span>\n\n<span class="gr">●</span> Thanks. Writing the plan now.`,
+    plan: `<span class="gr">●</span> User approved Claude's plan\n  <span class="dim">⎿</span>  Mode: auto\n     <span class="am">Approved from Podium by Ed at 14:42</span>\n\n<span class="gr">●</span> Starting with the route's paging.`,
+    permission: `<span class="gr">●</span> Bash(git push -u origin issue/195-history-pages)\n  <span class="dim">⎿</span>  <span class="am">Allowed once from Podium by Ed at 49:04</span>\n     branch 'issue/195-history-pages' set up to track\n     'origin/issue/195-history-pages'.`,
+    idle: `<span class="bl">❯</span> /clear\n  <span class="dim">⎿</span>  <span class="am">Sent from Podium by Ed at 50:12</span>\n\n<span class="dim">(no content)</span>\n\n<span class="bl">❯</span> Start on issue #205.\n  <span class="dim">⎿</span>  <span class="am">Sent from Podium by Ed at 50:20</span>`
+  }[k];
+  $("#termOpen").innerHTML = open;
+  $("#termDone").innerHTML = done;
+}
+
+// The live modal's own elements, so a lookup never lands in one of the gallery's copies.
+const M = () => $("#modal");
+function render() { renderBands(); renderFeed(); renderAsk(); renderCompose(); renderTerms(); }
+
+/* ---------- events ---------- */
+function syncDraft() {
+  const t = $("#draft"); if (!t) return;
+  const pos = t.selectionStart; S.draft = t.value; S.ta = 0;
+  renderCompose(); const n = $("#draft"); n.focus(); n.setSelectionRange(pos, pos);
+}
+function send() {
+  const text = S.draft.trim(); if (!text) return;
+  if (text === "/clear") { S.confirmClear = true; renderCompose(); $("[data-act='do-clear']", M()).focus(); return; }
+  const pending = S.kind !== "idle" && S.edge === "ready" && !S.submitted;
+  const note = pending ? `(in place of an answer; the ${S.kind === "question" ? "question" : S.kind === "plan" ? "plan" : "request"} closes)` : (S.kind === "idle" ? "" : "(queued until the session is idle)");
+  S.sent.push({ at: S.kind === "question" ? "12:24" : S.kind === "plan" ? "14:43" : S.kind === "permission" ? "49:05" : "50:20", text, note });
+  if (pending) S.kind = "idle", syncRadios();
+  S.draft = ""; render(); $("#draft")?.focus();
+}
+function syncRadios() { $$('input[name="kind"]').forEach(r => r.checked = r.value === S.kind); }
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act],[data-tab],[data-cmd],[data-respond]"); if (!t) return;
+  if (t.matches("[data-respond]")) return openModal(t);
+  if (t.dataset.tab !== undefined) { S.tab = Number(t.dataset.tab); renderAsk(); $(`[data-tab="${S.tab}"]`, M()).focus(); return; }
+  if (t.dataset.cmd) { S.draft = t.dataset.cmd + (t.dataset.cmd === "/clear" || t.dataset.cmd === "/compact" ? "" : " "); renderCompose(); const d = $("#draft"); d.focus(); d.setSelectionRange(S.draft.length, S.draft.length); return; }
+  const a = t.dataset.act;
+  if (a === "next") { S.tab = Math.min(S.tab + 1, QUESTIONS.length); renderAsk(); }
+  else if (a === "back") { S.tab = Math.max(S.tab - 1, 0); renderAsk(); }
+  else if (a === "submit") {
+    S.submitted = true; renderAsk(); renderCompose();
+    setTimeout(() => {
+      const ans = answerSummary(S);
+      S.sent.push({ at: S.kind === "question" ? "12:23" : S.kind === "plan" ? "14:42" : "49:04", text: S.kind === "question" ? `answered: ${ans}` : S.kind === "plan" ? `${S.plan === "keep" ? "No, keep planning" : "approved the plan"}${S.plan === "keep" && S.planFb ? `: ${S.planFb}` : S.plan === "keep" ? "" : ` (${planLabel(S).replace("Yes, ", "")})`}` : `${S.perm === "allow" ? "allowed once" : "denied"}: git push${S.perm === "deny" && S.permFb ? `. ${S.permFb}` : ""}` });
+      S.submitted = false; S.kind = "idle"; syncRadios(); render();
+      $("#draft")?.focus();
+    }, 1600);
+  }
+  else if (a === "discard") { S.edge = "ready"; $$('input[name="edge"]').forEach(r => r.checked = r.value === "ready"); S.answers = {}; render(); }
+  else if (a === "send") send();
+  else if (a === "cancel-clear") { S.confirmClear = false; renderCompose(); $("#draft").focus(); }
+  else if (a === "do-clear") { S.confirmClear = false; S.sent.push({ at: "50:12", text: "/clear", note: "(the conversation was cleared; a new session id follows)" }); S.draft = ""; render(); $("#draft").focus(); }
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.name === "kind") { S.kind = t.value; S.tab = 0; S.submitted = false; S.confirmClear = false; render(); return; }
+  if (t.name === "edge") { S.edge = t.value; S.submitted = false; render(); return; }
+  if (/^q\d$/.test(t.name)) {
+    const q = QUESTIONS[Number(t.name.slice(1))];
+    if (q.multi) S.answers[q.header] = $$(`input[name="${t.name}"]:checked`).map(x => x.value);
+    else S.answers[q.header] = t.value;
+    const id = t.id; renderAsk(); $("#" + id)?.focus();
+    if (t.value === "__other") $(`#q${S.tab}text`)?.focus();
+    return;
+  }
+  if (t.name === "plan") { S.plan = t.value; renderAsk(); $("#plan-" + t.value).focus(); return; }
+  if (t.name === "perm") { S.perm = t.value; renderAsk(); $("#perm-" + t.value).focus(); return; }
+});
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.id === "draft") return syncDraft();
+  if (t.id === "planFb") S.planFb = t.value;
+  if (t.id === "permFb") S.permFb = t.value;
+  if (/^q\dtext$/.test(t.id)) { const q = QUESTIONS[S.tab]; S.other[q.header] = t.value; S.answers[q.header] = "__other"; const r = $(`#q${S.tab}other`); if (r) r.checked = true; $$(".tab", M())[S.tab]?.classList.toggle("done", !!t.value.trim()); }
+});
+document.addEventListener("focusin", e => { if (/^q\dtext$/.test(e.target.id)) { const r = $(`#q${S.tab}other`); if (r && !r.checked) { r.checked = true; S.answers[QUESTIONS[S.tab].header] = "__other"; } } });
+document.addEventListener("keydown", e => {
+  if (e.target.id === "draft") {
+    const list = $$(".typeahead [data-cmd]", M());
+    if (list.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); S.ta = (S.ta + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length; list.forEach((b, i) => b.classList.toggle("on", i === S.ta)); return; }
+    if (list.length && (e.key === "Tab" || (e.key === "Enter" && !S.draft.includes(" ") && list[S.ta].dataset.cmd !== S.draft))) { e.preventDefault(); list[S.ta].click(); return; }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); return; }
+  }
+  if ($("#scrim").hidden) return;
+  if (e.key === "Escape") { e.preventDefault(); if (S.confirmClear) { S.confirmClear = false; renderCompose(); return; } closeModal(); }
+  if (e.key === "Tab") {
+    const f = $$("button:not(:disabled), input:not(:disabled), textarea, select, [tabindex='0']", $("#modal")).filter(x => x.offsetParent !== null);
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
+
+let opener = null;
+function openModal(from) {
+  opener = from; S.tab = 0; S.submitted = false;
+  render();
+  $("#scrim").hidden = false; document.body.classList.add("modal-open");
+  const first = $("#askBody input, #askBody button") || $("#draft") || $("#close");
+  first.focus();
+}
+function closeModal() {
+  if ($("#scrim").hidden) return;
+  $("#scrim").hidden = true; document.body.classList.remove("modal-open");
+  opener?.focus();
+}
+$("#close").addEventListener("click", closeModal);
+$("#scrim").addEventListener("mousedown", e => { if (e.target === $("#scrim")) closeModal(); });
+$("#flagSw").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") === "true" ? "false" : "true"); });
+
+$("#theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+});
+render();
+renderGallery();
+</script>
+</body>
+</html>
