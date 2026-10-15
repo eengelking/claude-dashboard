@@ -36,15 +36,18 @@ export function startSweeper(fleet: Fleet, intervals: SweeperIntervals = DEFAULT
       logger.error('sweeper.failed', `podium sweeper: ${name} failed: ${(err as Error).message}`, { timer: name, reason: (err as Error).message });
     }
   };
+  // Each job is guarded on its own, so a failing one never stops the other.
+  const retention = () => {
+    guard('retention', () => void fleet.retain())();
+    guard('forget-reporters', () => onRetention?.())();
+  };
   const timers = [
     setInterval(guard('sweep', () => fleet.sweep()), intervals.sweepMs),
     setInterval(guard('tick', () => fleet.tick()), intervals.tickMs),
-    setInterval(guard('retention', () => void fleet.retain()), intervals.retentionMs),
-    setInterval(guard('forget-reporters', () => onRetention?.()), intervals.retentionMs),
+    setInterval(retention, intervals.retentionMs),
   ];
   // Retention also runs once at start, so a server that restarts often still prunes.
-  guard('retention', () => void fleet.retain())();
-  guard('forget-reporters', () => onRetention?.())();
+  retention();
   for (const t of timers) t.unref?.();
   return () => {
     for (const t of timers) clearInterval(t);

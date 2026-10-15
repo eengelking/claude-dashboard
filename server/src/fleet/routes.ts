@@ -66,6 +66,17 @@ function noteReporter(opts: FleetRouterOptions, logger: Logger, seen: ReporterSe
   }
 }
 
+/** The key a sender is known by, and any other row that already holds its session, for the ignore check. */
+function keyTarget(opts: FleetRouterOptions, s: { kind: 'mod' | 'hooks'; machineId: string | null; source: string | null; sessionId: string }): { key: string; otherKeys: string[] } {
+  const own = ReporterStore.keyOf(s);
+  try {
+    const keys = opts.reporters?.keysFor(s) ?? [own];
+    return { key: own, otherKeys: keys.filter((k) => k !== own) };
+  } catch {
+    return { key: own, otherKeys: [] };
+  }
+}
+
 /** Refuses a report from a reporter the Admin ignores (issue #167): says so, notes it, and returns true. Nothing is stored. */
 function refuseIgnored(opts: FleetRouterOptions, logger: Logger, fleet: Fleet, req: Request, res: Response, who: IgnoreTarget): boolean {
   let rule: IgnoreRule | undefined;
@@ -151,7 +162,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     if (
       result.report.reporter.hostSurface !== SIMULATOR_SURFACE &&
       refuseIgnored(opts, logger, fleet, req, res, {
-        key: ReporterStore.keyOf({ kind: asHooks ? 'hooks' : 'mod', machineId, source: machineOf(req) }),
+        ...keyTarget(opts, { kind: asHooks ? 'hooks' : 'mod', machineId, source: machineOf(req), sessionId: result.report.session.id }),
         source: machineOf(req),
         version: result.report.reporter.version,
       })
@@ -216,7 +227,8 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   router.post('/hook', requireToken, json, (req, res) => {
     try {
       const id = identityOf(res);
-      if (refuseIgnored(opts, logger, fleet, req, res, { key: ReporterStore.keyOf({ kind: 'hooks', machineId: null, source: machineOf(req) }), source: machineOf(req), version: 'hooks' })) return;
+      const hookSession = typeof req.body?.session_id === 'string' ? (req.body.session_id as string) : '';
+      if (refuseIgnored(opts, logger, fleet, req, res, { ...keyTarget(opts, { kind: 'hooks', machineId: null, source: machineOf(req), sessionId: hookSession }), source: machineOf(req), version: 'hooks' })) return;
       const out = fleet.ingestHook(req.body, ownerOf(id));
       if (!out.ok) {
         logger.warn('hook.rejected', `podium: rejected hook payload at ${out.path}: ${out.error}`, {

@@ -359,7 +359,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
   turns its switch off for everyone. After you close one, Podium says so and links to this page. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
-  default). **Forget old reporters** (off by default) removes a reporter from Admin > Reporters once the server has not heard from it for the number of **Days** you set (30 to start with); it is checked every hour and each run that removes any is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. These settings apply to every browser and stay after a restart.
+  default). **Forget old reporters** (off by default) removes a reporter from Admin > Reporters once the server has not heard from it for the number of **Days** you set (30 to start with); it is checked every hour, starting an hour after the server starts, and each run that removes any is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. These settings apply to every browser and stay after a restart.
 - **Model prices.** One row per model with five prices in US dollars per million tokens: input, output, cache
   read, cache write for 5 minutes and cache write for 1 hour. They start as the prices on Anthropic's pricing
   sheet (the date is shown). Edit a price and click **Save**; every cost in Podium (the wall, each

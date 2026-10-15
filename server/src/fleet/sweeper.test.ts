@@ -280,6 +280,18 @@ describe('forgetting reporters by age (issue #167)', () => {
     stop();
   });
 
+  it('still forgets reporters when the fleet retention step throws', () => {
+    vi.useFakeTimers();
+    const fleet = makeFleet();
+    vi.spyOn(fleet, 'retain').mockImplementation(() => {
+      throw new Error('disk');
+    });
+    const hook = vi.fn();
+    const stop = startSweeper(fleet, { sweepMs: 1000, tickMs: 2000, retentionMs: 3600_000 }, () => {}, hook);
+    expect(hook).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
   it('removes stale reporters when the setting is on, and logs what it removed to the Admin log', () => {
     const raw = openDb(':memory:');
     const reporters = new ReporterStore(raw, T0);
@@ -289,15 +301,16 @@ describe('forgetting reporters by age (issue #167)', () => {
     reporters.record(seen('new'), T0 - 86_400_000);
     const lines: string[] = [];
     const logger = { info: (_e: string, m: string) => lines.push(m) } as never;
-    forgetReporters(reporters, people, logger, T0);
+    const LATER = T0 + 2 * 3_600_000;
+    forgetReporters(reporters, people, logger, LATER);
     expect(reporters.list({}, T0).total).toBe(2); // off by default
     reporters.setForgetSetting({ enabled: true, days: 30 });
-    forgetReporters(reporters, people, logger, T0);
+    forgetReporters(reporters, people, logger, LATER);
     expect(reporters.list({}, T0).rows.map((r) => r.key)).toEqual(['new']);
     expect(people.listLog({ page: 1, pageSize: 10 }).rows[0]).toMatchObject({ kind: 'reporters_forgotten', source: 'sweeper' });
     expect(people.listLog({ page: 1, pageSize: 10 }).rows[0]!.detail).toContain('1 reporter');
     expect(lines).toHaveLength(1);
-    forgetReporters(reporters, people, logger, T0);
+    forgetReporters(reporters, people, logger, LATER);
     expect(people.listLog({ page: 1, pageSize: 10 }).total).toBe(1); // nothing removed, nothing logged
   });
 });

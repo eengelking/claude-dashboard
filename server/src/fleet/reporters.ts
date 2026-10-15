@@ -15,6 +15,8 @@ const MAX_REJECTED = 200;
 const SHOWN_REJECTED = 20;
 const SHOWN_SESSIONS = 10;
 const DAY_MS = 24 * 60 * 60_000;
+/** After a start, reporters are not forgotten for this long, so a long outage does not empty the list before anyone could report. */
+const FORGET_GRACE_MS = 60 * 60_000;
 const MAX_PATTERN = 120;
 const MAX_FORGET_DAYS = 3650;
 const DEFAULT_FORGET_DAYS = 30;
@@ -85,6 +87,8 @@ export interface IgnoreRule {
 /** What a rule is matched against: a reporter's key, source address and reporter version. */
 export interface IgnoreTarget {
   key: string;
+  /** Other keys the same sender is known by, so a rule on the row's key still matches after the sender changes address (#166). */
+  otherKeys?: string[];
   source: string | null;
   version: string;
 }
@@ -170,6 +174,13 @@ export class ReporterStore {
        WHERE x.session_id = ? AND r.machine_id IS NULL AND r.kind = ? AND r.key LIKE ? ORDER BY r.first_seen_at, r.key LIMIT 1`,
     ).get(s.sessionId, s.kind, `${prefix}%`) as { key: string } | undefined;
     return hit?.key;
+  }
+
+  /** Every key a report from this sender can be known by: its own, and the row that already holds its session (#166). */
+  keysFor(s: Pick<ReporterSeen, 'kind' | 'machineId' | 'source' | 'sessionId'>): string[] {
+    const own = ReporterStore.keyOf(s);
+    const known = this.knownKey(s as ReporterSeen);
+    return known && known !== own ? [own, known] : [own];
   }
 
   /** Notes one accepted report: creates the reporter or updates it, and links the session. */
@@ -342,7 +353,29 @@ export class ReporterStore {
 
   /** A pattern is exact text, compared without regard to case, with * for "anything". Never a regular expression. */
   private static matches(pattern: string, value: string): boolean {
-    return new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i').test(value);
+    // Two-pointer wildcard match: * takes any run of characters, and the work stays proportional to the two lengths.
+    const p = pattern.toLowerCase();
+    const v = value.toLowerCase();
+    let pi = 0;
+    let vi = 0;
+    let star = -1;
+    let mark = 0;
+    while (vi < v.length) {
+      if (pi < p.length && p[pi] === '*') {
+        star = pi++;
+        mark = vi;
+      } else if (pi < p.length && p[pi] === v[vi]) {
+        pi++;
+        vi++;
+      } else if (star >= 0) {
+        pi = star + 1;
+        vi = ++mark;
+      } else {
+        return false;
+      }
+    }
+    while (pi < p.length && p[pi] === '*') pi++;
+    return pi === p.length;
   }
 
   private static ruleOf(r: { id: number; kind: string; pattern: string; created_at: number }): IgnoreRule {
@@ -356,7 +389,8 @@ export class ReporterStore {
   /** The first rule a reporter matches, or undefined. */
   ignoredBy(t: IgnoreTarget): IgnoreRule | undefined {
     return this.listIgnores().find((r) => {
-      const v = r.kind === 'key' ? t.key : r.kind === 'address' ? t.source : t.version;
+      if (r.kind === 'key') return [t.key, ...(t.otherKeys ?? [])].some((k) => ReporterStore.matches(r.pattern, k));
+      const v = r.kind === 'address' ? t.source : t.version;
       return v !== null && ReporterStore.matches(r.pattern, v);
     });
   }
@@ -408,10 +442,12 @@ export class ReporterStore {
     if (s.enabled !== undefined) this.putSetting('forget_reporters_enabled', s.enabled ? '1' : '0');
   }
 
-  /** Removes reporters not heard from for the set number of days, when the setting is on. Returns how many went. */
+  /** Removes reporters not heard from for the set number of days, when the setting is on and the server has been up for an hour. Returns how many went. */
   forgetStale(now: number): number {
     const f = this.forgetSetting();
     if (!f.enabled) return 0;
+    // A server that was down for longer than the setting has heard from nobody yet: give every reporter time to report first.
+    if (now - this.startedAt < FORGET_GRACE_MS) return 0;
     return Number(this.stmt('DELETE FROM reporters WHERE last_seen_at < ?').run(now - f.days * DAY_MS).changes);
   }
 }

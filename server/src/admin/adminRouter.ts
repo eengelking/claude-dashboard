@@ -298,6 +298,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       // Every reporter a filter holds, which can be more than one page: what "select all that match" asks for.
       const m = match as { q?: unknown; state?: unknown; admin?: unknown };
       if (!m || typeof m !== 'object' || Array.isArray(m)) return void res.status(400).json({ ok: false, error: 'match must be a filter' });
+      if (m.state !== undefined && m.state !== '' && !REPORTER_STATES.includes(m.state as ReporterState)) return void res.status(400).json({ ok: false, error: 'match.state is not a reporter state' });
       removed = reporters.removeMany(reporters.keys({ q: str(m.q), state: str(m.state), admin: m.admin === true }, now()));
     } else if (Array.isArray(keys)) {
       if (keys.length < 1 || keys.length > MAX_BULK || keys.some((k) => typeof k !== 'string' || reporterKey(k) === null)) {

@@ -613,6 +613,20 @@ describe("Reporters tab (#142)", () => {
     await waitFor(() => expect(state.removeBodies).toEqual([{ match: { q: "e" } }]));
   });
 
+  it("keeps the other ticked rows when one is unticked after \"select all that match\" (issue #167)", async () => {
+    const state = await openReporters();
+    state.reporters.push(...Array.from({ length: 3 }, (_, i) => ({ ...state.reporters[0]!, key: `k${i}`, name: `extra-${i}` })));
+    state.pageLimit = 2;
+    fireEvent.change(screen.getByLabelText("Search reporters"), { target: { value: "e" } });
+    await screen.findByText("extra-0");
+    fireEvent.click(await screen.findByLabelText("Select all 2 on this page"));
+    fireEvent.click(screen.getByRole("button", { name: "Select all 3 that match" }));
+    expect(screen.getByRole("group", { name: "Selected reporters" })).toHaveTextContent("3 selected (all that match)");
+    fireEvent.click(screen.getByLabelText("Select extra-0"));
+    expect(screen.getByRole("group", { name: "Selected reporters" })).toHaveTextContent("1 selected");
+    expect(screen.getByLabelText("Select extra-0")).not.toBeChecked();
+  });
+
   it("removes every reporter in a state from the state strip, with the count in the confirmation (issue #167)", async () => {
     const state = await openReporters();
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));

@@ -740,7 +740,7 @@ CREATE TABLE reporter_ignores (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT N
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);       -- allow_admin_secret_reporting: '1' (default) or '0'; feature.<id>: '0' once the Admin turns a feature flag off (on by default); wall_notice.<id>: '0' once a notice is off; wall_show_background_sessions: '1' when on (default off); model_prices: JSON of only what the Admin changed from the built-in prices, `{ "<key>": { std?, long? } }` (#117)
 ```
 
-Retention (run by the sweeper hourly): samples older than 24 h deleted; events older than 30 days deleted; sessions ended more than 30 days ago deleted with their rows. The `reporters` table is kept, so a reporter outlives its sessions until the Admin removes it, or until the forget-by-age setting does (off by default; the same hourly run removes reporters not heard from for `days` days, 30 unless the Admin sets another, and writes a `reporters_forgotten` entry to the Admin log). All three thresholds are env-configurable.
+Retention (run by the sweeper hourly): samples older than 24 h deleted; events older than 30 days deleted; sessions ended more than 30 days ago deleted with their rows. The `reporters` table is kept, so a reporter outlives its sessions until the Admin removes it, or until the forget-by-age setting does (off by default; the same hourly run, once the server has been up for an hour so a long outage cannot empty the list before anyone reports, removes reporters not heard from for `days` days, 30 unless the Admin sets another, and writes a `reporters_forgotten` entry to the Admin log). All three thresholds are env-configurable.
 
 ### 7.3 Ingest rules (`ingest.ts`) and derivation (`derive.ts`)
 

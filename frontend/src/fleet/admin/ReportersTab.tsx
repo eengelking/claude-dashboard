@@ -182,9 +182,10 @@ export function ReportersTab(props: {
   const nSel = selAll && data ? data.total : sel.length;
   const plural = (n: number) => `${n} ${n === 1 ? "reporter" : "reporters"}`;
   const toggle = (key: string, on: boolean) => {
-    setSelAll(false);
     setPending(null);
-    setSel((cur) => (on ? [...cur, key] : cur.filter((k) => k !== key)));
+    // Unticking a row while "all that match" is on keeps the other rows on this page ticked; the rest of the matches are let go.
+    setSel((cur) => (selAll ? rows.map((r) => r.key).filter((k) => k !== key) : on ? [...cur, key] : cur.filter((k) => k !== key)));
+    setSelAll(false);
   };
   const sortBy = (sort: ReporterSort) => onPaging({ sort, dir: paging.sort === sort ? (paging.dir === 1 ? -1 : 1) : 1, page: 1 });
   const th = (sort: ReporterSort, label: string, cls = "") => (

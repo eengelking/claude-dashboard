@@ -252,6 +252,23 @@ describe('ignore rules (issue #167)', () => {
     expect(store.ignoredBy({ key: 'aaaa', source: null, version: '1' })).toBeUndefined();
   });
 
+  it('matches * without backtracking on a long value', () => {
+    store.addIgnore('version', 'a*a*a*a*a*a*b', START);
+    const t0 = Date.now();
+    expect(store.ignoredBy({ key: 'k', source: null, version: 'a'.repeat(60) })).toBeUndefined();
+    expect(Date.now() - t0).toBeLessThan(50);
+    expect(store.ignoredBy({ key: 'k', source: null, version: 'aaaaaaaaaaaab' })).toBeDefined();
+  });
+
+  it('matches a key rule on the row a session already belongs to, after the reporter changes address (#166)', () => {
+    const anon = (over: Partial<ReporterSeen>) => seen({ machineId: null, machineName: null, owner: null, ...over });
+    store.record(anon({ source: '10.88.0.133', sessionId: 's1' }), START + MIN);
+    const s = anon({ source: '10.88.0.134', sessionId: 's1' });
+    expect(store.keysFor(s)).toEqual(['addr:10.88.0.134', 'addr:10.88.0.133']);
+    store.addIgnore('key', 'addr:10.88.0.133', START + 2 * MIN);
+    expect(store.ignoredBy({ key: 'addr:10.88.0.134', otherKeys: ['addr:10.88.0.133'], source: '10.88.0.134', version: '1' })).toBeDefined();
+  });
+
   it('refuses a rule made only of *, which would turn every reporter away', () => {
     expect(() => store.addIgnore('address', '*', START)).toThrow(/besides \*/);
     expect(() => store.addIgnore('version', '**', START)).toThrow();
@@ -275,7 +292,7 @@ describe('forgetting reporters by age (issue #167)', () => {
   it('is off, at 30 days, until the Admin turns it on', () => {
     expect(store.forgetSetting()).toEqual({ enabled: false, days: 30 });
     store.record(seen(), START - 90 * DAY);
-    expect(store.forgetStale(START)).toBe(0);
+    expect(store.forgetStale(START + 2 * 60 * MIN)).toBe(0);
     expect(store.list({}, START).total).toBe(1);
   });
 
@@ -283,8 +300,16 @@ describe('forgetting reporters by age (issue #167)', () => {
     store.record(seen({ machineId: 'old', sessionId: 'o' }), START - 31 * DAY);
     store.record(seen({ machineId: 'new', sessionId: 'n' }), START - 29 * DAY);
     store.setForgetSetting({ enabled: true, days: 30 });
-    expect(store.forgetStale(START)).toBe(1);
+    expect(store.forgetStale(START + 2 * 60 * MIN)).toBe(1);
     expect(store.list({}, START).rows.map((r) => r.key)).toEqual(['new']);
+  });
+
+  it('waits an hour after the server starts, so a long outage does not empty the list', () => {
+    store.record(seen({ machineId: 'old', sessionId: 'o' }), START - 90 * DAY);
+    store.setForgetSetting({ enabled: true, days: 30 });
+    expect(store.forgetStale(START + 59 * MIN)).toBe(0);
+    expect(store.list({}, START).total).toBe(1);
+    expect(store.forgetStale(START + 61 * MIN)).toBe(1);
   });
 
   it('keeps the days when it is switched off and on, and refuses days outside 1 to 3650', () => {
