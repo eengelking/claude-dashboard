@@ -435,7 +435,12 @@ button.tb-btn:hover { background: var(--sel); }
       <div class="term" id="termDone"></div>
       <p class="cap">After an answer from Podium. The dialog closes by itself.</p>
     </div>
+    <div>
+      <div class="term" id="termMore"></div>
+      <p class="cap">The other answers from Podium: a Deny, a plan sent back, and a message in place of an answer.</p>
+    </div>
   </div>
+  <p class="note">While responding is on and the session is idle, podium-reporter writes <b>messages from Podium are on.</b> once, the first time the session is idle with messages from Podium allowed, and again only after responding was turned off and back on.</p>
 
   <h2 class="s">5. The switches</h2>
   <p class="note">Off by default, and every one is needed. The Admin decides whether this server may send anything; the person running the session decides how much their session accepts, and can always say no. Answering also needs the activity feed, which already has both kinds of switch.</p>
@@ -446,7 +451,7 @@ button.tb-btn:hover { background: var(--sel); }
       <span class="fc"><button class="sw" type="button" role="switch" aria-checked="false" aria-label="Respond from Podium" id="flagSw"></button></span>
     </div>
     <div class="flag">
-      <span class="ft">podium-reporter option <code>respond</code></span>
+      <span class="ft">podium-reporter option <code>respond</code>, titled Respond from Podium</span>
       <span class="fd">Set in Claude Code with <code>/plugin configure podium-reporter@eengelking-marketplace</code>. What this session accepts from Podium:
         <ul class="levels">
           <li><b>off</b><span>Nothing. The default.</span></li>
@@ -600,7 +605,7 @@ function feedHTML(st) {
     return `<li class="txt"><span class="at">${at}</span><span class="k" title="Text">${icon("text", 12)}</span><span class="body">${esc(text)}</span></li>`;
   });
   for (const m of st.sent) {
-    rows.push(`<li class="you"><span class="at">${m.at}</span><span class="k" title="Sent from Podium">${icon("you", 12)}</span><span class="body"><span class="who">You, from Podium:</span> ${esc(m.text)}${m.note ? ` <span class="q">${esc(m.note)}</span>` : ""}</span></li>`);
+    rows.push(`<li class="you"><span class="at">${m.at}</span><span class="k" title="Sent from Podium">${icon("you", 12)}</span><span class="body"><span class="who">${m.who ? esc(m.who) : "You"}, from Podium:</span> ${esc(m.text)}${m.note ? ` <span class="q">${esc(m.note)}</span>` : ""}</span></li>`);
     if (m.then) rows.push(`<li class="txt"><span class="at">${m.thenAt}</span><span class="k" title="Text">${icon("text", 12)}</span><span class="body">${esc(m.then)}</span></li>`);
   }
   if (st.tail) rows = rows.slice(-st.tail);
@@ -651,7 +656,7 @@ function askParts(st) {
     // The mod can't see which plan option the terminal picked, so an approval there names no mode.
     const there = st.kind === "plan"
       ? (st.termPlan === "keep" ? "The answer there was <q>No, keep planning</q>." : "The plan was approved there.")
-      : `The answer there was <q>${esc(st.kind === "question" ? "25/50/100, default 50; Keep it, page within the day; The page number" : "Allow once")}</q>.`;
+      : `The answer there was <q>${esc(st.kind === "question" ? "25/50/100, default 50; Keep it, page within the day; The page number" : st.termPerm === "deny" ? "Denied" : "Allowed")}</q>.`;
     r.body = outcome("info", icon("info"), "Answered in the terminal at 12:23.", `${there} Nothing from here was sent, and your draft was dropped.`);
     r.foot = `<span class="grow">The session has moved on.</span>`;
   } else if (st.edge === "other") {
@@ -660,7 +665,7 @@ function askParts(st) {
     r.foot = `<span class="grow">Only the first answer to a ${what} is accepted.</span>`;
   } else if (st.edge === "closed") {
     r.also = "";
-    r.body = outcome("bad", icon("x"), `This ${what} was closed in the session before you answered.`, "Someone pressed Esc in the terminal at 12:23, so Claude stopped waiting. Nothing was sent. Send a message below if you want to pick it up again.");
+    r.body = outcome("bad", icon("x"), `This ${what} was closed in the session before you answered.`, "It was closed without an answer at 12:23, so Claude stopped waiting. Nothing was sent. Send a message below if you want to pick it up again.");
     r.foot = `<span class="grow">The session is now waiting for a new message.</span>`;
   } else if (st.edge === "undelivered") {
     r.also = "Last check-in 0:45 ago";
@@ -723,6 +728,14 @@ function questionParts(st, r) {
 
 function planParts(st, r) {
   const p = st.p;
+  // Where Claude Code doesn't run podium-reporter's permission hooks, only "No, keep planning" can be sent from here.
+  if (st.backOnly) {
+    r.body = `<p class="qh">Ready to code?</p><p class="planfile">~/.claude/plans/wise-beaming-token.md</p><div class="planbox">${PLAN}</div>
+    <p class="signnote">This session can't take an approval from Podium, because Claude Code doesn't run podium-reporter's permission hooks on this computer. That happens where an organization manages Claude Code. Approve the plan in the terminal, or send it back from here.</p>
+    <fieldset class="opts" aria-label="Send the plan back"><label class="opt"><input type="radio" name="${p}plan" value="keep" checked id="${p}plan-keep"><span class="ol">No, keep planning</span><textarea id="${p}planFb" rows="2" placeholder="Tell Claude what to change" aria-label="Tell Claude what to change">${esc(st.planFb)}</textarea></label></fieldset>`;
+    r.foot = `<span class="grow">Editing the plan text (Ctrl+G) is only in the terminal.</span><button class="btn pri" type="button" data-act="submit">Send feedback</button>`;
+    return;
+  }
   const o = (v, label, d) => `<label class="opt"><input type="radio" name="${p}plan" value="${v}" ${st.plan === v ? "checked" : ""} id="${p}plan-${v}"><span class="ol">${label}</span>${d ? `<span class="od">${d}</span>` : ""}${v === "keep" && st.plan === "keep" ? `<textarea id="${p}planFb" rows="2" placeholder="Tell Claude what to change" aria-label="Tell Claude what to change">${esc(st.planFb)}</textarea>` : ""}</label>`;
   r.body = `<p class="qh">Ready to code?</p><p class="planfile">~/.claude/plans/wise-beaming-token.md</p><div class="planbox">${PLAN}</div>
     <fieldset class="opts" aria-label="Approve the plan">${o("auto", "Yes, and use auto mode", "Claude decides which tools need asking.")}${o("edits", "Yes, auto-accept edits", "File edits run without asking; commands still ask.")}${o("manual", "Yes, manually approve edits", "Every edit asks first.")}${o("keep", "No, keep planning", "")}</fieldset>`;
@@ -797,6 +810,7 @@ const CASES = [
   { group: "Plan approval" },
   { id: "p-approve", title: "Approve the plan", cap: "The plan is shown whole, with three ways to approve it. The terminal's dialog has two of them; Yes, auto-accept edits is offered here too.", st: { kind: "plan" } },
   { id: "p-keep", title: "Keep planning, with feedback", cap: "No, keep planning opens a box for what to change. The button says what happens.", st: { kind: "plan", plan: "keep", planFb: "Also cover search across days. People will ask for it next." } },
+  { id: "p-backonly", title: "A plan that can only be sent back", cap: "Where Claude Code doesn't run podium-reporter's permission hooks, such as on a computer an organization manages, approving stays in the terminal. No, keep planning still works from here.", st: { kind: "plan", plan: "keep", backOnly: true } },
   { group: "A tool permission" },
   { id: "t-allow", title: "Allow once", cap: "The command and Claude's description of it. Only Allow once is offered here.", st: { kind: "permission" } },
   { id: "t-deny", title: "Deny, with a reason", cap: "The reason is optional and goes to Claude with the denial.", st: { kind: "permission", perm: "deny", permFb: "Not yet. Run npm run build first." } },
@@ -811,7 +825,8 @@ const CASES = [
   { id: "e-nottaken", title: "Approval not taken", cap: "Claude Code didn't take an approval sent from here. The ask stays open, in Podium and in the terminal.", st: { kind: "plan", edge: "nottaken" } },
   { id: "e-terminal", title: "Answered in the terminal", cap: "The terminal answered first. What was chosen there replaces the form.", st: { kind: "question", edge: "terminal" } },
   { id: "e-plan-terminal", title: "Plan approved in the terminal", cap: "Podium can't see which mode was picked in the terminal, so none is named. When the terminal sent feedback instead, the detail reads \"The answer there was No, keep planning.\"", st: { kind: "plan", edge: "terminal" } },
-  { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted.", st: { kind: "question", edge: "other" } },
+  { id: "e-tool-terminal", title: "Tool answered in the terminal", cap: "Podium learns what the terminal chose when the command ends, so a command the terminal allowed still looks open while it runs. The detail reads Allowed or Denied. A Deny sent from here meanwhile is never shown as taken.", st: { kind: "permission", edge: "terminal" } },
+  { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted. Their answer shows in the feed under their name.", st: { kind: "question", edge: "other", sent: [{ who: "Alex", at: "12:23", text: "answered: Fixed 50, no choice; One paged list, newest first; The page number" }] } },
   { id: "e-closed", title: "Closed in the session", cap: "Esc, an interrupted turn or the end of the session closed the question before you sent anything.", st: { kind: "question", edge: "closed" } },
   { id: "e-undelivered", title: "Session not checking in", cap: "Your answer is kept and sent when the reporter checks in again, unless the terminal answered by then.", st: { kind: "question", edge: "undelivered", answers: { "Page size": PS } } },
   { id: "e-old", title: "Reporter can't answer", cap: "An older podium-reporter, the settings hooks, or a claude -p run. The card has no Respond button; Expand still opens the feed.", st: { kind: "question", edge: "old" } },
@@ -854,6 +869,7 @@ function renderTerms() {
   }[k];
   $("#termOpen").innerHTML = open;
   $("#termDone").innerHTML = done;
+  $("#termMore").innerHTML = `<span class="gr">●</span> Bash(git push -u origin issue/195-history-pages)\n  <span class="dim">⎿</span>  <span class="am">Denied from Podium by Ed at 49:04</span>\n     Error: Not yet. Run npm run build first.\n\n<span class="gr">●</span> User rejected Claude's plan\n  <span class="dim">⎿</span>  <span class="am">Sent back from Podium by Ed at 14:43</span>\n     Also cover search across days.\n\n<span class="gr">●</span> AskUserQuestion\n  <span class="dim">⎿</span>  <span class="am">Replied from Podium by Ed at 12:24</span>\n     Before you pick: how many sessions does History hold on a busy day?`;
 }
 
 function renderTopBar() {
