@@ -1,6 +1,6 @@
 // Every podium-reporter the server has heard from (issue #142, SPEC 7.2 and 7.7). One row per machine, keyed on the
-// machine id the reporter sends, or on its source address when it sends none. The table is not touched by
-// retention, so a reporter outlives its sessions. A reporter that stops is "silent", which is all the server can
+// machine id the reporter sends, or on its source address when it sends none. Retention does not touch the
+// table, so a reporter outlives its sessions; only the Admin removes one, or the forget-by-age setting (#167). A reporter that stops is "silent", which is all the server can
 // know: it cannot tell a reporter that is turned off from one that cannot reach it. All statements are parameterized.
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { checkReporter } from './compat.js';

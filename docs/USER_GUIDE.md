@@ -345,8 +345,13 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   one person is always flagged: an amber **Admin secret** badge in the Token column, a band above the list that
   counts them (**Show only these** filters to them), and a warning at the top of its details with the steps to
   fix it: make a person in People, then enter their token and name in the reporter's options. **Remove from list** takes a reporter off the list;
-  it comes back if it reports again, and its sessions are not touched. A source address and a machine name are
-  personal data, so only Admin shows them.
+  it comes back if it reports again, and its sessions are not touched.
+  To clear out many at once, tick the boxes (the box in the header ticks the page, and **Select all N that
+  match** reaches past it), then **Remove N…**; with a state chosen, **Remove all <state>** beside the search
+  does the same. To keep a reporter off the list for good, choose **Ignore…** in its details: its reports are
+  then turned away, so its sessions stop appearing on the fleet. The **Ignore rules** list under the table shows
+  every rule (a key, an address or a version, with `*` for "anything", as in `10.88.*` or `*-sim`), and
+  **Remove rule** undoes one. A source address and a machine name are personal data, so only Admin shows them.
 - **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
   today is **Agent activity feed** (`activity-feed`), on by default. Turned off, every agent and orchestrator
   panel says the Admin turned the feed off, the server asks no mod for activity and forgets what it held,
@@ -354,7 +359,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
   turns its switch off for everyone. After you close one, Podium says so and links to this page. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
-  default). These settings apply to every browser and stay after a restart.
+  default). **Forget old reporters** (off by default) removes a reporter from Admin > Reporters once the server has not heard from it for the number of **Days** you set (30 to start with); it is checked every hour and each run that removes any is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. These settings apply to every browser and stay after a restart.
 - **Model prices.** One row per model with five prices in US dollars per million tokens: input, output, cache
   read, cache write for 5 minutes and cache write for 1 hour. They start as the prices on Anthropic's pricing
   sheet (the date is shown). Edit a price and click **Save**; every cost in Podium (the wall, each
