@@ -69,7 +69,7 @@ report has none) as the key and the credential as a key id, never a token, and c
 keeps the last 200 in memory only. Retention never touches the table, so a reporter outlives its sessions; the session count
 comes from `reporter_sessions`. The state (reporting, idle, silent, not since restart) is computed in SQL from the last report,
 the server's start time and now, so filtering, counting and sorting by it stay server-side and paged, and the browser only
-asks again every 10 seconds. The tab is admin-only because it shows source addresses and machine names. The report format did
+asks again every 10 seconds. The page is admin-only because it shows source addresses and machine names. The report format did
 not change, so the mod's options are not available to show.
 
 **The prompt and answer modal** (`components/ReportDocs.tsx`, `components/Markdown.tsx`, issue #97). The whole
