@@ -142,6 +142,11 @@ async function settle(w: World, rounds = 30) {
   for (let i = 0; i < rounds; i++) await w.clock.advance(0)
 }
 
+/** A call the test leaves open on purpose. Once the test's engine is gone its dialog rejects, with nobody awaiting it. */
+function leaveOpen(call: Promise<unknown>): void {
+  call.catch(() => undefined)
+}
+
 async function started($: Engine, w: World) {
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
   await w.clock.advance(1000) // the first report, whose reply says the server takes answers
@@ -287,7 +292,7 @@ describe('respond: a question', () => {
   test('the open ask rides in every report while the server takes answers', { options: ON }, async ($, on) => {
     const w = world(on)
     await started($, w)
-    void $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never)
+    leaveOpen($.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never))
     await settle(w)
     await w.clock.advance(1000)
     expect(w.posts.at(-1)!.session.asks).toEqual([expect.objectContaining({ kind: 'question' })])
@@ -296,7 +301,7 @@ describe('respond: a question', () => {
   test('an ask the server stopped waiting on leaves the reports, so the server never takes an answer nobody collects', { options: ON }, async ($, on) => {
     const w = world(on)
     await started($, w)
-    void $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never)
+    leaveOpen($.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never))
     await settle(w)
     w.dropAsks()
     await settle(w)
@@ -374,7 +379,7 @@ describe('respond: a plan', () => {
   test('at the questions level an approval is refused and the PermissionRequest passes through', { options: { respond: 'questions', activityFeed: true } }, async ($, on) => {
     const w = world(on)
     await started($, w)
-    void $.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never)
+    leaveOpen($.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never))
     await settle(w)
     expect(puts(w)).toEqual([])
     expect(await $.classic.PermissionRequest({ tool_name: 'ExitPlanMode', tool_input: PLAN_INPUT } as never)).toEqual({})
@@ -533,7 +538,7 @@ describe('respond: where PermissionRequest hooks do not run', () => {
   test('a PermissionRequest that follows the prompt in time keeps every kind', { options: ON }, async ($, on) => {
     const w = world(on)
     await started($, w)
-    void $.tool.call({ tool: 'Bash', command: 'git push', description: 'Push' } as never)
+    leaveOpen($.tool.call({ tool: 'Bash', command: 'git push', description: 'Push' } as never))
     await settle(w)
     await $.tool.check({ tool: 'Bash', input: { command: 'git push', description: 'Push' }, tool_use_id: 'toolu_check2' } as never)
     void $.classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'git push', description: 'Push' } } as never)

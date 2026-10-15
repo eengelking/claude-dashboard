@@ -147,6 +147,8 @@ export function readOptions(o: Record<string, unknown>): Options {
 
 let opts: Options = readOptions({});
 let rt: Runtime | null = null;
+/** Bumped by each register (a reload, or a new test): a wait for an answer started under an older one stops. */
+let generation = 0;
 let errors: { at: number; where: string; message: string }[] = [];
 let stats: Record<string, HookStat> = {};
 /** Agents whose failure was sent for an explanation: at most one call per failure, never retried. */
@@ -663,8 +665,23 @@ async function waitForAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boo
   return d;
 }
 
+/**
+ * Waits `ms` on the engine's clock. False when the sleep fails: its dispatch was aborted or let go, so the engine
+ * behind this wait is gone, and a loop that went round again would never wait at all.
+ */
+async function pause($: Engine, ms: number): Promise<boolean> {
+  try {
+    await $.clock.sleep(ms);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void): Promise<Delivery | null> {
-  while (!a.done && rt?.transport.respond) {
+  // `rt` is module state, so a wait from an older register would otherwise read a newer session's switches.
+  const gen = generation;
+  while (!a.done && gen === generation && rt?.transport.respond) {
     const res = await podiumCall($, 'GET', `${sessionPath(a.sessionId)}/asks/${encodeURIComponent(a.ask.id)}/answer?wait=${HOLD_SECONDS}`);
     if (a.done) {
       const d = deliveryOf(res);
@@ -672,19 +689,19 @@ async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolea
       return null;
     }
     if (!res) {
-      await attempt(() => $.clock.sleep(Transport.backoff(1)), undefined);
+      if (!(await pause($, Transport.backoff(1)))) return null;
       continue;
     }
     if (res.status === 204) continue;
     if (res.status === 404) {
-      if ((await announce($, a)) !== 200) await attempt(() => $.clock.sleep(Transport.backoff(2)), undefined);
+      if ((await announce($, a)) !== 200 && !(await pause($, Transport.backoff(2)))) return null;
       continue;
     }
     const d = deliveryOf(res);
     if (!d) return null;
     if (!markActed($, d.id)) {
       // Already acted on and waiting for its result to reach the server: ask again shortly.
-      await attempt(() => $.clock.sleep(1000), undefined);
+      if (!(await pause($, 1000))) return null;
       continue;
     }
     if (d.askId === a.ask.id && wanted(d)) return d;
@@ -1066,6 +1083,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
 export const register: Register = (on, rawOptions) => {
   opts = readOptions(rawOptions as Record<string, unknown>);
   rt = null;
+  generation++;
   errors = [];
   stats = {};
   explained = new Set();
