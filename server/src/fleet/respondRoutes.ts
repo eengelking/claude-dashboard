@@ -141,7 +141,10 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     const raw = typeof req.query.wait === 'string' && /^\d{1,3}$/.test(req.query.wait) ? Number(req.query.wait) : RESPOND_LIMITS.holdSeconds;
     const wait = Math.max(1, Math.min(RESPOND_LIMITS.holdSeconds, raw));
     res.set('Cache-Control', 'no-store');
-    const out = await fleet.respond.hold(row.id, req.params.askId!, wait * 1000);
+    // A mod that gives up (Esc aborts a hook's fetches) must not be handed an answer it never reads.
+    const gone = new AbortController();
+    res.on('close', () => gone.abort());
+    const out = await fleet.respond.hold(row.id, req.params.askId!, wait * 1000, gone.signal);
     if (res.writableEnded || res.destroyed) return;
     if (out.kind === 'delivery') res.json({ delivery: out.delivery });
     else if (out.kind === 'none') res.status(204).end();

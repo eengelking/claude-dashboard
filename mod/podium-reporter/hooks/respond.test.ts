@@ -27,6 +27,8 @@ interface World {
   server: { respond: boolean; deliveries: Delivery[] }
   /** Answers every held request now waiting, and the next one if none is. */
   deliver: (d: Delivery) => void
+  /** The server drops its asks (the Admin turned responding off): every held request, and each later one, is a 410. */
+  dropAsks: () => void
   /** The terminal's dialog for the next AskUserQuestion or ExitPlanMode call: resolve it to answer there. */
   dialog: { resolve: ((r: unknown) => void) | null }
   /** What a tool's own call resolves to once it runs (or is refused). */
@@ -42,8 +44,9 @@ function world(on: On): World {
   const submitted: string[] = []
   const commands: string[] = []
   const server = { respond: true, deliveries: [] as Delivery[] }
-  const holds: ((d: Delivery) => void)[] = []
+  const holds: ((d: Delivery | null) => void)[] = []
   let waiting: Delivery | null = null
+  let dropped = false
   const dialog: World['dialog'] = { resolve: null }
   const toolRun: World['toolRun'] = { resolve: null }
   const sessionId = { value: SID }
@@ -79,12 +82,14 @@ function world(on: On): World {
       return ok({ ok: true, ackedEvents: (body as Report).events.length, liveSessions: 1, watch: [], respond: server.respond, deliveries })
     }
     if (method === 'GET' && url.pathname.endsWith('/answer')) {
+      const gone = () => ok({ ok: false, error: 'closed', outcome: 'ended' }, 410)
+      if (dropped) return gone()
       if (waiting) {
         const d = waiting
         waiting = null
         return ok({ delivery: d })
       }
-      return new Promise((resolve) => holds.push((d) => resolve(ok({ delivery: d }))))
+      return new Promise((resolve) => holds.push((d) => resolve(d ? ok({ delivery: d }) : gone())))
     }
     return ok({ ok: true })
   })
@@ -124,6 +129,10 @@ function world(on: On): World {
       const all = holds.splice(0)
       if (!all.length) waiting = d
       for (const h of all) h(d)
+    },
+    dropAsks: () => {
+      dropped = true
+      for (const h of holds.splice(0)) h(null)
     },
   }
 }
@@ -282,6 +291,17 @@ describe('respond: a question', () => {
     await settle(w)
     await w.clock.advance(1000)
     expect(w.posts.at(-1)!.session.asks).toEqual([expect.objectContaining({ kind: 'question' })])
+  })
+
+  test('an ask the server stopped waiting on leaves the reports, so the server never takes an answer nobody collects', { options: ON }, async ($, on) => {
+    const w = world(on)
+    await started($, w)
+    void $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never)
+    await settle(w)
+    w.dropAsks()
+    await settle(w)
+    await w.clock.advance(1000)
+    expect(w.posts.at(-1)!.session.asks).toEqual([])
   })
 })
 

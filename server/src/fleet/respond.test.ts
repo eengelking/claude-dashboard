@@ -106,6 +106,36 @@ describe('RespondStore', () => {
     expect(await s.hold(sid, 'toolu_p', 10_000)).toEqual({ kind: 'closed', outcome: 'terminal' });
   });
 
+  it('drops a held request whose connection closed, so a later answer is not taken as handed over', async () => {
+    const { s, sid } = store();
+    s.announce(sid, QUESTION);
+    const gone = new AbortController();
+    const waiting = s.hold(sid, 'toolu_q', 10_000, gone.signal);
+    gone.abort();
+    expect(await waiting).toEqual({ kind: 'none' });
+    expect(s.holding).toBe(0);
+    s.answer(sid, 'toolu_q', 'Ed', { kind: 'reply', text: 'x' });
+    expect(s.detail(sid, 'toolu_q', 'Ed', 0)?.delivery?.handedOver).toBe(false);
+  });
+
+  it('opens an implicitly closed ask again when a report lists it, without the answer the close dropped', () => {
+    const { s, sid, changes } = store();
+    s.announce(sid, QUESTION);
+    expect(s.answer(sid, 'toolu_q', 'Ed', { kind: 'reply', text: 'x' }).ok).toBe(true);
+    const r = fixtureReport();
+    r.sentAt = T0 + 60_000;
+    r.session.respond = { level: 'everything', accepts: ALL, limits: [] };
+    r.session.asks = [];
+    s.noteReport(r, true);
+    expect(s.summaries(sid)[0]!.state).toBe('closed');
+    const before = changes.length;
+    r.session.asks = [QUESTION];
+    s.noteReport(r, true);
+    expect(changes.length).toBeGreaterThan(before);
+    expect(s.summaries(sid)[0]!.state).toBe('open');
+    expect(s.answer(sid, 'toolu_q', 'Ed', { kind: 'reply', text: 'y' }).ok).toBe(true);
+  });
+
   it('closes an ask as answered from Podium once the session took the answer', () => {
     const { s, sid } = store();
     s.announce(sid, TOOL);

@@ -4,6 +4,7 @@ import type { ActivityEntryView, SessionView } from "../types";
 import { EVERY_CHOICES, readEvery, useActivityFeed, writeEvery, type FeedState, type FetchActivity } from "../useActivityFeed";
 import { Modal } from "./Modal";
 import { useRespond } from "../useRespond";
+import { nameKey } from "../respond";
 
 // The Activity section of the agent and orchestrator panels (#118, mockup/podium-agent-feed.html): the loop's recent
 // tool calls and the text it writes, newest at the bottom, fetched on the viewer's interval while the panel is open.
@@ -49,7 +50,7 @@ const KIND: Record<ActivityEntryView["kind"], { label: string; icon: JSX.Element
 };
 
 /** The note shown in the panel, and in its modal, while the Admin has the feed turned off. */
-function AdminOffNote() {
+export function AdminOffNote() {
   return (
     <div className="feedoff">
       <b>The activity feed is turned off by the Admin.</b>
@@ -83,9 +84,8 @@ function Redacted(props: { text: string }) {
 
 /** Who sent an answer or message from Podium, as the feed names them: "You" for the signed-in person (#206). */
 function senderOf(by: string | undefined, me: string | null): string {
-  const key = (n: string) => n.trim().toLowerCase();
   if (!by) return "Someone";
-  return me && key(by) === key(me) ? "You" : by;
+  return me && nameKey(by) === nameKey(me) ? "You" : by;
 }
 
 function Entry(props: { e: ActivityEntryView; startedAt: number; fresh: boolean }) {

@@ -170,6 +170,11 @@ interface OpenAsk {
   notTaken: boolean;
   /** A tool: the answer the PermissionRequest hook returned. */
   answered: Delivery | null;
+  /**
+   * Something still waits on the server for this ask's answer. Once the wait gives up (responding turned off, the ask
+   * closed there) the ask stops riding in reports, so the server never learns it again and takes an answer nobody collects.
+   */
+  listening: boolean;
 }
 
 /** A close or a result for the server, sent from the flush timer (Esc aborts a hook's own fetches). */
@@ -251,7 +256,7 @@ function responding(r: Runtime | null, kind: RespondKind): boolean {
 }
 
 function openAsks(r: Runtime): Ask[] {
-  return [...asks.values()].filter((a) => !a.done && a.sessionId === r.state.id).map((a) => a.ask);
+  return [...asks.values()].filter((a) => !a.done && a.listening && a.sessionId === r.state.id).map((a) => a.ask);
 }
 
 function metaOf(r: Runtime, now: number) {
@@ -632,7 +637,7 @@ async function announce($: Engine, a: OpenAsk): Promise<number> {
 }
 
 function openAsk(r: Runtime, ask: Ask, questions?: OpenAsk['questions']): OpenAsk {
-  const a: OpenAsk = { ask, sessionId: r.state.id, questions, done: false, announced: false, approval: null, approvalWaiters: [], notTaken: false, answered: null };
+  const a: OpenAsk = { ask, sessionId: r.state.id, questions, done: false, announced: false, approval: null, approvalWaiters: [], notTaken: false, answered: null, listening: true };
   asks.set(ask.id, a);
   r.state = { ...r.state, dirty: true };
   return a;
@@ -650,6 +655,15 @@ function finish(a: OpenAsk): void {
  * stops taking answers. An answer of another kind is refused (or, for a plan, handed to `other`).
  */
 async function waitForAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void): Promise<Delivery | null> {
+  const d = await pollAnswer($, a, wanted, other);
+  if (!d && !a.done) {
+    a.listening = false;
+    if (rt) rt.state = { ...rt.state, dirty: true };
+  }
+  return d;
+}
+
+async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void): Promise<Delivery | null> {
   while (!a.done && rt?.transport.respond) {
     const res = await podiumCall($, 'GET', `${sessionPath(a.sessionId)}/asks/${encodeURIComponent(a.ask.id)}/answer?wait=${HOLD_SECONDS}`);
     if (a.done) {

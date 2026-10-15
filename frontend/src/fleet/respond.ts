@@ -1,6 +1,7 @@
 // What the console shows for responding to a waiting session (#206, mockup/podium-respond.html), worked out from one
 // SessionView, the Admin's flags and who is signed in. Pure: the components draw what these say.
 import { cardKind } from "./components/Chips";
+import { LEVEL_KINDS } from "../../../server/src/fleet/protocol";
 import type { AskDetail, AskKind, AskSummary, Delivery, QuestionAnswer, RespondKind, RespondMe, SessionView } from "./types";
 
 /** The ask the band and the modal are about: the newest open one, the main loop's first. */
@@ -23,13 +24,6 @@ export function neededKinds(kind: AskKind | null): RespondKind[] {
   return ["message"];
 }
 
-const LEVEL_KINDS: Record<string, readonly RespondKind[]> = {
-  off: [],
-  questions: ["question", "message"],
-  "questions-and-plans": ["question", "message", "plan-approve", "plan-feedback"],
-  everything: ["question", "message", "plan-approve", "plan-feedback", "permission", "command"],
-};
-
 /**
  * Whether this session can take an answer for an ask of this kind: `ok`; `off` when a switch is off (the Admin's, the
  * session's `respond` level, or its activity feed); `old` when the reporter can't (too old, settings hooks, a `claude -p`
@@ -41,7 +35,7 @@ export function canAnswer(s: Pick<SessionView, "reporter" | "respond">, kind: As
   if (need.some((k) => s.respond!.accepts.includes(k))) return "ok";
   if (s.respond.limits.includes("not-interactive")) return "old";
   // The level would allow it, so a limit took it away: the reporter can't, rather than a switch being off.
-  if (s.respond.accepts.length && need.some((k) => (LEVEL_KINDS[s.respond!.level] ?? []).includes(k))) return "old";
+  if (s.respond.accepts.length && need.some((k) => LEVEL_KINDS[s.respond!.level].includes(k))) return "old";
   return "off";
 }
 
@@ -50,7 +44,8 @@ export function planBackOnly(s: Pick<SessionView, "respond">): boolean {
   return !!s.respond && s.respond.accepts.includes("plan-feedback") && !s.respond.accepts.includes("plan-approve");
 }
 
-const nameKey = (n: string) => n.trim().replace(/ +/g, " ").toLowerCase();
+/** A name as the server compares it (`nameKey` in server/src/fleet/people.ts): trimmed, spaces folded, any case. */
+export const nameKey = (n: string) => n.trim().replace(/ +/g, " ").toLowerCase();
 
 /** Whether the signed-in person may respond to this session: its owner, or an Admin. A session owned by Admin needs an Admin. */
 export function isMine(s: Pick<SessionView, "owner">, me: RespondMe | null): boolean {

@@ -5,7 +5,7 @@ import { askLead, ASK_WORD, canAnswer, clockOf, deliverySummary, isMine, minSec,
 import type { AskDetail, SessionView } from "../types";
 import { readEvery, useActivityFeed, writeEvery } from "../useActivityFeed";
 import { useRespond } from "../useRespond";
-import { ACTIVITY_REPORTER_MINOR, EverySelect, FeedList, FeedStatus, footer } from "./ActivityFeed";
+import { ACTIVITY_REPORTER_MINOR, AdminOffNote, EverySelect, FeedList, FeedStatus, footer } from "./ActivityFeed";
 import { Compose, OffNote } from "./Compose";
 import { Modal } from "./Modal";
 import { draftToAnswer, ICONS, Outcome, PermissionForm, PlanForm, Q, QuestionForm, type Draft, type PlanChoice } from "./RespondForms";
@@ -342,7 +342,13 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
       />
     );
 
-  const empty = active ? "Watching from now. Earlier activity is not kept, and nothing is kept after you close this." : "The session has ended. Activity is kept only while someone watches it run.";
+  // As the Activity modal this replaces (#118): the Admin's switch wins, and the empty text follows the feed's state.
+  const adminOff = !props.adminFeedOn || feed.adminOff;
+  const empty = !feed.live
+    ? "This session is no longer live. Activity is kept only while someone watches a running session."
+    : active
+      ? "Watching from now. Earlier activity is not kept, and nothing is kept after you close this."
+      : "The session has ended. Activity is kept only while someone watches it run.";
   const model = familyName(s.modelFamily, s.model);
   return (
     <Modal
@@ -356,11 +362,17 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
         setConfirmClear(false);
         return true;
       }}
-      actions={active ? <EverySelect id="every-respond" every={every} onChange={(n) => (setEvery(n), writeEvery(n))} /> : undefined}
+      actions={active && !adminOff ? <EverySelect id="every-respond" every={every} onChange={(n) => (setEvery(n), writeEvery(n))} /> : undefined}
     >
       <div className="mb feedmb respondmb">
-        <FeedList feed={feed} startedAt={s.startedAt} empty={empty} />
-        <FeedStatus count={count} when={when} />
+        {adminOff ? (
+          <AdminOffNote />
+        ) : (
+          <>
+            <FeedList feed={feed} startedAt={s.startedAt} empty={empty} />
+            <FeedStatus count={count} when={when} />
+          </>
+        )}
         {panel}
         {compose ?? <div className="mpad" />}
       </div>

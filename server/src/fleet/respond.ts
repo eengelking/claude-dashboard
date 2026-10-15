@@ -22,6 +22,7 @@ import {
   type RespondInfo,
   type RespondKind,
 } from './protocol.js';
+import { nameKey } from './people.js';
 
 /** How long a closed ask stays readable, unless the session's next ask opens first. */
 export const CLOSED_KEEP_MS = 10 * 60_000;
@@ -83,8 +84,6 @@ export type AnswerError =
   | { status: 410; error: 'closed'; outcome: AskOutcome; at: number }
   | { status: 422; error: 'not accepted'; kind: string }
   | { status: 429; error: string };
-
-const nameKey = (raw: string): string => raw.trim().replace(/ +/g, ' ').toLowerCase();
 
 // eslint-disable-next-line no-control-regex
 const CONTROL_KEEP_NEWLINE = /[\u0000-\u0008\u000b-\u001f\u007f]/g;
@@ -242,7 +241,12 @@ export class RespondStore {
     const known = s.asks.get(ask.id);
     if (known) {
       if (known.closed && !known.closed.implicit) return 'closed';
-      if (known.closed?.implicit) known.closed = null;
+      if (known.closed?.implicit) {
+        // Open again: an answer the implicit close dropped is gone, so the ask takes a new one.
+        known.closed = null;
+        if (known.delivery?.result === 'closed') known.delivery = null;
+        this.onChange(sessionId);
+      }
       if (!known.delivery) known.ask = ask;
       return 'ok';
     }
@@ -255,8 +259,12 @@ export class RespondStore {
     return 'ok';
   }
 
-  /** The mod's held request: an answer now, or once one arrives, or nothing within `waitMs`. */
-  hold(sessionId: string, askId: string, waitMs: number): Promise<HoldResult> {
+  /**
+   * The mod's held request: an answer now, or once one arrives, or nothing within `waitMs`. `signal` aborts when the
+   * mod's connection closes, so an answer that comes later is not marked handed over to a request nobody reads.
+   */
+  hold(sessionId: string, askId: string, waitMs: number, signal?: AbortSignal): Promise<HoldResult> {
+    if (signal?.aborted) return Promise.resolve({ kind: 'none' });
     const e = this.sessions.get(sessionId)?.asks.get(askId);
     if (!e) return Promise.resolve({ kind: 'unknown' });
     if (e.closed) return Promise.resolve({ kind: 'closed', outcome: e.closed.outcome });
@@ -269,6 +277,7 @@ export class RespondStore {
       const w: Waiter = { sessionId, askId, resolve, timer: setTimeout(() => this.release(w, { kind: 'none' }), waitMs) };
       w.timer.unref?.();
       this.waiters.add(w);
+      signal?.addEventListener('abort', () => this.release(w, { kind: 'none' }), { once: true });
     });
   }
 
@@ -477,14 +486,6 @@ export class RespondStore {
       return 'ok';
     }
     return 'unknown';
-  }
-
-  /** The session a delivery belongs to, for the routes' owner check. */
-  sessionOfDelivery(deliveryId: string): string | null {
-    for (const [sid, s] of this.sessions) {
-      if (s.messages.some((m) => m.d.id === deliveryId) || [...s.asks.values()].some((a) => a.delivery?.d.id === deliveryId)) return sid;
-    }
-    return null;
   }
 }
 
