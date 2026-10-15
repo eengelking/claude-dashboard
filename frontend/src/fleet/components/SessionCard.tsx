@@ -1,5 +1,5 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
-import { COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
+import { COST_HINT_SESSION, currentStep, dropAtOf, inferredStep, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
 import { backgroundLead, backgroundTitle, toolOfNote, waitLead } from "../waiting";
@@ -61,7 +61,9 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const p = planProgress(s.plan);
   const c = sessionCounts(s);
   const byId = new Map(s.agents.map((a) => [a.id, a]));
-  const step = currentStep(s.plan);
+  const active = currentStep(s.plan);
+  const inferred = active ? null : inferredStep(s.plan);
+  const step = active ?? (inferred ? `${inferred.text} (inferred)` : null);
   const risk = s.blowouts.level === 2;
   const vNote = versionNote(s);
   const detached = s.attached === false;

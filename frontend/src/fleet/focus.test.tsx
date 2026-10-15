@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, act } from "@testing-library/react"
 import { FleetView } from "./FleetApp";
 import { MiniChart, MiniCharts } from "./components/MiniCharts";
 import { PlanPanel } from "./components/PlanPanel";
+import { FocusHeader } from "./components/FocusHeader";
 import { ContextBar } from "./components/Chips";
 import { fleetReducer } from "./store";
 import { makeAgent, makeSession } from "./fixtures";
@@ -513,5 +514,31 @@ describe("delegating (#98)", () => {
     const card = container.querySelector(".wall .card")!;
     expect(card.querySelector(".band")!.textContent).toBe("Running");
     expect(card.textContent).not.toContain("delegating");
+  });
+});
+
+describe("inferred current step (#179)", () => {
+  const base = makeSession();
+  const withSteps = (states: Array<"done" | "active" | "pending" | "blocked">) =>
+    makeSession({ plan: { ...base.plan!, steps: states.map((state, i) => ({ id: String(i + 1), text: `Task ${i + 1}`, state, activeText: null, ownerAgentId: null, ownerLabel: null })) } });
+  it("goal line shows the first pending step as inferred when none is active", () => {
+    const { container } = render(<FocusHeader s={withSteps(["done", "pending", "pending"])} now={0} />);
+    expect(container.querySelector(".goal")!.textContent).toContain("now: Task 2");
+    expect(container.querySelector(".goal")!.textContent).toContain("inferred");
+  });
+  it("goal line prefers a step Claude marked active, with no inferred note", () => {
+    const { container } = render(<FocusHeader s={withSteps(["done", "active", "pending"])} now={0} />);
+    expect(container.querySelector(".goal")!.textContent).toContain("now: Task 2");
+    expect(container.querySelector(".goal")!.textContent).not.toContain("inferred");
+  });
+  it("goal line says the plan is complete when every step is done", () => {
+    const { container } = render(<FocusHeader s={withSteps(["done", "done"])} now={0} />);
+    expect(container.querySelector(".goal")!.textContent).toContain("plan complete");
+  });
+  it("checklist marks the inferred step as current", () => {
+    const { container } = render(<PlanPanel s={withSteps(["done", "pending", "pending"])} />);
+    const steps = [...container.querySelectorAll(".step")];
+    expect(steps.map((x) => x.className)).toEqual(["step done", "step pending inferred", "step pending"]);
+    expect(steps[1]!.textContent).toContain("inferred");
   });
 });

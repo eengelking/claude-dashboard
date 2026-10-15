@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { familyName, modelVersion, delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, sessionCounts, orchestratorCostUsd, sessionAgentSec, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
+import { familyName, modelVersion, delegateText, waitingOnByRow, ORCHESTRATOR_ROW, agentCounts, sessionCounts, orchestratorCostUsd, sessionAgentSec, agentOrder, agentTokens, branchTotals, sessionTokens, buildTree, currentStep, inferredStep, planComplete, filterSessions, parentOf, planProgress, splitDetached, sortAgents, sortSessions, treeDepth, treeOrder, type SortKey } from "./logic";
 import { makeAgent, makeSession } from "./fixtures";
 import type { SessionView } from "./types";
 
@@ -353,5 +353,24 @@ describe("model version (issue #116)", () => {
     expect(familyName("sonnet", null)).toBe("Sonnet");
     expect(familyName("other", "llama3.1:8b")).toBe("llama3.1:8b");
     expect(familyName("other", null)).toBe("unknown");
+  });
+});
+
+describe("inferredStep and planComplete", () => {
+  const step = (id: string, state: "pending" | "active" | "done" | "blocked") => ({ id, text: `Step ${id}`, state, activeText: null, ownerAgentId: null, ownerLabel: null });
+  const plan = (...steps: ReturnType<typeof step>[]) => ({ title: "P", source: "TaskCreate" as const, steps });
+  it("picks the first pending step when none is active", () => {
+    expect(inferredStep(plan(step("1", "done"), step("2", "blocked"), step("3", "pending"), step("4", "pending")))?.id).toBe("3");
+  });
+  it("yields to an active step, and to no plan or no pending step", () => {
+    expect(inferredStep(plan(step("1", "active"), step("2", "pending")))).toBeNull();
+    expect(inferredStep(plan(step("1", "done")))).toBeNull();
+    expect(inferredStep(null)).toBeNull();
+  });
+  it("is complete only when there are steps and every one is done", () => {
+    expect(planComplete(plan(step("1", "done"), step("2", "done")))).toBe(true);
+    expect(planComplete(plan(step("1", "done"), step("2", "pending")))).toBe(false);
+    expect(planComplete(plan())).toBe(false);
+    expect(planComplete(null)).toBe(false);
   });
 });

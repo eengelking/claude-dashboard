@@ -340,6 +340,9 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .step.done .tx { color: var(--muted); }
 .podium .step.active .ic { border-color: var(--good); }
 .podium .step.active .ic::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+.podium .step.inferred .ic { border-color: var(--good); border-style: dashed; }
+.podium .step.inferred .ow { font-style: italic; }
+.podium .goal em { font-style: italic; color: var(--muted); }
 .podium .step.blocked .ic { border-color: var(--warn); }
 .podium .step .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .podium .step .ow { color: var(--muted); font-size: 11.5px; margin-top: 1px; }

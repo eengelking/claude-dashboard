@@ -1,6 +1,6 @@
 // Pure presentation logic: sorting, filtering, plan progress, agent counts and the agent tree.
 import { MAIN_LOOP } from "../../../server/src/fleet/protocol";
-import type { AgentView, Effort, ModelFamily, Plan, SessionView } from "./types";
+import type { AgentView, Effort, ModelFamily, Plan, PlanStep, SessionView } from "./types";
 
 export const EFFORTS: readonly Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
@@ -93,6 +93,17 @@ export function planProgress(plan: Plan | null): PlanProgress | null {
 export function currentStep(plan: Plan | null): string | null {
   const s = plan?.steps.find((x) => x.state === "active");
   return s ? s.text : null;
+}
+
+/** Display only: with no step active, the first pending step in plan order, which Claude has yet to mark in progress. Null when a step is active or none is pending. */
+export function inferredStep(plan: Plan | null): PlanStep | null {
+  if (!plan || plan.steps.some((x) => x.state === "active")) return null;
+  return plan.steps.find((x) => x.state === "pending") ?? null;
+}
+
+/** A plan with steps, every one of them done. */
+export function planComplete(plan: Plan | null): boolean {
+  return !!plan && plan.steps.length > 0 && plan.steps.every((x) => x.state === "done");
 }
 
 export interface AgentCounts {

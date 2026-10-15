@@ -1,10 +1,11 @@
-import { currentStep, delegateText, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
+import { currentStep, inferredStep, planComplete, delegateText, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
 import type { SessionView } from "../types";
 import { backgroundOf, GitLine, sessionDot, StatusChip } from "./Chips";
 import { MiniCharts } from "./MiniCharts";
 
 export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
   const step = currentStep(s.plan);
+  const next = step ? null : inferredStep(s.plan);
   const kids = waitingOnByRow(s).get(ORCHESTRATOR_ROW);
   const delegating = kids ? delegateText(kids) : undefined;
   return (
@@ -18,6 +19,12 @@ export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
           <div className="goal">
             {s.plan.title ?? "Plan"}
             {step ? <span> · now: {step}</span> : null}
+            {next ? (
+              <span title="Claude has not marked this in progress yet. Podium shows the first step not started.">
+                {" "}· now: {next.text} <em>(inferred)</em>
+              </span>
+            ) : null}
+            {planComplete(s.plan) ? <span> · plan complete</span> : null}
           </div>
         ) : (
           <div className="goal">

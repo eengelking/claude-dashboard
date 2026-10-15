@@ -1,5 +1,5 @@
 import { useId, useState, type KeyboardEvent } from "react";
-import { planProgress } from "../logic";
+import { inferredStep, planProgress } from "../logic";
 import type { Plan, PlanStep, SessionView } from "../types";
 import { PlanBar } from "./Chips";
 import { FilesList } from "./FilesList";
@@ -36,6 +36,7 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
   const id = useId();
   const { plan, files } = s;
   const p = planProgress(plan);
+  const inferredId = inferredStep(plan)?.id;
   const pick = (t: PlanTab) => {
     setTab(t);
     onTab?.(t);
@@ -79,14 +80,14 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
             </div>
             <ol className="steps">
               {plan.steps.map((st) => (
-                <li key={st.id} className={`step ${st.state}`}>
+                <li key={st.id} className={`step ${st.state}${st.id === inferredId ? " inferred" : ""}`}>
                   <span className="ic" aria-hidden="true">
                     {st.state === "done" ? <IconCheck /> : null}
                   </span>
                   <div className="tx">
                     {st.text}
                     <span className="vh"> ({STATE_WORD[st.state]})</span>
-                    <div className="ow">{ownerLine(st)}</div>
+                    <div className="ow">{st.id === inferredId ? ["up next · inferred", st.ownerLabel].filter(Boolean).join(" · ") : ownerLine(st)}</div>
                   </div>
                 </li>
               ))}
