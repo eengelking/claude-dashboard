@@ -483,7 +483,7 @@ describe("delegating (#98)", () => {
     const st = stateFrom({ sessions: [makeSession({ agents: nested })] });
     const { container } = render(<FleetView state={st} />);
     const card = container.querySelector(".wall .card")!;
-    expect(card.querySelector(".st")!.textContent).toBe("running");
-    expect(card.querySelector(".st.deleg")).toBeNull();
+    expect(card.querySelector(".band")!.textContent).toBe("Running");
+    expect(card.textContent).not.toContain("delegating");
   });
 });

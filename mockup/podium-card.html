@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium card redesign</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
+<!-- Mockup for issue #144, approved 2026-10-14. The fleet card is four fixed layers (who, what it is doing, cost and health, status band). The status band is always last and full width. Token values are copied from frontend/src/fleet/fleet.css. -->
+<style>
+/* Layout: a review page for issue #144. Page chrome is neutral and follows the viewer's theme; the card specimens carry Podium's own dark and light tokens, copied from frontend/src/fleet/fleet.css, so what is approved is what gets built. */
+:root {
+  --pg-bg: #eef0f2; --pg-panel: #ffffff; --pg-ink: #16181b; --pg-ink2: #4a4f57; --pg-muted: #6a707a; --pg-line: #d9dde2; --pg-accent: #1c6fd1;
+  --pg-warn-bg: #fff4d6; --pg-warn-line: #e3b341;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pg-bg: #101113; --pg-panel: #17191c; --pg-ink: #ecedef; --pg-ink2: #b6bac1; --pg-muted: #8d929b; --pg-line: #2a2d32; --pg-accent: #6aa8f0; --pg-warn-bg: #2b2412; --pg-warn-line: #7a6320; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --pg-bg: #101113; --pg-panel: #17191c; --pg-ink: #ecedef; --pg-ink2: #b6bac1; --pg-muted: #8d929b; --pg-line: #2a2d32; --pg-accent: #6aa8f0; --pg-warn-bg: #2b2412; --pg-warn-line: #7a6320; color-scheme: dark; }
+body { margin: 0; background: var(--pg-bg); color: var(--pg-ink); font: 15px/1.55 var(--font-ui); -webkit-font-smoothing: antialiased; padding-block: 32px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+.page > section { min-width: 0; }
+h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 20px; line-height: 1.25; margin: 0 0 6px; letter-spacing: -0.005em; text-wrap: balance; }
+p { margin: 0; max-width: 70ch; color: var(--pg-ink2); }
+.lede { font-size: 16.5px; color: var(--pg-ink); max-width: 66ch; }
+.sub { margin-bottom: 18px; }
+.meta-line { color: var(--pg-muted); font: 12.5px var(--font-mono); margin-bottom: 14px; }
+code, .mono { font-family: var(--font-mono); }
+
+/* ---------- Podium tokens (verbatim from fleet.css, plus two text tokens for light) ---------- */
+.th-dark {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --opus: #9085e9; --sonnet: #3987e5; --haiku: #199e70; --fable: #d95926;
+  --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --warn-text: #fab219; --deleg: #2fa4e0; --deleg-text: #5cbcf0; --serious: #ec835a; --serious-text: #ec835a; --crit: #d03b3b; --crit-text: #ee6a6a;
+  --eff-low: #f58b57; --eff-medium: #91c882; --eff-high: #5aa9f5; --eff-xhigh: #af87ff;
+  color-scheme: dark;
+}
+.th-light {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --opus: #6250d6; --sonnet: #2a78d6; --haiku: #1baf7a; --fable: #eb6834;
+  --good: #0ca30c; --good-text: #006300; --warn: #fab219; --warn-text: #8a5b00; --deleg: #0a7fb8; --deleg-text: #07608c; --serious: #ec835a; --serious-text: #a9431c; --crit: #d03b3b; --crit-text: #b52a2a;
+  --eff-low: #d9601f; --eff-medium: #2f8f3a; --eff-high: #1f78c8; --eff-xhigh: #7a3fe0;
+  color-scheme: light;
+}
+.wall { background: var(--bg); color: var(--ink); border: 1px solid var(--pg-line); border-radius: 10px; padding: 16px; min-width: 0; font: 13px/1.4 var(--font-ui); }
+.wall > .tag { font: 11.5px var(--font-mono); color: var(--muted); margin: 0 0 10px; }
+
+/* ---------- The card ---------- */
+.card { position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; height: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; color: var(--ink); }
+.card.risk { border-color: var(--crit); box-shadow: inset 0 3px 0 var(--crit); }
+.card.detached { background: transparent; border-style: dashed; }
+.card.detached .nm, .card.detached .path, .card.detached .z3 .v { color: var(--muted); }
+.z1 { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
+.z2 { padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
+.z3 { border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
+.r1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sd { flex: none; display: inline-flex; color: var(--c-text, var(--muted)); }
+.sd svg { width: 13px; height: 13px; }
+.nm { font-weight: 600; font-size: 14px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdl { flex: none; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
+.mdl .sq { width: 8px; height: 8px; border-radius: 2px; background: var(--fam); }
+.eff { display: inline-flex; gap: 2px; align-items: center; }
+.eff i { width: 3px; height: 11px; border-radius: 1px; background: var(--grid); }
+.eff i.on { background: var(--effc); }
+.owner { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); min-width: 0; }
+.owner b { font-weight: 500; }
+.owner .mach { color: var(--muted); font-size: 11.5px; display: inline-flex; align-items: center; gap: 4px; }
+.owner svg, .git svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.path { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.git { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink2); min-width: 0; }
+.git .br { display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex: 1 1 auto; font-family: var(--font-mono); font-size: 12px; }
+.git .br span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.git .ck { color: var(--muted); }
+.pill { flex: none; font-size: 11px; line-height: 1; padding: 3px 6px; border: 1px dashed var(--axis); border-radius: 4px; color: var(--muted); white-space: nowrap; }
+.notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.notes .pill { border-style: solid; border-color: var(--grid); }
+.notes .pill.warn { color: var(--warn-text); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+.notes .pill.det { border-style: dashed; color: var(--ink2); }
+.plan .t { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink2); }
+.plan .t span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan .t .n { font: 12px var(--font-mono); color: var(--ink); flex: none; }
+.bar { height: 4px; border-radius: 2px; background: var(--grid); margin-top: 5px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--good); border-radius: 2px; }
+.noplan { color: var(--muted); font-size: 12.5px; }
+.crew { display: flex; align-items: center; gap: 3px; min-height: 22px; }
+.crew .a { flex: none; width: 11px; height: 11px; border-radius: 2px; background: var(--fam); }
+.crew .a.d { opacity: .28; }
+.crew .a.f { outline: 2px solid var(--crit); outline-offset: -1px; }
+.crew .a.q { background: transparent; border: 1.5px dashed var(--fam); }
+.crew .cnt { margin-left: 6px; font-size: 12px; color: var(--ink2); font-family: var(--font-mono); white-space: nowrap; }
+.crew svg.sp { margin-left: auto; width: 72px; height: 20px; flex: none; }
+.z3 .c { padding: 8px 12px 9px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.z3 .c + .c { border-left: 1px solid var(--grid); }
+.z3 .k { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.z3 .v { font: 600 13px var(--font-mono); color: var(--ink); white-space: nowrap; }
+.z3 .v.na { color: var(--muted); font-weight: 400; }
+.ctxbar { height: 3px; border-radius: 2px; background: var(--grid); margin-top: 4px; overflow: hidden; }
+.ctxbar i { display: block; height: 100%; background: var(--ink2); }
+.ctx.hi .ctxbar i { background: var(--crit); }
+.ctx.hi .v { color: var(--crit-text); }
+.blow { display: inline-flex; align-items: center; gap: 2px; color: var(--crit-text); font: 600 11px var(--font-mono); }
+.blow svg { width: 11px; height: 11px; }
+/* The status band: always the last thing in the card, always full width, always the same place. */
+.band { margin-top: auto; display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); font-size: 13px; }
+.band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); border-top: 2px solid var(--c); }
+.card.detached .band { background: color-mix(in srgb, var(--c) 12%, transparent); }
+.band .bi { flex: none; display: inline-flex; color: var(--c-text); }
+.band .bi svg { width: 16px; height: 16px; }
+.band .bl { font-weight: 600; min-width: 0; }
+.band .bd { margin-left: auto; color: var(--ink2); font-size: 12px; text-align: right; flex: none; max-width: 45%; }
+.remove-bar { display: flex; justify-content: flex-end; padding: 6px 2px 0; }
+.btn { font: 12px var(--font-ui); color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; }
+.slot { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.slot > .card { flex: 1; }
+
+/* state colours: tokens per kind */
+.k-running  { --c: var(--good);    --c-text: var(--good-text); }
+.k-deleg    { --c: var(--deleg);   --c-text: var(--deleg-text); }
+.k-waiting  { --c: var(--warn);    --c-text: var(--warn-text); }
+.k-bg       { --c: var(--deleg);   --c-text: var(--deleg-text); }
+.k-failed   { --c: var(--crit);    --c-text: var(--crit-text); }
+.k-stale    { --c: var(--serious); --c-text: var(--serious-text); }
+.k-done     { --c: var(--muted);   --c-text: var(--muted); }
+
+/* ---------- Review page furniture ---------- */
+.panel { background: var(--pg-panel); border: 1px solid var(--pg-line); border-radius: 10px; padding: 20px; min-width: 0; }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.cmp h3, .anat-title { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.cmp .cap { font-size: 13px; color: var(--pg-muted); margin-bottom: 12px; max-width: 52ch; }
+.mini-wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mini { height: 196px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; padding: 8px; overflow: hidden; }
+.mini .ln { height: 6px; border-radius: 3px; background: var(--grid); }
+.mini .ln.w1 { width: 62%; background: var(--axis); height: 7px; }
+.mini .ln.w2 { width: 85%; }
+.mini .ln.w3 { width: 48%; }
+.mini .bn { height: 24px; border-radius: 4px; background: color-mix(in srgb, var(--warn) 28%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); }
+.mini .bn.deleg { background: color-mix(in srgb, var(--deleg) 22%, var(--surface)); border-color: color-mix(in srgb, var(--deleg) 60%, transparent); }
+.mini .gap { flex: 1; }
+.mini.after { padding: 0; gap: 0; }
+.mini.after .in { padding: 8px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.mini.after .bn { border-radius: 0; border: 0; border-top: 2px solid var(--warn); height: 28px; }
+.mini.after .bn.deleg { border-top-color: var(--deleg); }
+.anat { display: grid; grid-template-columns: minmax(0, 392px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.notes-col { position: relative; min-height: 100px; }
+.note { position: absolute; left: 0; right: 0; padding-left: 16px; border-left: 2px solid var(--pg-accent); }
+.note b { display: block; font-size: 14px; }
+.note span { color: var(--pg-ink2); font-size: 13.5px; display: block; max-width: 54ch; }
+.note em { font-style: normal; color: var(--pg-muted); font: 12px var(--font-mono); }
+.view-ctl { display: inline-flex; border: 1px solid var(--pg-line); border-radius: 8px; overflow: hidden; margin-bottom: 18px; }
+.view-ctl label { padding: 6px 14px; font-size: 13px; cursor: pointer; color: var(--pg-ink2); background: var(--pg-panel); border-left: 1px solid var(--pg-line); }
+.view-ctl label:first-child { border-left: 0; }
+.view-ctl input { position: absolute; opacity: 0; pointer-events: none; }
+.view-ctl label:has(input:checked) { background: var(--pg-ink); color: var(--pg-bg); }
+.view-ctl label:has(input:focus-visible) { outline: 2px solid var(--pg-accent); outline-offset: -2px; }
+.states { display: flex; flex-direction: column; gap: 28px; }
+.state { min-width: 0; }
+.state h3 { margin: 0 0 2px; font-size: 15px; }
+.state .why { font-size: 13.5px; color: var(--pg-ink2); max-width: 78ch; margin-bottom: 10px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.gallery[data-view="dark"] .states, .gallery[data-view="light"] .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(392px, 1fr)); gap: 28px 20px; }
+.gallery[data-view="dark"] .pair, .gallery[data-view="light"] .pair { grid-template-columns: 1fr; }
+.gallery[data-view="dark"] .wall.th-light, .gallery[data-view="light"] .wall.th-dark { display: none; }
+.dens-scroll { overflow-x: auto; border: 1px solid var(--pg-line); border-radius: 10px; }
+.dens { display: grid; grid-template-columns: repeat(4, 360px); gap: 12px; padding: 16px; width: max-content; background: var(--bg); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tbl { overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--pg-line); }
+th { font-weight: 600; color: var(--pg-muted); font-size: 12.5px; white-space: nowrap; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td { color: var(--pg-ink2); min-width: 150px; }
+td:first-child { color: var(--pg-ink); min-width: 0; }
+.dec { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; counter-reset: d; }
+.dec li { list-style: none; padding: 12px 14px; border: 1px solid var(--pg-line); border-radius: 8px; background: var(--pg-panel); color: var(--pg-ink2); font-size: 14px; }
+.dec li b { display: block; color: var(--pg-ink); margin-bottom: 2px; }
+.dec { padding: 0; margin: 0; }
+.ask { margin-top: 16px; padding: 14px 16px; background: var(--pg-warn-bg); border: 1px solid var(--pg-warn-line); border-radius: 8px; color: var(--pg-ink); max-width: none; }
+@media (max-width: 860px) {
+  .cmp, .anat, .pair, .dec { grid-template-columns: 1fr; }
+  .note { position: static; margin-bottom: 12px; }
+  .notes-col { min-height: 0; }
+  .mini-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  h1 { font-size: 25px; }
+  .gallery[data-view="dark"] .states, .gallery[data-view="light"] .states { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<section>
+  <div class="meta-line">Issue #144 · mockup for approval · no code written yet</div>
+  <h1>Podium card redesign</h1>
+  <p class="lede">Every card gets the same four layers in the same order. Who it is, what it is doing, what it costs, then one status band that sits at the bottom edge of every card, whatever the card holds.</p>
+</section>
+
+<section>
+  <h2>The problem, and the fix</h2>
+  <p class="sub">Today the colored bar sits wherever the content above it ends. Beside each other, three waiting cards put it at three heights. In the proposal it is always the last thing in the card, so cards in a row end on the same line and the eye goes to one place.</p>
+  <div class="panel">
+    <div class="cmp">
+      <div>
+        <h3>Today</h3>
+        <div class="cap">The bar floats. A plan, an agent strip or a longer path moves it.</div>
+        <div class="wall th-dark"><div class="mini-wall">
+          <div class="mini"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w2"></div><div class="bn"></div><div class="gap"></div><div class="ln w3"></div></div>
+          <div class="mini"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w3"></div><div class="ln w2"></div><div class="ln w3"></div><div class="ln w2"></div><div class="ln w3"></div><div class="bn deleg"></div><div class="gap"></div><div class="ln w3"></div></div>
+          <div class="mini"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w2"></div><div class="ln w3"></div><div class="bn"></div><div class="ln w2"></div><div class="gap"></div><div class="ln w3"></div></div>
+        </div></div>
+      </div>
+      <div>
+        <h3>Proposed</h3>
+        <div class="cap">The band is pinned to the bottom edge, full width, same height on every card.</div>
+        <div class="wall th-dark"><div class="mini-wall">
+          <div class="mini after"><div class="in"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w2"></div><div class="ln w3"></div><div class="gap"></div></div><div class="bn"></div></div>
+          <div class="mini after"><div class="in"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w3"></div><div class="ln w2"></div><div class="ln w3"></div><div class="ln w2"></div><div class="gap"></div></div><div class="bn deleg"></div></div>
+          <div class="mini after"><div class="in"><div class="ln w1"></div><div class="ln w3"></div><div class="ln w2"></div><div class="gap"></div></div><div class="bn"></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Anatomy of one card</h2>
+  <p class="sub">Read top to bottom: who, what it is doing, what it costs and how healthy it is, then the verdict. Dividers between layers do the grouping that the single crowded column does not.</p>
+  <div class="panel">
+    <div class="anat">
+      <div class="wall th-dark" id="anat-wall"><div id="anat-card"></div></div>
+      <div class="notes-col" id="anat-notes">
+        <div class="note" data-for="1"><b>Who is this, and where?</b><span>Name, model and effort. Below it the folder, the branch and whether the tree is clean. Notes such as “nobody attached” or a reporter warning sit last in this layer, and only appear when they apply.</span></div>
+        <div class="note" data-for="2"><b>What is it doing?</b><span>The plan step and its progress, then the agents it launched and how busy the session is right now (tokens per second). Without a plan this layer shrinks to one quiet line.</span></div>
+        <div class="note" data-for="3"><b>What is it costing, and how full is it?</b><span>Four readouts in fixed columns: cost, tokens, time and context. A blowout count joins the context column and turns the card’s top edge red.</span></div>
+        <div class="note" data-for="4"><b>Does it need me?</b><span>The status band. Same position, same height, same size icon on every card. Calm states (running, done, background wait) are a light tint. States that want you (waiting, failed, stale) are a heavier tint with a 2 px top rule.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="gallery" id="gallery" data-view="both">
+  <h2>Every state, in both themes</h2>
+  <p class="sub">Each state below is the same card with different data. Shape carries the state as well as color: the icon by the name and in the band is different for each state.</p>
+  <div class="view-ctl" role="radiogroup" aria-label="Theme to show">
+    <label><input type="radio" name="view" value="both" checked>Dark and light</label>
+    <label><input type="radio" name="view" value="dark">Dark</label>
+    <label><input type="radio" name="view" value="light">Light</label>
+  </div>
+  <div class="states" id="states"></div>
+</section>
+
+<section>
+  <h2>Density check: four across</h2>
+  <p class="sub">The widest the wall goes (#145): four columns at the 360 px minimum. Padding is unchanged at 12 px. The strip scrolls sideways here only because the page is narrower than the wall.</p>
+  <div class="dens-scroll"><div class="dens th-dark" id="dens"></div></div>
+</section>
+
+<section>
+  <h2>Where every fact goes</h2>
+  <p class="sub">Nothing is dropped. Two facts change form: the blowout sentence and the reporter chips.</p>
+  <div class="panel tbl">
+    <table>
+      <thead><tr><th>Fact</th><th>Today</th><th>Proposed</th></tr></thead>
+      <tbody id="facts"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Decisions to confirm</h2>
+  <p class="sub">These come from your notes and from the layout above. Say yes, or change any of them.</p>
+  <ul class="dec">
+    <li><b>The band bleeds to the card edge.</b>Content keeps its 12 px padding. Only the band runs edge to edge, which is what makes it read as a base.</li>
+    <li><b>The status chip leaves the header.</b>The band carries the words. A small shape beside the name still marks the state when a card is skimmed.</li>
+    <li><b>The blowout sentence leaves the card.</b>The red top edge, the count and the red context figure stay. The sentence stays in the hover text and on the orchestrator page, so no fact is lost.</li>
+    <li><b>The sparkline moves up beside the agents.</b>Tokens per second says how busy the session is, so it sits with “what it is doing”, not with the totals.</li>
+    <li><b>Reporter notes become small tags.</b>“settings hooks” and “reporter 0.2.1 · update” shrink to tags in the first layer, shown only when they apply. Hooks-only sessions show a dash where cost and context cannot be known.</li>
+    <li><b>Side panel: no change needed.</b>One suggestion: the plan’s full step list and the blowout sentence could both open from the card with one click on the band. Say if you want that.</li>
+  </ul>
+  <p class="ask"><b>Your call.</b> Approve this, or tell me what to move. Nothing gets built until you do.</p>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var ICON = {
+    running: '<svg viewBox="0 0 16 16"><path d="M5 3.2v9.6l7.6-4.8z" fill="currentColor"/></svg>',
+    waiting: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.8v3.8M8 11v.1" stroke-width="1.9"/></svg>',
+    deleg: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none"/></svg>',
+    bg: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6" stroke-dasharray="2.4 2.2"/><path d="M8 5v3.2l2 1.2"/></svg>',
+    failed: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/></svg>',
+    stale: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.4 1.4"/></svg>',
+    done: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M5.2 8.2l2 2 3.6-4"/></svg>',
+    warn: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l6.2 11H1.8z"/><path d="M8 6.6v3M8 11.6v.1"/></svg>',
+    branch: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.6"/><circle cx="4.5" cy="12.5" r="1.6"/><circle cx="11.5" cy="5.5" r="1.6"/><path d="M4.5 5.1v5.8M11.5 7.1c0 2.4-3.6 1.8-6.4 4"/></svg>',
+    person: '<svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.6"/><path d="M3 13.5c.6-2.6 2.6-3.8 5-3.8s4.4 1.2 5 3.8"/></svg>',
+    host: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 13.5h4M8 11v2.5"/></svg>'
+  };
+  var FAM = { s: 'var(--sonnet)', o: 'var(--opus)', h: 'var(--haiku)', f: 'var(--fable)' };
+  var EFFC = { low: ['var(--eff-low)', 1], medium: ['var(--eff-medium)', 2], high: ['var(--eff-high)', 3], xhigh: ['var(--eff-xhigh)', 4] };
+
+  function spark(vals) {
+    var w = 72, h = 20, max = Math.max.apply(null, vals.concat([1]));
+    var pts = vals.map(function (v, i) { return [(i / (vals.length - 1)) * (w - 4) + 2, h - 3 - (v / max) * (h - 6)]; });
+    var d = pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    var e = pts[pts.length - 1];
+    return '<svg class="sp" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true"><polyline points="' + d + '" fill="none" stroke="var(--ink2)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="' + e[0].toFixed(1) + '" cy="' + e[1].toFixed(1) + '" r="2" fill="var(--ink)"/></svg>';
+  }
+  var BUSY = [2, 3, 2, 5, 7, 4, 6, 9, 7, 8, 10, 8];
+  var CALM = [3, 3, 4, 3, 2, 4, 3, 3, 2, 3, 3, 2];
+  var FLAT = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  function crewOf(spec) {
+    var a = spec.split(' '), run = 0, done = 0, fail = 0;
+    var sq = a.map(function (t) {
+      var p = t.split('.'), st = p[1];
+      if (st === 'r') run++; else if (st === 'd') done++; else if (st === 'f') { fail++; }
+      return '<i class="a ' + st + '" style="--fam:' + FAM[p[0]] + '"></i>';
+    }).join('');
+    var txt = run + ' running · ' + done + ' done' + (fail ? ' · ' + fail + ' failed' : '');
+    return { sq: sq, txt: txt };
+  }
+
+  function card(s, extra) {
+    var ef = EFFC[s.eff] || EFFC.medium, bars = '';
+    for (var i = 0; i < 4; i++) bars += '<i' + (i < ef[1] ? ' class="on"' : '') + '></i>';
+    var cr = crewOf(s.crew);
+    var pct = s.ctx;
+    var hi = s.blow > 0;
+    var notes = (s.det ? '<span class="pill det">nobody attached</span><span class="pill det">hides in <span class="mono">' + s.det + '</span></span>' : '') +
+      (s.hooks ? '<span class="pill">settings hooks</span>' : '') + (s.ver ? '<span class="pill warn">' + s.ver + '</span>' : '');
+    var plan = s.plan
+      ? '<div class="plan"><div class="t"><span>' + s.plan[0] + ' · ' + s.plan[1] + '</span><span class="n">' + s.plan[2] + '/' + s.plan[3] + '</span></div><div class="bar"><i style="width:' + Math.round(100 * s.plan[2] / s.plan[3]) + '%"></i></div></div>'
+      : '<div class="noplan">No plan reported. Agents were launched ad hoc.</div>';
+    var na = s.hooks;
+    var html =
+      '<div class="card k-' + s.kind + (hi ? ' risk' : '') + (s.det ? ' detached' : '') + '" style="--fam:' + FAM[s.fam] + '">' +
+      '<div class="z1" data-zone="1">' +
+        '<div class="r1"><span class="sd" aria-hidden="true">' + ICON[s.kind] + '</span><span class="nm" title="' + s.name + '">' + s.name + '</span>' +
+        '<span class="mdl" style="--effc:' + ef[0] + '"><i class="sq"></i>' + s.model + '<span class="eff" title="Effort: ' + s.eff + '">' + bars + '</span></span></div>' +
+        (s.owner ? '<div class="owner"><span style="display:inline-flex">' + ICON.person + '</span><b>' + s.owner[0] + '</b><span class="mach">' + ICON.host + s.owner[1] + '</span></div>' : '') +
+        '<div class="path mono" title="' + s.path + '"><bdi>' + s.path + '</bdi></div>' +
+        '<div class="git"><span class="br">' + ICON.branch + '<span>' + s.branch + '</span></span>' + (s.wt ? '<span class="pill">' + s.wt + '</span>' : '') + '<span class="ck">' + s.tree + '</span></div>' +
+        (notes ? '<div class="notes">' + notes + '</div>' : '') +
+      '</div>' +
+      '<div class="z2" data-zone="2">' + plan + '<div class="crew" aria-label="' + cr.txt + '">' + cr.sq + '<span class="cnt">' + cr.txt + '</span>' + spark(s.spark) + '</div></div>' +
+      '<div class="z3" data-zone="3">' +
+        '<div class="c"><span class="k">Cost</span><span class="v' + (na ? ' na' : '') + '">' + (na ? '—' : s.cost) + '</span></div>' +
+        '<div class="c"><span class="k">Tokens</span><span class="v' + (na ? ' na' : '') + '">' + (na ? '—' : s.tok) + '</span></div>' +
+        '<div class="c"><span class="k">Time</span><span class="v">' + s.time + '</span></div>' +
+        '<div class="c ctx' + (hi ? ' hi' : '') + '"><span class="k">Context' + (hi ? ' <span class="blow" title="Context window exceeded ' + s.blow + ' times. Earlier work was compacted away; output may be unreliable.">' + ICON.warn + s.blow + '×</span>' : '') + '</span>' +
+          '<span class="v' + (na ? ' na' : '') + '">' + (na ? '—' : pct + '%') + '</span>' + (na ? '' : '<span class="ctxbar"><i style="width:' + pct + '%"></i></span>') + '</div>' +
+      '</div>' +
+      '<div class="band' + (s.hot ? ' hot' : '') + '" data-zone="4"><span class="bi" aria-hidden="true">' + ICON[s.kind] + '</span><span class="bl">' + s.band + '</span>' + (s.bd ? '<span class="bd">' + s.bd + '</span>' : '') + '</div>' +
+      '</div>';
+    if (extra) html = '<div class="slot">' + html + extra + '</div>';
+    return html;
+  }
+
+  var P = '~/dev/claude-dashboard';
+  var STATES = [
+    { id: 'running', title: 'Running', why: 'The usual case. Calm green band, plan step in the middle, totals below.', kind: 'running', name: 'claude-dashboard', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: P, branch: 'issue/144-fleet-card-redesign', wt: 'main checkout', tree: '3 changed', plan: ['Fleet card redesign', 'Build the mockup', 2, 6], crew: 's.r s.r h.r o.d s.d', spark: BUSY, cost: '$1.42', tok: '214k', time: '18:40', ctx: 31, blow: 0, band: 'Running' },
+    { id: 'deleg', title: 'Delegating', why: 'The orchestrator is waiting on agents it launched. Blue ring, and the band says how many.', kind: 'deleg', name: 'podium', model: 'Opus 5.5', fam: 'o', eff: 'high', path: '~/dev/podium', branch: 'main', tree: 'clean', plan: ['Release 0.9', 'Run the review agents', 3, 5], crew: 'o.r s.r s.r h.r s.d', spark: CALM, cost: '$3.08', tok: '402k', time: '41:12', ctx: 48, blow: 0, band: 'Delegating to 3 agents', bd: 'Not waiting on you' },
+    { id: 'wait-approval', title: 'Waiting for your approval', why: 'Needs you. Heavier amber band with a 2 px top rule. The tool name stays on the orchestrator page, as today.', kind: 'waiting', hot: true, name: 'skills', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/skills', branch: 'main', tree: 'clean', plan: ['Tidy the skill index', 'Rename two skills', 1, 4], crew: 's.r s.d', spark: FLAT, cost: '$0.06', tok: '51.3k', time: '58:14', ctx: 5, blow: 0, band: 'Waiting for your approval.' },
+    { id: 'wait-input', title: 'Waiting for your input, no plan', why: 'The card from your screenshot. With no plan the middle layer shrinks to one line and the band is still last.', kind: 'waiting', hot: true, name: 'FortressMaximus', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '/var/home/eengelking/dev/centrlized-logging', branch: 'main', tree: 'clean', plan: null, crew: 's.r', spark: FLAT, cost: '$0.08', tok: '43.2k', time: '58:06', ctx: 4, blow: 0, band: 'Waiting for your input.' },
+    { id: 'bg', title: 'Waiting on background work', why: 'Not waiting on you, so it is blue and calm: a dashed ring with a clock, not the amber “!”.', kind: 'bg', name: 'logship', model: 'Haiku 5.5', fam: 'h', eff: 'low', path: '~/dev/logship', branch: 'fix/retry-backoff', tree: 'clean', plan: null, crew: 'h.r h.d', spark: FLAT, cost: '$0.21', tok: '88k', time: '12:30', ctx: 14, blow: 0, band: 'Waiting for 1 background shell to finish.' },
+    { id: 'failed', title: 'Failed', why: 'A failed agent. Red band, a square X, and the failed agent keeps its red outline in the strip. The reason is on the orchestrator page, as today.', kind: 'failed', hot: true, name: 'ingest-api', model: 'Sonnet 5.5', fam: 's', eff: 'high', path: '~/dev/ingest-api', branch: 'feat/batch-upload', tree: '1 changed', plan: ['Batch upload', 'Run the migration', 4, 7], crew: 's.r s.d s.d s.f h.d', spark: CALM, cost: '$2.17', tok: '330k', time: '1:12:03', ctx: 62, blow: 0, band: '1 agent failed.', bd: 'Open for the reason' },
+    { id: 'stale', title: 'Stale', why: 'No heartbeat for a while. Orange band with a clock. The Remove button stays where it is today, just under the card.', kind: 'stale', hot: true, name: 'notes-sync', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/notes-sync', branch: 'main', tree: 'clean', plan: null, crew: 's.d', spark: FLAT, cost: '$0.44', tok: '120k', time: '2:04:10', ctx: 22, blow: 0, band: 'Last heartbeat 4m 12s ago. Goes away in 3:20.', extra: '<div class="remove-bar"><span class="btn">Remove</span></div>' },
+    { id: 'blowout', title: 'Context blowout', why: 'The context window ran over three times. The card’s top edge turns red and the context figure turns red with a count. The band still reports the session’s actual state.', kind: 'running', name: 'data-pipeline', model: 'Opus 5.5', fam: 'o', eff: 'xhigh', path: '~/dev/data-pipeline', branch: 'refactor/loaders', tree: '9 changed', plan: ['Loader refactor', 'Port the CSV loader', 5, 8], crew: 'o.r s.r s.r s.d s.d h.d', spark: BUSY, cost: '$7.90', tok: '1.4M', time: '2:31:48', ctx: 96, blow: 3, band: 'Running' },
+    { id: 'done', title: 'Done', why: 'Finished. Neutral band, no plan bar movement, sparkline flat.', kind: 'done', name: 'docs-pass', model: 'Haiku 5.5', fam: 'h', eff: 'low', path: '~/dev/podium/docs', branch: 'docs/spec-tidy', tree: 'clean', plan: ['Spec tidy', 'Done', 4, 4], crew: 'h.d h.d s.d', spark: FLAT, cost: '$0.37', tok: '96k', time: '9:21', ctx: 18, blow: 0, band: 'Done' },
+    { id: 'detached', title: 'Nobody attached', why: 'No terminal window is open on it. Dashed outline and muted text, with tags in the first layer. The band still tells its real state.', kind: 'running', name: 'overnight-eval', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/evals', branch: 'main', tree: 'clean', det: '4:12', plan: ['Nightly eval', 'Score the batch', 6, 12], crew: 's.r s.r s.d', spark: CALM, cost: '$0.93', tok: '260k', time: '6:02:44', ctx: 37, blow: 0, band: 'Running' },
+    { id: 'people', title: 'People view on', why: 'The owner and their machine get a line under the name, as they do today.', kind: 'running', owner: ['Priya', 'build-box-2'], name: 'checkout-svc', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/checkout-svc', branch: 'feat/tax-rules', tree: '2 changed', plan: ['Tax rules', 'Add the EU rates', 3, 5], crew: 's.r s.d h.d', spark: BUSY, cost: '$0.88', tok: '170k', time: '22:15', ctx: 29, blow: 0, band: 'Running' },
+    { id: 'hooks', title: 'Settings hooks, reporter out of date', why: 'Reported by hooks, not the mod, so cost, tokens and context are unknown and show a dash. The reporter warning is a small tag in the first layer.', kind: 'running', name: 'legacy-app', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/legacy-app', branch: 'main', tree: 'clean', hooks: true, ver: 'reporter 0.2.1 · update', plan: null, crew: 's.r', spark: FLAT, cost: '', tok: '', time: '33:50', ctx: 0, blow: 0, band: 'Running' }
+  ];
+
+  var states = document.getElementById('states');
+  states.innerHTML = STATES.map(function (s) {
+    var one = function (th, lab) { return '<div class="wall th-' + th + '"><div class="tag">' + lab + '</div>' + card(s, s.extra) + '</div>'; };
+    return '<div class="state"><h3>' + s.title + '</h3><div class="why">' + s.why + '</div><div class="pair">' + one('dark', 'dark') + one('light', 'light') + '</div></div>';
+  }).join('');
+
+  var by = {}; STATES.forEach(function (s) { by[s.id] = s; });
+  document.getElementById('dens').innerHTML = ['running', 'wait-approval', 'deleg', 'failed'].map(function (id) { return card(by[id]); }).join('');
+  document.getElementById('anat-card').innerHTML = card(by['wait-approval']);
+
+  // View switch
+  var g = document.getElementById('gallery');
+  Array.prototype.forEach.call(g.querySelectorAll('input[name=view]'), function (r) {
+    r.addEventListener('change', function () { g.setAttribute('data-view', r.value); });
+  });
+
+  // Anatomy notes line up with the layer they describe.
+  function place() {
+    var col = document.getElementById('anat-notes'), card0 = document.querySelector('#anat-card .card');
+    if (!col || !card0) return;
+    var wide = window.matchMedia('(min-width: 861px)').matches;
+    var cTop = col.getBoundingClientRect().top, max = 0;
+    Array.prototype.forEach.call(col.querySelectorAll('.note'), function (n) {
+      if (!wide) { n.style.top = ''; return; }
+      var z = card0.querySelector('[data-zone="' + n.getAttribute('data-for') + '"]');
+      var r = z.getBoundingClientRect();
+      n.style.top = (r.top - cTop) + 'px';
+      max = Math.max(max, r.top - cTop + n.offsetHeight);
+    });
+    col.style.minHeight = wide ? Math.max(max, card0.getBoundingClientRect().height) + 'px' : '';
+  }
+  place();
+  window.addEventListener('resize', place);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+
+  // Fact map
+  var FACTS = [
+    ['Status word and sentence', 'Chip top right, plus a colored alert that floats mid-card', 'The band, last in the card. A small state shape beside the name'],
+    ['Name', 'Header', 'Layer 1, left'],
+    ['Model', 'Chip in the meta row', 'Layer 1, right of the name'],
+    ['Effort', 'Meter in the meta row', 'Layer 1, next to the model'],
+    ['Project path', 'Under the name', 'Layer 1, muted line. Full path in the hover text'],
+    ['Branch, worktree, clean or changed', 'Git line', 'Layer 1, the line under the path'],
+    ['Owner and machine (people view)', 'Owner line', 'Layer 1, line under the name'],
+    ['Nobody attached, hides in', 'Chips in the meta row', 'Layer 1, tags at the end. Dashed outline on the card'],
+    ['Settings hooks, reporter version', 'Chips in the meta row', 'Layer 1, tags at the end, only when they apply'],
+    ['Plan title, step, progress', 'Plan block', 'Layer 2, same content'],
+    ['No plan reported', 'Muted sentence', 'Layer 2, same sentence, one line'],
+    ['Agents and counts', 'Strip with a running, done, failed count', 'Layer 2, same strip'],
+    ['Tokens per second', 'Sparkline in the footer', 'Layer 2, right end of the agent strip'],
+    ['Cost, tokens, elapsed time', 'Footer line', 'Layer 3, three labelled readouts'],
+    ['Context percent', 'Chip in the meta row', 'Layer 3, readout with a thin bar'],
+    ['Context blowouts', 'Badge, red alert sentence, red top edge', 'Layer 3 count, red top edge, red context figure. The sentence moves to the hover text and the orchestrator page'],
+    ['Waiting, background wait, stale sentences', 'Colored alert mid-card', 'The band'],
+    ['Remove (stale only)', 'Button under the card', 'Unchanged']
+  ];
+  document.getElementById('facts').innerHTML = FACTS.map(function (f) { return '<tr><td>' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td></tr>'; }).join('');
+})();
+</script>
+</body>
+</html>

@@ -234,7 +234,6 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .card .nm { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* rtl puts the ellipsis at the front of an over-long path so the last folders stay visible; the bdi keeps the text itself in reading order */
 .podium .card .path { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
-.podium .card .meta { display: flex; gap: 8px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
 .podium .card .plan { margin-top: 10px; }
 .podium .card .plan .t { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .podium .card .plan .t span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
@@ -247,11 +246,45 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .trow .nm .a { box-sizing: border-box; width: 14px; height: 14px; border: 1.5px solid color-mix(in srgb, var(--c) 60%, var(--ink)); }
 .podium .trow .nm .a.queued { border: 1.5px dashed var(--c); }
 .podium .crew .cnt { margin-left: 6px; color: var(--ink2); font-size: 12px; }
-.podium .card .foot { display: flex; justify-content: space-between; align-items: end; margin-top: 10px; color: var(--ink2); font-size: 12px; gap: 8px; }
-.podium .card .foot > .mono { display: flex; flex-wrap: wrap; column-gap: 0.5ch; min-width: 0; }
-.podium .card .foot .v { white-space: nowrap; }
-.podium .card .foot svg.sp { width: 92px; height: 22px; flex: none; }
 .podium .card .noplan { margin-top: 10px; color: var(--muted); font-size: 12px; }
+/* The fleet card (#144, mockup/podium-card.html): four layers, always in this order. z1 who and where, z2 what it is doing,
+   z3 what it costs and how full it is, then the status band, which is always last and full width. */
+.podium .card.sc { padding: 0; overflow: hidden; text-align: left; align-items: stretch; --c: var(--muted); }
+.podium .card.sc .z1 { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
+.podium .card.sc .z2 { padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
+.podium .card.sc .z3 { border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
+.podium .card.sc .h { min-width: 0; }
+.podium .card.sc .sd { flex: none; display: inline-flex; color: var(--muted); }
+.podium .card.sc .sd .si { width: 13px; height: 13px; }
+.podium .card.sc .sd .si-running { color: var(--good-text); }
+.podium .card.sc .mdl { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+.podium .card.sc .path { margin-top: 0; }
+.podium .card.sc .git, .podium .card.sc .owner { margin-top: 0; }
+.podium .card.sc .notes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.podium .card.sc .plan, .podium .card.sc .noplan { margin-top: 0; }
+.podium .card.sc .crew { margin-top: 0; min-height: 22px; }
+.podium .card.sc .crew svg.sp { margin-left: auto; width: 72px; height: 20px; flex: none; }
+.podium .card.sc .z3 .c { padding: 8px 12px 9px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.podium .card.sc .z3 .c + .c { border-left: 1px solid var(--grid); }
+.podium .card.sc .z3 .k { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.podium .card.sc .z3 .v { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.podium .card.sc .z3 .blow { padding: 0 4px; font-size: 11px; }
+.podium .card.sc .z3 .bar.ctx { height: 3px; margin-top: 4px; }
+.podium .card.sc .z3 .ctx.hi .v { color: var(--crit-text); }
+.podium .band { margin-top: auto; display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; font-size: 13px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.podium .band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); border-top: 2px solid var(--c); }
+.podium .card.detached .band { background: color-mix(in srgb, var(--c) 12%, transparent); }
+.podium .band .bi { flex: none; display: inline-flex; color: var(--c-text); }
+.podium .band .bi .si { width: 16px; height: 16px; }
+.podium .band .bl { font-weight: 600; min-width: 0; }
+.podium .band.running { --c: var(--good); --c-text: var(--good-text); }
+.podium .band.waiting { --c: var(--warn); --c-text: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
+.podium .band.bg { --c: var(--deleg); --c-text: var(--deleg-text); }
+.podium .band.stale { --c: var(--serious); --c-text: color-mix(in srgb, var(--serious) 60%, var(--ink)); }
+.podium .band.done { --c: var(--muted); --c-text: var(--muted); }
+.podium .card.sc .sd .si-waiting { color: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
+.podium .card.sc .sd .si-bg { color: var(--deleg-text); }
+.podium .card.sc .sd .si-stale { color: color-mix(in srgb, var(--serious) 60%, var(--ink)); }
 .podium .alert { margin-top: 10px; padding: 5px 8px; border-radius: 5px; font-size: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); display: flex; gap: 6px; align-items: flex-start; }
 .podium .alert.bg { background: color-mix(in srgb, var(--deleg) 12%, transparent); border-color: color-mix(in srgb, var(--deleg) 40%, transparent); }
 .podium .alert .wait-rows { min-width: 0; }
@@ -475,7 +508,7 @@ body.modal-open #root { filter: blur(5px); }
 .podium .bar.bx2 > i { background: repeating-linear-gradient(135deg, var(--crit) 0 4px, color-mix(in srgb, var(--crit) 55%, var(--surface)) 4px 8px); }
 /* A session nobody is attached to: dashed and quiet until it is set aside (#45). */
 .podium .card.detached { background: transparent; border-style: dashed; }
-.podium .card.detached .nm, .podium .card.detached .path, .podium .card.detached .foot { color: var(--muted); }
+.podium .card.detached .nm, .podium .card.detached .path, .podium .card.detached .z3 .v { color: var(--muted); }
 .podium .chip.detached { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
 .podium .fold { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; padding: 9px 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--ink2); font-size: 12.5px; }
 .podium .fold b { color: var(--ink); font-weight: 600; }

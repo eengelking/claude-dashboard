@@ -62,6 +62,8 @@ copies the pattern instead of inventing one. Spacing steps are 4, 8, 12, 16, 24 
 table row. Admin's CSS is scoped under `.adminv` and its layout classes are prefixed (`asec`, `apage`) because `fleet.css` already
 uses `.sec`, `.main`, `.code` and `.back` under `.podium`, with higher specificity.
 
+**Fleet card** (`frontend/src/fleet/components/SessionCard.tsx`, issue #144, mockup `mockup/podium-card.html`). The card is one `button.card.sc` holding four children in a fixed order: `.z1` (who and where, plus the tags in `.notes`), `.z2` (plan and the agent strip with its sparkline), `.z3` (four readouts) and `.band`. The band has `margin-top: auto`, so in a flex column it is always the last element and sits on the card's bottom edge, whatever the layers above hold; the card is `overflow: hidden` so it can run edge to edge inside the rounded corners. `cardKind` in `Chips.tsx` maps a session to one of five kinds (running, waiting, bg, stale, done; background work wins over waiting, as in `idleOnBackground`), and `StateIcon` draws that kind's shape, so the name marker and the band use one source and state is never color alone. The kind class on the band (`.band.waiting`, `.band.bg`...) sets `--c` and `--c-text`; `.hot` is the heavier tint for waiting and stale. `.card` is also the class of the orchestrator page's callout, so the layout rules hang on `.card.sc`.
+
 **Which reporters are known** (`server/src/fleet/reporters.ts`, `frontend/src/fleet/admin/ReportersTab.tsx`, issue #142).
 `ReporterStore` owns migration 11 (`reporters` and `reporter_sessions`) and is built once in `index.ts`, then handed to both
 routers. `routes.ts` calls `record()` after a report or hook is stored, with the machine id (or the source address when the
@@ -422,7 +424,7 @@ Run in Chrome (Claude in Chrome) against the dev server, Vite, and either `podiu
 | Rows enter and leave with animation | yes (burst of 11) | | | |
 | KPI tiles with sparklines | yes | yes | yes (2 columns) | yes |
 | Toolbar: segments, Sort (Model: Fable, Opus, Sonnet in rail and wall), text filter, counts | yes | yes | | |
-| Cards: git line, model, effort, context, badge, risk callout, plan, agent strip, cost, sparkline | yes | yes | yes | yes |
+| Cards: git line, model, effort, context, badge, blowout tooltip, plan, agent strip, cost, sparkline | yes | yes | yes | yes |
 | Waiting and stale callouts | yes | yes | | |
 | Empty states with an instruction | yes | | | |
 | Orchestrator page: header, three charts with crosshair and readout, blowout marker and caption | yes | yes | yes | |

@@ -1,5 +1,5 @@
 // Small shared pieces: model chip, effort meter, status chip, blowout badge, git line.
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import { fmtUsd } from "../format";
 import { EFFORTS, familyName } from "../logic";
 import type { BackgroundWait, GitInfo, ModelFamily, SessionView } from "../types";
@@ -68,6 +68,52 @@ export function StatusIcon({ status }: { status: StatusKind }) {
   if (status === "waiting") return <i className="dot waiting" aria-hidden="true" />;
   if (status === "stale") return <IconWarn />;
   return <IconClock />;
+}
+
+/** The state a card shows: its own shape and color, so state is never color alone (#144). */
+export type CardKind = "running" | "waiting" | "bg" | "stale" | "done";
+
+export function cardKind(s: Pick<SessionView, "status" | "waitReason" | "background">): CardKind {
+  if (idleOnBackground(s)) return "bg";
+  if (s.status === "running" || s.status === "waiting" || s.status === "stale") return s.status;
+  return "done";
+}
+
+const STATE_SHAPE: Record<CardKind, ReactElement> = {
+  running: <path d="M5 3.2v9.6l7.6-4.8z" fill="currentColor" stroke="none" />,
+  waiting: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.8v3.8M8 11v.1" strokeWidth="1.9" />
+    </>
+  ),
+  bg: (
+    <>
+      <circle cx="8" cy="8" r="6" strokeDasharray="2.4 2.2" />
+      <path d="M8 5v3.2l2 1.2" />
+    </>
+  ),
+  stale: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 4.6V8l2.4 1.4" />
+    </>
+  ),
+  done: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M5.2 8.2l2 2 3.6-4" />
+    </>
+  ),
+};
+
+/** One shape per card state: a play mark, a "!" ring, a dashed clock ring, a clock, a check. */
+export function StateIcon({ kind }: { kind: CardKind }) {
+  return (
+    <svg className={`si si-${kind}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {STATE_SHAPE[kind]}
+    </svg>
+  );
 }
 
 /**

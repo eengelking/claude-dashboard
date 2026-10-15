@@ -41,30 +41,32 @@ describe("backgroundLead", () => {
 describe("the card", () => {
   it("says what it waits on, never \"your input\", and carries no task description", () => {
     const { container } = renderCard(idleOn([task("shell", "npm run build:all && npm run test:integration -- --runInBand --coverage")]));
-    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for 1 background shell to finish.");
+    expect(container.querySelector(".band")!.textContent).toBe("Waiting for 1 background shell to finish.");
     expect(container.textContent).not.toContain("your input");
     expect(container.textContent).not.toContain("npm run build");
   });
 
-  it("is blue and quiet: a ring dot, not the waiting-on-you chip, and no amber alert", () => {
+  it("is blue and quiet: a dashed-ring clock, not the waiting-on-you mark, and no amber band", () => {
     const { container } = renderCard();
-    expect(container.querySelector(".st")!.textContent).toContain("waiting on shell");
-    expect(container.querySelector(".st")!.className).not.toContain("waiting");
-    expect(container.querySelector(".st .dot.ring")).not.toBeNull();
-    expect(container.querySelector(".st .dot.waiting")).toBeNull();
-    expect(container.querySelector(".alert")!.className).toContain("bg");
+    expect(container.querySelector(".st")).toBeNull();
+    expect(container.querySelector(".card .sd .si-bg")).not.toBeNull();
+    expect(container.querySelector(".card .sd .si-waiting")).toBeNull();
+    expect(container.querySelector(".band .si-bg")).not.toBeNull();
+    expect(container.querySelector(".band")!.className).toContain("bg");
+    expect(container.querySelector(".band")!.className).not.toContain("hot");
   });
 
   it("a session that waits on the person still reads as before", () => {
     const { container } = renderCard(makeSession({ status: "waiting", waitReason: "input" }));
-    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for your input.");
-    expect(container.querySelector(".st")!.textContent).toContain("waiting on you");
-    expect(container.querySelector(".st .dot.waiting")).not.toBeNull();
+    expect(container.querySelector(".band")!.textContent).toBe("Waiting for your input.");
+    expect(container.querySelector(".band")!.className).toContain("waiting");
+    expect(container.querySelector(".band")!.className).toContain("hot");
+    expect(container.querySelector(".card .sd .si-waiting")).not.toBeNull();
   });
 
   it("a permission wait wins over background work", () => {
     const { container } = renderCard(makeSession({ status: "waiting", waitReason: "permission", waitNote: "Bash(rm x)", background: { tasks: [task("shell")], wakeAt: null } }));
-    expect(container.querySelector(".alert")!.textContent).toBe("Waiting for your approval.");
+    expect(container.querySelector(".band")!.textContent).toBe("Waiting for your approval.");
   });
 });
 
