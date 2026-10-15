@@ -34,10 +34,17 @@ const ICON_EXPAND = (
     <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" />
   </svg>
 );
+const ICON_YOU = (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+    <circle cx="8" cy="5.5" r="2.7" />
+    <path d="M2.8 13.5c.7-2.6 2.8-4 5.2-4s4.5 1.4 5.2 4" />
+  </svg>
+);
 const KIND: Record<ActivityEntryView["kind"], { label: string; icon: JSX.Element; cls: string }> = {
   tool: { label: "Tool call", icon: ICON_TOOL, cls: "tool" },
   text: { label: "Text", icon: ICON_TEXT, cls: "txt" },
   reasoning: { label: "Reasoning", icon: ICON_REASONING, cls: "txt" },
+  podium: { label: "Sent from Podium", icon: ICON_YOU, cls: "you" },
 };
 
 /** The note shown in the panel, and in its modal, while the Admin has the feed turned off. */

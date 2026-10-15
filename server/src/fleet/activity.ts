@@ -164,7 +164,8 @@ export class ActivityStore {
     for (const e of list) {
       if (e.at - skewMs < lease.since) continue;
       // Compared with the reporter's own entries only: a Podium entry carries the server's time, not the reporter's.
-      const last = lease.entries.filter((x) => x.kind !== 'podium').at(-1);
+      const own = lease.entries.filter((x) => x.kind !== 'podium');
+      const last = own[own.length - 1];
       if (last && e.at < last.at) continue;
       if (last && e.at === last.at && lease.entries.some((x) => x.kind !== 'podium' && x.at === e.at && x.kind === e.kind && x.text === e.text)) continue;
       lease.entries.push({ seq: ++lease.seq, at: e.at, kind: e.kind, text: e.text });
