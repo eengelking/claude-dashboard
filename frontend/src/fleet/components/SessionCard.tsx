@@ -66,8 +66,6 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const vNote = versionNote(s);
   const detached = s.attached === false;
   const kind = cardKind(s);
-  // The states that want the person (or say the session is lost) get the heavier band; a calm state a lighter one.
-  const hot = kind === "waiting" || kind === "stale";
   const hooks = s.reporter === "hooks";
   const cls = `card sc${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}${detached ? " detached" : ""}`;
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
@@ -165,15 +163,18 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           <span className="v mono">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>
         <div className={`c ctx${risk ? " hi" : ""}`} title={risk ? riskText(s) : undefined}>
-          <span className="k">
-            Context
+          {/* A heartbeat-lost card gives its last readout column to Remove, so with a blowout badge beside it the label is shortened to fit. */}
+          <span className="k" title="Context">
+            {s.status === "stale" && props.onRemove && s.blowouts.total > 0 ? "Ctx" : "Context"}
             <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
           </span>
           <span className="v mono">{fmtPct(s.context.percent)}</span>
           {s.context.percent !== null && <ContextBar percent={s.context.percent} blowouts={s.blowouts.total} />}
         </div>
+        {/* Room for the Remove button, which cannot sit inside this button and is laid over this cell instead. */}
+        {s.status === "stale" && props.onRemove && <div className="c rm" aria-hidden="true" />}
       </div>
-      <div className={`band ${kind}${hot ? " hot" : ""}`}>
+      <div className={`band ${kind}`}>
         <span className="bi"><StateIcon kind={kind} /></span>
         {bandLine(s, kind, sinceSeen, now, config)}
       </div>
