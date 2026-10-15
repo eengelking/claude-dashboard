@@ -284,6 +284,25 @@ describe("MiniCharts (#169)", () => {
     expect(labels).toContain("Subagents running");
     expect(labels).not.toContain("Agents running");
   });
+
+  // #191: tokens arrive in bursts, so the newest second is usually 0 while the graph shows activity.
+  const tpsReadout = (tokensPerSec: number[]) => {
+    const s = makeSession({ series: { ...makeSession().series, tokensPerSec } });
+    const { container } = render(<MiniCharts s={s} now={Date.now()} />);
+    return container.querySelector(".hc .hv")!;
+  };
+  it("shows a Tokens per second rate above 0 when the newest second is 0 but the last 10 seconds had tokens", () => {
+    const burst = new Array(60).fill(0);
+    burst[55] = 5000;
+    const hv = tpsReadout(burst);
+    expect(hv.textContent).toBe("500/s");
+    expect(hv).toHaveAttribute("title", "Average over the last 10 seconds");
+  });
+  it("falls to 0/s once the session has been idle for the whole 10 seconds", () => {
+    const idle = new Array(60).fill(0);
+    idle[40] = 5000;
+    expect(tpsReadout(idle).textContent).toBe("0/s");
+  });
 });
 
 describe("MiniChart", () => {

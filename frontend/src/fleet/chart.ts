@@ -27,6 +27,12 @@ export function xOf(index: number, n: number, w: number): number {
   return (index / (n - 1)) * w;
 }
 
+/** The mean of the newest `window` points (all of them when there are fewer); 0 for none. */
+export function windowMean(values: readonly number[], window: number): number {
+  const tail = window > 0 ? values.slice(-window) : [];
+  return tail.length ? tail.reduce((a, b) => a + b, 0) / tail.length : 0;
+}
+
 /** The point index under a pointer at `clientX` over a box starting at `left`, `width` wide. */
 export function indexAt(clientX: number, left: number, width: number, n: number): number {
   if (n <= 1 || width <= 0) return 0;

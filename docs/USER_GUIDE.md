@@ -190,7 +190,7 @@ accept part of the name, but `stop` and `rm` need the id. These are Claude Code'
 ### One session
 
 Click a card or a rail item. You get the session's goal and working directory, three charts for the last
-minute (tokens per second, the largest context fill in any loop with blowout markers, and subagents running),
+minute (tokens per second, whose number is the average of the last 10 seconds, the largest context fill in any loop with blowout markers, and subagents running),
 and a bar of facts: agents (the orchestrator counts as one; a red "N failed" button opens the first
 failure), estimated cost for the whole session, tokens, running time, and agent time (the orchestrator's time
 plus every agent's, which is longer than running time when agents run at once), and the reporter: the

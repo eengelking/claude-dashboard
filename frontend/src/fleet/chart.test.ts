@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { areaPoints, indexAt, seriesPoints, xOf } from "./chart";
+import { areaPoints, indexAt, seriesPoints, windowMean, xOf } from "./chart";
+
+describe("windowMean", () => {
+  it("averages the newest points, counting every second in the window", () => {
+    expect(windowMean([9, 9, 0, 0, 40, 0], 3)).toBe(40 / 3);
+    expect(windowMean([5, 15], 10)).toBe(10);
+  });
+  it("is 0 for an empty series or a window of 0", () => {
+    expect(windowMean([], 10)).toBe(0);
+    expect(windowMean([4, 4], 0)).toBe(0);
+  });
+});
 
 describe("seriesPoints", () => {
   it("draws a flat bottom line for an empty series", () => {

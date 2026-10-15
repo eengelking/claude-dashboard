@@ -1,6 +1,6 @@
 // The orchestrator page's three 60-second charts, with a crosshair and value readout on hover.
 import { useState, type MouseEvent } from "react";
-import { areaPoints, indexAt, seriesPoints, xOf } from "../chart";
+import { areaPoints, indexAt, seriesPoints, windowMean, xOf } from "../chart";
 import { fmtClock, fmtTok } from "../format";
 import type { SessionView } from "../types";
 
@@ -18,12 +18,14 @@ export interface MiniChartProps {
   limit?: boolean;
   /** Epoch ms of the newest point. */
   endTime: number;
+  /** Show the mean of the newest N seconds instead of the newest second (bursty series), and say so in the tooltip. */
+  avgSeconds?: number;
 }
 
 export function MiniChart(p: MiniChartProps) {
   const [hover, setHover] = useState<number | null>(null);
   const n = p.values.length;
-  const last = n ? p.values[n - 1]! : 0;
+  const last = p.avgSeconds ? windowMean(p.values, p.avgSeconds) : n ? p.values[n - 1]! : 0;
   const onMove = (e: MouseEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     if (!r.width || !Number.isFinite(e.clientX)) return;
@@ -36,7 +38,7 @@ export function MiniChart(p: MiniChartProps) {
     <div className="hc">
       <div className="ht">
         <span className="hl">{p.label}</span>
-        <span className="hv mono" aria-live="off">
+        <span className="hv mono" aria-live="off" title={hover === null && p.avgSeconds ? `Average over the last ${p.avgSeconds} seconds` : undefined}>
           {readout}
         </span>
       </div>
@@ -44,7 +46,7 @@ export function MiniChart(p: MiniChartProps) {
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         role="img"
-        aria-label={`${p.label}, last 60 seconds: now ${p.format(last)}, peak ${p.format(peak)}${p.marks ? `, ${marks.length} blowouts` : ""}`}
+        aria-label={`${p.label}, last 60 seconds: ${p.avgSeconds ? `average of the last ${p.avgSeconds} seconds` : "now"} ${p.format(last)}, peak ${p.format(peak)}${p.marks ? `, ${marks.length} blowouts` : ""}`}
         onPointerMove={onMove}
         onMouseMove={onMove}
         onPointerLeave={() => setHover(null)}
@@ -73,7 +75,7 @@ export function MiniCharts({ s, now }: { s: SessionView; now: number }) {
   const end = (Math.floor(now / 1000) - 1) * 1000;
   return (
     <div className="hcs" aria-label="Orchestrator activity, last 60 seconds">
-      <MiniChart label="Tokens per second" values={s.series.tokensPerSec} max={Math.max(1, ...s.series.tokensPerSec)} format={(v) => `${fmtTok(v)}/s`} endTime={end} />
+      <MiniChart label="Tokens per second" values={s.series.tokensPerSec} max={Math.max(1, ...s.series.tokensPerSec)} format={(v) => `${fmtTok(v)}/s`} endTime={end} avgSeconds={10} />
       <MiniChart
         label="Peak context, any loop"
         values={s.series.peakContext}
