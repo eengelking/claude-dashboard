@@ -61,7 +61,7 @@ html:has(.podium), html:has(.podium) body { background: #0d0d0d; }
 html, body, #root { height: 100%; }
 body { margin: 0; }
 .podium, .podium * { box-sizing: border-box; }
-.podium { height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased; }
+.podium { --rail-base: 252px; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased; }
 .podium button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 .podium button:focus-visible, .podium input:focus-visible, .podium select:focus-visible, .podium a:focus-visible, .podium [role="separator"]:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
 .podium a { color: inherit; }
@@ -90,7 +90,7 @@ body { margin: 0; }
 .podium .banner { padding: 5px 16px; font-size: 12px; color: var(--ink2); background: var(--raised); border-bottom: 1px solid var(--border); }
 .podium .banner b { color: var(--ink); font-weight: 600; }
 .podium .banner.bad { color: var(--ink); background: color-mix(in srgb, var(--crit) 16%, var(--raised)); }
-.podium .cols { --rail-w: 252px; --side-w: 340px; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0; position: relative; }
+.podium .cols { --rail-w: var(--rail-base); --side-w: 340px; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--side-w); min-height: 0; position: relative; }
 .podium .rz { position: absolute; top: 0; bottom: 0; width: 9px; margin-left: -4px; z-index: 5; cursor: col-resize; touch-action: none; }
 .podium .rz::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: transparent; transition: background .15s; }
 .podium .rz:hover::after, .podium .rz:focus-visible::after, .podium .rz.drag::after { background: var(--sonnet); }
@@ -596,7 +596,8 @@ body.modal-open #root { filter: blur(5px); }
 @media (max-width: 1280px) {
   .podium .trow { grid-template-columns: minmax(calc(200px + var(--deep, 0) * 16px), 1fr) 92px 52px 150px 64px 70px 104px; }
   .podium .trow .c-tok { display: none; }
-  .podium .cols { --rail-w: 224px; --side-w: 310px; }
+  .podium { --rail-base: 224px; }
+  .podium .cols { --side-w: 310px; }
 }
 @media (max-width: 1040px) {
   .podium, .podium .app { height: auto; }

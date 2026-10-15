@@ -20,7 +20,7 @@
 .adminv .row2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 /* shell: a side menu that runs the full height, and a page that scrolls on its own */
-.adminv .shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100%; min-height: 0; }
+.adminv .shell { display: grid; grid-template-columns: var(--rail-base) minmax(0, 1fr); height: 100%; min-height: 0; }
 .adminv .nav { border-right: 1px solid var(--border); background: var(--surface); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .adminv .navin { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 16px 12px; }
 .adminv .ngroup { display: grid; gap: 2px; }
