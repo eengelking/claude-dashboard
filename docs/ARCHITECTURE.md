@@ -52,6 +52,16 @@ header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`)
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them.
 
+**Which reporters are known** (`server/src/fleet/reporters.ts`, `frontend/src/fleet/admin/ReportersTab.tsx`, issue #142).
+`ReporterStore` owns migration 11 (`reporters` and `reporter_sessions`) and is built once in `index.ts`, then handed to both
+routers. `routes.ts` calls `record()` after a report or hook is stored, with the machine id (or the source address when the
+report has none) as the key and the credential as a key id, never a token, and calls `rejected()` at each refusal, which
+keeps the last 200 in memory only. Retention never touches the table, so a reporter outlives its sessions; the session count
+comes from `reporter_sessions`. The state (reporting, idle, silent, not since restart) is computed in SQL from the last report,
+the server's start time and now, so filtering, counting and sorting by it stay server-side and paged, and the browser only
+asks again every 10 seconds. The tab is admin-only because it shows source addresses and machine names. The report format did
+not change, so the mod's options are not available to show.
+
 **The prompt and answer modal** (`components/ReportDocs.tsx`, `components/Markdown.tsx`, issue #97). The whole
 prompt and answer are kept out of the places that grow: the mod sends them (`promptText`, `answerText`, mod 0.10.0,
 `fullPrompts` option) once each, tracked by `promptSent`/`answerSent` on its agent state and cleared only by an

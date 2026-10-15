@@ -313,7 +313,7 @@ Admin is for the person who runs the server. Open it with the **Admin** button i
 without activity, and five wrong secrets lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
+Admin has six tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
 
 - **People.** Type a name and choose Create token. Podium shows the token once, above the tabs, with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
@@ -325,6 +325,18 @@ Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 an
   a label for arranging the console (Group by Group, see "People" above) and grants nothing. Deleting a group
   moves its people to "No group". A change shows on the wall with each session's next report, within a few
   seconds.
+- **Reporters.** Every machine that has reported to this server, one row each, kept after its sessions are
+  deleted, so you can check that a reporter is connected and see which ones ever were. The strip on top counts
+  them by state and filters the list: **Reporting** (heard from in the last 2 minutes), **Idle** (up to an
+  hour ago), **Silent** (longer) and **Not since restart** (last heard before the server started). **Silent**
+  means only that nothing has arrived: Podium cannot tell a reporter that is turned off from one that cannot
+  reach it. The list updates by itself every few seconds. Each row shows the machine, the person, the reporter
+  version (with a warning when it is older or newer than this Podium supports), the last report and the number
+  of sessions. Select a row for its details: version and compatibility, machine id, source address, the token's
+  key id (never the token), its recent sessions and any reports the server turned away. A reporter with no user
+  name sends no machine id, so it is matched by its address. **Remove from list** takes a reporter off the list;
+  it comes back if it reports again, and its sessions are not touched. A source address and a machine name are
+  personal data, so only Admin shows them.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
 - **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
@@ -344,7 +356,7 @@ Admin has five tabs. Every list is paged by the server, 50 rows at a time (25 an
   model Podium has no price for, such as a local model, type its id under **Add a model by its id**, fill in
   the five prices and save; until then its cost reads "n/a". Cache writes use the 5-minute price unless Claude
   Code reports which writes were 1-hour ones.
-- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes and changes to
+- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.
 
