@@ -323,9 +323,10 @@ What you can send:
   it in the terminal. On a computer where an organization manages Claude Code, only **No, keep planning** is
   offered.
 - **A tool's request.** **Allow once**, or **Deny** with an optional reason. "Always allow" stays in the terminal.
+  A command too long to show in full can only be allowed in the terminal; Podium still lets you deny it.
 - **A message.** While the session is idle it starts the next turn. Sent while it runs, it waits until the session
-  is idle. Type `/` for the two commands Podium can send: `/clear` (it asks first) and `/compact`. Anything else
-  runs only in the terminal.
+  is idle. Type `/` for the two commands Podium can send: `/clear` (it asks first) and `/compact`, each on its own
+  with nothing after it. Anything else runs only in the terminal.
 
 An answer counts once the session confirms it, usually within 2 seconds; until then the modal says **Sending**.
 If the terminal answered first, if someone else answered first, or if the question closed in the session, the
