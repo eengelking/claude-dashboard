@@ -214,6 +214,7 @@ body.modal-open { overflow: hidden; }
 .out b { font-weight: 600; }
 .out .od { grid-column: 2; color: var(--ink2); font-size: 12.5px; }
 .out .od q { color: var(--ink); font-weight: 600; quotes: none; }
+.out .od .nt { display: block; margin-top: 6px; color: var(--warn-text); font-weight: 600; }
 .out.ok .oi { color: var(--good-text); } .out.info .oi { color: var(--deleg-text); } .out.bad .oi { color: var(--crit-text); } .out.wait .oi { color: var(--warn-text); }
 .out .acts { grid-column: 2; display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .spin { width: 14px; height: 14px; border: 2px solid var(--axis); border-top-color: var(--warn); border-radius: 50%; animation: spin .9s linear infinite; }
@@ -279,8 +280,6 @@ body.modal-open { overflow: hidden; }
 .stage .mpad { height: 14px; }
 @media (max-width: 560px) { .stage { padding: 10px; } }
 
-.tests { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 12.5px; color: var(--ink2); max-width: 80ch; }
-.tests b { color: var(--ink); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -313,6 +312,7 @@ body.modal-open { overflow: hidden; }
       <span class="rl">State</span>
       <label class="seg"><input type="radio" name="edge" value="ready" checked> Ready to answer</label>
       <label class="seg"><input type="radio" name="edge" value="sending"> Sent, not confirmed yet</label>
+      <label class="seg"><input type="radio" name="edge" value="nottaken"> Approval not taken</label>
       <label class="seg"><input type="radio" name="edge" value="terminal"> Answered in the terminal</label>
       <label class="seg"><input type="radio" name="edge" value="other"> Answered by someone else</label>
       <label class="seg"><input type="radio" name="edge" value="closed"> Closed in the session</label>
@@ -416,21 +416,12 @@ body.modal-open { overflow: hidden; }
           <li><b>off</b><span>Nothing. The default.</span></li>
           <li><b>questions</b><span>Answers to questions, and new messages while idle.</span></li>
           <li><b>questions-and-plans</b><span>The above, plus approving or rejecting a plan.</span></li>
-          <li><b>everything</b><span>The above, plus allowing or denying a tool (allow once only), and <code>/clear</code>, <code>/compact</code>, <code>/model</code>, <code>/effort</code>.</span></li>
+          <li><b>everything</b><span>The above, plus allowing or denying a tool (allow once only), and <code>/clear</code>, <code>/compact</code>.</span></li>
         </ul>
       </span>
       <span class="fc"><select aria-label="respond option" id="optSel"><option>off</option><option>questions</option><option>questions-and-plans</option><option selected>everything</option></select></span>
     </div>
   </div>
-
-  <h2 class="s">6. Still to test before any code</h2>
-  <ol class="tests">
-    <li><b>Answering a question from a mod.</b> Whether a <code>tool.call</code> hook on AskUserQuestion can return the answer and close the open terminal dialog at the same moment.</li>
-    <li><b>Messages in place of an answer.</b> How a message sent in place of an answer, and a typed answer, reach Claude (the tool's <code>response</code> and <code>answers</code> fields).</li>
-    <li><b>Plan approval.</b> Whether the mode can be chosen on approval, and whether "keep planning" can carry your feedback.</li>
-    <li><b><code>/clear</code> from a mod.</b> Whether <code>$.command.run</code> runs it, and how Podium follows the session to its new id.</li>
-    <li><b>Tool permissions.</b> Whether a permission prompt can be raced the same way, and with what reply.</li>
-  </ol>
 </div>
 </div>
 
@@ -576,13 +567,20 @@ function askParts(st) {
   const r = { hidden: st.kind === "idle" || st.edge === "off" || st.edge === "old", lead: k.lead, ago: st.kind === "permission" ? "asked 0:54 ago" : "asked 0:42 ago", also: "Also open in the terminal", body: "", foot: "" };
   if (r.hidden) return r;
   const what = WHAT[st.kind];
-  if (st.edge === "sending" || st.submitted) {
-    r.also = "";
-    r.body = outcome("wait", `<span class="spin" role="img" aria-label="Sending"></span>`, "Sending to claude-dashboard.", `Your answer, <q>${esc(answerSummary(st))}</q>, goes out with the reporter's next check-in. It counts as answered once the session confirms it, usually within 2 seconds.`);
+  if (st.edge === "sending" || st.edge === "nottaken" || st.submitted) {
+    // An approval Claude Code didn't take keeps the sending frame, adds one line, and leaves the ask open.
+    const approval = (st.kind === "plan" && st.plan !== "keep") || (st.kind === "permission" && st.perm === "allow");
+    const notTaken = st.edge === "nottaken" && approval && !st.submitted;
+    if (!notTaken) r.also = "";
+    r.body = outcome("wait", `<span class="spin" role="img" aria-label="Sending"></span>`, "Sending to claude-dashboard.", `Your answer, <q>${esc(answerSummary(st))}</q>, goes out with the reporter's next check-in. It counts as answered once the session confirms it, usually within 2 seconds.${notTaken ? `<span class="nt">Claude Code didn't take this approval. Approve it in the terminal.</span>` : ""}`);
     r.foot = `<span class="grow">If the terminal answers first, that answer stands and this one is dropped.</span>`;
   } else if (st.edge === "terminal") {
     r.also = "";
-    r.body = outcome("info", icon("info"), "Answered in the terminal at 12:23.", `The answer there was <q>${esc(st.kind === "question" ? "25/50/100, default 50; Keep it, page within the day; The page number" : st.kind === "plan" ? "Yes, manually approve edits" : "Allow once")}</q>. Nothing from here was sent, and your draft was dropped.`);
+    // The mod can't see which plan option the terminal picked, so an approval there names no mode.
+    const there = st.kind === "plan"
+      ? (st.termPlan === "keep" ? "The answer there was <q>No, keep planning</q>." : "The plan was approved there.")
+      : `The answer there was <q>${esc(st.kind === "question" ? "25/50/100, default 50; Keep it, page within the day; The page number" : "Allow once")}</q>.`;
+    r.body = outcome("info", icon("info"), "Answered in the terminal at 12:23.", `${there} Nothing from here was sent, and your draft was dropped.`);
     r.foot = `<span class="grow">The session has moved on.</span>`;
   } else if (st.edge === "other") {
     r.also = "";
@@ -648,9 +646,7 @@ function permissionParts(st, r) {
 /* ---------- the message box ---------- */
 const COMMANDS = [
   { name: "/clear", desc: "Start over with an empty conversation" },
-  { name: "/compact", desc: "Summarize the conversation to free context" },
-  { name: "/model", desc: "Switch model, for example /model sonnet" },
-  { name: "/effort", desc: "Set effort, for example /effort high" }
+  { name: "/compact", desc: "Summarize the conversation to free context" }
 ];
 function composeHTML(st) {
   if (st.edge === "off") return `<div class="offnote"><b>Responding from Podium is turned off.</b><span>The Admin's Respond from Podium switch, this session's <code>respond</code> option, or the activity feed is off. Answer in the terminal or desktop app. Admin &gt; Settings &gt; Feature flags has the server's switch.</span></div>`;
@@ -665,7 +661,7 @@ function composeHTML(st) {
   if (st.confirmClear) {
     extra = `<div class="confirm" role="alertdialog" aria-label="Clear the conversation?"><span><b>Clear the conversation?</b> claude-dashboard starts over with an empty context. Podium shows the cleared part as its own session in History, linked to this one.</span><span class="acts"><button class="btn" type="button" data-act="cancel-clear">Cancel</button><button class="btn bad" type="button" data-act="do-clear">Clear conversation</button></span></div>`;
   } else if (slash && !known && val.length > 1 && !matches.length) {
-    extra = `<div class="err">${esc(slash)} runs only in the terminal. From here you can send /clear, /compact, /model and /effort.</div>`;
+    extra = `<div class="err">${esc(slash)} runs only in the terminal. From here you can send /clear and /compact.</div>`;
   } else if (pending && val.trim() && !slash) {
     extra = `<div class="warnline">Sending this closes the ${WHAT[st.kind]} without an answer and gives Claude your message instead, like "Chat about this" in the terminal.</div>`;
   }
@@ -698,7 +694,7 @@ const CASES = [
   { id: "q-review", title: "Review before sending", cap: "Review lists every answer. A question left blank is marked, and Claude sees it as skipped.", st: { kind: "question", tab: 3, answers: { "Page size": PS, "Day selector": DS } } },
   { id: "q-chat", title: "Chat about this instead", cap: "Writing in the message box while a question is open replaces the answer, like Chat about this in the terminal. The warning says so before you send.", st: { kind: "question", draft: "Before you pick: how many sessions does History hold on a busy day?" } },
   { group: "Plan approval" },
-  { id: "p-approve", title: "Approve the plan", cap: "The plan is shown whole, with the three ways to approve it from Claude Code.", st: { kind: "plan" } },
+  { id: "p-approve", title: "Approve the plan", cap: "The plan is shown whole, with three ways to approve it. The terminal's dialog has two of them; Yes, auto-accept edits is offered here too.", st: { kind: "plan" } },
   { id: "p-keep", title: "Keep planning, with feedback", cap: "No, keep planning opens a box for what to change. The button says what happens.", st: { kind: "plan", plan: "keep", planFb: "Also cover search across days. People will ask for it next." } },
   { group: "A tool permission" },
   { id: "t-allow", title: "Allow once", cap: "The command and Claude's description of it. Only Allow once is offered here.", st: { kind: "permission" } },
@@ -711,7 +707,9 @@ const CASES = [
   { id: "i-running", title: "While it is still running", cap: "Expand on the Activity panel opens the modal without a wait. A message sent now is queued until the session is idle.", st: { kind: "idle", feed: "running", sent: [{ at: "31:50", text: "Also update the user guide.", note: "(queued until the session is idle)" }] } },
   { group: "When Podium can't send the answer" },
   { id: "e-sending", title: "Sent, not confirmed yet", cap: "Counted as answered only when the session confirms it, not when the server has it.", st: { kind: "question", edge: "sending", answers: { "Page size": PS, "Day selector": DS, "Back state": ["The page number"] } } },
+  { id: "e-nottaken", title: "Approval not taken", cap: "Claude Code didn't take an approval sent from here. The ask stays open, in Podium and in the terminal.", st: { kind: "plan", edge: "nottaken" } },
   { id: "e-terminal", title: "Answered in the terminal", cap: "The terminal answered first. What was chosen there replaces the form.", st: { kind: "question", edge: "terminal" } },
+  { id: "e-plan-terminal", title: "Plan approved in the terminal", cap: "Podium can't see which mode was picked in the terminal, so none is named. When the terminal sent feedback instead, the detail reads \"The answer there was No, keep planning.\"", st: { kind: "plan", edge: "terminal" } },
   { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted.", st: { kind: "question", edge: "other" } },
   { id: "e-closed", title: "Closed in the session", cap: "Esc, an interrupted turn or the end of the session closed the question before you sent anything.", st: { kind: "question", edge: "closed" } },
   { id: "e-undelivered", title: "Session not checking in", cap: "Your answer is kept and sent when the reporter checks in again, unless the terminal answered by then.", st: { kind: "question", edge: "undelivered", answers: { "Page size": PS } } },
@@ -743,7 +741,7 @@ function renderTerms() {
   const k = S.kind;
   const open = {
     question: `<span class="dim">Planning: /Users/eengelking/.claude/plans/wise-beaming-token.md</span>\n\n<span class="dim">←</span> <span class="hl"> ☐ Page size </span> ☐ Day selector  ☐ Back state  ✔ Submit <span class="dim">→</span>\n\n<b>How many History rows per page, and can the user change it?</b>\n\n<span class="bl">❯ 1. 25/50/100, default 50 (Recommended)</span>\n     <span class="dim">Same Pager and choices as Admin > Reporters (#167)</span>\n  2. Fixed 50, no choice\n  3. Type something.\n\n  4. Chat about this\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
-    plan: `<b>Ready to code?</b>\n\n<span class="dim">Here is Claude's plan:</span>\n Paginate the History page (#195)\n ...\n\n<span class="bl">❯ 1. Yes, and use auto mode</span>\n  2. Yes, auto-accept edits\n  3. Yes, manually approve edits\n  4. No, keep planning\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
+    plan: `<b>Ready to code?</b>\n\n<span class="dim">Here is Claude's plan:</span>\n Paginate the History page (#195)\n ...\n\n<span class="bl">❯ 1. Yes, and use auto mode</span>\n  2. Yes, manually approve edits\n  3. Tell Claude what to change\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
     permission: `<b>Bash command</b>\n\n  git push -u origin issue/195-history-pages\n  <span class="dim">Push the branch to GitHub</span>\n\nDo you want to proceed?\n<span class="bl">❯ 1. Yes</span>\n  2. Yes, and don't ask again for git push\n  3. No, and tell Claude what to do differently\n\n<span class="am">▌ podium-reporter: also open in Podium. Answer here or there.</span>`,
     idle: `<span class="gr">●</span> PR #204 is open: feat: paginate the History page.\n  CI is running. Merging is your call.\n\n<span class="dim">───────────────────────────────────────────</span>\n<span class="bl">❯</span> \n<span class="dim">───────────────────────────────────────────</span>\n<span class="am">▌ podium-reporter: messages from Podium are on.</span>`
   }[k];
@@ -777,12 +775,13 @@ function send() {
   S.draft = ""; render(); $("#draft")?.focus();
 }
 function syncRadios() { $$('input[name="kind"]').forEach(r => r.checked = r.value === S.kind); }
+function syncEdge() { $$('input[name="edge"]').forEach(r => r.checked = r.value === S.edge); }
 
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-act],[data-tab],[data-cmd],[data-respond]"); if (!t) return;
   if (t.matches("[data-respond]")) return openModal(t);
   if (t.dataset.tab !== undefined) { S.tab = Number(t.dataset.tab); renderAsk(); $(`[data-tab="${S.tab}"]`, M()).focus(); return; }
-  if (t.dataset.cmd) { S.draft = t.dataset.cmd + (t.dataset.cmd === "/clear" || t.dataset.cmd === "/compact" ? "" : " "); renderCompose(); const d = $("#draft"); d.focus(); d.setSelectionRange(S.draft.length, S.draft.length); return; }
+  if (t.dataset.cmd) { S.draft = t.dataset.cmd; renderCompose(); const d = $("#draft"); d.focus(); d.setSelectionRange(S.draft.length, S.draft.length); return; }
   const a = t.dataset.act;
   if (a === "next") { S.tab = Math.min(S.tab + 1, QUESTIONS.length); renderAsk(); }
   else if (a === "back") { S.tab = Math.max(S.tab - 1, 0); renderAsk(); }
@@ -795,15 +794,24 @@ document.addEventListener("click", e => {
       $("#draft")?.focus();
     }, 1600);
   }
-  else if (a === "discard") { S.edge = "ready"; $$('input[name="edge"]').forEach(r => r.checked = r.value === "ready"); S.answers = {}; render(); }
+  else if (a === "discard") { S.edge = "ready"; syncEdge(); S.answers = {}; render(); }
   else if (a === "send") send();
   else if (a === "cancel-clear") { S.confirmClear = false; renderCompose(); $("#draft").focus(); }
   else if (a === "do-clear") { S.confirmClear = false; S.sent.push({ at: "50:12", text: "/clear", note: "(the conversation was cleared; a new session id follows)" }); S.draft = ""; render(); $("#draft").focus(); }
 });
 document.addEventListener("change", e => {
   const t = e.target;
-  if (t.name === "kind") { S.kind = t.value; S.tab = 0; S.submitted = false; S.confirmClear = false; render(); return; }
-  if (t.name === "edge") { S.edge = t.value; S.submitted = false; render(); return; }
+  // "Approval not taken" exists only for a plan or a tool permission, so the two controls keep each other valid.
+  if (t.name === "kind") {
+    S.kind = t.value; S.tab = 0; S.submitted = false; S.confirmClear = false;
+    if (S.edge === "nottaken" && (S.kind === "question" || S.kind === "idle")) { S.edge = "sending"; syncEdge(); }
+    render(); return;
+  }
+  if (t.name === "edge") {
+    S.edge = t.value; S.submitted = false;
+    if (S.edge === "nottaken" && (S.kind === "question" || S.kind === "idle")) { S.kind = "plan"; syncRadios(); }
+    render(); return;
+  }
   if (/^q\d$/.test(t.name)) {
     const q = QUESTIONS[Number(t.name.slice(1))];
     if (q.multi) S.answers[q.header] = $$(`input[name="${t.name}"]:checked`).map(x => x.value);
