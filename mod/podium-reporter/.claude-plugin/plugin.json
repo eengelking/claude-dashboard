@@ -1,8 +1,10 @@
 {
   "name": "podium-reporter",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
-  "author": { "name": "Ed Engelking" },
+  "author": {
+    "name": "Ed Engelking"
+  },
   "userConfig": {
     "serverUrl": {
       "type": "string",
@@ -44,7 +46,7 @@
     "showStatus": {
       "type": "boolean",
       "title": "Status line",
-      "description": "Show 'podium ● N live' or 'podium ○ offline' under the prompt.",
+      "description": "Show 'podium \u25cf N live' or 'podium \u25cb offline' under the prompt.",
       "default": true
     },
     "explainFailures": {
@@ -64,6 +66,18 @@
       "title": "Send an agent's recent activity",
       "description": "While someone has an agent's panel open in Podium, send that agent's recent tool calls and the text it writes between them (the last 20, each cut to 300 characters, secrets redacted). Nothing is sent for an agent nobody is watching, and the server keeps it in memory only. Off by default.",
       "default": false
+    },
+    "respond": {
+      "type": "string",
+      "title": "Respond from Podium",
+      "description": "What this session accepts from Podium, sent by the session's owner or an Admin: off (nothing; the default), questions (answers to questions, and new messages while idle), questions-and-plans (the above, plus approving or rejecting a plan), everything (the above, plus allowing or denying a tool, allow once only, and /clear, /compact). Needs 'Send an agent's recent activity' on too, and the Podium server's Respond from Podium switch.",
+      "options": [
+        "off",
+        "questions",
+        "questions-and-plans",
+        "everything"
+      ],
+      "default": "off"
     }
   }
 }

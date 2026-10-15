@@ -56,6 +56,18 @@ describe('transport', () => {
     expect(await run(ok())).toEqual([])
   })
 
+  test('reads whether the server takes answers, and the messages it hands over, and nothing from an older server (#206)', async () => {
+    const d = { id: 'dlv_1', askId: null, by: 'Ed', at: 1, kind: 'message', text: 'hi' }
+    const run = async (body: unknown) => {
+      const t = new Transport(fake([{ status: 200, ok: true, text: JSON.stringify(body) }]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.14.0' })
+      await t.send(build, 0)
+      return [t.respond, t.deliveries]
+    }
+    expect(await run({ ok: true, respond: true, deliveries: [d, { id: 7 }, null] })).toEqual([true, [d]])
+    expect(await run({ ok: true, respond: false, deliveries: [d] })).toEqual([false, []])
+    expect(await run({ ok: true })).toEqual([false, []])
+  })
+
   test('reads where the server places this reporter, and says what to do about it', async () => {
     const reply = (c: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, liveSessions: 2, serverVersion: '0.3.0', reporterCompat: c }) })
     const run = async (r: HttpResult) => {

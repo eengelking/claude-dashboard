@@ -4,7 +4,7 @@ import { clip, excerpt, LIMITS } from './failures.ts';
 import { lastSegment } from './git.ts';
 import { family, windowOf } from './models.ts';
 import { toPlan } from './plan.ts';
-import type { ActivityEntry, ActivityEvent, AgentReport, Failure, LoopReport, MachineInfo, ModelUsage, Report } from './protocol.ts';
+import type { ActivityEntry, ActivityEvent, AgentReport, Ask, Failure, LoopReport, MachineInfo, ModelUsage, Report, RespondInfo } from './protocol.ts';
 import { mergeUsage, resolveOwners, type AgentState, type LoopStats, type SessionState } from './state.ts';
 
 export const REPORTER_NAME = 'podium-reporter';
@@ -32,6 +32,12 @@ export interface ReportMeta {
   fullText?: boolean;
   /** The `activityFeed` option: send the feed of each loop the server says is watched (#118). */
   activity?: boolean;
+  /** Whether and how far the session can be answered from Podium (#206); omitted by nothing that responds. */
+  respond?: RespondInfo | null;
+  /** The asks open now, sent only while the server takes answers (#206). */
+  asks?: Ask[] | null;
+  /** The session this one continues after a /clear. */
+  clearedFrom?: string | null;
 }
 
 /** Display name (SPEC 6.6): /podium name, the option, a worktree's branch or folder, the repo folder, the id. */
@@ -194,6 +200,9 @@ export function buildReport(s0: SessionState, events: readonly ActivityEvent[], 
       files: { ...s.files, files: s.files.files.map((f) => ({ ...f, path: clip(f.path, 300), from: f.from === null ? null : clip(f.from, 300) })) },
       activityFeed: activity,
       ...(activity && s.main.activity.length ? { activity: feed(s.main.activity) } : {}),
+      ...(meta.respond ? { respond: meta.respond } : {}),
+      ...(meta.asks ? { asks: meta.asks.slice(0, 8) } : {}),
+      ...(meta.clearedFrom ? { clearedFrom: meta.clearedFrom } : {}),
     },
     agents: withinTextBudget(agents.map((a) => agentReport(a, meta.fullText === true, activity))),
     events: events.slice(0, MAX_EVENTS_PER_REPORT).map((e) => ({ ...e, text: clip(e.text, 240) })),

@@ -1,7 +1,7 @@
 // Getting reports to the server (SPEC 6.1, 6.7): an event queue capped at 500, one POST at a time,
 // acks by count, backoff 1 s, 2 s, 5 s, 10 s while the server is unreachable. Nothing here awaits
 // anything a tool call waits on: hooks only call `enqueue`; the flush timer calls `send`.
-import type { ActivityEvent, Report } from './protocol.ts';
+import type { ActivityEvent, Delivery, Report } from './protocol.ts';
 
 export const QUEUE_MAX = 500;
 export const BACKOFF_MS = [1000, 2000, 5000, 10_000] as const;
@@ -10,6 +10,14 @@ export const EVENTS_PER_REPORT = 100;
 export const REFUSED_RETRY_MS = 60_000;
 /** More watched loops than a report can carry agents is not a list the mod takes whole. */
 const MAX_WATCHED = 201;
+/** Messages and commands one reply can hand over (#206). */
+const MAX_DELIVERIES = 20;
+
+/** A delivery as the server sends it: only its shape is checked here; what it may do is the mod's to decide (SPEC 5.3). */
+export function isDelivery(v: unknown): v is Delivery {
+  const d = v as Partial<Delivery> | null;
+  return !!d && typeof d === 'object' && typeof d.id === 'string' && typeof d.kind === 'string' && typeof d.by === 'string' && typeof d.at === 'number';
+}
 
 export interface HttpResult {
   status: number;
@@ -60,6 +68,10 @@ export class Transport {
   support: ReporterSupport | null = null;
   /** The loops the last accepted report's reply says someone is watching (#118); empty from a server that predates it. */
   watch: string[] = [];
+  /** Whether the last accepted report's reply said the server takes answers for this session (#206); false from an older server. */
+  respond = false;
+  /** Messages and commands from Podium the last reply handed over (#206). */
+  deliveries: Delivery[] = [];
   inFlight = false;
   private current: Promise<SendOutcome> | null = null;
   private loggedReject = false;
@@ -127,7 +139,7 @@ export class Transport {
       if (res.ok) {
         let acked = events.length;
         try {
-          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown; reporterSupport?: unknown; watch?: unknown };
+          const body = JSON.parse(res.text) as { ackedEvents?: unknown; liveSessions?: unknown; reporterCompat?: unknown; serverVersion?: unknown; reporterSupport?: unknown; watch?: unknown; respond?: unknown; deliveries?: unknown };
           if (typeof body.ackedEvents === 'number') acked = Math.max(0, Math.min(events.length, body.ackedEvents));
           if (typeof body.liveSessions === 'number') this.liveSessions = body.liveSessions;
           this.compat = body.reporterCompat === 'outdated' || body.reporterCompat === 'newer' || body.reporterCompat === 'ok' ? body.reporterCompat : null;
@@ -135,6 +147,8 @@ export class Transport {
           const sup = body.reporterSupport as Partial<ReporterSupport> | null | undefined;
           this.support = sup && typeof sup.min === 'string' && typeof sup.max === 'string' ? { min: sup.min, max: sup.max } : null;
           this.watch = Array.isArray(body.watch) ? body.watch.filter((id): id is string => typeof id === 'string').slice(0, MAX_WATCHED) : [];
+          this.respond = body.respond === true;
+          this.deliveries = this.respond && Array.isArray(body.deliveries) ? body.deliveries.filter(isDelivery).slice(0, MAX_DELIVERIES) : [];
         } catch {
           // a 200 without a JSON body still acks what was sent
         }
