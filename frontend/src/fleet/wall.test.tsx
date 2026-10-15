@@ -404,14 +404,16 @@ describe("Remove a heartbeat-lost session (#41)", () => {
   });
 });
 
-describe("subagents running tile (#169)", () => {
-  it("labels the second tile Subagents running, says forks are counted, and keeps the number", () => {
+describe("subagents running tile (#169, #196)", () => {
+  it("labels the second tile Subagents running and shows only the number running", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession()], kpis: makeKpis({ agentsRunning: 3, agentsTotal: 7 }) })} />);
     const tile = [...container.querySelectorAll(".kpis .kpi")].find((t) => t.querySelector(".k")?.textContent === "Subagents running")!;
     expect(tile).toBeTruthy();
     expect(tile.querySelector(".v span")!.textContent).toBe("3");
-    expect(tile.textContent).toContain("of 7 this run");
-    expect(tile.querySelector(".kpi-cap")!.textContent).toBe("forks included");
+    expect(tile.textContent).not.toContain("this run");
+    expect(tile.textContent).not.toContain("forks included");
+    expect(tile.querySelector(".kpi-cap")).toBeNull();
+    expect(tile.querySelector(".v small")).toBeNull();
     expect(container.querySelector(".kpis")!.textContent).not.toContain("Agents running");
   });
 });
