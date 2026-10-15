@@ -20,37 +20,28 @@ function split(path: string): [string, string] {
   return i < 0 ? ["", path] : [path.slice(0, i + 1), path.slice(i + 1)];
 }
 
-/** A GitHub-style bar: five blocks, green for the share of added lines and red for the rest. Decoration only; the counts carry the numbers. */
+/** Five blocks, green for the share of added lines and red for the rest. Decoration only; the counts carry the numbers. */
 function ChangeBar({ added, removed }: { added: number; removed: number }) {
   const total = added + removed;
   let green = total ? Math.round((5 * added) / total) : 0;
   if (total && added && !green) green = 1;
   if (total && removed && green === 5) green = 4;
   return (
-    <span className="blocks" aria-hidden="true">
+    <span className="bars" aria-hidden="true">
       {[0, 1, 2, 3, 4].map((i) => (
-        <b key={i} className={!total ? "" : i < green ? "g" : "r"} />
+        <i key={i} className={!total ? undefined : i < green ? "g" : "r"} />
       ))}
     </span>
   );
 }
 
-function Counts({ f }: { f: ChangedFile }) {
-  if (f.added === null || f.removed === null) {
-    return (
-      <span className="cnt">
-        <span className="fnone" title="Binary file, no line counts">
-          binary
-        </span>
-      </span>
-    );
-  }
+function Counts({ added, removed }: { added: number; removed: number }) {
   return (
     <span className="cnt">
-      <span className="add">+{f.added}</span>
+      <span className="add">+{added}</span>
       <span className="del">
         {MINUS}
-        {f.removed}
+        {removed}
       </span>
     </span>
   );
@@ -58,27 +49,36 @@ function Counts({ f }: { f: ChangedFile }) {
 
 function FileRow({ f }: { f: ChangedFile }) {
   const [dir, name] = split(f.path);
+  const binary = f.added === null || f.removed === null;
   return (
-    <li className={`f ${f.status}`}>
-      <span className={`fst ${LETTER[f.status]}`} aria-hidden="true" title={f.status}>
+    <li className={f.status}>
+      <span className={`st ${LETTER[f.status]}`} aria-hidden="true" title={f.status}>
         {LETTER[f.status]}
       </span>
-      <div className="fbody">
-        <div className="ftop">
-          <span className="path l1" title={f.path}>
-            <span className="nm">{name}</span>
-            <span className="vh"> ({f.status})</span>
-            {f.status === "renamed" && f.from ? <span className="old"> {"←"} {f.from}</span> : null}
-          </span>
-          {f.added !== null && f.removed !== null && <ChangeBar added={f.added} removed={f.removed} />}
-          <Counts f={f} />
-        </div>
-        {dir && (
-          <span className="path l2" title={f.path}>
+      <span className="fn" title={f.path}>
+        <b>{name}</b>
+        <span className="vh"> ({f.status})</span>
+        {(dir || (f.status === "renamed" && f.from)) && (
+          <i>
             <bdi>{dir}</bdi>
-          </span>
+            {f.status === "renamed" && f.from ? ` \u2190 ${f.from}` : null}
+          </i>
         )}
-      </div>
+      </span>
+      <span className="df">
+        {binary ? (
+          <span className="cnt">
+            <span className="fnone" title="Binary file, no line counts">
+              binary
+            </span>
+          </span>
+        ) : (
+          <>
+            <Counts added={f.added!} removed={f.removed!} />
+            <ChangeBar added={f.added!} removed={f.removed!} />
+          </>
+        )}
+      </span>
     </li>
   );
 }
@@ -101,31 +101,24 @@ export function FilesList({ report, hint }: { report: FilesReport | null; hint: 
   const note = SINCE_NOTE[report.since];
   return (
     <>
-      <div className="sum">
-        <span>{plural(report.total)}</span>
-        <span className="cnt">
-          <span className="add">+{report.added}</span>
-          <span className="del">
-            {MINUS}
-            {report.removed}
-          </span>
-        </span>
+      <div className="sumline">
+        {plural(report.total)} {"\u00b7"} <Counts added={report.added} removed={report.removed} />
       </div>
       <ul className="files">
         {shown.map((f) => (
           <FileRow key={f.path} f={f} />
         ))}
       </ul>
-      {pages > 1 && (
-        <nav className="pager" aria-label="Files pages">
-          <span>
-            {from + 1}
-            {"–"}
-            {from + shown.length} of {report.files.length}
-          </span>
-          <span className="pg">
+      <div className="pager">
+        <span>
+          Showing {from + 1}
+          {"\u2013"}
+          {from + shown.length} of {report.files.length}
+        </span>
+        {pages > 1 ? (
+          <nav className="pg" aria-label="Files pages">
             <button type="button" aria-label="Previous page" disabled={at === 0} onClick={() => setPage(at - 1)}>
-              {"‹"}
+              {"\u2039"}
             </button>
             {Array.from({ length: pages }, (_, i) => (
               <button key={i} type="button" aria-current={i === at ? "page" : undefined} onClick={() => setPage(i)}>
@@ -133,11 +126,13 @@ export function FilesList({ report, hint }: { report: FilesReport | null; hint: 
               </button>
             ))}
             <button type="button" aria-label="Next page" disabled={at === pages - 1} onClick={() => setPage(at + 1)}>
-              {"›"}
+              {"\u203a"}
             </button>
-          </span>
-        </nav>
-      )}
+          </nav>
+        ) : (
+          <span>{FILES_PER_PAGE} per page</span>
+        )}
+      </div>
       {(report.total > report.files.length || note) && (
         <div className="foot-note">
           {report.total > report.files.length && <div>Listing the first {report.files.length} of {report.total} files.</div>}

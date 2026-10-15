@@ -1,20 +1,50 @@
 import { useId, useState, type KeyboardEvent } from "react";
 import { inferredStep, planProgress } from "../logic";
-import type { Plan, PlanStep, SessionView } from "../types";
+import type { PlanStep, SessionView } from "../types";
 import { PlanBar } from "./Chips";
 import { FilesList } from "./FilesList";
-import { IconCheck } from "./Icons";
 
 /** The first reporter version that sends the changed files (SPEC 6.2). */
 export const FILES_MIN_REPORTER = "0.6.0";
 export type PlanTab = "plan" | "files";
 const TABS: PlanTab[] = ["plan", "files"];
 
-const SOURCE: Record<Plan["source"], string> = {
-  TaskCreate: "Read from TaskCreate and TaskUpdate calls in the session.",
-  TodoWrite: "Read from TodoWrite calls in the session.",
-  podium_plan: "Named with the Podium plan tool; steps from the session's task calls.",
-};
+type StepShape = PlanStep["state"] | "inferred";
+
+/** The mockup's step marks (podium-orchestrator.html, STEP): one distinct shape per state, so shape carries the state as well as color. */
+function StepMark({ shape }: { shape: StepShape }) {
+  const ring = <circle cx="7" cy="7" r="5.5" />;
+  let body;
+  if (shape === "done") {
+    body = (
+      <svg data-shape={shape} viewBox="0 0 14 14" fill="none" stroke="var(--good-text)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        {ring}
+        <path d="M4.4 7.2l1.8 1.8 3.4-3.7" />
+      </svg>
+    );
+  } else if (shape === "active") {
+    body = (
+      <svg data-shape={shape} viewBox="0 0 14 14">
+        <circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--ink)" strokeWidth="1.6" />
+        <circle className="pdot" cx="7" cy="7" r="2.6" fill="var(--ink)" />
+      </svg>
+    );
+  } else if (shape === "blocked") {
+    body = (
+      <svg data-shape={shape} viewBox="0 0 14 14" fill="none" stroke="var(--serious-text)" strokeWidth="1.6" strokeLinecap="round">
+        {ring}
+        <path d="M3.2 10.8l7.6-7.6" />
+      </svg>
+    );
+  } else {
+    body = (
+      <svg data-shape={shape} viewBox="0 0 14 14" fill="none" stroke="var(--muted)" strokeWidth="1.5">
+        <circle cx="7" cy="7" r="5.5" strokeDasharray={shape === "inferred" ? "2.4 2" : undefined} />
+      </svg>
+    );
+  }
+  return <span className="mk" aria-hidden="true">{body}</span>;
+}
 
 const STATE_WORD: Record<PlanStep["state"], string> = { done: "done", active: "in progress", blocked: "blocked", pending: "not started" };
 
@@ -75,15 +105,13 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
         {plan && p ? (
           <>
             {plan.title && <div className="plan-title">{plan.title}</div>}
-            <div style={{ padding: "10px 12px 2px" }}>
+            <div className="plan-prog">
               <PlanBar pct={p.pct} />
             </div>
             <ol className="steps">
               {plan.steps.map((st) => (
                 <li key={st.id} className={`step ${st.state}${st.id === inferredId ? " inferred" : ""}`}>
-                  <span className="ic" aria-hidden="true">
-                    {st.state === "done" ? <IconCheck /> : null}
-                  </span>
+                  <StepMark shape={st.id === inferredId ? "inferred" : st.state} />
                   <div className="tx">
                     {st.text}
                     <span className="vh"> ({STATE_WORD[st.state]})</span>
@@ -92,7 +120,6 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
                 </li>
               ))}
             </ol>
-            <div className="foot-note">{SOURCE[plan.source]}</div>
           </>
         ) : (
           <div className="empty">No plan reported. Agents were launched ad hoc, so only the agent tree is available.</div>

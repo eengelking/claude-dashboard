@@ -39,7 +39,7 @@ describe("continuous motion", () => {
       expect(css).toMatch(new RegExp(`\\.podium\\[data-beat="${n}"\\][^{]*\\.dot\\.running::after`));
     }
     expect(css).toMatch(/\.podium\[data-beat="2"\][^{]*\.crew \.a\.running/);
-    expect(css).toMatch(/\.podium\[data-beat="2"\][^{]*\.step\.active \.ic::after/);
+    expect(css).toMatch(/\.podium\[data-beat="2"\][^{]*\.step\.active \.mk \.pdot/);
   });
 
   it("does not slide the progress bars, which would redraw them every refresh after each update", () => {

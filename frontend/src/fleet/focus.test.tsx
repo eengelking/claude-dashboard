@@ -485,6 +485,73 @@ describe("Plan and Files tabs", () => {
   });
 });
 
+describe("Plan and Files panel matches the mockup (#200)", () => {
+  const base = makeSession();
+  const withSteps = (states: Array<"done" | "active" | "pending" | "blocked">) =>
+    makeSession({ plan: { ...base.plan!, steps: states.map((state, i) => ({ id: String(i + 1), text: `Task ${i + 1}`, state, activeText: null, ownerAgentId: null, ownerLabel: null })) } });
+
+  it("draws each step state as its own shape, not a CSS circle", () => {
+    const { container } = render(<PlanPanel s={withSteps(["done", "active", "blocked", "pending"])} />);
+    const shapes = [...container.querySelectorAll(".step .mk svg")].map((v) => v.getAttribute("data-shape"));
+    expect(shapes).toEqual(["done", "active", "blocked", "pending"]);
+    expect(container.querySelector(".step .ic")).toBeNull();
+  });
+
+  it("the inferred step gets the dashed ring and the others do not", () => {
+    const { container } = render(<PlanPanel s={withSteps(["done", "pending", "pending"])} />);
+    const shapes = [...container.querySelectorAll(".step .mk svg")].map((v) => v.getAttribute("data-shape"));
+    expect(shapes).toEqual(["done", "inferred", "pending"]);
+    expect(container.querySelector('.step svg[data-shape="inferred"] circle')).toHaveAttribute("stroke-dasharray");
+  });
+
+  it("does not say where the plan was read from under a populated plan", () => {
+    const { container } = render(<PlanPanel s={makeSession()} />);
+    expect(container.textContent).not.toMatch(/Read from (TaskCreate|TodoWrite)/);
+    expect(container.textContent).not.toContain("Named with the Podium plan tool");
+    expect(container.querySelector('[id$="-plan-panel"] .foot-note')).toBeNull();
+  });
+
+  it("puts the progress bar in its own block above the steps, so a hairline can separate them", () => {
+    const { container } = render(<PlanPanel s={makeSession()} />);
+    const prog = container.querySelector(".plan-prog")!;
+    expect(prog.querySelector(".bar.plan")).not.toBeNull();
+    expect(prog.nextElementSibling).toBe(container.querySelector("ol.steps"));
+  });
+
+  it("the Files summary is one line: the count, then the signed totals", () => {
+    const { container } = render(<PlanPanel s={makeSession()} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Files/ }));
+    const sum = container.querySelector(".sumline")!;
+    expect(sum.textContent).toMatch(/^3 files · /);
+    expect([sum.querySelector(".add")!.textContent, sum.querySelector(".del")!.textContent]).toEqual(["+69", "−25"]);
+    expect(container.querySelector(".sum")).toBeNull();
+  });
+
+  it("each file row is the status letter, the name over its folder, then the counts and the change bar", () => {
+    const { container } = render(<PlanPanel s={makeSession()} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Files/ }));
+    const row = container.querySelector(".files li")!;
+    expect([...row.children].map((c) => c.className.split(" ")[0])).toEqual(["st", "fn", "df"]);
+    expect(row.querySelector(".fn b")!.textContent).toBe("PlanPanel.tsx");
+    expect(row.querySelector(".fn i")!.textContent).toBe("frontend/src/fleet/components/");
+    const df = row.querySelector(".df")!;
+    expect([...df.children].map((c) => c.className)).toEqual(["cnt", "bars"]);
+    expect(df.querySelectorAll(".bars i")).toHaveLength(5);
+  });
+
+  it("the pager footer reads Showing a-b of n with the page size, and has page buttons only past one page", () => {
+    const one = render(<PlanPanel s={makeSession({ files: filesOf(6) })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect([...one.container.querySelector(".pager")!.children].map((c) => c.textContent)).toEqual(["Showing 1–6 of 6", "20 per page"]);
+    expect(screen.queryByRole("button", { name: "Next page" })).not.toBeInTheDocument();
+    cleanup();
+    const many = render(<PlanPanel s={makeSession({ files: filesOf(47) })} />);
+    fireEvent.click(screen.getAllByRole("tab")[1]!);
+    expect(many.container.querySelector(".pager")!.textContent).toContain("Showing 1–20 of 47");
+    expect(screen.getByRole("button", { name: "Next page" })).toBeInTheDocument();
+  });
+});
+
 describe("delegating (#98)", () => {
   const nested = [makeAgent({ id: "p", description: "Parent agent" }), makeAgent({ id: "c", parentId: "p", description: "Child agent" })];
   const chip = (c: HTMLElement, sel: string) => c.querySelector(`${sel} .st`) as HTMLElement;
