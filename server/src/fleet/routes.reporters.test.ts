@@ -22,7 +22,7 @@ function setup(adminSecret: string | null = 'admin-secret') {
   const app = express();
   app.use('/api/fleet', createFleetRouter(fleet, { token: adminSecret, people, reporters, log: () => {} }));
   closers.push(() => fleet.close());
-  return { app, people, reporters };
+  return { app, people, reporters, fleet };
 }
 
 function report(over: Record<string, unknown> = {}, id = 'sess-1') {
@@ -53,6 +53,18 @@ describe('recording reporters', () => {
     expect(d.key.startsWith('addr:')).toBe(true);
     expect(d).toMatchObject({ who: 'Admin', credential: 'admin secret', machineId: null });
     expect(JSON.stringify(d)).not.toContain('"admin-secret"');
+  });
+
+  it('does not record the simulator (hostSurface "simulator"), but still stores its session (#168)', async () => {
+    const { app, reporters, fleet } = setup();
+    const base = report({ machine: { name: 'sim-box', id: 'aaaabbbbcccc' } }) as unknown as { reporter: Record<string, unknown> };
+    const res = await request(app)
+      .post('/api/fleet/report')
+      .set('X-Podium-Token', 'admin-secret')
+      .send({ ...base, reporter: { ...base.reporter, hostSurface: 'simulator' } });
+    expect(res.status).toBe(200);
+    expect(list(reporters)).toHaveLength(0);
+    expect(fleet.view('sess-1')).toBeTruthy();
   });
 
   it('records a settings-hooks session as a hooks-only reporter', async () => {

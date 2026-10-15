@@ -36,7 +36,8 @@ Options:
   -h, --help        Show this help
 
 On exit (duration reached, Ctrl-C or SIGTERM) every session it started is reported once more with
-status "done", so nothing is left running in the dashboard.`;
+status "done", so nothing is left running in the dashboard. Its reports say hostSurface "simulator", so the
+server never lists it in Admin > Reporters: a run leaves no reporter row behind (#168).`;
 
 // ------------------------------------------------------------------------------------------------
 // Seeded randomness

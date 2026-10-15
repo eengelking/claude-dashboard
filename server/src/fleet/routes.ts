@@ -54,6 +54,9 @@ const machineOf = (req: Request): string | null => (req.ip ? sourceAddress(req.i
 /** How the Reporters page names the credential: a person's token by its key id (never the token), or the admin secret. */
 const credentialOf = (id: Identity): string | null => (id.kind === 'person' ? `pdm_${id.person.keyId}` : id.kind === 'admin' ? 'admin secret' : null);
 
+/** The `hostSurface` the simulator reports; the Reporters page never lists it (#168). */
+const SIMULATOR_SURFACE = 'simulator';
+
 /** Bookkeeping for the Reporters page must never turn a stored report into a failed one. */
 function noteReporter(opts: FleetRouterOptions, logger: Logger, seen: ReporterSeen, now: number): void {
   try {
@@ -131,22 +134,25 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       const out = fleet.ingest(result.report, ownerOf(id));
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
       const r = result.report;
-      noteReporter(
-        opts,
-        logger,
-        {
-          kind: r.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
-          machineId: r.machine?.id ?? null,
-          machineName: r.machine?.name ?? null,
-          source: machineOf(req),
-          owner: ownerOf(id),
-          credential: credentialOf(id),
-          version: r.reporter.version,
-          engineVersion: r.reporter.engineVersion,
-          sessionId: out.sessionId,
-        },
-        fleet.now(),
-      );
+      // The simulator (`npm run podium:sim`) says so in hostSurface; it is never listed, so a run leaves no reporter row behind (#168).
+      if (r.reporter.hostSurface !== SIMULATOR_SURFACE) {
+        noteReporter(
+          opts,
+          logger,
+          {
+            kind: r.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
+            machineId: r.machine?.id ?? null,
+            machineName: r.machine?.name ?? null,
+            source: machineOf(req),
+            owner: ownerOf(id),
+            credential: credentialOf(id),
+            version: r.reporter.version,
+            engineVersion: r.reporter.engineVersion,
+            sessionId: out.sessionId,
+          },
+          fleet.now(),
+        );
+      }
       logger.debug('report.accepted', `podium: report for session ${out.sessionId}`, {
         session_id: out.sessionId,
         owner: ownerOf(id),
