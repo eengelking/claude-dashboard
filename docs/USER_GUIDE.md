@@ -294,7 +294,7 @@ also read as plain sentences, such as "Session ended (cleared)."
 ### What the numbers mean
 
 Cost is an estimate from token counts and a price table, and it is never a bill. The prices are the ones in
-**Admin > Settings > Model prices**, which start as Anthropic's published list prices; change them there to
+**Admin > Model prices**, which start as Anthropic's published list prices; change them there to
 match what you pay. The session's figure covers the orchestrator and every agent, nested ones included; the
 figures for agents are each agent's own use, and the dashboard labels them as estimates. The orchestrator's row
 in the agent tree shows the session figure. A session from a reporter older than 0.12.0 sends no per-model
@@ -313,15 +313,15 @@ Admin is for the person who runs the server. Open it with the **Admin** button i
 without activity, and five wrong secrets lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has six tabs. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
+Admin has seven pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
 
-- **People.** Type a name and choose Create token. Podium shows the token once, above the tabs, with the
+- **People.** Under **Create user**, type a name and choose Create user. Podium shows the token once, above the page (it stays there when you switch pages), with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
   choose "I have saved it", because Podium keeps only a hash and cannot show the token again. The list shows
   the last four characters, when each person last reported and from which machines. Rotate gives a person a
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
   stale and drop as usual. The search finds a person by name, group or machine.
-- **Groups.** Create groups such as Frontend or DevOps, and pick one for a person on the People tab. A group is
+- **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is
   a label for arranging the console (Group by Group, see "People" above) and grants nothing. Deleting a group
   moves its people to "No group". A change shows on the wall with each session's next report, within a few
   seconds.
@@ -337,14 +337,12 @@ Admin has six tabs. Every list is paged by the server, 50 rows at a time (25 and
   name sends no machine id, so it is matched by its address. **Remove from list** takes a reporter off the list;
   it comes back if it reports again, and its sessions are not touched. A source address and a machine name are
   personal data, so only Admin shows them.
-- **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
-  sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
 - **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
   today is **Agent activity feed** (`activity-feed`), on by default. Turned off, every agent and orchestrator
   panel says the Admin turned the feed off, the server asks no mod for activity and forgets what it held,
   whatever each machine's `activityFeed` option says. Turned back on, open panels start the feed again,
   empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
-  turns its switch off for everyone. After you close one, Podium says so and links to this tab. A second
+  turns its switch off for everyone. After you close one, Podium says so and links to this page. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
   default). These settings apply to every browser and stay after a restart.
 - **Model prices.** One row per model with five prices in US dollars per million tokens: input, output, cache
@@ -353,9 +351,11 @@ Admin has six tabs. Every list is paged by the server, 50 rows at a time (25 and
   orchestrator, **Est. cost today** and History) changes to match at once, including for sessions already
   running, and the change stays after a restart. A changed row shows **Changed** and a **Reset to
   built-in** button. Haiku 5.5 has a second row for prompts over 100,000 tokens, which cost more. To price a
-  model Podium has no price for, such as a local model, type its id under **Add a model by its id**, fill in
+  model Podium has no price for, such as a local model, type its id in **Model id** under **Add a model**, fill in
   the five prices and save; until then its cost reads "n/a". Cache writes use the 5-minute price unless Claude
   Code reports which writes were 1-hour ones.
+- **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
+  sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
 - **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.

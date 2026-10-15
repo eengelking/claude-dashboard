@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium Admin Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: the console's own tokens and faces; a grouped side menu replaces six tabs, and every page is header + sections + panels. */
+:root {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --sonnet: #2a78d6; --good: #0ca30c; --good-text: #006300; --warn: #b87a00; --serious: #c4501f; --crit-text: #b52a2a;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+    --sonnet: #3987e5; --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --serious: #ec835a; --crit-text: #ee6a6a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --sonnet: #3987e5; --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --serious: #ec835a; --crit-text: #ee6a6a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--font-ui); -webkit-font-smoothing: antialiased; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .ink2 { color: var(--ink2); }
+
+/* review controls (not part of the design) */
+.review { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); padding: var(--s3) 0; display: grid; gap: var(--s2); max-width: 1180px; margin: 0 auto; }
+.review .r1 { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; }
+.review h1 { margin: 0; font-size: 15px; letter-spacing: -0.01em; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--surface); flex-wrap: wrap; }
+.seg button { padding: 5px 11px; font-size: 12px; color: var(--ink2); border-right: 1px solid var(--border); }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.note { max-width: 1180px; margin: var(--s4) auto 0; color: var(--ink2); font-size: 12.5px; display: grid; gap: var(--s1); }
+.note b { color: var(--ink); }
+
+/* frame: the console shell */
+.frame { container-type: inline-size; max-width: 1180px; margin: var(--s4) auto 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.frame.narrow { max-width: 400px; }
+.top { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s4); border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+.logo { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.pill { padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
+.spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 var(--s3); border-radius: 6px; border: 1px solid var(--border); background: var(--raised); font-size: 12.5px; font-weight: 500; white-space: nowrap; text-decoration: none; color: var(--ink); }
+.btn:hover { background: var(--sel); }
+.btn.pri { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.pri:hover { background: var(--ink2); }
+.btn.dng { color: var(--crit-text); }
+.btn.sm { min-height: 26px; padding: 0 var(--s2); font-size: 12px; }
+.btn.quiet { background: none; border-color: transparent; color: var(--ink2); }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 640px; }
+.nav { border-right: 1px solid var(--border); background: var(--surface); padding: var(--s4) var(--s3); display: flex; flex-direction: column; gap: var(--s4); }
+.ngroup { display: grid; gap: 2px; }
+.ngroup > .gh { padding: 0 var(--s2) var(--s1); font-size: 12px; color: var(--muted); font-weight: 600; }
+.nav a { display: flex; justify-content: space-between; align-items: center; gap: var(--s2); padding: 7px var(--s2); border-radius: 6px; color: var(--ink2); font-size: 13px; text-decoration: none; cursor: pointer; border-left: 2px solid transparent; }
+.nav a:hover { background: var(--hover); color: var(--ink); }
+.nav a[aria-current="page"] { background: var(--sel); color: var(--ink); font-weight: 600; border-left-color: var(--ink); border-radius: 0 6px 6px 0; }
+.nav .n { font: 11px var(--font-mono); color: var(--muted); }
+.nav .foot { margin-top: auto; display: grid; gap: var(--s2); }
+.nav .hint { font-size: 12px; color: var(--muted); padding: 0 var(--s2); }
+
+.main { padding: var(--s5) var(--s6) var(--s6); display: grid; gap: var(--s5); align-content: start; min-width: 0; }
+.page-h { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s4); flex-wrap: wrap; }
+.page-h h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+.page-h .lead { margin: var(--s1) 0 0; color: var(--ink2); max-width: 62ch; }
+.sec { display: grid; gap: var(--s3); min-width: 0; }
+.sec-h { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s4); flex-wrap: wrap; }
+.sec-h h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.hint { color: var(--muted); font-size: 12px; margin: 2px 0 0; max-width: 66ch; }
+.hint.ink2 { color: var(--ink2); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow: hidden; }
+.tool { display: flex; gap: var(--s3) var(--s4); align-items: flex-end; flex-wrap: wrap; padding: var(--s3) var(--s4); border-bottom: 1px solid var(--border); }
+.tool.end { border-bottom: 0; border-top: 1px solid var(--border); }
+.f { display: grid; gap: var(--s1); min-width: 0; }
+.f label { font-size: 12px; color: var(--ink2); font-weight: 500; }
+.in { min-height: 32px; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; width: 100%; }
+.f.grow { flex: 1 1 220px; max-width: 360px; }
+.f.inline { display: flex; align-items: center; gap: var(--s3); max-width: 520px; }
+.f.inline label { white-space: nowrap; font-size: 13px; color: var(--ink); font-weight: 500; }
+.f.fixed { flex: 0 1 200px; }
+.tool .push { margin-left: auto; }
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: var(--s2) var(--s4); border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 10px var(--s4); border-bottom: 1px solid var(--grid); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+th.r, td.r { text-align: right; }
+tr.off td { color: var(--muted); }
+.who { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; white-space: nowrap; }
+.mg { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--axis); background: var(--raised); color: var(--ink2); font-size: 10.5px; font-weight: 600; }
+.sub { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+.acts { display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.confirm { display: inline-flex; gap: var(--s2); align-items: center; color: var(--ink2); font-size: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.st { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12.5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.st.ok { color: var(--good-text); } .st.ok .dot { background: var(--good); }
+.st.idle { color: var(--good-text); } .st.idle .dot { background: transparent; border: 2px solid var(--good); }
+.st.silent { color: var(--serious); } .st.silent .dot { background: var(--serious); }
+.st.gone { color: var(--muted); }
+.pager { display: flex; justify-content: space-between; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; padding: var(--s2) var(--s4); border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.pager .pg { display: flex; gap: var(--s2); align-items: center; }
+
+/* switch rows */
+.srow { display: flex; justify-content: space-between; align-items: center; gap: var(--s5); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--grid); }
+.srow:last-child { border-bottom: 0; }
+.srow .t { min-width: 0; }
+.srow .t b { font-weight: 600; }
+.srow .id { font: 500 11px var(--font-mono); color: var(--muted); margin-left: 6px; }
+.srow .hint { margin-top: 2px; }
+.sw { display: inline-flex; align-items: center; gap: var(--s2); flex: none; min-width: 64px; justify-content: flex-end; }
+.sw button { width: 36px; height: 22px; border-radius: 999px; background: var(--axis); border: 1px solid var(--border); position: relative; flex: none; }
+.sw button::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform .15s; }
+.sw button[aria-checked="true"] { background: var(--good); }
+.sw button[aria-checked="true"]::after { transform: translateX(14px); background: #fff; }
+.sw span { font-size: 12px; color: var(--ink2); width: 24px; }
+@media (prefers-reduced-motion: reduce) { .sw button::after { transition: none; } }
+
+/* callouts and states */
+.callout { border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 8px; padding: var(--s4); display: grid; gap: var(--s3); }
+.callout h2 { margin: 0; font-size: 15px; }
+.code { margin: 0; font: 12px/1.5 var(--font-mono); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: var(--s3); white-space: pre-wrap; word-break: break-all; }
+.err { color: var(--crit-text); font-size: 12.5px; padding: var(--s2) var(--s4); border-top: 1px solid var(--grid); }
+.errbox { color: var(--crit-text); font-size: 12.5px; border: 1px solid color-mix(in srgb, var(--crit-text) 40%, transparent); border-radius: 8px; padding: var(--s3) var(--s4); }
+.empty { padding: var(--s6) var(--s4); text-align: center; color: var(--ink2); display: grid; gap: var(--s2); justify-items: center; }
+.empty b { color: var(--ink); }
+.ul { margin: 0; padding: var(--s4) var(--s4) var(--s4) 34px; color: var(--ink2); display: grid; gap: var(--s2); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+.stats button { background: var(--surface); padding: var(--s3) var(--s4); display: grid; gap: 2px; }
+.stats button:hover { background: var(--hover); }
+.stats button[aria-pressed="true"] { background: var(--sel); box-shadow: inset 0 -2px 0 var(--ink); }
+.stats .k { color: var(--ink2); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.stats .v { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.price { width: 72px; text-align: right; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: 12px var(--font-mono); }
+.price.changed { border-color: var(--sonnet); }
+.tag { color: var(--sonnet); font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
+.tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.lock { max-width: 440px; margin: var(--s6) auto 0; display: grid; gap: var(--s3); }
+.lock h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+
+/* patterns sheet */
+.spec { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s4); }
+.spec .panel { padding: var(--s4); display: grid; gap: var(--s3); align-content: start; }
+.spec h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.spec dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px var(--s4); font-size: 12.5px; }
+.spec dt { color: var(--muted); } .spec dd { margin: 0; }
+.row-demo { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+
+/* narrow: the menu becomes a scrolling strip, padding tightens */
+@container (max-width: 760px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .nav { border-right: 0; border-bottom: 1px solid var(--border); flex-direction: row; overflow-x: auto; padding: var(--s2) var(--s3); gap: var(--s2); }
+  .ngroup { display: flex; gap: 2px; } .ngroup > .gh, .nav .foot .hint { display: none; }
+  .nav a { white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
+  .nav a[aria-current="page"] { border-left-color: transparent; border-bottom-color: var(--ink); border-radius: 6px 6px 0 0; }
+  .nav .foot { margin: 0; flex-direction: row; }
+  .main { padding: var(--s4); gap: var(--s4); }
+  .srow { gap: var(--s3); }
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="review">
+  <div class="r1">
+    <h1>Podium Admin redesign, mockup for #143</h1>
+    <span class="seg" role="group" aria-label="Theme"><button type="button" data-theme-set="auto" aria-pressed="true">Auto</button><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></span>
+    <span class="seg" role="group" aria-label="Width"><button type="button" data-width="wide" aria-pressed="true">Desktop</button><button type="button" data-width="narrow" aria-pressed="false">Narrow</button></span>
+  </div>
+  <div class="seg" role="group" aria-label="Screen" id="screens">
+    <button type="button" data-screen="people" aria-pressed="true">People</button>
+    <button type="button" data-screen="token" aria-pressed="false">Token shown once</button>
+    <button type="button" data-screen="groups" aria-pressed="false">Groups</button>
+    <button type="button" data-screen="reporters" aria-pressed="false">Reporters</button>
+    <button type="button" data-screen="security" aria-pressed="false">Reporting and security</button>
+    <button type="button" data-screen="settings" aria-pressed="false">Settings</button>
+    <button type="button" data-screen="prices" aria-pressed="false">Model prices</button>
+    <button type="button" data-screen="log" aria-pressed="false">Admin log</button>
+    <button type="button" data-screen="lock" aria-pressed="false">Lock screen</button>
+    <button type="button" data-screen="patterns" aria-pressed="false">Patterns</button>
+  </div>
+</div>
+
+<div class="note">
+  <span><b>What changes.</b> The six tabs become a grouped side menu (a strip along the top on narrow screens), so Reporters and later pages have room. Every page is the same stack: a page header, then sections, each a title and one-line help above a panel. Behavior, copy and settings stay as they are.</span>
+  <span><b>What stays.</b> The console's colors, Schibsted Grotesk and JetBrains Mono. Try the buttons: switches flip, Revoke asks inline, theme and width change the frame.</span>
+</div>
+
+<div class="frame" id="frame">
+  <header class="top">
+    <span class="logo">Podium</span><span class="pill">Admin</span><span class="spacer"></span>
+    <a class="btn" href="#" onclick="return false">Back to fleet</a>
+  </header>
+
+  <div class="shell" id="shell">
+    <nav class="nav" aria-label="Admin sections" id="nav">
+      <div class="ngroup"><span class="gh">People and access</span>
+        <a data-nav="people" role="link" tabindex="0">People <span class="n">12</span></a>
+        <a data-nav="groups" role="link" tabindex="0">Groups <span class="n">3</span></a>
+        <a data-nav="reporters" role="link" tabindex="0">Reporters <span class="n">14</span></a>
+      </div>
+      <div class="ngroup"><span class="gh">Server</span>
+        <a data-nav="settings" role="link" tabindex="0">Settings</a>
+        <a data-nav="prices" role="link" tabindex="0">Model prices</a>
+        <a data-nav="security" role="link" tabindex="0">Reporting and security</a>
+      </div>
+      <div class="ngroup"><span class="gh">Activity</span>
+        <a data-nav="log" role="link" tabindex="0">Admin log <span class="n">86</span></a>
+      </div>
+      <div class="foot"><span class="hint">Locks after 10 minutes without activity.</span><button type="button" class="btn" data-screen-go="lock">Lock Admin</button></div>
+    </nav>
+
+    <main class="main" id="main">
+
+      <!-- PEOPLE -->
+      <div data-view="people token" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>People</h1><p class="lead">Each person gets a token that only works with their own name. A report is accepted when the two match.</p></div></div>
+        <div class="callout" data-only="token" role="region" aria-labelledby="once-h">
+          <h2 id="once-h">Token for Maya Okafor</h2>
+          <p class="hint ink2" style="max-width:none">This is the only time the token is shown. Put these settings in Maya Okafor’s reporter. The token does nothing without the matching name. It stays here while you switch pages.</p>
+          <pre class="code">userName: Maya Okafor
+token: pdm_9f3c1a7e52b84d06a1c9e0f73b25d8ab
+serverUrl: http://192.168.1.20:7777</pre>
+          <div class="acts" style="justify-content:flex-start"><button type="button" class="btn pri">Copy settings</button><button type="button" class="btn">I have saved it</button></div>
+        </div>
+        <section class="sec" aria-labelledby="c-h">
+          <div class="sec-h"><div><h2 id="c-h">Create user</h2><p class="hint">Adds the person and makes their token. The token is shown once, right after you create it.</p></div></div>
+          <div class="panel">
+            <form class="tool" style="border-bottom:0" onsubmit="return false">
+              <div class="f grow"><label for="pn">Name</label><input class="in" id="pn" placeholder="Maya Okafor"></div>
+              <div class="f fixed"><label for="pg">Group</label><select class="in" id="pg"><option>No group</option><option>Platform</option><option>Research</option></select></div>
+              <button type="submit" class="btn pri">Create user</button>
+            </form>
+          </div>
+        </section>
+        <section class="sec" aria-labelledby="p-h">
+          <div class="sec-h"><div><h2 id="p-h">Reporting people</h2><p class="hint">Revoking a token takes effect on the next report.</p></div></div>
+          <div class="panel">
+            <div class="tool"><div class="f grow inline"><label for="ps">Search people</label><input class="in" id="ps" type="search" placeholder="Name, group or machine"></div></div>
+            <div class="tw"><table>
+              <thead><tr><th>Person</th><th>Group</th><th>Token</th><th>Status</th><th>Last report</th><th class="r"><span class="sr" style="position:absolute;left:-9999px">Actions</span></th></tr></thead>
+              <tbody>
+                <tr><td><span class="who"><span class="mg">EE</span>Ed Engelking</span></td><td>Platform</td><td class="mono ink2">…a3f9</td><td><span class="st ok"><i class="dot"></i>Active</span></td><td class="mono muted">2 min ago</td><td class="r"><div class="acts"><button type="button" class="btn sm dng" data-revoke>Revoke</button></div></td></tr>
+                <tr><td><span class="who"><span class="mg">MO</span>Maya Okafor</span></td><td>Research</td><td class="mono ink2">…d8ab</td><td><span class="st idle"><i class="dot"></i>Not used yet</span></td><td class="mono muted">Never</td><td class="r"><div class="acts"><button type="button" class="btn sm dng" data-revoke>Revoke</button></div></td></tr>
+                <tr><td><span class="who"><span class="mg">JP</span>Jun Park</span></td><td>Platform</td><td class="mono ink2">…07c1</td><td><span class="st ok"><i class="dot"></i>Active</span></td><td class="mono muted">1 h ago</td><td class="r"><div class="acts"><span class="confirm">Revoke Jun Park’s token?<button type="button" class="btn sm dng">Revoke</button><button type="button" class="btn sm" data-cancel>Cancel</button></span></div></td></tr>
+                <tr class="off"><td><span class="who"><span class="mg">PN</span>Priya Nair</span></td><td>Research</td><td class="mono">…5e22</td><td><span class="st gone"><i class="dot"></i>Revoked 12 Oct</span></td><td class="mono">3 days ago</td><td class="r"></td></tr>
+              </tbody>
+            </table></div>
+            <div class="pager"><span>1 to 4 of 12</span><span class="pg"><label for="ps1">Rows</label><select class="in" id="ps1" style="width:auto;min-height:26px"><option>50</option><option>100</option></select><button type="button" class="btn sm" disabled>Previous</button><button type="button" class="btn sm" disabled>Next</button></span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- GROUPS -->
+      <div data-view="groups" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Groups</h1><p class="lead">Arrange people into groups. The fleet wall shows a band per group.</p></div></div>
+        <section class="sec" aria-labelledby="gc-h">
+          <div class="sec-h"><div><h2 id="gc-h">Create group</h2><p class="hint">Add a group, then put people in it from the People page.</p></div></div>
+          <div class="panel">
+            <form class="tool" style="border-bottom:0" onsubmit="return false"><div class="f grow"><label for="gn">Name</label><input class="in" id="gn" placeholder="Platform"></div><button type="submit" class="btn pri">Create group</button></form>
+          </div>
+        </section>
+        <section class="sec" aria-labelledby="g-h">
+          <div class="sec-h"><div><h2 id="g-h">Manage groups</h2><p class="hint">Deleting a group leaves its people without a group.</p></div></div>
+          <div class="panel">
+            <div class="tw"><table>
+              <thead><tr><th>Group</th><th class="r">People</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="who">Platform</td><td class="r mono">5</td><td class="r"><div class="acts"><button type="button" class="btn sm">Rename</button><button type="button" class="btn sm dng" data-revoke>Delete</button></div></td></tr>
+                <tr><td class="who">Research</td><td class="r mono">4</td><td class="r"><div class="acts"><button type="button" class="btn sm">Rename</button><button type="button" class="btn sm dng" data-revoke>Delete</button></div></td></tr>
+                <tr><td class="who">Contractors</td><td class="r mono">0</td><td class="r"><div class="acts"><button type="button" class="btn sm">Rename</button><button type="button" class="btn sm dng" data-revoke>Delete</button></div></td></tr>
+              </tbody>
+            </table></div>
+            <div class="pager"><span>1 to 3 of 3</span><span class="pg"><label for="gp1">Rows</label><select class="in" id="gp1" style="width:auto;min-height:26px"><option>50</option><option>100</option></select><button type="button" class="btn sm" disabled>Previous</button><button type="button" class="btn sm" disabled>Next</button></span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- REPORTERS -->
+      <div data-view="reporters" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Reporters</h1><p class="lead">Every reporter this server has heard from, and whether it is still reporting.</p></div></div>
+        <section class="sec" aria-labelledby="r-h">
+          <div class="sec-h"><div><h2 id="r-h">Heard from</h2></div></div>
+          <div class="panel">
+            <div class="stats" role="group" aria-label="Filter by state">
+              <button type="button" aria-pressed="true"><span class="k">All</span><span class="v">14</span></button>
+              <button type="button" aria-pressed="false"><span class="k"><i class="dot" style="background:var(--good)"></i>Reporting</span><span class="v">6</span></button>
+              <button type="button" aria-pressed="false"><span class="k"><i class="dot" style="background:transparent;border:2px solid var(--good)"></i>Idle</span><span class="v">3</span></button>
+              <button type="button" aria-pressed="false"><span class="k"><i class="dot" style="background:var(--serious)"></i>Silent</span><span class="v">2</span></button>
+              <button type="button" aria-pressed="false"><span class="k"><i class="dot"></i>Restarted</span><span class="v">3</span></button>
+            </div>
+            <div class="tool"><div class="f grow inline"><label for="rs">Search reporters</label><input class="in" id="rs" type="search" placeholder="Machine, person, address or version"></div></div>
+            <div class="tw"><table>
+              <thead><tr><th>Reporter</th><th>State</th><th>Version</th><th>Last report</th></tr></thead>
+              <tbody>
+                <tr><td><span class="who">mbp-ed<span class="sub">Ed Engelking</span></span></td><td><span class="st ok"><i class="dot"></i>Reporting</span></td><td class="mono ink2">1.4.2</td><td class="mono muted">8 s ago</td></tr>
+                <tr><td><span class="who">studio-maya<span class="sub">Maya Okafor</span></span></td><td><span class="st idle"><i class="dot"></i>Idle</span></td><td class="mono ink2">1.4.2</td><td class="mono muted">6 min ago</td></tr>
+                <tr><td><span class="who">build-02<span class="sub">Jun Park</span></span></td><td><span class="st silent"><i class="dot"></i>Silent</span></td><td class="mono" style="color:var(--warn)">1.2.0 (outdated)</td><td class="mono muted">2 h ago</td></tr>
+              </tbody>
+            </table></div>
+            <div class="pager"><span>1 to 3 of 14. Select a row for its details.</span><span class="pg"><label for="rp1">Rows</label><select class="in" id="rp1" style="width:auto;min-height:26px"><option>50</option><option>100</option></select><button type="button" class="btn sm" disabled>Previous</button><button type="button" class="btn sm" disabled>Next</button></span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SECURITY -->
+      <div data-view="security" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Reporting and security</h1><p class="lead">Control how reporters prove who they are, and what protects the tokens.</p></div></div>
+        <section class="sec" aria-labelledby="s1-h">
+          <div class="sec-h"><div><h2 id="s1-h">Reporting with the admin secret</h2></div></div>
+          <div class="panel"><div class="srow"><div class="t"><b id="a1">Allow reporters to use the admin secret</b><p class="hint ink2">Reporters that send the admin secret show in the Admin band. Anyone who has this secret can also open Admin, so keep it to your own machine and give everyone else their own token.</p></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-labelledby="a1"></button><span>On</span></div></div></div>
+        </section>
+        <section class="sec" aria-labelledby="s2-h">
+          <div class="sec-h"><div><h2 id="s2-h">What protects this</h2></div></div>
+          <div class="panel"><ul class="ul">
+            <li>Tokens are stored hashed. Podium cannot show one again.</li>
+            <li>Podium decides who a report is from by its token, not by the name in it.</li>
+            <li>Revoking takes effect on the next report.</li>
+            <li>Wrong guesses at the admin secret are limited and logged in the Admin log.</li>
+            <li>Tokens travel as they do today. On a network, use a trusted network or a TLS proxy.</li>
+          </ul></div>
+        </section>
+      </div>
+
+      <!-- SETTINGS -->
+      <div data-view="settings" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Settings</h1><p class="lead">Server-wide choices. A change applies to everyone on this server.</p></div></div>
+        <section class="sec" aria-labelledby="f-h">
+          <div class="sec-h"><div><h2 id="f-h">Feature flags</h2><p class="hint">A flag that is off hides the feature in the console and stops its data.</p></div></div>
+          <div class="panel">
+            <div class="srow"><div class="t"><b id="f1">Terminal</b><span class="id">terminal</span><p class="hint ink2">Open a session’s tmux from the dashboard.</p></div><div class="sw"><button type="button" role="switch" aria-checked="false" aria-labelledby="f1"></button><span>Off</span></div></div>
+            <div class="srow"><div class="t"><b id="f2">Files tab</b><span class="id">files-tab</span><p class="hint ink2">Show the files an agent touched.</p></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-labelledby="f2"></button><span>On</span></div></div>
+          </div>
+        </section>
+        <section class="sec" aria-labelledby="n-h">
+          <div class="sec-h"><div><h2 id="n-h">Wall notices</h2><p class="hint">Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.</p></div></div>
+          <div class="panel">
+            <div class="srow"><div class="t"><b id="n1">Version mismatch</b><p class="hint ink2">Tell people when a reporter is older than the server.</p></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-labelledby="n1"></button><span>On</span></div></div>
+            <div class="srow"><div class="t"><b id="n2">Update interval</b><p class="hint ink2">Explain how often the wall refreshes.</p></div><div class="sw"><button type="button" role="switch" aria-checked="false" aria-labelledby="n2"></button><span>Off</span></div></div>
+          </div>
+        </section>
+        <section class="sec" aria-labelledby="w-h">
+          <div class="sec-h"><div><h2 id="w-h">The wall</h2></div></div>
+          <div class="panel"><div class="srow"><div class="t"><b id="w1">Show background sessions on the wall</b><p class="hint ink2">Sessions nobody is attached to are set aside after a minute. Turn this on to keep them in view. Off by default.</p></div><div class="sw"><button type="button" role="switch" aria-checked="false" aria-labelledby="w1"></button><span>Off</span></div></div></div>
+        </section>
+      </div>
+
+      <!-- MODEL PRICES -->
+      <div data-view="prices" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Model prices</h1><p class="lead">What Podium charges each model per million tokens, in dollars. It uses these to work out what a session cost.</p></div></div>
+        <section class="sec" aria-labelledby="m-h">
+          <div class="sec-h"><div><h2 id="m-h">Prices by model</h2><p class="hint">Edit a price, then save that row. Reset puts back the built-in price.</p></div></div>
+          <div class="panel">
+            <div class="tw"><table>
+              <thead><tr><th>Model</th><th class="r">Input</th><th class="r">Output</th><th class="r">Cache write</th><th class="r">Cache read</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><span class="who">Opus 5.5</span></td><td class="r"><input class="price" aria-label="Opus 5.5 input" value="15.00"></td><td class="r"><input class="price" aria-label="Opus 5.5 output" value="75.00"></td><td class="r"><input class="price" aria-label="Opus 5.5 cache write" value="18.75"></td><td class="r"><input class="price" aria-label="Opus 5.5 cache read" value="1.50"></td><td class="r"><div class="acts"><span class="muted">Built in</span></div></td></tr>
+                <tr><td><span class="who">Sonnet 5.5</span> <span class="tag">Edited</span></td><td class="r"><input class="price changed" aria-label="Sonnet 5.5 input" value="3.50"></td><td class="r"><input class="price" aria-label="Sonnet 5.5 output" value="15.00"></td><td class="r"><input class="price" aria-label="Sonnet 5.5 cache write" value="3.75"></td><td class="r"><input class="price" aria-label="Sonnet 5.5 cache read" value="0.30"></td><td class="r"><div class="acts"><button type="button" class="btn sm pri">Save</button><button type="button" class="btn sm">Reset</button></div></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- LOG -->
+      <div data-view="log" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Admin log</h1><p class="lead">What happened in Admin, newest first.</p></div></div>
+        <section class="sec" aria-labelledby="l-h">
+          <div class="sec-h"><div><h2 id="l-h">Recent activity</h2></div></div>
+          <div class="panel">
+            <div class="tw"><table>
+              <thead><tr><th>When</th><th>What happened</th><th>From</th></tr></thead>
+              <tbody>
+                <tr><td class="mono muted" style="white-space:nowrap">14 Oct 09:41</td><td>Created a token for Maya Okafor</td><td class="mono muted">127.0.0.1</td></tr>
+                <tr><td class="mono muted" style="white-space:nowrap">14 Oct 09:12</td><td style="color:var(--crit-text)">Unlock failed: wrong secret</td><td class="mono muted">192.168.1.44</td></tr>
+                <tr><td class="mono muted" style="white-space:nowrap">13 Oct 17:03</td><td>Turned off Terminal</td><td class="mono muted">127.0.0.1</td></tr>
+              </tbody>
+            </table></div>
+            <div class="pager"><span>1 to 3 of 86</span><span class="pg"><button type="button" class="btn sm" disabled>Previous</button><button type="button" class="btn sm">Next</button></span></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- LOCK -->
+      <div data-view="lock" class="main-in" style="display:contents">
+        <form class="lock" onsubmit="return false">
+          <div><h1>Admin</h1><p class="ink2" style="margin:4px 0 0">Create and revoke the tokens people use to report to this Podium. Enter the admin secret to continue.</p></div>
+          <p class="hint ink2" role="status">Admin locked after 10 minutes without activity. Enter the secret to continue.</p>
+          <div class="f"><label for="sec">Admin secret</label><input class="in mono" id="sec" type="password" aria-describedby="sec-h2"></div>
+          <div class="errbox" role="alert">That is not the admin secret.</div>
+          <div><button type="submit" class="btn pri">Unlock Admin</button></div>
+          <p class="hint" id="sec-h2">Podium made this secret the first time the server started. On the server’s machine, <span class="mono">podiumctl token</span> prints it. After 5 wrong tries it locks for 15 minutes.</p>
+        </form>
+      </div>
+
+      <!-- PATTERNS -->
+      <div data-view="patterns" class="main-in" style="display:contents">
+        <div class="page-h"><div><h1>Patterns</h1><p class="lead">The rules every Admin page follows. These go into the docs so a later page copies them instead of inventing its own.</p></div></div>
+        <div class="spec">
+          <div class="panel"><h3>Page</h3><dl><dt>Header</dt><dd>H1 22 px, one-line lead, actions on the right</dd><dt>Sections</dt><dd>H2 15 px, optional one-line help, then a panel</dd><dt>Spacing</dt><dd>4, 8, 12, 16, 24, 32 only</dd><dt>Width</dt><dd>Content fills the area; text lines stop at 66 characters</dd></dl></div>
+          <div class="panel"><h3>Buttons</h3><div class="row-demo"><button class="btn pri" type="button">Primary</button><button class="btn" type="button">Default</button><button class="btn dng" type="button">Danger</button><button class="btn sm" type="button">Row action</button></div><dl><dt>Default</dt><dd>30 px tall, everywhere outside a table row</dd><dt>Small</dt><dd>26 px, table rows only</dd><dt>Primary</dt><dd>One per panel, names the result: “Create user”</dd></dl></div>
+          <div class="panel"><h3>Form row</h3><div class="f"><label for="x1">Label above, always visible</label><input class="in" id="x1" placeholder="32 px field"></div><dl><dt>Layout</dt><dd>Fields in a toolbar row at the top of the panel; wraps on narrow screens</dd><dt>Search</dt><dd>Label to the left, field to its right, alone in the table’s toolbar</dd><dt>Help</dt><dd>Below the field, 12 px muted</dd></dl></div>
+          <div class="panel"><h3>Switch row</h3><div class="srow" style="padding:0;border:0"><div class="t"><b id="x2">Name</b><p class="hint ink2">What turns on or off, in plain words.</p></div><div class="sw"><button type="button" role="switch" aria-checked="true" aria-labelledby="x2"></button><span>On</span></div></div><dl><dt>Used for</dt><dd>Every on/off setting, in Settings and Reporting</dd></dl></div>
+          <div class="panel"><h3>Table</h3><dl><dt>Header</dt><dd>12 px muted sentence case, no uppercase</dd><dt>Cells</dt><dd>10 px by 16 px; numbers right-aligned in mono</dd><dt>Footer</dt><dd>Pager (range, rows per page, Previous, Next) at the bottom of every list: People, Groups, Reporters, Admin log</dd><dt>Actions</dt><dd>Right-most column, small buttons</dd></dl></div>
+          <div class="panel"><h3>Confirm, empty, error</h3><span class="confirm">Revoke Jun Park’s token?<button type="button" class="btn sm dng">Revoke</button><button type="button" class="btn sm">Cancel</button></span><div class="errbox" role="alert">Could not load the log (503). Try again.</div><div class="empty" style="padding:var(--s3)"><b>Nothing has happened yet.</b><span>Actions in Admin show up here.</span></div><dl><dt>Confirm</dt><dd>Inline in the row, never a dialog</dd><dt>Error</dt><dd>Says what failed and what to do</dd></dl></div>
+          <div class="panel"><h3>Accessibility</h3><dl><dt>Controls</dt><dd>Every control has a visible label or aria-label</dd><dt>Focus</dt><dd>2 px blue ring on everything</dd><dt>Contrast</dt><dd>Checked in both themes; state never rests on color alone</dd><dt>Narrow</dt><dd>Menu becomes a top strip; tables scroll inside their panel</dd></dl></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement, frame = document.getElementById('frame');
+  var views = [].slice.call(document.querySelectorAll('[data-view]'));
+  var navLinks = [].slice.call(document.querySelectorAll('[data-nav]'));
+  var screenBtns = [].slice.call(document.querySelectorAll('#screens button'));
+  function show(name) {
+    views.forEach(function (v) { v.hidden = v.getAttribute('data-view').split(' ').indexOf(name) < 0; });
+    document.querySelectorAll('[data-only]').forEach(function (e) { e.hidden = e.getAttribute('data-only') !== name; });
+    var navKey = name === 'token' ? 'people' : name;
+    navLinks.forEach(function (a) { if (a.getAttribute('data-nav') === navKey) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    screenBtns.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-screen') === name)); });
+    document.getElementById('shell').style.display = '';
+    document.getElementById('nav').style.display = (name === 'lock') ? 'none' : '';
+    document.getElementById('shell').style.gridTemplateColumns = (name === 'lock') ? '1fr' : '';
+  }
+  screenBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-screen')); }); });
+  navLinks.forEach(function (a) {
+    function go() { show(a.getAttribute('data-nav')); }
+    a.addEventListener('click', go);
+    a.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  document.querySelectorAll('[data-screen-go]').forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-screen-go')); }); });
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = b.getAttribute('data-theme-set');
+      if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+      document.querySelectorAll('[data-theme-set]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    });
+  });
+  document.querySelectorAll('[data-width]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      frame.classList.toggle('narrow', b.getAttribute('data-width') === 'narrow');
+      document.querySelectorAll('[data-width]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    });
+  });
+  document.addEventListener('click', function (e) {
+    var sw = e.target.closest('.sw button');
+    if (sw) { var on = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', String(on)); sw.nextElementSibling.textContent = on ? 'On' : 'Off'; return; }
+    var rv = e.target.closest('[data-revoke]');
+    if (rv) {
+      var label = rv.textContent.trim(), acts = rv.parentNode, saved = acts.innerHTML;
+      acts.innerHTML = '<span class="confirm">' + label + '?<button type="button" class="btn sm dng" data-done>' + label + '</button><button type="button" class="btn sm" data-cancel>Cancel</button></span>';
+      acts._saved = saved; return;
+    }
+    var c = e.target.closest('[data-cancel]');
+    if (c) { var a = c.closest('.acts'); if (a && a._saved) { a.innerHTML = a._saved; a._saved = null; } }
+  });
+  show('people');
+})();
+</script>
+</body>
+</html>

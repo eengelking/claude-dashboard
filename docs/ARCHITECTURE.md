@@ -52,6 +52,16 @@ header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`)
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them.
 
+**Admin page patterns** (`frontend/src/fleet/admin/Page.tsx`, `admin.css`, issue #143, mockup `mockup/podium-admin.html`). `AdminView`
+holds a side menu (`NAV` groups the pages, `PAGES` names each and gives its one-line lead) and renders one page component at a time;
+the menu and the page scroll on their own inside `.adminv`, so the menu always runs the full height with Lock Admin and the footer at
+the bottom. A page component returns sections only: `AdminView` draws the header (`PageHeader`), and each section is `Section`
+(an H2 with an optional help line) around a `Panel`. A list is a panel holding an optional toolbar (`.tool`), the table (`.ptab`) and
+`Pager`; an on/off setting is a `SwitchRow`; a new page adds an entry to `PAGES` and `NAV` and follows the same shape, so a later tab
+copies the pattern instead of inventing one. Spacing steps are 4, 8, 12, 16, 24 and 32 px; buttons are 30 px, or 26 px (`.sm`) in a
+table row. Admin's CSS is scoped under `.adminv` and its layout classes are prefixed (`asec`, `apage`) because `fleet.css` already
+uses `.sec`, `.main`, `.code` and `.back` under `.podium`, with higher specificity.
+
 **Which reporters are known** (`server/src/fleet/reporters.ts`, `frontend/src/fleet/admin/ReportersTab.tsx`, issue #142).
 `ReporterStore` owns migration 11 (`reporters` and `reporter_sessions`) and is built once in `index.ts`, then handed to both
 routers. `routes.ts` calls `record()` after a report or hook is stored, with the machine id (or the source address when the

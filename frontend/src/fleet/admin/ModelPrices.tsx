@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ModelPriceRow, ModelPricesView, PriceSet } from "./adminApi";
+import { Panel, Section } from "./Page";
 
 const FIELDS = [
   { f: "input", head: "Input", aria: "input" },
@@ -124,21 +125,21 @@ function ModelRow({ row, actions, startDirty }: { row: ModelPriceRow; actions: P
           <div className="acts">
             {dirty && (
               <>
-                <button type="button" className="btn" aria-label={`Cancel ${row.label}`} disabled={busy} onClick={startDirty ? () => void actions.reset(row.key) : cancel}>
+                <button type="button" className="btn sm" aria-label={`Cancel ${row.label}`} disabled={busy} onClick={startDirty ? () => void actions.reset(row.key) : cancel}>
                   Cancel
                 </button>
-                <button type="button" className="btn pri" aria-label={`Save ${row.label}`} disabled={busy} onClick={save}>
+                <button type="button" className="btn sm pri" aria-label={`Save ${row.label}`} disabled={busy} onClick={save}>
                   Save
                 </button>
               </>
             )}
             {!dirty && row.builtin && row.overridden && (
-              <button type="button" className="btn" aria-label={`Reset ${row.label} to built-in`} disabled={busy} onClick={() => void run(() => actions.reset(row.key))}>
+              <button type="button" className="btn sm" aria-label={`Reset ${row.label} to built-in`} disabled={busy} onClick={() => void run(() => actions.reset(row.key))}>
                 Reset to built-in
               </button>
             )}
             {!dirty && !row.builtin && (
-              <button type="button" className="btn" aria-label={`Remove ${row.label}`} disabled={busy} onClick={() => void run(() => actions.reset(row.key))}>
+              <button type="button" className="btn sm" aria-label={`Remove ${row.label}`} disabled={busy} onClick={() => void run(() => actions.reset(row.key))}>
                 Remove
               </button>
             )}
@@ -166,7 +167,7 @@ function ModelRow({ row, actions, startDirty }: { row: ModelPriceRow; actions: P
   );
 }
 
-/** Admin > Settings > Model prices (issue #117): the prices every cost figure on the wall is worked out from. */
+/** Admin > Model prices (issue #117, its own page since #143): the prices every cost figure on the wall is worked out from. */
 export function ModelPrices({ view, actions }: { view: ModelPricesView; actions: PriceActions }) {
   const [drafts, setDrafts] = useState<string[]>([]);
   const [id, setId] = useState("");
@@ -186,65 +187,69 @@ export function ModelPrices({ view, actions }: { view: ModelPricesView; actions:
       return m;
     });
   return (
-    <section aria-labelledby="admin-prices-h">
-      <h2 id="admin-prices-h">Model prices</h2>
-      <div className="hint ink2 wide">
-        US dollars per million tokens, as Anthropic lists them. Podium multiplies each model&apos;s tokens by these prices, so changing one changes today&apos;s cost everywhere at once: the wall, each orchestrator, Est. cost today and History.
-        Built-in prices are from Anthropic&apos;s pricing sheet of {view.asOf}.
-      </div>
-      <div className="box pricebox">
-        <div className="tw2">
-          <table className="ptab">
-            <thead>
-              <tr>
-                <th>Model</th>
-                {FIELDS.map(({ f, head }) => (
-                  <th className="n" key={f}>
-                    {head}
+    <>
+      <Section id="admin-prices-add-h" title="Add a model" help={'A model with no price shows "n/a" for cost until you add one.'}>
+        <Panel>
+          <form
+            className="tool alone"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add();
+            }}
+          >
+            <div className="f grow">
+              <label htmlFor="mp-new">Model id</label>
+              <input id="mp-new" className="field mono" placeholder="for example llama3.1:8b" value={id} onChange={(e) => setId(e.target.value)} />
+            </div>
+            <button type="submit" className="btn pri">
+              Add model
+            </button>
+          </form>
+          {addErr && (
+            <div className="err" role="alert">
+              {addErr}
+            </div>
+          )}
+        </Panel>
+      </Section>
+      <Section
+        id="admin-prices-h"
+        title="Prices by model"
+        help={`US dollars per million tokens, as Anthropic lists them. Podium multiplies each model's tokens by these prices, so changing one changes today's cost everywhere at once: the wall, each orchestrator, Est. cost today and History. Built-in prices are from Anthropic's pricing sheet of ${view.asOf}.`}
+      >
+        <Panel>
+          <div className="tw2">
+            <table className="ptab">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  {FIELDS.map(({ f, head }) => (
+                    <th className="n" key={f}>
+                      {head}
+                    </th>
+                  ))}
+                  <th>
+                    <span className="vh">Actions</span>
                   </th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.models.map((m) => (
+                  <ModelRow key={`${m.key}:${JSON.stringify([m.std, m.long])}`} row={m} actions={{ ...actions, save: saved }} startDirty={false} />
                 ))}
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {view.models.map((m) => (
-                <ModelRow key={`${m.key}:${JSON.stringify([m.std, m.long])}`} row={m} actions={{ ...actions, save: saved }} startDirty={false} />
-              ))}
-              {drafts.map((key) => (
-                <ModelRow
-                  key={`draft:${key}`}
-                  row={{ key, label: key, builtin: false, overridden: true, std: { input: NaN, output: NaN, cacheRead: NaN, cacheWrite: NaN, cacheWrite1h: NaN } }}
-                  actions={{ ...actions, save: saved, reset: async () => (setDrafts((d) => d.filter((k) => k !== key)), null) }}
-                  startDirty
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <form
-          className="addrow"
-          onSubmit={(e) => {
-            e.preventDefault();
-            add();
-          }}
-        >
-          <div className="f">
-            <label htmlFor="mp-new" className="hint">
-              Add a model by its id
-            </label>
-            <input id="mp-new" className="field mono" placeholder="for example llama3.1:8b" value={id} onChange={(e) => setId(e.target.value)} />
+                {drafts.map((key) => (
+                  <ModelRow
+                    key={`draft:${key}`}
+                    row={{ key, label: key, builtin: false, overridden: true, std: { input: NaN, output: NaN, cacheRead: NaN, cacheWrite: NaN, cacheWrite1h: NaN } }}
+                    actions={{ ...actions, save: saved, reset: async () => (setDrafts((d) => d.filter((k) => k !== key)), null) }}
+                    startDirty
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
-          <button type="submit" className="btn pri">
-            Add model
-          </button>
-          <span className="hint">A model with no price shows &quot;n/a&quot; for cost until you add one.</span>
-        </form>
-        {addErr && (
-          <div className="err pad" role="alert">
-            {addErr}
-          </div>
-        )}
-      </div>
-    </section>
+        </Panel>
+      </Section>
+    </>
   );
 }

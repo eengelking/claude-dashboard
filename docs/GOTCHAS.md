@@ -190,6 +190,10 @@ shows as stale. A session the mod reports uses the 15-second default.
 
 ## Developing
 
+### An Admin style does nothing, or looks like the fleet page's
+
+Admin's CSS is scoped under `.adminv`, but `fleet.css` styles bare class names under `.podium` (`.sec`, `.main`, `.code`, `.back`, `.field`, `.btn` and more) with higher specificity, so a class of the same name in Admin picks up its rules. Before you add a class to `admin.css`, search `fleet.css` for it, and prefix a layout class that collides (Admin uses `asec` and `apage` for this reason).
+
 ### `npm run test:mod` and `npm run typecheck:mod` fail on a clean machine
 
 Both need Claude Code installed, and CI cannot run them. Run them locally when you change the mod.

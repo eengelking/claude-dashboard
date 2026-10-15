@@ -14,7 +14,7 @@ Two dashboards for Claude Code on one machine, served by one local server:
 New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
 
 Cost in Podium is an estimate from token counts and a price table. The table starts as Anthropic's list
-prices and you can change any price in Admin > Settings > Model prices. It is never a bill.
+prices and you can change any price in Admin > Model prices. It is never a bill.
 
 ## Run it
 

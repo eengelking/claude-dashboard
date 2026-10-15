@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { AdminError, query, type AdminApi, type ReporterDetail, type ReporterList, type ReporterRow, type ReporterSort, type ReporterState } from "./adminApi";
 import { Pager } from "./Pager";
+import { Panel, Section } from "./Page";
 import { failText, useList } from "./useList";
 
 export interface ReporterPaging {
@@ -113,78 +114,80 @@ export function ReportersTab(props: {
     </th>
   );
   return (
-    <>
-      <div className="states" role="group" aria-label="Filter by state">
-        {[{ id: "" as const, name: "All reporters", n: data?.counts.all }, ...STATES.map((s) => ({ id: s.id, name: s.name, n: data?.counts[s.id] }))].map((s) => (
-          <button key={s.id || "all"} type="button" className="sbtn" aria-pressed={paging.state === s.id} onClick={() => onPaging({ state: s.id, page: 1 })} title={s.id ? stateOf(s.id).def : undefined}>
-            <span className="k">
-              {s.id && <span className={`rdot ${s.id}`} aria-hidden="true" />}
-              {s.name}
-            </span>
-            <span className="v mono">{s.n ?? "–"}</span>
-          </button>
-        ))}
-      </div>
-      <div className="ptool inline">
-        <label htmlFor="reporters-search" className="strong nowrap">
-          Find a reporter
-        </label>
-        <input className="field" id="reporters-search" type="search" placeholder="Machine, person, address or version" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-      {list.error && (
-        <div className="err pad" role="alert">
-          Could not load the reporters ({list.error}).
+    <Section id="admin-reporters-h" title="Heard from">
+      <Panel>
+        <div className="states" role="group" aria-label="Filter by state">
+          {[{ id: "" as const, name: "All reporters", n: data?.counts.all }, ...STATES.map((s) => ({ id: s.id, name: s.name, n: data?.counts[s.id] }))].map((s) => (
+            <button key={s.id || "all"} type="button" className="sbtn" aria-pressed={paging.state === s.id} onClick={() => onPaging({ state: s.id, page: 1 })} title={s.id ? stateOf(s.id).def : undefined}>
+              <span className="k">
+                {s.id && <span className={`rdot ${s.id}`} aria-hidden="true" />}
+                {s.name}
+              </span>
+              <span className="v mono">{s.n ?? "–"}</span>
+            </button>
+          ))}
         </div>
-      )}
-      {data && data.rows.length === 0 ? (
-        <div className="empty">{data.counts.all ? "No reporter matches. Clear the search or pick another state." : "No reporter has connected yet. Install podium-reporter and point it at this server."}</div>
-      ) : (
-        data && (
-          <div className="tw2 scroll" tabIndex={0} aria-label="Reporters">
-            <table className="ptab">
-              <thead>
-                <tr>
-                  {th("state", "State")}
-                  {th("name", "Machine")}
-                  {th("who", "Person")}
-                  {th("ver", "Reporter version")}
-                  {th("last", "Last report")}
-                  {th("sessions", "Sessions", "n")}
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((r) => (
-                  <tr key={r.key} className="rw" onClick={() => setOpen(r.key)}>
-                    <td>
-                      <StateBadge id={r.state} />
-                    </td>
-                    <td>
-                      <button type="button" className="rname" onClick={(e) => (e.stopPropagation(), setOpen(r.key))} aria-label={`Open details for ${r.name}`}>
-                        {r.name}
-                      </button>
-                      <span className="sub mono">{r.key.startsWith("addr:") || r.key.startsWith("hooks:") ? `no machine id, matched by address ${r.key.slice(r.key.indexOf(":") + 1)}` : r.key}</span>
-                    </td>
-                    <td>{r.who}</td>
-                    <td>
-                      <Version r={r} />
-                    </td>
-                    <td className="mono muted nowrap">{ago(data.serverTime, r.lastSeenAt)}</td>
-                    <td className="n mono">
-                      {r.sessions}
-                      {r.live > 0 && <span className="hint"> · {r.live} live</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="tool">
+          <div className="f grow inline">
+            <label htmlFor="reporters-search">Search reporters</label>
+            <input className="field" id="reporters-search" type="search" placeholder="Machine, person, address or version" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-        )
-      )}
-      {data && data.total > 0 && <Pager id="reporters" page={data.page} pageSize={data.pageSize} total={data.total} onPage={(n) => onPaging({ page: n })} onSize={(n) => onPaging({ pageSize: n, page: 1 })} />}
-      <div className="rnote">
-        <b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.
-      </div>
-    </>
+        </div>
+        {list.error && (
+          <div className="err" role="alert">
+            Could not load the reporters ({list.error}).
+          </div>
+        )}
+        {data && data.rows.length === 0 ? (
+          <div className="empty">{data.counts.all ? "No reporter matches. Clear the search or pick another state." : "No reporter has connected yet. Install podium-reporter and point it at this server."}</div>
+        ) : (
+          data && (
+            <div className="tw2 scroll" tabIndex={0} aria-label="Reporters">
+              <table className="ptab">
+                <thead>
+                  <tr>
+                    {th("state", "State")}
+                    {th("name", "Machine")}
+                    {th("who", "Person")}
+                    {th("ver", "Reporter version")}
+                    {th("last", "Last report")}
+                    {th("sessions", "Sessions", "n")}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((r) => (
+                    <tr key={r.key} className="rw" onClick={() => setOpen(r.key)}>
+                      <td>
+                        <StateBadge id={r.state} />
+                      </td>
+                      <td>
+                        <button type="button" className="rname" onClick={(e) => (e.stopPropagation(), setOpen(r.key))} aria-label={`Open details for ${r.name}`}>
+                          {r.name}
+                        </button>
+                        <span className="sub mono">{r.key.startsWith("addr:") || r.key.startsWith("hooks:") ? `no machine id, matched by address ${r.key.slice(r.key.indexOf(":") + 1)}` : r.key}</span>
+                      </td>
+                      <td>{r.who}</td>
+                      <td>
+                        <Version r={r} />
+                      </td>
+                      <td className="mono muted nowrap">{ago(data.serverTime, r.lastSeenAt)}</td>
+                      <td className="n mono">
+                        {r.sessions}
+                        {r.live > 0 && <span className="hint"> · {r.live} live</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+        {data && data.total > 0 && <Pager id="reporters" page={data.page} pageSize={data.pageSize} total={data.total} onPage={(n) => onPaging({ page: n })} onSize={(n) => onPaging({ pageSize: n, page: 1 })} />}
+        <div className="rnote">
+          <b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.
+        </div>
+      </Panel>
+    </Section>
   );
 }
 
@@ -215,14 +218,14 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
   );
   if (!d) {
     return (
-      <>
+      <Panel>
         {back}
         {one.error ? (
           <div className="empty">{one.error === "unknown reporter" ? "That reporter is no longer on the list." : `Could not load this reporter (${one.error}).`}</div>
         ) : (
           <div className="empty">Loading…</div>
         )}
-      </>
+      </Panel>
     );
   }
   const kv = (rows: [string, React.ReactNode][]) => (
@@ -236,7 +239,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
     </dl>
   );
   return (
-    <>
+    <Panel>
       {back}
       <div className="dhead">
         <h2>
@@ -259,7 +262,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
         )}
       </div>
       {err && (
-        <div className="err pad" role="alert">
+        <div className="err" role="alert">
           {err}
         </div>
       )}
@@ -334,6 +337,6 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
           )}
         </div>
       </div>
-    </>
+    </Panel>
   );
 }

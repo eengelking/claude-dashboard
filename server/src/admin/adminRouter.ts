@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
 import { safeEqualStr } from '../fleet/tokens.js';
+import { serverVersion } from '../fleet/compat.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
 import type { ReporterStore } from '../fleet/reporters.js';
@@ -96,7 +97,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   });
 
   router.get('/session', (req, res) => {
-    res.json({ enabled: opts.secret !== null, unlocked: opts.secret !== null && sessionValid(req) });
+    res.json({ enabled: opts.secret !== null, unlocked: opts.secret !== null && sessionValid(req), version: serverVersion() });
   });
 
   // Admin is off without a token: the console is open to everyone who can reach it, so there is nothing to gate it with.

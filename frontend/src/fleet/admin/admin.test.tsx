@@ -149,7 +149,7 @@ afterEach(() => {
 async function unlock() {
   fireEvent.change(await screen.findByLabelText("Admin secret"), { target: { value: "right" } });
   fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
-  await screen.findByRole("tablist", { name: "Admin sections" });
+  await screen.findByRole("navigation", { name: "Admin sections" });
 }
 
 describe("Admin lock screen", () => {
@@ -159,16 +159,16 @@ describe("Admin lock screen", () => {
     fireEvent.change(await screen.findByLabelText("Admin secret"), { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("That is not the admin secret.");
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
     expect((screen.getByLabelText("Admin secret") as HTMLInputElement).value).toBe("");
     await unlock();
-    expect(screen.getByRole("tab", { name: /People/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: /People/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens straight away when this browser already has a session", async () => {
     fakeServer({ unlocked: true });
     render(<AdminView />);
-    expect(await screen.findByRole("tablist", { name: "Admin sections" })).toBeInTheDocument();
+    expect(await screen.findByRole("navigation", { name: "Admin sections" })).toBeInTheDocument();
   });
 
   it("says Admin is off when the server has no token", async () => {
@@ -184,16 +184,16 @@ describe("tokens", () => {
     fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.change(await screen.findByLabelText("Add a person"), { target: { value: "Dana" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Dana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create user" }));
     const code = await screen.findByText(/token: pdm_aaaaaaaaaaaa_/);
     expect(code).toHaveTextContent("userName: Dana");
-    fireEvent.click(screen.getByRole("tab", { name: /Admin log/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Admin log/ }));
     expect(screen.getByText(/token: pdm_aaaaaaaaaaaa_/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "I have saved it" }));
     expect(screen.queryByText(/pdm_aaaaaaaaaaaa_/)).toBeNull();
     // After it, the list shows only the last four characters.
-    fireEvent.click(screen.getByRole("tab", { name: /People/ }));
+    fireEvent.click(screen.getByRole("button", { name: /People/ }));
     expect(await screen.findByText("pdm_…ab12")).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
   });
@@ -202,8 +202,8 @@ describe("tokens", () => {
     fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.change(await screen.findByLabelText("Add a person"), { target: { value: "Dana" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Dana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create user" }));
     await screen.findByText(/token: pdm_/);
     const stored = JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage });
     expect(stored).not.toContain("pdm_");
@@ -214,11 +214,11 @@ describe("tokens", () => {
     const s = fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.change(await screen.findByLabelText("Add a person"), { target: { value: "Dana" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Dana" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create user" }));
     await screen.findByText(/token: pdm_/);
     s.expire = true;
-    fireEvent.click(screen.getByRole("tab", { name: /Admin log/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Admin log/ }));
     expect(await screen.findByLabelText("Admin secret")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/locked after 10 minutes/);
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
@@ -239,10 +239,10 @@ describe("paging and search", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(await screen.findByText("Showing 51 to 100 of 125")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Find a person"), { target: { value: "person-099" } });
+    fireEvent.change(screen.getByLabelText("Search people"), { target: { value: "person-099" } });
     expect(await screen.findByText("Showing 1 to 1 of 1")).toBeInTheDocument();
     expect(s.calls.some((c) => c.includes("q=person-099") && c.includes("page=1"))).toBe(true);
-    fireEvent.change(screen.getByLabelText("Find a person"), { target: { value: "zzz" } });
+    fireEvent.change(screen.getByLabelText("Search people"), { target: { value: "zzz" } });
     expect(await screen.findByText(/No one matches/)).toBeInTheDocument();
     // Seven round trips through a 50-row table; the 5 s default was too tight for a shared CI runner.
   }, 15_000);
@@ -260,23 +260,30 @@ describe("paging and search", () => {
   });
 });
 
-describe("tabs", () => {
-  it("move with the arrow keys, Home and End", async () => {
+describe("side menu", () => {
+  it("lists every page in its group and shows each page under its own heading", async () => {
     fakeServer();
     render(<AdminView />);
     await unlock();
-    const tabs = within(screen.getByRole("tablist", { name: "Admin sections" })).getAllByRole("tab");
-    expect(tabs).toHaveLength(6);
-    tabs[0]!.focus();
-    fireEvent.keyDown(tabs[0]!, { key: "ArrowRight" });
-    expect(screen.getByRole("tab", { name: /Groups/ })).toHaveAttribute("aria-selected", "true");
-    expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Groups/ }));
-    fireEvent.keyDown(document.activeElement!, { key: "End" });
-    expect(screen.getByRole("tab", { name: /Admin log/ })).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
-    expect(screen.getByRole("tab", { name: /People/ })).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
-    expect(screen.getByRole("tab", { name: /Admin log/ })).toHaveAttribute("aria-selected", "true");
+    const nav = screen.getByRole("navigation", { name: "Admin sections" });
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      expect.stringMatching(/^People/),
+      expect.stringMatching(/^Groups/),
+      expect.stringMatching(/^Reporters/),
+      "Settings",
+      "Model prices",
+      "Reporting and security",
+      expect.stringMatching(/^Admin log/),
+      "Lock Admin",
+    ]);
+    expect(within(nav).getByRole("group", { name: "Server" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("People");
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/ }));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Groups");
+    expect(within(nav).getByRole("button", { name: /Groups/ })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("button", { name: /People/ })).not.toHaveAttribute("aria-current");
+    fireEvent.click(within(nav).getByRole("button", { name: /Admin log/ }));
+    expect(within(nav).getByRole("button", { name: /Admin log/ })).toHaveAttribute("aria-current", "page");
     await waitFor(() => expect(screen.getByText("Wrong secret (1)")).toBeInTheDocument());
   });
 });
@@ -286,7 +293,7 @@ describe("Settings tab (#114)", () => {
     const srv = fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
     const notice = await screen.findByRole("switch", { name: /Background sessions/ });
     expect(notice).toHaveAttribute("aria-checked", "true");
     const show = screen.getByRole("switch", { name: /Show background sessions on the wall/ });
@@ -302,7 +309,7 @@ describe("Settings tab (#114)", () => {
     const srv = fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
     const flag = await screen.findByRole("switch", { name: /Agent activity feed/ });
     expect(flag).toHaveAttribute("aria-checked", "true");
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
@@ -323,7 +330,7 @@ describe("Settings tab (#114)", () => {
     window.location.hash = "#/admin/settings";
     render(<AdminView />);
     await unlock();
-    expect(screen.getByRole("tab", { name: /^Settings/ })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: /^Settings/ })).toHaveAttribute("aria-current", "page");
     window.location.hash = "";
   });
 });
@@ -333,8 +340,8 @@ describe("Model prices (#117)", () => {
     const srv = fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.click(screen.getByRole("tab", { name: /^Settings/ }));
-    await screen.findByRole("heading", { name: "Model prices" });
+    fireEvent.click(screen.getByRole("button", { name: "Model prices" }));
+    await screen.findByRole("heading", { name: "Prices by model" });
     return srv;
   }
   const field = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
@@ -407,7 +414,7 @@ describe("Model prices (#117)", () => {
 
   it("adds a model by id as a row to fill in, saves it, and can remove it", async () => {
     const srv = await open();
-    fireEvent.change(screen.getByLabelText("Add a model by its id"), { target: { value: "My-Local-Model" } });
+    fireEvent.change(screen.getByLabelText("Model id"), { target: { value: "My-Local-Model" } });
     fireEvent.click(screen.getByRole("button", { name: "Add model" }));
     for (const [f, v] of [["input", "0.3"], ["output", "0.9"], ["cache read", "0"], ["cache write 5 minutes", "0"], ["cache write 1 hour", "0"]]) {
       fireEvent.change(field(`my-local-model ${f}`), { target: { value: v } });
@@ -420,7 +427,7 @@ describe("Model prices (#117)", () => {
 
   it("refuses to add a model id that is already in the table", async () => {
     await open();
-    fireEvent.change(screen.getByLabelText("Add a model by its id"), { target: { value: "sonnet-5-5" } });
+    fireEvent.change(screen.getByLabelText("Model id"), { target: { value: "sonnet-5-5" } });
     fireEvent.click(screen.getByRole("button", { name: "Add model" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/already/);
   });
@@ -431,14 +438,14 @@ describe("Reporters tab (#142)", () => {
     const state = fakeServer();
     render(<AdminView />);
     await unlock();
-    fireEvent.click(screen.getByRole("tab", { name: /Reporters/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Reporters/ }));
     await screen.findByRole("table");
     return state;
   }
 
   it("lists reporters with a count on the tab, the state strip and the versions, and says what Silent means", async () => {
     await openReporters();
-    expect(screen.getByRole("tab", { name: /Reporters/ })).toHaveTextContent("2");
+    expect(screen.getByRole("button", { name: /Reporters/ })).toHaveTextContent("2");
     const rows = within(screen.getByRole("table")).getAllByRole("row");
     expect(rows).toHaveLength(3);
     expect(rows[1]).toHaveTextContent("studio-m2");
@@ -458,7 +465,7 @@ describe("Reporters tab (#142)", () => {
     await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2));
     expect(state.calls.some((c) => c.includes("/reporters") && c.includes("state=silent"))).toBe(true);
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /All reporters/ }));
-    fireEvent.change(screen.getByLabelText("Find a reporter"), { target: { value: "studio" } });
+    fireEvent.change(screen.getByLabelText("Search reporters"), { target: { value: "studio" } });
     await waitFor(() => expect(state.calls.some((c) => c.includes("q=studio"))).toBe(true));
   });
 

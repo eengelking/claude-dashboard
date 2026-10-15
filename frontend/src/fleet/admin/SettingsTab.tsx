@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { AdminError, type AdminApi, type ModelPricesView, type PriceSet } from "./adminApi";
-import { ModelPrices } from "./ModelPrices";
+import { AdminError, type AdminApi } from "./adminApi";
+import { Panel, Section, SwitchRow } from "./Page";
 import { failText, useList } from "./useList";
 
 interface NoticeRow {
@@ -14,12 +14,11 @@ interface Settings {
   features: NoticeRow[];
   notices: NoticeRow[];
   showBackgroundSessions: boolean;
-  modelPrices: ModelPricesView;
 }
 
 /**
  * Server settings: the feature flags (#118), one switch per informational wall notice and whether background sessions
- * show on the wall (#114), and the model prices (#117).
+ * show on the wall (#114). The model prices have their own page (#143).
  */
 export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => void }) {
   const list = useList<Settings>(api, "/settings", onLocked);
@@ -34,73 +33,42 @@ export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => 
       else setErr(failText(e));
     }
   };
-  /** A model-price change reports its refusal on its own row, so it hands the message back instead of showing a banner. */
-  const putPrice = async (body: object): Promise<string | null> => {
-    setErr("");
-    try {
-      await api("PUT", "/settings", body);
-      list.reload();
-      return null;
-    } catch (e) {
-      if (e instanceof AdminError && e.status === 401) {
-        onLocked();
-        return null;
-      }
-      return failText(e);
-    }
-  };
-  const priceActions = {
-    save: (key: string, std: PriceSet, long: PriceSet | undefined) => putPrice({ modelPrice: { key, std, ...(long ? { long } : {}) } }),
-    reset: (key: string) => putPrice({ resetModelPrice: key }),
-  };
   const data = list.data;
   const row = (id: string, name: string, description: string, on: boolean | undefined, flip: () => void, tag?: string) => (
-    <div className="setrow" key={id}>
-      <div className="setname">
-        <b id={`set-${id}-n`}>{name}</b>
-        {tag && <span className="fid">{tag}</span>}
-        <div className="hint ink2">{description}</div>
-      </div>
-      <div className="sw">
-        <button type="button" role="switch" aria-checked={on ?? false} aria-labelledby={`set-${id}-n set-${id}-s`} disabled={on === undefined} onClick={flip} />
-        <span id={`set-${id}-s`}>{on === undefined ? "Loading…" : on ? "On" : "Off"}</span>
-      </div>
-    </div>
+    <SwitchRow key={id} id={`set-${id}`} name={name} tag={tag} description={description} on={on} onFlip={flip} />
   );
   return (
-    <div className="stack pad">
-      <section aria-labelledby="admin-features-h">
-        <h2 id="admin-features-h">Feature flags</h2>
-        <div className="hint ink2">
-          Turn a feature off for everyone on this server. A flag that is off hides the feature in the console and stops its data. New features that can be switched off appear here.
-        </div>
-        {data
-          ? (data.features ?? []).map((f) => row(`feature-${f.id}`, f.name, f.description, f.on, () => put({ features: { [f.id]: !f.on } }), f.id))
-          : row("feature-loading", "Feature flags", "", undefined, () => {})}
-      </section>
-      <section aria-labelledby="admin-notices-h">
-        <h2 id="admin-notices-h">Wall notices</h2>
-        <div className="hint ink2">Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.</div>
-        {data
-          ? data.notices.map((n) => row(`notice-${n.id}`, n.name, n.description, n.on, () => put({ notices: { [n.id]: !n.on } })))
-          : row("notice-loading", "Notices", "", undefined, () => {})}
-      </section>
-      <section aria-labelledby="admin-wall-h">
-        <h2 id="admin-wall-h">The wall</h2>
-        {row(
-          "background",
-          "Show background sessions on the wall",
-          "Sessions nobody is attached to are set aside after a minute. Turn this on to keep them in view. Off by default.",
-          data?.showBackgroundSessions,
-          () => data && put({ showBackgroundSessions: !data.showBackgroundSessions }),
-        )}
-      </section>
-      {data?.modelPrices && <ModelPrices view={data.modelPrices} actions={priceActions} />}
+    <>
+      <Section id="admin-features-h" title="Feature flags" help="Turn a feature off for everyone on this server. A flag that is off hides the feature in the console and stops its data. New features that can be switched off appear here.">
+        <Panel>
+          {data
+            ? (data.features ?? []).map((f) => row(`feature-${f.id}`, f.name, f.description, f.on, () => put({ features: { [f.id]: !f.on } }), f.id))
+            : row("feature-loading", "Feature flags", "", undefined, () => {})}
+        </Panel>
+      </Section>
+      <Section id="admin-notices-h" title="Wall notices" help="Notices sit at the bottom of the wall. Closing one there turns it off here, for everyone.">
+        <Panel>
+          {data
+            ? data.notices.map((n) => row(`notice-${n.id}`, n.name, n.description, n.on, () => put({ notices: { [n.id]: !n.on } })))
+            : row("notice-loading", "Notices", "", undefined, () => {})}
+        </Panel>
+      </Section>
+      <Section id="admin-wall-h" title="The wall">
+        <Panel>
+          {row(
+            "background",
+            "Show background sessions on the wall",
+            "Sessions nobody is attached to are set aside after a minute. Turn this on to keep them in view. Off by default.",
+            data?.showBackgroundSessions,
+            () => data && put({ showBackgroundSessions: !data.showBackgroundSessions }),
+          )}
+        </Panel>
+      </Section>
       {(err || list.error) && (
-        <div className="err" role="alert">
+        <div className="errbox" role="alert">
           {err || `Could not load the settings (${list.error}).`}
         </div>
       )}
-    </div>
+    </>
   );
 }

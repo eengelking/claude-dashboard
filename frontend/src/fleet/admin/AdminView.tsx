@@ -1,7 +1,7 @@
 // #/admin (issue #36): create and revoke the tokens people report with, arrange them in groups, and read the admin log.
 // Opened with the admin secret. The secret is typed into a password field, sent once, and dropped; the session is an
 // HttpOnly cookie this page cannot read. A newly made token is held in state only until the owner says it is saved.
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import "../fleet.css";
 import "./admin.css";
 import { BrandLink } from "../components/BrandLink";
@@ -11,20 +11,29 @@ import { APP_NAME } from "../types";
 import { AdminError, makeApi } from "./adminApi";
 import { GroupsTab } from "./GroupsTab";
 import { LogTab } from "./LogTab";
+import { ModelPricesTab } from "./ModelPricesTab";
+import { AdminFoot, PageHeader } from "./Page";
 import { PeopleTab, type Created } from "./PeopleTab";
 import { ReportersTab, type ReporterPaging } from "./ReportersTab";
 import { ReportingTab } from "./ReportingTab";
 import { SettingsTab } from "./SettingsTab";
 
 type Status = "checking" | "locked" | "open" | "disabled";
-type TabId = "people" | "groups" | "reporters" | "reporting" | "settings" | "log";
-const TABS: { id: TabId; name: string }[] = [
-  { id: "people", name: "People" },
-  { id: "groups", name: "Groups" },
-  { id: "reporters", name: "Reporters" },
-  { id: "reporting", name: "Reporting and security" },
-  { id: "settings", name: "Settings" },
-  { id: "log", name: "Admin log" },
+type TabId = "people" | "groups" | "reporters" | "reporting" | "settings" | "prices" | "log";
+const PAGES: Record<TabId, { name: string; lead: string }> = {
+  people: { name: "People", lead: "Each person gets a token that only works with their own name. A report is accepted when the two match." },
+  groups: { name: "Groups", lead: "Arrange people into groups. The fleet wall shows a band per group." },
+  reporters: { name: "Reporters", lead: "Every reporter this server has heard from, and whether it is still reporting." },
+  reporting: { name: "Reporting and security", lead: "Control how reporters prove who they are, and what protects the tokens." },
+  settings: { name: "Settings", lead: "Server-wide choices. A change applies to everyone on this server." },
+  prices: { name: "Model prices", lead: "What Podium charges each model per million tokens, in dollars. It uses these to work out what a session cost." },
+  log: { name: "Admin log", lead: "What happened in Admin, newest first." },
+};
+/** The side menu: pages in groups, in the order they are listed. */
+const NAV: { name: string; ids: TabId[] }[] = [
+  { name: "People and access", ids: ["people", "groups", "reporters"] },
+  { name: "Server", ids: ["settings", "prices", "reporting"] },
+  { name: "Activity", ids: ["log"] },
 ];
 
 export function AdminView({ base = "/api/admin" }: { base?: string }) {
@@ -32,6 +41,7 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   const api = useMemo(() => makeApi(base), [base]);
   const [status, setStatus] = useState<Status>("checking");
   const [notice, setNotice] = useState("");
+  const [version, setVersion] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>(() => (window.location.hash === "#/admin/settings" ? "settings" : "people"));
   const [created, setCreated] = useState<Created | null>(null);
   const [counts, setCounts] = useState<Partial<Record<TabId, number>>>({});
@@ -53,8 +63,8 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   }, []);
   useEffect(() => {
     let live = true;
-    api<{ enabled: boolean; unlocked: boolean }>("GET", "/session")
-      .then((s) => live && setStatus(!s.enabled ? "disabled" : s.unlocked ? "open" : "locked"))
+    api<{ enabled: boolean; unlocked: boolean; version?: string }>("GET", "/session")
+      .then((s) => live && (setVersion(s.version ?? null), setStatus(!s.enabled ? "disabled" : s.unlocked ? "open" : "locked")))
       .catch(() => live && (setNotice("Could not reach the server."), setStatus("locked")));
     return () => {
       live = false;
@@ -83,15 +93,12 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   const onReportersPaging = useCallback((p: Partial<ReporterPaging>) => setPaging((s) => ({ ...s, reporters: { ...s.reporters, ...p } })), []);
   const onLogPaging = useCallback((p: { page?: number; pageSize?: number }) => setPaging((s) => ({ ...s, log: { ...s.log, ...p } })), []);
 
-  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
-    const j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : null;
-    if (j === null) return;
-    e.preventDefault();
-    const next = TABS[(j + TABS.length) % TABS.length]!.id;
-    setTab(next);
-    document.getElementById(`admin-tab-${next}`)?.focus();
-  };
-
+  const page = PAGES[tab];
+  const pageRef = useRef<HTMLDivElement>(null);
+  // The page scrolls on its own, so a new page would otherwise open at the old page's scroll position.
+  useEffect(() => {
+    pageRef.current?.scrollTo?.(0, 0);
+  }, [tab]);
   return (
     <div className="podium">
       <div className="app" style={{ gridTemplateRows: "auto auto 1fr" }}>
@@ -105,62 +112,76 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
         </header>
         <div className="banner has-picker">
           <span>
-            <b>Admin.</b> Tokens, groups and the admin log for this server.
+            <b>Admin.</b> Tokens, groups, reporters and settings for this server.
           </span>
           <ThemePicker theme={theme} />
         </div>
         <main className="adminv" aria-label="Admin">
-          {status === "checking" && <div className="empty">Checking…</div>}
-          {status === "disabled" && (
-            <div className="lock">
-              <h1>Admin is off</h1>
-              <p className="lead">This server is running without a token, so there is nothing to protect Admin with. Start it with one (podiumctl does this on first start), then reload.</p>
+          {status === "checking" && (
+            <div className="solo">
+              <div className="solo-in empty">Checking…</div>
+              <AdminFoot version={version} />
             </div>
           )}
-          {status === "locked" && <LockForm api={api} notice={notice} onUnlocked={() => (setNotice(""), setStatus("open"))} />}
-          {status === "open" && (
-            <div className="wrap">
-              <div className="row2 between">
-                <div>
-                  <h1>Admin</h1>
-                  <p className="lead">Each person gets a token that only works with their own name. A report is accepted when the two match.</p>
+          {status === "disabled" && (
+            <div className="solo">
+              <div className="solo-in">
+                <div className="lock">
+                  <h1>Admin is off</h1>
+                  <p className="lead">This server is running without a token, so there is nothing to protect Admin with. Start it with one (podiumctl does this on first start), then reload.</p>
                 </div>
-                <button type="button" className="btn" onClick={lockNow}>
-                  Lock Admin
-                </button>
               </div>
-              {created && <OnceSettings c={created} onDone={() => setCreated(null)} />}
-              <section className="box">
-                <div className="tabs" role="tablist" aria-label="Admin sections">
-                  {TABS.map((t, i) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      role="tab"
-                      className="tab"
-                      id={`admin-tab-${t.id}`}
-                      aria-selected={tab === t.id}
-                      aria-controls="admin-panel"
-                      tabIndex={tab === t.id ? 0 : -1}
-                      onClick={() => setTab(t.id)}
-                      onKeyDown={(e) => onTabKey(e, i)}
-                    >
-                      {t.name}
-                      {counts[t.id] !== undefined && <span className="n">{counts[t.id]}</span>}
-                    </button>
+              <AdminFoot version={version} />
+            </div>
+          )}
+          {status === "locked" && (
+            <div className="solo">
+              <div className="solo-in">
+                <LockForm api={api} notice={notice} onUnlocked={() => (setNotice(""), setStatus("open"))} />
+              </div>
+              <AdminFoot version={version} />
+            </div>
+          )}
+          {status === "open" && (
+            <div className="shell">
+              <nav className="nav" aria-label="Admin sections">
+                <div className="navin">
+                  {NAV.map((g) => (
+                    <div key={g.name} className="ngroup" role="group" aria-label={g.name}>
+                      <span className="gh" aria-hidden="true">
+                        {g.name}
+                      </span>
+                      {g.ids.map((id) => (
+                        <button key={id} type="button" className="navbtn" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
+                          {PAGES[id].name}
+                          {counts[id] !== undefined && <span className="n">{counts[id]}</span>}
+                        </button>
+                      ))}
+                    </div>
                   ))}
+                  <div className="navfoot">
+                    <button type="button" className="btn" onClick={lockNow}>
+                      Lock Admin
+                    </button>
+                    <span className="hint">Locks after 10 minutes without activity.</span>
+                  </div>
                 </div>
-                <div id="admin-panel" role="tabpanel" aria-labelledby={`admin-tab-${tab}`}>
-                  {tab === "people" && (
-                    <PeopleTab api={api} {...paging.people} onPaging={onPeoplePaging} onCreated={setCreated} onCount={onCountPeople} onLocked={onLocked} />
-                  )}
+                <AdminFoot version={version} />
+              </nav>
+              <div className="apage" ref={pageRef}>
+                <div className="apage-in">
+                  {created && <OnceSettings c={created} onDone={() => setCreated(null)} />}
+                  <PageHeader title={page.name} lead={page.lead} />
+                  {tab === "people" && <PeopleTab api={api} {...paging.people} onPaging={onPeoplePaging} onCreated={setCreated} onCount={onCountPeople} onLocked={onLocked} />}
                   {tab === "groups" && <GroupsTab api={api} {...paging.groups} onPaging={onGroupPaging} onCount={onCountGroups} onLocked={onLocked} />}
                   {tab === "reporters" && <ReportersTab api={api} paging={paging.reporters} onPaging={onReportersPaging} onCount={onCountReporters} onLocked={onLocked} />}
                   {tab === "reporting" && <ReportingTab api={api} onLocked={onLocked} />}
                   {tab === "settings" && <SettingsTab api={api} onLocked={onLocked} />}
+                  {tab === "prices" && <ModelPricesTab api={api} onLocked={onLocked} />}
                   {tab === "log" && <LogTab api={api} {...paging.log} onPaging={onLogPaging} onCount={onCountLog} onLocked={onLocked} />}
                 </div>
-              </section>
+                <AdminFoot version={version} className="afoot-narrow" />
+              </div>
             </div>
           )}
         </main>
@@ -209,7 +230,7 @@ function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>
       <label htmlFor="admin-secret">Admin secret</label>
       <input className="field mono" id="admin-secret" type="password" autoComplete="off" autoFocus value={secret} onChange={(e) => setSecret(e.target.value)} aria-describedby="admin-secret-hint" />
       {err && (
-        <div className="err" role="alert">
+        <div className="errbox" role="alert">
           {err}
         </div>
       )}
