@@ -256,7 +256,7 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 23. **Resync on reconnect.** The server sends a full `snapshot` (the `/state` body) on every SSE connect,
     so a reconnect resyncs from it rather than issuing a separate `GET /state`. The first paint still
     fetches `/state`.
-24. **"N reporters live"** counts live sessions that are not stale.
+24. **"N reporters live"** counts live sessions that are not stale. One `ConnectionPill` component and one `reportersLive` helper in `store.ts` produce it for both the fleet top bar and the Admin top bar, so the two cannot drift; Admin opens its own `useFleet` stream to get the number (#187).
 25. **Activity rows of ended sessions.** A session that leaves the live set stays in the reducer's
     `gone` map, so its activity rows stay greyed and inert even after its card is gone.
 

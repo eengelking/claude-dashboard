@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AdminView } from "./AdminView";
 import { REFRESH_MS } from "./ReportersTab";
+import { makeSession, makeState } from "../fixtures";
+import type { FleetSource } from "../useFleet";
 
 interface PriceSet {
   input: number;
@@ -176,7 +178,17 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
   return state;
 }
 
-beforeEach(() => localStorage.clear());
+/** Admin opens the fleet stream for its "N reporters live" pill; jsdom has no EventSource. */
+class QuietSource {
+  onerror = null;
+  readyState = 1;
+  addEventListener() {}
+  close() {}
+}
+beforeEach(() => {
+  localStorage.clear();
+  vi.stubGlobal("EventSource", QuietSource);
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -256,7 +268,7 @@ describe("tokens", () => {
     s.expire = true;
     fireEvent.click(screen.getByRole("button", { name: /Admin log/ }));
     expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/locked after 10 minutes/);
+    expect(screen.getByText(/locked after 10 minutes/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
   });
 });
@@ -771,5 +783,25 @@ describe("Forget old reporters setting (issue #167)", () => {
     fireEvent.blur(screen.getByLabelText("Days"));
     expect(await screen.findByText(/whole number of days from 1 to 3650/)).toBeInTheDocument();
     expect(state.forget.days).toBe(30);
+  });
+});
+
+describe("Admin top bar reporters pill (#187)", () => {
+  it("sits beside the Admin pill and counts the reporters that are not stale", async () => {
+    fakeServer();
+    const body = makeState({ sessions: [makeSession({ id: "a", status: "running" }), makeSession({ id: "b", status: "waiting" }), makeSession({ id: "c", status: "stale" })] });
+    const quiet: FleetSource = new QuietSource() as unknown as FleetSource;
+    render(<AdminView fleetOptions={{ open: () => quiet, fetchState: async () => body }} />);
+    const pill = await screen.findByText(/2 reporters live/);
+    expect(pill.previousElementSibling).toHaveTextContent("Admin");
+  });
+
+  it("pulses its green dot on the same beat as the fleet page", async () => {
+    fakeServer();
+    const body = makeState({ sessions: [makeSession({ id: "a", status: "running" })] });
+    const quiet: FleetSource = new QuietSource() as unknown as FleetSource;
+    const { container } = render(<AdminView fleetOptions={{ open: () => quiet, fetchState: async () => body }} />);
+    await screen.findByText(/1 reporter live/);
+    expect(container.querySelector(".podium")).toHaveAttribute("data-beat");
   });
 });

@@ -11,6 +11,8 @@ afterEach(() => {
 
 function quietServer() {
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
+  // Admin opens the fleet stream for its reporters pill.
+  vi.stubGlobal("EventSource", class { onerror = null; readyState = 1; addEventListener() {} close() {} });
 }
 
 describe("logo link", () => {

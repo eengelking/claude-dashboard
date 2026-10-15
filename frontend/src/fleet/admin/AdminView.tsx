@@ -5,8 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import "../fleet.css";
 import "./admin.css";
 import { BrandLink } from "../components/BrandLink";
+import { ConnectionPill } from "../components/ConnectionPill";
 import { ThemePicker } from "../components/ThemePicker";
 import { useTheme } from "../useTheme";
+import { useFleet, type UseFleetOptions } from "../useFleet";
+import { useHeartbeat } from "../useHeartbeat";
+import { usePageVisible } from "../usePageVisible";
+import { reportersLive } from "../store";
 import { APP_NAME } from "../types";
 import { AdminError, makeApi } from "./adminApi";
 import { GroupsTab } from "./GroupsTab";
@@ -36,8 +41,17 @@ const NAV: { name: string; ids: TabId[] }[] = [
   { name: "Activity", ids: ["log"] },
 ];
 
-export function AdminView({ base = "/api/admin" }: { base?: string }) {
+/** Owns the fleet stream so its 2 s ticks re-render only this pill, not the whole Admin view. */
+function FleetPill({ options }: { options?: UseFleetOptions }) {
+  const fleet = useFleet(options);
+  return <ConnectionPill phase={fleet.phase} reporters={reportersLive(fleet.sessions, fleet.leaving)} />;
+}
+
+export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string; fleetOptions?: UseFleetOptions }) {
   const theme = useTheme();
+  // The reporters pill's dot pulses on the fleet page's shared beat, which this root carries as data-beat.
+  const root = useRef<HTMLDivElement>(null);
+  useHeartbeat(root, usePageVisible());
   const api = useMemo(() => makeApi(base), [base]);
   const [status, setStatus] = useState<Status>("checking");
   const [notice, setNotice] = useState("");
@@ -100,11 +114,12 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
     pageRef.current?.scrollTo?.(0, 0);
   }, [tab]);
   return (
-    <div className="podium">
+    <div ref={root} className="podium">
       <div className="app" style={{ gridTemplateRows: "auto auto 1fr" }}>
         <header className="top">
           <BrandLink />
           <span className="pill">Admin</span>
+          <FleetPill options={fleetOptions} />
           <span className="spacer" />
           <a className="btn" href="#/">
             Back to fleet

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Phase } from "../store";
 import { BrandLink } from "./BrandLink";
+import { ConnectionPill } from "./ConnectionPill";
 
 export function TopBar(props: { phase: Phase; reporters: number; outdated?: number; newer?: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters } = props;
@@ -10,22 +11,7 @@ export function TopBar(props: { phase: Phase; reporters: number; outdated?: numb
       <span className="pill">Fleet</span>
       {/* Do not add anything to the right of the connection pill below. Its text changes width with the
           reporter count, so everything after it would shift. Leave that space empty for now. */}
-      {phase === "disconnected" ? (
-        <span className="pill bad" role="status">
-          <span className="dot bad" aria-hidden="true" />
-          disconnected, retrying
-        </span>
-      ) : phase === "loading" ? (
-        <span className="pill" role="status">
-          <span className="dot" aria-hidden="true" />
-          connecting…
-        </span>
-      ) : (
-        <span className="pill" role="status">
-          <span className="dot running" aria-hidden="true" />
-          {reporters} reporter{reporters === 1 ? "" : "s"} live
-        </span>
-      )}
+      <ConnectionPill phase={phase} reporters={reporters} />
       {!!props.outdated && (
         <span className="pill warn" role="status" title="Update the podium-reporter mod from eengelking-marketplace">
           <span className="dot warn" aria-hidden="true" />

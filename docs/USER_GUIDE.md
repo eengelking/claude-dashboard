@@ -59,7 +59,7 @@ Give a session a name that shows on its card with `/podium name <text>`.
 
 The Podium logo at the top left is a link home: from History or Admin it takes you back to the fleet page.
 The top bar shows a "Fleet" pill that names the page, then the connection (`N reporters live`,
-or a red "disconnected, retrying"). The row under it has the theme picker. The left rail lists your sessions. The right panel shows activity.
+or a red "disconnected, retrying"). Admin's top bar shows the same connection indicator beside its "Admin" pill. The row under it has the theme picker. The left rail lists your sessions. The right panel shows activity.
 Drag the handles between the columns to resize them.
 
 **Themes.** Pick a color theme from the Theme dropdown in the row under the top bar (Podium, Solarized, Nord, Gruvbox, Catppuccin or GitHub), then choose Light, Dark or System for it. System follows your operating system and changes with it. Podium is the default. Your choice is kept in this browser, and a light or dark choice from an older version carries over as Podium in that mode. The palettes belong to their authors and are credited under Theme credits at the bottom left of the left rail, next to a License link, and in `THIRD_PARTY_NOTICES.md`. The same footer shows the version of the server you are looking at, for example `Podium v0.1.0`, so you can tell which build is live.

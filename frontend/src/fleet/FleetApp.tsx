@@ -33,7 +33,7 @@ import { SpendPanel } from "./components/SpendPanel";
 import type { WallPeople } from "./components/Wall";
 import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
-import type { FleetState } from "./store";
+import { reportersLive, type FleetState } from "./store";
 
 
 const ENTER_MS = 1000;
@@ -127,7 +127,7 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
     waiting: live.filter((s) => s.status === "waiting" && !idleOnBackground(s)).length,
     stale: live.filter((s) => s.status === "stale").length,
   };
-  const reporters = live.filter((s) => s.status !== "stale").length;
+  const reporters = reportersLive(state.sessions, state.leaving);
   const outdated = live.filter((s) => s.compat === "outdated").length;
   const newer = live.filter((s) => s.compat === "newer").length;
   const ready = state.phase !== "loading";
