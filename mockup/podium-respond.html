@@ -744,12 +744,16 @@ function planParts(st, r) {
 
 function permissionParts(st, r) {
   const p = st.p;
-  r.body = `<p class="qh">Bash wants to run a command</p><div class="cmd">git push -u origin issue/195-history-pages</div><p class="cmdd">Push the branch to GitHub</p>
+  // A command cut to fit can't be allowed from here, since the person can't see all of it: only Deny is offered.
+  const deny = st.perm === "deny" || st.cut;
+  const cmd = st.cut ? "for f in $(git ls-files 'src/**/*.ts'); do npx prettier --check \"$f\" &amp;&amp; ... [cut off at 20,000 characters]" : "git push -u origin issue/195-history-pages";
+  r.body = `<p class="qh">Bash wants to run a command</p><div class="cmd">${cmd}</div><p class="cmdd">${st.cut ? "Check formatting file by file" : "Push the branch to GitHub"}</p>
+    ${st.cut ? `<p class="signnote">This command is too long to show in full here, so it can only be allowed in the terminal. You can still deny it from here.</p>` : ""}
     <fieldset class="opts" aria-label="Allow or deny">
-      <label class="opt"><input type="radio" name="${p}perm" value="allow" ${st.perm === "allow" ? "checked" : ""} id="${p}perm-allow"><span class="ol">Allow once</span><span class="od">Runs this command now. The next one asks again.</span></label>
-      <label class="opt"><input type="radio" name="${p}perm" value="deny" ${st.perm === "deny" ? "checked" : ""} id="${p}perm-deny"><span class="ol">Deny</span><span class="od">Claude is told no and keeps going.</span>${st.perm === "deny" ? `<textarea id="${p}permFb" rows="2" placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why">${esc(st.permFb)}</textarea>` : ""}</label>
+      ${st.cut ? "" : `<label class="opt"><input type="radio" name="${p}perm" value="allow" ${!deny ? "checked" : ""} id="${p}perm-allow"><span class="ol">Allow once</span><span class="od">Runs this command now. The next one asks again.</span></label>`}
+      <label class="opt"><input type="radio" name="${p}perm" value="deny" ${deny ? "checked" : ""} id="${p}perm-deny"><span class="ol">Deny</span><span class="od">Claude is told no and keeps going.</span>${deny ? `<textarea id="${p}permFb" rows="2" placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why">${esc(st.permFb)}</textarea>` : ""}</label>
     </fieldset>`;
-  r.foot = `<span class="grow">"Always allow" changes the session's rules, so it is only in the terminal.</span><button class="btn ${st.perm === "deny" ? "bad" : "pri"}" type="button" data-act="submit">${st.perm === "deny" ? "Deny" : "Allow once"}</button>`;
+  r.foot = `<span class="grow">"Always allow" changes the session's rules, so it is only in the terminal.</span><button class="btn ${deny ? "bad" : "pri"}" type="button" data-act="submit">${deny ? "Deny" : "Allow once"}</button>`;
 }
 
 /* ---------- the message box ---------- */
@@ -771,6 +775,8 @@ function composeHTML(st) {
     extra = `<div class="confirm" role="alertdialog" aria-label="Clear the conversation?"><span><b>Clear the conversation?</b> claude-dashboard starts over with an empty context. Podium shows the cleared part as its own session in History, linked to this one.</span><span class="acts"><button class="btn" type="button" data-act="cancel-clear">Cancel</button><button class="btn bad" type="button" data-act="do-clear">Clear conversation</button></span></div>`;
   } else if (slash && !known && val.length > 1 && !matches.length) {
     extra = `<div class="err">${esc(slash)} runs only in the terminal. From here you can send /clear and /compact.</div>`;
+  } else if (known && val.trim() !== slash) {
+    extra = `<div class="err">${esc(slash)} takes nothing after it from here. Send ${esc(slash)} on its own, or use the terminal.</div>`;
   } else if (pending && val.trim() && !slash) {
     extra = `<div class="warnline">Sending this closes the ${WHAT[st.kind]} without an answer and gives Claude your message instead, like "Chat about this" in the terminal.</div>`;
   }
@@ -814,9 +820,11 @@ const CASES = [
   { group: "A tool permission" },
   { id: "t-allow", title: "Allow once", cap: "The command and Claude's description of it. Only Allow once is offered here.", st: { kind: "permission" } },
   { id: "t-deny", title: "Deny, with a reason", cap: "The reason is optional and goes to Claude with the denial.", st: { kind: "permission", perm: "deny", permFb: "Not yet. Run npm run build first." } },
+  { id: "t-cut", title: "A command too long to show", cap: "A command over 20,000 characters is cut to fit. Since you can't see all of it, Allow once isn't offered here; Deny still is.", st: { kind: "permission", cut: true } },
   { group: "Its turn ended" },
   { id: "i-message", title: "Send a new message", cap: "No answer panel, only the message box. The message starts Claude's next turn.", st: { kind: "idle", draft: "Start on issue #205." } },
   { id: "i-commands", title: "Commands", cap: "Typing / lists the commands Podium can send. Anything else runs only in the terminal.", st: { kind: "idle", draft: "/c" } },
+  { id: "i-args", title: "A command with something after it", cap: "/clear and /compact go only on their own. With anything after one, nothing is sent and the box says so.", st: { kind: "idle", draft: "/compact focus on tests" } },
   { id: "i-clear", title: "Confirm /clear", cap: "Clearing asks first, because it empties the session's context.", st: { kind: "idle", draft: "/clear", confirmClear: true } },
   { id: "i-after", title: "After you answer", cap: "Your answer becomes a feed entry marked as yours, and the panel goes away until the session asks again.", st: { kind: "idle", feed: "question", sent: [{ at: "12:23", text: `answered: ${PS}; ${DS}; The page number, The rows-per-page choice`, then: "Thanks. Writing the plan now.", thenAt: "12:24" }] } },
   { id: "i-running", title: "While it is still running", cap: "Expand on the Activity panel opens the modal without a wait. A message sent now is queued until the session is idle.", st: { kind: "idle", feed: "running", sent: [{ at: "31:50", text: "Also update the user guide.", note: "(queued until the session is idle)" }] } },
@@ -915,6 +923,8 @@ function syncDraft() {
 function send() {
   const text = S.draft.trim(); if (!text) return;
   if (text === "/clear") { S.confirmClear = true; renderCompose(); $("[data-act='do-clear']", M()).focus(); return; }
+  // Only /clear and /compact, and only on their own; anything else stays in the box with its error line.
+  if (text.startsWith("/") && !COMMANDS.some(c => c.name === text)) return;
   const pending = S.kind !== "idle" && S.edge === "ready" && !S.submitted;
   const note = pending ? `(in place of an answer; the ${S.kind === "question" ? "question" : S.kind === "plan" ? "plan" : "request"} closes)` : (S.kind === "idle" ? "" : "(queued until the session is idle)");
   S.sent.push({ at: S.kind === "question" ? "12:24" : S.kind === "plan" ? "14:43" : S.kind === "permission" ? "49:05" : "50:20", text, note });

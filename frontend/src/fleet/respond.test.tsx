@@ -271,6 +271,18 @@ describe("a plan and a tool", () => {
     await flush();
     expect(api.answer).toHaveBeenCalledWith("sess-ed", "toolu_t", { kind: "deny", text: "Not yet. Run npm run build first." });
   });
+
+  it("offers only Deny, with a note, for a tool whose input was cut", async () => {
+    const cut: Ask = { ...TOOL, tool: { ...TOOL.tool!, cut: true } };
+    const api = fakeApi({}, ME, detailOf(cut));
+    await modal(session({ waitReason: "permission" }, cut), api);
+    expect(screen.queryByLabelText(/^Allow once/)).toBeNull();
+    expect(screen.getByText("This command is too long to show in full here, so it can only be allowed in the terminal. You can still deny it from here.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Deny/)).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Deny" }));
+    await flush();
+    expect(api.answer).toHaveBeenCalledWith("sess-ed", "toolu_t", { kind: "deny", text: "" });
+  });
 });
 
 describe("when Podium can't send the answer", () => {
@@ -379,5 +391,16 @@ describe("its turn ended", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
     await flush();
     expect(api.message).toHaveBeenCalledWith("sess-ed", { command: "clear" });
+  });
+
+  it("says a command takes nothing after it, instead of doing nothing", async () => {
+    const api = fakeApi();
+    await modal(session({}, null), api);
+    const box = screen.getByRole("textbox", { name: "Message to claude-dashboard" });
+    fireEvent.change(box, { target: { value: "/compact focus on tests" } });
+    expect(screen.getByText("/compact takes nothing after it from here. Send /compact on its own, or use the terminal.")).toBeInTheDocument();
+    fireEvent.keyDown(box, { key: "Enter" });
+    await flush();
+    expect(api.message).not.toHaveBeenCalled();
   });
 });

@@ -232,7 +232,7 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
             onSubmit={() => void answer(backOnly || plan === "keep" ? { kind: "plan-feedback", text: feedback } : { kind: "plan-approve", mode: plan })}
           />
         ) : (
-          <PermissionForm detail={detail} allow={allow} reason={reason} onAllow={setAllow} onReason={setReason} busy={busy} onSubmit={() => void answer(allow ? { kind: "allow-once" } : { kind: "deny", text: reason })} />
+          <PermissionForm detail={detail} allow={allow} reason={reason} onAllow={setAllow} onReason={setReason} busy={busy} onSubmit={(ok) => void answer(ok ? { kind: "allow-once" } : { kind: "deny", text: reason })} />
         );
       panel = (
         <Panel lead={lead} ago={ago} also="Also open in the terminal">

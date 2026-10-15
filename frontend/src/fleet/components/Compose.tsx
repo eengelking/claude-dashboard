@@ -75,6 +75,12 @@ export function Compose(props: {
     );
   } else if (slash && !known && val.length > 1 && !matches.length) {
     extra = <div className="err">{slash} runs only in the terminal. From here you can send /clear and /compact.</div>;
+  } else if (known && val.trim() !== slash) {
+    extra = (
+      <div className="err">
+        {slash} takes nothing after it from here. Send {slash} on its own, or use the terminal.
+      </div>
+    );
   } else if (pending && val.trim() && !slash) {
     extra = <div className="warnline">Sending this closes the {ASK_WORD[pending]} without an answer and gives Claude your message instead, like "Chat about this" in the terminal.</div>;
   }

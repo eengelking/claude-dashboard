@@ -257,36 +257,42 @@ export function PlanForm(props: { detail: AskDetail; backOnly: boolean; choice: 
 
 // ---- a tool permission -------------------------------------------------------------------------
 
-export function PermissionForm(props: { detail: AskDetail; allow: boolean; reason: string; onAllow: (allow: boolean) => void; onReason: (t: string) => void; onSubmit: () => void; busy: boolean }) {
+export function PermissionForm(props: { detail: AskDetail; allow: boolean; reason: string; onAllow: (allow: boolean) => void; onReason: (t: string) => void; onSubmit: (allow: boolean) => void; busy: boolean }) {
   const id = useId();
   const tool = props.detail.ask.tool;
   const input = tool?.input ?? {};
   const command = typeof input.command === "string" ? input.command : null;
   const description = typeof input.description === "string" ? input.description : null;
+  // A cut input can't be allowed from here (the server refuses it), so only Deny is offered.
+  const cut = !!tool?.cut;
+  const allow = props.allow && !cut;
   return (
     <>
       <div className="ab">
         <p className="qh">{tool?.name === "Bash" ? "Bash wants to run a command" : `${tool?.name ?? "A tool"} wants your permission`}</p>
         <div className="cmd">{command ?? JSON.stringify(input, null, 2)}</div>
         {description && <p className="cmdd">{description}</p>}
+        {cut && <p className="signnote">This command is too long to show in full here, so it can only be allowed in the terminal. You can still deny it from here.</p>}
         <fieldset className="opts" aria-label="Allow or deny">
+          {!cut && (
+            <label className="opt">
+              <input type="radio" name={`${id}-perm`} checked={allow} onChange={() => props.onAllow(true)} />
+              <span className="ol">Allow once</span>
+              <span className="od">Runs this command now. The next one asks again.</span>
+            </label>
+          )}
           <label className="opt">
-            <input type="radio" name={`${id}-perm`} checked={props.allow} onChange={() => props.onAllow(true)} />
-            <span className="ol">Allow once</span>
-            <span className="od">Runs this command now. The next one asks again.</span>
-          </label>
-          <label className="opt">
-            <input type="radio" name={`${id}-perm`} checked={!props.allow} onChange={() => props.onAllow(false)} />
+            <input type="radio" name={`${id}-perm`} checked={!allow} onChange={() => props.onAllow(false)} />
             <span className="ol">Deny</span>
             <span className="od">Claude is told no and keeps going.</span>
-            {!props.allow && <textarea rows={2} placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why" value={props.reason} onChange={(e) => props.onReason(e.target.value)} />}
+            {!allow && <textarea rows={2} placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why" value={props.reason} onChange={(e) => props.onReason(e.target.value)} />}
           </label>
         </fieldset>
       </div>
       <div className="af">
         <span className="grow">"Always allow" changes the session's rules, so it is only in the terminal.</span>
-        <button className={`btn ${props.allow ? "pri" : "bad"}`} type="button" disabled={props.busy} onClick={props.onSubmit}>
-          {props.allow ? "Allow once" : "Deny"}
+        <button className={`btn ${allow ? "pri" : "bad"}`} type="button" disabled={props.busy} onClick={() => props.onSubmit(allow)}>
+          {allow ? "Allow once" : "Deny"}
         </button>
       </div>
     </>
