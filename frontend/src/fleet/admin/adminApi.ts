@@ -39,6 +39,8 @@ export interface ReporterRow {
   key: string;
   state: ReporterState;
   name: string;
+  /** False when `name` is made up (newest project or address) because the reporter sends no machine name. */
+  named: boolean;
   who: string;
   version: string;
   compat: "ok" | "outdated" | "newer" | "unknown";
@@ -48,10 +50,12 @@ export interface ReporterRow {
   live: number;
 }
 export interface ReporterList extends Paged<ReporterRow> {
+  serverStartedAt: number;
   counts: Record<"all" | ReporterState, number>;
   serverTime: number;
 }
 export interface ReporterDetail extends ReporterRow {
+  serverStartedAt: number;
   kind: "mod" | "hooks";
   machineId: string | null;
   source: string | null;

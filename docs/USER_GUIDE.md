@@ -334,7 +334,10 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   version (with a warning when it is older or newer than this Podium supports), the last report and the number
   of sessions. Select a row for its details: version and compatibility, machine id, source address, the token's
   key id (never the token), its recent sessions and any reports the server turned away. A reporter with no user
-  name sends no machine id, so it is matched by its address. **Remove from list** takes a reporter off the list;
+  name (the `userName` option) sends no machine id, so the row shows its newest project, or its address, with
+  "no name set" beside it, and it is matched by its sessions: a container that comes back on a new address
+  stays one row. Hover or focus a state, or "no name set", for what it means for that row. After the server
+  restarts, most rows read **Not since restart** until they report again. **Remove from list** takes a reporter off the list;
   it comes back if it reports again, and its sessions are not touched. A source address and a machine name are
   personal data, so only Admin shows them.
 - **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one

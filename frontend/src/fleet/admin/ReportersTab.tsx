@@ -58,11 +58,30 @@ function useRefresh(reload: () => void, enabled = true) {
   }, [reload, enabled]);
 }
 
-function StateBadge({ id }: { id: ReporterState }) {
-  const s = stateOf(id);
+/** What this row's state means for this row: the general definition plus the times behind it. */
+export function stateDetail(r: Pick<ReporterRow, "state" | "lastSeenAt">, serverTime: number, serverStartedAt: number): string {
+  const s = stateOf(r.state);
+  const heard = `Last heard ${ago(serverTime, r.lastSeenAt)} (${time(r.lastSeenAt)}).`;
+  if (r.state === "restart") {
+    return `${s.def} ${heard} This server started ${ago(serverTime, serverStartedAt)} (${time(serverStartedAt)}). The server cannot tell whether the reporter is still running; the row moves to Reporting when it reports again.`;
+  }
+  return `${s.def} ${heard}`;
+}
+
+/** Why a reporter has the name it has, when it sends none. */
+export function nameDetail(r: Pick<ReporterRow, "name" | "named" | "key">): string | undefined {
+  if (r.named || r.key.startsWith("hooks:")) return undefined;
+  const addr = r.key.startsWith("addr:") ? r.key.slice(5) : null;
+  return `No name is set on this reporter, so it is shown by its newest project, or its address. Set the userName option in podium-reporter to name it.${addr ? ` Until then it is matched by session, or by source address ${addr}.` : ""}`;
+}
+
+/** A hover and keyboard-focus note: the same text as the title and as a line a screen reader reads. */
+function StateBadge({ r, serverTime, serverStartedAt }: { r: Pick<ReporterRow, "state" | "lastSeenAt">; serverTime: number; serverStartedAt: number }) {
+  const s = stateOf(r.state);
+  const text = stateDetail(r, serverTime, serverStartedAt);
   return (
-    <span className={`rstate ${id}`} title={s.def}>
-      <span className={`rdot ${id}`} aria-hidden="true" />
+    <span className={`rstate ${r.state}`} title={text} tabIndex={0} aria-label={`${s.name}. ${text}`}>
+      <span className={`rdot ${r.state}`} aria-hidden="true" />
       {s.name}
     </span>
   );
@@ -158,12 +177,17 @@ export function ReportersTab(props: {
                   {data.rows.map((r) => (
                     <tr key={r.key} className="rw" onClick={() => setOpen(r.key)}>
                       <td>
-                        <StateBadge id={r.state} />
+                        <StateBadge r={r} serverTime={data.serverTime} serverStartedAt={data.serverStartedAt} />
                       </td>
                       <td>
                         <button type="button" className="rname" onClick={(e) => (e.stopPropagation(), setOpen(r.key))} aria-label={`Open details for ${r.name}`}>
                           {r.name}
                         </button>
+                        {nameDetail(r) && (
+                          <span className="sub tt" tabIndex={0} title={nameDetail(r)} aria-label={nameDetail(r)}>
+                            no name set
+                          </span>
+                        )}
                         <span className="sub mono">{r.key.startsWith("addr:") || r.key.startsWith("hooks:") ? `no machine id, matched by address ${r.key.slice(r.key.indexOf(":") + 1)}` : r.key}</span>
                       </td>
                       <td>{r.who}</td>
@@ -185,6 +209,10 @@ export function ReportersTab(props: {
         {data && data.total > 0 && <Pager id="reporters" page={data.page} pageSize={data.pageSize} total={data.total} onPage={(n) => onPaging({ page: n })} onSize={(n) => onPaging({ pageSize: n, page: 1 })} />}
         <div className="rnote">
           <b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.
+          <br />
+          <b>Not since restart</b> is what every reporter reads after this server restarts, until it reports again. Most rows show it for a short while after a restart; it does not mean they stopped.
+          <br />
+          A reporter with no name set (the <span className="mono">userName</span> option) is shown by its newest project, or its address, and is matched by its sessions, so a container that comes back on a new address stays one row.
         </div>
       </Panel>
     </Section>
@@ -243,7 +271,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
       {back}
       <div className="dhead">
         <h2>
-          {d.name} <StateBadge id={d.state} />
+          {d.name} <StateBadge r={d} serverTime={d.serverTime} serverStartedAt={d.serverStartedAt} />
         </h2>
         {confirm ? (
           <div className="confirm">
@@ -281,7 +309,8 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
         <section className="dsec" aria-labelledby="rep-h2">
           <h3 id="rep-h2">Where it comes from</h3>
           {kv([
-            ["Machine", d.name],
+            ["Machine", d.named || !nameDetail(d) ? d.name : <span key="n" className="tt" tabIndex={0} title={nameDetail(d)}>{d.name} (no name set)</span>],
+            ...(d.named || !nameDetail(d) ? [] : ([["Why unnamed", nameDetail(d)]] as [string, React.ReactNode][])),
             ["Machine id", d.machineId ? <span key="m" className="mono">{d.machineId}</span> : <span key="m" className="tt" title="The reporter has no user name set, so it sends no machine id and is matched by source address.">Not sent</span>],
             ["Source address", <span key="a" className="mono">{d.source ?? "unknown"}</span>],
             ["Person", d.who],

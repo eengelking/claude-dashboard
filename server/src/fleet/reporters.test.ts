@@ -51,9 +51,42 @@ describe('reporters', () => {
     store.record(seen({ kind: 'hooks', machineId: null, machineName: null, version: 'hooks', engineVersion: null, sessionId: 'h1' }), START + MIN);
     const rows = store.list({}, START + MIN).rows;
     expect(rows.map((r) => r.key).sort()).toEqual(['addr:192.168.1.24', 'hooks:192.168.1.24']);
-    expect(rows.find((r) => r.key.startsWith('addr:'))!.name).toBe('Unnamed reporter');
+    expect(rows.find((r) => r.key.startsWith('addr:'))!.name).toBe('192.168.1.24');
     expect(rows.find((r) => r.key.startsWith('hooks:'))!.name).toBe('Hooks only');
     expect(rows.find((r) => r.key.startsWith('hooks:'))!.compat).toBe('unknown');
+  });
+
+  it('keeps one row for a reporter with no machine id that moves to a new source address (issue #166)', () => {
+    const anon = (over: Partial<ReporterSeen> = {}) => seen({ machineId: null, machineName: null, owner: null, ...over });
+    store.record(anon({ source: '10.88.0.133', sessionId: 's1' }), START + MIN);
+    // The container restarted and came back on another address, still reporting the same session.
+    store.record(anon({ source: '10.88.0.134', sessionId: 's1' }), START + 2 * MIN);
+    store.record(anon({ source: '10.88.0.135', sessionId: 's2' }), START + 3 * MIN);
+    store.record(anon({ source: '10.88.0.135', sessionId: 's1' }), START + 4 * MIN);
+    const rows = store.list({}, START + 4 * MIN).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ key: 'addr:10.88.0.133', firstSeenAt: START + MIN, lastSeenAt: START + 4 * MIN, sessions: 2 });
+    expect(store.get('addr:10.88.0.133', START + 4 * MIN)!.source).toBe('10.88.0.135');
+  });
+
+  it('calls an unnamed reporter by its newest project, else its address, and says it is not named', () => {
+    store.record(seen({ machineId: null, machineName: null, source: '10.88.0.133', sessionId: 's1' }), START + MIN);
+    expect(store.list({}, START + MIN).rows[0]).toMatchObject({ name: '10.88.0.133', named: false });
+    const add = db.prepare(`INSERT INTO sessions (id, name, status, started_at, last_seen_at, cwd, repo_name) VALUES (?, ?, 'running', ?, ?, '/x', ?)`);
+    add.run('s1', 'older', START, START, null);
+    expect(store.list({}, START + MIN).rows[0]!.name).toBe('older');
+    store.record(seen({ machineId: null, machineName: null, source: '10.88.0.133', sessionId: 's2' }), START + 2 * MIN);
+    add.run('s2', 'newer', START, START + MIN, 'podium');
+    expect(store.list({ q: 'podium' }, START + 2 * MIN).rows[0]).toMatchObject({ name: 'podium', named: false });
+    expect(store.get('addr:10.88.0.133', START + 2 * MIN)!.serverStartedAt).toBe(START);
+    store.record(seen({ sessionId: 's3' }), START + 2 * MIN);
+    expect(store.list({ q: 'studio' }, START + 2 * MIN).rows[0]).toMatchObject({ name: 'studio-m2', named: true });
+  });
+
+  it('does not fold a hooks-only report into a mod reporter that shares its session', () => {
+    store.record(seen({ machineId: null, machineName: null, source: '10.88.0.133' }), START + MIN);
+    store.record(seen({ kind: 'hooks', machineId: null, machineName: null, source: '10.88.0.134', version: 'hooks', engineVersion: null }), START + MIN);
+    expect(store.list({}, START + MIN).total).toBe(2);
   });
 
   it('keeps a reporter after the sessions it reported are removed', () => {

@@ -142,6 +142,38 @@ CREATE TABLE reporter_sessions (
   PRIMARY KEY (reporter_key, session_id)
 );`,
   },
+  {
+    version: 12,
+    // One row per reporter (issue #166). A reporter with no machine id was keyed on its source address, so a container
+    // that came back on a new address added a row. Rows that share a session are one reporter: each is merged into
+    // the oldest row it shares a session with, keeping every session link, the first seen time of the oldest row and the
+    // address and last seen time of the newest.
+    sql: `CREATE INDEX IF NOT EXISTS reporter_sessions_session ON reporter_sessions(session_id);
+CREATE TEMP TABLE rmap0 AS
+  SELECT a.reporter_key AS from_key, MIN((
+    SELECT b.reporter_key FROM reporter_sessions b JOIN reporters rb ON rb.key = b.reporter_key
+    WHERE b.session_id = a.session_id AND rb.machine_id IS NULL AND rb.kind = ra.kind AND rb.key LIKE (CASE ra.kind WHEN 'hooks' THEN 'hooks:%' ELSE 'addr:%' END)
+    ORDER BY rb.first_seen_at, rb.key LIMIT 1)) AS to_key
+  FROM reporter_sessions a JOIN reporters ra ON ra.key = a.reporter_key
+  WHERE ra.machine_id IS NULL AND (ra.key LIKE 'addr:%' OR ra.key LIKE 'hooks:%')
+  GROUP BY a.reporter_key;
+DELETE FROM rmap0 WHERE from_key = to_key;
+-- A row can point at a row that is itself merged away: follow each chain to its last row.
+CREATE TEMP TABLE rmap AS WITH RECURSIVE chase(from_key, cur) AS (
+  SELECT from_key, to_key FROM rmap0 UNION SELECT c.from_key, m.to_key FROM chase c JOIN rmap0 m ON m.from_key = c.cur)
+  SELECT from_key, cur AS to_key FROM chase WHERE cur NOT IN (SELECT from_key FROM rmap0);
+INSERT OR IGNORE INTO reporter_sessions (reporter_key, session_id)
+  SELECT m.to_key, s.session_id FROM reporter_sessions s JOIN rmap m ON s.reporter_key = m.from_key;
+UPDATE reporters SET
+  first_seen_at = MIN(first_seen_at, COALESCE((SELECT MIN(f.first_seen_at) FROM reporters f JOIN rmap m ON m.from_key = f.key WHERE m.to_key = reporters.key), first_seen_at)),
+  source_address = COALESCE((SELECT f.source_address FROM reporters f JOIN rmap m ON m.from_key = f.key WHERE m.to_key = reporters.key AND f.last_seen_at > reporters.last_seen_at ORDER BY f.last_seen_at DESC LIMIT 1), source_address),
+  last_seen_at = MAX(last_seen_at, COALESCE((SELECT MAX(f.last_seen_at) FROM reporters f JOIN rmap m ON m.from_key = f.key WHERE m.to_key = reporters.key), 0))
+  WHERE key IN (SELECT to_key FROM rmap);
+DELETE FROM reporter_sessions WHERE reporter_key IN (SELECT from_key FROM rmap);
+DELETE FROM reporters WHERE key IN (SELECT from_key FROM rmap);
+DROP TABLE rmap;
+DROP TABLE rmap0;`,
+  },
 ];
 
 export interface SessionRow {

@@ -68,7 +68,10 @@ uses `.sec`, `.main`, `.code` and `.back` under `.podium`, with higher specifici
 `ReporterStore` owns migration 11 (`reporters` and `reporter_sessions`) and is built once in `index.ts`, then handed to both
 routers. `routes.ts` calls `record()` after a report or hook is stored, with the machine id (or the source address when the
 report has none) as the key and the credential as a key id, never a token, and calls `rejected()` at each refusal, which
-keeps the last 200 in memory only. Retention never touches the table, so a reporter outlives its sessions; the session count
+keeps the last 200 in memory only. A report with no machine id is filed under the row that already holds its session id (`knownKey`), and a row made for
+the new address before that session turned up is merged into it, so a reporter that changes address (a container that
+restarts) stays one row; migration 12 merges the duplicates that already existed. An unnamed reporter is named by its newest
+session's project, else its address (#166). Retention never touches the table, so a reporter outlives its sessions; the session count
 comes from `reporter_sessions`. The state (reporting, idle, silent, not since restart) is computed in SQL from the last report,
 the server's start time and now, so filtering, counting and sorting by it stay server-side and paged, and the browser only
 asks again every 10 seconds. The page is admin-only because it shows source addresses and machine names. The report format did
