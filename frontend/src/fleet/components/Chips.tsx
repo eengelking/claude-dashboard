@@ -79,7 +79,16 @@ export function cardKind(s: Pick<SessionView, "status" | "waitReason" | "backgro
   return "done";
 }
 
-const STATE_SHAPE: Record<CardKind, ReactElement> = {
+/** The orchestrator page also shows delegating (SPEC 8.1, #98); the cards never do. */
+export type StateKind = CardKind | "deleg";
+
+const STATE_SHAPE: Record<StateKind, ReactElement> = {
+  deleg: (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <circle cx="8" cy="8" r="2.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   running: <path d="M5 3.2v9.6l7.6-4.8z" fill="currentColor" stroke="none" />,
   waiting: (
     <>
@@ -107,8 +116,8 @@ const STATE_SHAPE: Record<CardKind, ReactElement> = {
   ),
 };
 
-/** One shape per card state: a play mark, a "!" ring, a dashed clock ring, a clock, a check. */
-export function StateIcon({ kind }: { kind: CardKind }) {
+/** One shape per state: a play mark, a "!" ring, a dashed clock ring, a clock, a check, and on the page a ring with a dot for delegating. */
+export function StateIcon({ kind }: { kind: StateKind }) {
   return (
     <svg className={`si si-${kind}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       {STATE_SHAPE[kind]}

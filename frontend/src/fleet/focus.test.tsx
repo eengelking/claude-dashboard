@@ -59,12 +59,10 @@ describe("orchestrator page", () => {
     expect(screen.getByText(/api-refactor ended and left the fleet/)).toBeInTheDocument();
   });
 
-  it("the heartbeat-lost notice is one flex child, so the alert's gap cannot split the sentence (#87)", () => {
+  it("the heartbeat-lost band carries the sentence in one element, so nothing splits it (#87, #165)", () => {
     const { container } = openFocus({ status: "stale", dropAt: Date.now() + 41_000 });
-    const alert = container.querySelector(".notice .alert.stale")!;
-    expect(alert.textContent).toMatch(/It goes away in .*\./);
-    expect(alert.childNodes).toHaveLength(1);
-    expect(alert.firstChild!.nodeType).toBe(Node.ELEMENT_NODE);
+    const lead = container.querySelector(".osum .band .bl")!;
+    expect(lead.textContent).toMatch(/^No heartbeat for .*\. Goes away in .*\.$/);
   });
 
   it("the legend is a footer under the middle column on the wall and on this page, outside the scrolling main (#92)", () => {
@@ -84,11 +82,11 @@ describe("orchestrator page", () => {
     expect(onPage[0]).toHaveTextContent("Square color is the model:");
   });
 
-  it("has the facts bar with Copy resume command as the last cell", () => {
+  it("has the facts grid with Resume as the last cell", () => {
     const { container } = openFocus();
     const cells = [...container.querySelectorAll(".facts > .fact")];
     expect(cells.map((c) => c.querySelector(".k")?.textContent ?? c.textContent)).toEqual([
-      "Agents", "Est. cost", "Tokens", "Running for", "Agent time", "Reporter", "Copy resume command",
+      "Agents", "Est. cost", "Tokens", "Running for", "Agent time", "Blowouts", "Reporter", "Resume",
     ]);
     expect(container.querySelector(".facts .blow.l2")?.textContent).toContain("1 failed");
   });
@@ -268,9 +266,11 @@ describe("orchestrator page", () => {
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("Fork one");
   });
 
-  it("shows the blowout callout with links at level 2", () => {
+  it("opens the blowout detail with links from the Blowouts cell at level 2", () => {
     const { container } = openFocus({ blowouts: { orchestrator: 1, agents: 2, total: 3, level: 2, loopsHit: 2, loopsTotal: 4, log: [] } });
-    const callout = container.querySelector(".callout.l2")!;
+    expect(container.querySelector(".bdet")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Blowouts/ }));
+    const callout = container.querySelector(".bdet.l2")!;
     expect(callout.textContent).toContain("Repeated context blowouts");
     expect(callout.textContent).toContain("Orchestrator: 1×");
     fireEvent.click(screen.getByRole("button", { name: "Kid one" }));
@@ -496,13 +496,14 @@ describe("delegating (#98)", () => {
     expect(chip(container, '[data-agent="p"]').textContent).toMatch(/^delegating\./);
     expect(chip(container, '[data-agent="p"]')).toHaveAttribute("title", "Waiting on 1 agent: Child agent. Not waiting on you.");
     expect(chip(container, '[data-agent="c"]').textContent).toBe("running");
-    expect(container.querySelector(".fh h1 .st")!.textContent).toMatch(/^delegating\./);
+    expect(container.querySelector(".osum .band")!.textContent).toMatch(/^Delegating to 1 agent\./);
+    expect(container.querySelector(".fh h1 .sd .si-deleg")).not.toBeNull();
   });
 
   it("goes back to running when the agents finish", () => {
     const { container } = openFocus({ agents: [makeAgent({ id: "p", status: "done", endedAt: 1_500_000 })] });
     expect(chip(container, ".trow.root").textContent).toBe("running");
-    expect(container.querySelector(".fh h1 .st")!.textContent).toBe("running");
+    expect(container.querySelector(".osum .band")!.textContent).toBe("Running");
   });
 
   it("leaves the session's own waiting status alone, and the fleet card keeps saying running", () => {

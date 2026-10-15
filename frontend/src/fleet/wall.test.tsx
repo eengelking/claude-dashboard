@@ -276,53 +276,53 @@ describe("a waiting session", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ status: "waiting", ...over })] })} />);
     const cardText = container.querySelector(".wall .card")!.textContent;
     fireEvent.click(container.querySelector(".wall .card")!);
-    return { container, cardText, callout: container.querySelector(".card.notice .alert")! };
+    return { container, cardText, callout: container.querySelector(".osum .band")! };
   }
 
   it("keeps the card short; the page leads with a plain message and the tool name (#50, #64)", () => {
     const plan = "ExitPlanMode(# Plan: Issue #24, effort as a colored indicator with a tooltip ## Context Reported by the maintainer on 2026-10-12 draws f";
     const { cardText, callout } = pageFor({ waitReason: "permission", waitNote: plan });
     expect(cardText).not.toContain("ExitPlanMode");
-    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: ExitPlanMode");
+    expect(callout.querySelector(".bl")!.textContent).toBe("Waiting for your approval.");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Tool: ExitPlanMode");
     expect(callout.textContent).not.toContain("# Plan");
   });
 
   it("reads a question tool as input, the same as the card and the feed (#68)", () => {
     const { callout } = pageFor({ waitReason: "permission", waitNote: 'AskUserQuestion([{"question":"What card width?"}])' });
-    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your input. Answer in its terminal.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: AskUserQuestion");
+    expect(callout.querySelector(".bl")!.textContent).toBe("Waiting for your input.");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Tool: AskUserQuestion");
   });
 
   it("names the tool of a Bash permission prompt without its command", () => {
     const { callout } = pageFor({ waitReason: "permission", waitNote: "Bash(npm run e2e -- --grep long-running-suite)" });
-    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: Bash");
+    expect(callout.querySelector(".bl")!.textContent).toBe("Waiting for your approval.");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Tool: Bash");
   });
 
   it("shows a short question as the detail under a plain input message", () => {
     const { callout } = pageFor({ waitReason: "input", waitNote: "Which branch should I use?" });
-    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your input. Answer in its terminal.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Which branch should I use?");
+    expect(callout.querySelector(".bl")!.textContent).toBe("Waiting for your input.");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Which branch should I use?");
   });
 
   it("leaves out a note clipped at the 160-character limit instead of presenting it as whole", () => {
     const { callout } = pageFor({ waitReason: "input", waitNote: "x".repeat(160) });
-    expect(callout.querySelector(".wait-detail")).toBeNull();
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal.");
   });
 
   it("names the tool when a settings hook reports only the bare tool name", () => {
     const { callout } = pageFor({ reporter: "hooks", waitReason: "permission", waitNote: "Bash" });
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Tool: Bash");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Tool: Bash");
   });
 
   it("works with no note, and with a notification message from settings hooks", () => {
     const none = pageFor({ waitReason: "permission", waitNote: null });
-    expect(none.callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for your approval. Answer in its terminal.");
-    expect(none.callout.querySelector(".wait-detail")).toBeNull();
+    expect(none.callout.querySelector(".bl")!.textContent).toBe("Waiting for your approval.");
+    expect(none.callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal.");
     cleanup();
     const hooks = pageFor({ reporter: "hooks", waitReason: "permission", waitNote: "Claude needs your permission to use Bash" });
-    expect(hooks.callout.querySelector(".wait-detail")!.textContent).toBe("Claude needs your permission to use Bash");
+    expect(hooks.callout.querySelector(".bd")!.textContent).toBe("Answer in its terminal. Claude needs your permission to use Bash");
   });
 });
 
@@ -331,7 +331,9 @@ describe("sessions reported by settings hooks", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession({ reporter: "hooks", costUsd: null, plan: null, context: { tokens: null, window: null, percent: null } })] })} />);
     expect(container.querySelector(".wall .card")!.textContent).toContain("settings hooks");
     fireEvent.click(container.querySelector(".wall .card")!);
-    expect(screen.getByRole("note").textContent).toContain("context, cost, tokens, the plan and which agent launched which are unavailable, so every agent shows under the orchestrator");
+    const reporter = [...container.querySelectorAll(".facts > .fact")].find((f) => f.querySelector(".k")!.textContent === "Reporter")!;
+    expect(reporter.getAttribute("title")).toContain("context, cost, tokens, the plan and which agent launched which are unavailable, so every agent shows under the orchestrator");
+    expect(container.querySelector(".callout")).toBeNull();
   });
 });
 
@@ -351,7 +353,8 @@ describe("reporter and server versions that do not match (#49)", () => {
     expect(chipOf(container)!.textContent).toContain("update");
     expect(container.querySelector(".top")!.textContent).toContain("2 reporters need an update");
     fireEvent.click(container.querySelector(".wall .card")!);
-    expect(screen.getByText(/update the podium-reporter mod/i)).toBeInTheDocument();
+    const cell = (c: HTMLElement) => [...c.querySelectorAll(".facts > .fact")].find((f) => f.querySelector(".k")!.textContent === "Reporter")!;
+    expect(cell(container).getAttribute("title")).toMatch(/update the podium-reporter mod/i);
   });
 
   it("gives the opposite advice for a reporter newer than the server", () => {
@@ -359,7 +362,8 @@ describe("reporter and server versions that do not match (#49)", () => {
     expect(chipOf(container)!.textContent).toContain("upgrade server");
     expect(container.querySelector(".top")!.textContent).toContain("1 reporter newer than the server");
     fireEvent.click(container.querySelector(".wall .card")!);
-    expect(screen.getByText(/upgrade the Podium server/i)).toBeInTheDocument();
+    const cell = [...container.querySelectorAll(".facts > .fact")].find((f) => f.querySelector(".k")!.textContent === "Reporter")!;
+    expect(cell.getAttribute("title")).toMatch(/upgrade the Podium server/i);
   });
 });
 
@@ -391,7 +395,7 @@ describe("Remove a heartbeat-lost session (#41)", () => {
       const st = stateFrom({ sessions: [makeSession({ id: "lost", name: "billing", status: "stale", dropAt: Date.now() + 40_000 })] });
       const { container } = render(<FleetView state={st} />);
       fireEvent.click(container.querySelector(".wall .card")!);
-      expect(container.textContent).toContain("It goes away in");
+      expect(container.textContent).toContain("Goes away in");
       fireEvent.click(screen.getByRole("button", { name: "Remove now" }));
       expect(fetchMock).toHaveBeenCalledWith("/api/fleet/sessions/lost/drop", { method: "POST" });
     } finally {

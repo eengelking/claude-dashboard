@@ -208,7 +208,7 @@ in the same checkout see the same changes; use a worktree to keep them apart. It
 or later, and says so when the reporter is older. On the right is the agent tree: every
 subagent and fork with its task, type, model, effort, context bar, tokens, cost, time and status. Click a
 column header to sort: each agent's own agents stay under it, sorted among themselves. Click the header again
-to reverse, and **Launch order** to go back. **Copy resume command** copies the command that resumes the session.
+to reverse, and **Launch order** to go back. The **Resume** cell (Copy command) copies the command that resumes the session. The coloured band at the bottom of the summary says what the session is doing, and Blowouts opens the detail when a context window has overflowed.
 
 A subagent or a fork can launch agents of its own, and those can too. Each is indented under the agent that
 launched it, as deep as it goes; past two levels the Task column gets wider and the table scrolls sideways

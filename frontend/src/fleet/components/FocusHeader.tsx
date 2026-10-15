@@ -1,19 +1,21 @@
-import { currentStep, inferredStep, planComplete, delegateText, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
+import { currentStep, inferredStep, planComplete } from "../logic";
 import type { SessionView } from "../types";
-import { backgroundOf, GitLine, sessionDot, StatusChip } from "./Chips";
+import { GitLine, StateIcon } from "./Chips";
 import { MiniCharts } from "./MiniCharts";
+import { pageKind } from "./StatusBand";
 
+/** Layer one of the summary surface: who it is, what it is doing, where. The state shape beside the name is the status band's shape. */
 export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
   const step = currentStep(s.plan);
   const next = step ? null : inferredStep(s.plan);
-  const kids = waitingOnByRow(s).get(ORCHESTRATOR_ROW);
-  const delegating = kids ? delegateText(kids) : undefined;
   return (
     <div className="fh">
       <div className="id">
         <h1>
-          <i className={delegating ? "dot ring" : sessionDot(s)} aria-hidden="true" />
-          {s.name} <StatusChip status={s.status} delegating={delegating} background={backgroundOf(s)} />
+          <span className="sd">
+            <StateIcon kind={pageKind(s)} />
+          </span>
+          {s.name}
         </h1>
         {s.plan ? (
           <div className="goal">

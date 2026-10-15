@@ -19,7 +19,7 @@ export function versionNote(s: Pick<SessionView, "compat" | "reporterVersion">):
 // The reporter clips a wait note at this many characters (LIMITS.waitNote); a note that long is cut off.
 const WAIT_NOTE_LIMIT = 160;
 
-/** The orchestrator page's callout: a plain lead, plus the tool or question as a secondary line when there is one. */
+/** The orchestrator page's status band: a plain lead, plus the tool or question as a secondary line when there is one. */
 export function waitSummary(s: Pick<SessionView, "waitReason" | "waitNote">): { lead: string; detail: string | null } {
   const note = s.waitNote?.trim() ?? "";
   const tool = toolOfNote(note, s.waitReason);
@@ -43,7 +43,7 @@ export interface CardOwner {
 }
 
 /** What the status band says. One sentence, the same ones the orchestrator page and the activity feed use. */
-function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now: number, config: LifecycleConfig) {
+export function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now: number, config: LifecycleConfig) {
   if (kind === "bg" && s.background) return <span className="bl" title={backgroundTitle(s.background)}>{backgroundLead(s.background)}</span>;
   if (kind === "waiting") return <span className="bl">{waitSummary(s).lead}</span>;
   if (kind === "stale") {

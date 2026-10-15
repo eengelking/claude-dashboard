@@ -74,16 +74,16 @@ describe("the orchestrator page", () => {
   it("leads with the sentence and puts the task description on its own row", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", "nightly build")])] })} />);
     fireEvent.click(container.querySelector(".wall .card")!);
-    const callout = container.querySelector(".card.notice .alert")!;
-    expect(callout.querySelector(".wait-lead")!.textContent).toBe("Waiting for 1 background shell to finish.");
-    expect(callout.querySelector(".wait-detail")!.textContent).toBe("Shell: nightly build");
+    const callout = container.querySelector(".osum .band")!;
+    expect(callout.querySelector(".bl")!.textContent).toBe("Waiting for 1 background shell to finish.");
+    expect(callout.querySelector(".bd")!.textContent).toBe("Shell: nightly build");
     expect(callout.textContent).not.toContain("Answer in its terminal");
   });
 
   it("cuts a long description at a character limit and ends it with a space and three dots", () => {
     const { container } = render(<FleetView state={stateFrom({ sessions: [idleOn([task("shell", "npm run build:all && npm run test:integration -- --runInBand --coverage --reporters=default --reporters=jest-junit")])] })} />);
     fireEvent.click(container.querySelector(".wall .card")!);
-    const detail = container.querySelector(".card.notice .alert .wait-detail")!.textContent!;
+    const detail = container.querySelector(".osum .band .bd")!.textContent!;
     expect(detail.length).toBeLessThanOrEqual(64 + 4);
     expect(detail).toMatch(/\S \.\.\.$/);
   });

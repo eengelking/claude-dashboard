@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Changed
+
+- The orchestrator page is rebuilt to match the fleet card (mockup `mockup/podium-orchestrator.html`). The header, the facts and a new status band are one bordered surface, with the band as the last row, full width and at least 58 px tall. The band replaces the status chip beside the name and the waiting, background-wait and heartbeat-lost callouts: one bold line and one detail line, in the card band's shapes, sentences and tints, with **Remove now** laid over its right end. The page also says "Delegating to N agents." with the blue ring shape, as SPEC 8.1 allows for this page. The facts are a grid of eight cells in fixed places (four columns, two at 520 px and narrower). **Blowouts** is always there ("none" when clear) and, when there are blowouts, opens the blowout detail between the header and the facts; a level 2 blowout gives the surface the card's red top edge. The settings-hooks and reporter-version callouts are gone: their text is the Reporter cell's tooltip, and an out-of-range version shows a warning shape. **Copy resume command** is now a quiet **Resume** cell ("Copy command"). The plan, Files and agent panels use the card's hairlines, and a blocked plan step has a slash as well as its color. UI only. (#165)
+
 ### Added
 
 - The orchestrator page and the cards no longer go quiet between one plan step finishing and Claude marking the next one in progress. With no step active, the first step not started is shown as current: in the goal line ("now: ... (inferred)"), on the card, and in the Plan checklist, where it has a dashed marker and "up next · inferred". When every step is done the goal line says "plan complete". It is display only: Podium cannot change Claude's task list, the report format is unchanged, and a step Claude marks in progress replaces the inferred one at once. UI only. (#179)

@@ -118,21 +118,21 @@ describe("copy resume command", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<CopyResume command="cd /x && claude --resume s1" />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy resume command" }));
+      fireEvent.click(screen.getByRole("button", { name: /Copy command/ }));
     });
     expect(writeText).toHaveBeenCalledWith("cd /x && claude --resume s1");
     expect(screen.getByRole("button")).toHaveTextContent("Copied");
     act(() => {
       vi.advanceTimersByTime(1600);
     });
-    expect(screen.getByRole("button")).toHaveTextContent("Copy resume command");
+    expect(screen.getByRole("button")).toHaveTextContent("Copy command");
   });
 
   it("falls back to a selected text field when the clipboard refuses", async () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     render(<CopyResume command="cd /x && claude --resume s1" />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy resume command" }));
+      fireEvent.click(screen.getByRole("button", { name: /Copy command/ }));
     });
     expect(screen.getByRole("button")).toHaveTextContent("Select and copy");
     const input = screen.getByRole("textbox", { name: "Resume command" }) as HTMLInputElement;

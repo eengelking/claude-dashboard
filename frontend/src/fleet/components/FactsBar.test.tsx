@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { FactsBar } from "./FactsBar";
 import { makeAgent, makeSession } from "../fixtures";
-import { versionNote } from "./SessionCard";
+import { HOOKS_NOTE, versionNote } from "./SessionCard";
 
 afterEach(cleanup);
 
@@ -28,10 +28,10 @@ describe("FactsBar Agents tile (#100, #109)", () => {
     expect(agentsTile([])).toHaveClass("agents");
   });
 
-  it("starts the short tiles at their content width so the Agents tile gets their spare room", () => {
+  it("has eight cells in fixed places: Agents, cost, tokens, running for; then agent time, blowouts, reporter, resume (#165)", () => {
     const { container } = render(<FactsBar s={makeSession()} now={Date.now()} onAgent={() => {}} />);
-    const slim = [...container.querySelectorAll(".fact.slim .k")].map((k) => k.textContent);
-    expect(slim).toEqual(["Est. cost", "Tokens", "Running for", "Agent time", "Reporter"]);
+    const labels = [...container.querySelectorAll(".facts > .fact")].map((f) => f.querySelector(".k")!.textContent);
+    expect(labels).toEqual(["Agents", "Est. cost", "Tokens", "Running for", "Agent time", "Blowouts", "Reporter", "Resume"]);
   });
 
   it("keeps the failed button on the same line after the counts", () => {
@@ -96,6 +96,7 @@ describe("FactsBar Reporter cell (#124)", () => {
     const { cell } = reporter({ reporterVersion: null });
     expect(cell!.querySelector(".v")!.textContent).toBe("Settings hooks");
     expect(cell!.getAttribute("title")).toMatch(/settings hooks/i);
+    expect(cell!.getAttribute("title")).toContain(HOOKS_NOTE);
   });
 
   it.each([["outdated", "0.3.0 · update"], ["newer", "0.99.0 · upgrade server"]] as const)("says so when the reporter is %s, in the card chip's words and tooltip", (compat, text) => {
@@ -107,9 +108,9 @@ describe("FactsBar Reporter cell (#124)", () => {
     expect(cell.getAttribute("title")).toBe(versionNote(s)!.text);
   });
 
-  it("sits just before Copy resume command, which stays the last cell", () => {
+  it("sits just before Resume, which stays the last cell", () => {
     const { cells } = reporter({ reporterVersion: "0.11.0" });
-    expect(cells[cells.length - 1].querySelector("button")!.textContent).toBe("Copy resume command");
+    expect(cells[cells.length - 1].querySelector(".k")!.textContent).toBe("Resume");
     expect(cells[cells.length - 2].querySelector(".k")!.textContent).toBe("Reporter");
   });
 });
