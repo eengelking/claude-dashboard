@@ -70,6 +70,15 @@ export interface ReporterDetail extends ReporterRow {
   rejected: { t: number; reason: string }[];
   serverTime: number;
 }
+/** Issue #167: a rule that turns away the reports of every reporter it matches. `*` in a pattern means "anything". */
+export interface IgnoreRule {
+  id: number;
+  kind: "key" | "address" | "version";
+  pattern: string;
+  createdAt: number;
+}
+/** What to remove in one step: these keys, or every reporter a filter holds (past one page). */
+export type RemoveBody = { keys: string[] } | { match: { q?: string; state?: ReporterState; admin?: boolean } };
 export interface GroupChoice {
   id: number;
   name: string;

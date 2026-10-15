@@ -409,8 +409,15 @@ describe('reporters (#142)', () => {
     expect(reporters.list({}, clock.t).rows.map((r) => r.key)).toEqual(['cccc']);
     const byState = await agent.post('/api/admin/reporters/remove').set(H).send({ state: 'reporting' });
     expect(byState.body).toEqual({ ok: true, removed: 1 });
+    // A filter removes every reporter it holds, not one page of them.
+    for (const k of ['dd1', 'dd2', 'ee1']) reporters.record(seen({ machineId: k, machineName: k, sessionId: k }), clock.t);
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({ match: { q: 'zzz' } })).body).toEqual({ ok: true, removed: 0 });
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({ match: { q: 'dd' } })).body).toEqual({ ok: true, removed: 2 });
+    expect(reporters.list({}, clock.t).rows.map((r) => r.key)).toEqual(['ee1']);
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({ match: 'all' })).status).toBe(400);
+    reporters.removeMany(['ee1']);
     const log = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'reporter_removed');
-    expect(log.map((r) => r.detail)).toEqual([expect.stringContaining('1 reporter'), expect.stringContaining('2 reporters')]);
+    expect(log.map((r) => r.detail)).toEqual([expect.stringContaining('2 reporters'), expect.stringContaining('0 reporters'), expect.stringContaining('1 reporter'), expect.stringContaining('2 reporters')]);
   });
 
   it('keeps ignore rules: add, list, remove, and log each (issue #167)', async () => {

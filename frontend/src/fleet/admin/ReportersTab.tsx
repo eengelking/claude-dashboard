@@ -3,7 +3,7 @@
 // reporter that stops moves from "Reporting" to "Silent" without a reload. "Silent" means nothing has arrived for a while; the
 // server cannot tell a reporter that is turned off from one that cannot reach it.
 import { useEffect, useState } from "react";
-import { AdminError, query, type AdminApi, type ReporterDetail, type ReporterList, type ReporterRow, type ReporterSort, type ReporterState } from "./adminApi";
+import { AdminError, query, type AdminApi, type IgnoreRule, type RemoveBody, type ReporterDetail, type ReporterList, type ReporterRow, type ReporterSort, type ReporterState } from "./adminApi";
 import { Pager } from "./Pager";
 import { Panel, Section } from "./Page";
 import { failText, useList } from "./useList";
@@ -136,12 +136,23 @@ export function ReportersTab(props: {
   const { api, paging, onPaging, onCount } = props;
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState(paging.q);
+  // Issue #167: the rows ticked, whether "all that match" is ticked, and a removal waiting for its confirmation.
+  const [sel, setSel] = useState<string[]>([]);
+  const [selAll, setSelAll] = useState(false);
+  const [pending, setPending] = useState<{ count: number; body: RemoveBody } | null>(null);
+  const [err, setErr] = useState("");
+  const rules = useList<{ rules: IgnoreRule[] }>(api, "/reporters/ignores", props.onLocked);
   const list = useList<ReporterList>(api, `/reporters${query({ page: paging.page, pageSize: paging.pageSize, q: paging.q, state: paging.state, sort: paging.sort, dir: paging.dir, admin: paging.admin ? 1 : "" })}`, props.onLocked);
   useRefresh(list.reload, open === null);
   const total = list.data?.counts.all;
   useEffect(() => {
     if (total !== undefined) onCount(total);
   }, [total, onCount]);
+  // A different filter is a different set of matches.
+  useEffect(() => {
+    setSelAll(false);
+    setPending(null);
+  }, [paging.q, paging.state, paging.admin]);
   useEffect(() => {
     if (search === paging.q) return;
     const t = setTimeout(() => onPaging({ q: search, page: 1 }), 250);
@@ -151,6 +162,30 @@ export function ReportersTab(props: {
   if (open !== null) return <Detail api={api} id={open} onBack={() => (setOpen(null), list.reload())} onLocked={props.onLocked} />;
 
   const data = list.data;
+  const filterOf = () => ({ ...(paging.q ? { q: paging.q } : {}), ...(paging.state ? { state: paging.state } : {}), ...(paging.admin ? { admin: true } : {}) });
+  const removePending = async () => {
+    if (!pending) return;
+    try {
+      await api("POST", "/reporters/remove", pending.body);
+      setSel([]);
+      setSelAll(false);
+      setPending(null);
+      setErr("");
+      list.reload();
+    } catch (e) {
+      if (e instanceof AdminError && e.status === 401) props.onLocked();
+      else setErr(failText(e));
+    }
+  };
+  const rows = data?.rows ?? [];
+  const pageAllSelected = rows.length > 0 && rows.every((r) => sel.includes(r.key));
+  const nSel = selAll && data ? data.total : sel.length;
+  const plural = (n: number) => `${n} ${n === 1 ? "reporter" : "reporters"}`;
+  const toggle = (key: string, on: boolean) => {
+    setSelAll(false);
+    setPending(null);
+    setSel((cur) => (on ? [...cur, key] : cur.filter((k) => k !== key)));
+  };
   const sortBy = (sort: ReporterSort) => onPaging({ sort, dir: paging.sort === sort ? (paging.dir === 1 ? -1 : 1) : 1, page: 1 });
   const th = (sort: ReporterSort, label: string, cls = "") => (
     <th className={cls} aria-sort={paging.sort === sort ? (paging.dir === 1 ? "ascending" : "descending") : "none"}>
@@ -193,7 +228,49 @@ export function ReportersTab(props: {
             <label htmlFor="reporters-search">Search reporters</label>
             <input className="field" id="reporters-search" type="search" placeholder="Machine, person, address or version" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          {paging.state && data && data.counts[paging.state] > 0 && (
+            <button type="button" className="btn sm dng" onClick={() => setPending({ count: data.counts[paging.state as ReporterState], body: { match: { state: paging.state as ReporterState } } })}>
+              Remove all {stateOf(paging.state as ReporterState).name} ({data.counts[paging.state]})
+            </button>
+          )}
         </div>
+        {pending && (
+          <div className="selbar" role="group" aria-label="Confirm removal">
+            <span>Remove {plural(pending.count)} from the list? They come back if they report again, unless ignored. Their sessions are not touched.</span>
+            <span className="grow" />
+            <button type="button" className="btn sm dng" onClick={() => void removePending()}>
+              Remove {plural(pending.count)}
+            </button>
+            <button type="button" className="btn sm" onClick={() => setPending(null)}>
+              Keep them
+            </button>
+          </div>
+        )}
+        {!pending && nSel > 0 && (
+          <div className="selbar" role="group" aria-label="Selected reporters">
+            <span className="count">{nSel} selected{selAll ? " (all that match)" : ""}</span>
+            <span className="grow" />
+            <button type="button" className="btn sm dng" onClick={() => setPending({ count: nSel, body: selAll ? { match: filterOf() } : { keys: sel } })}>
+              Remove {nSel}…
+            </button>
+            <button type="button" className="btn sm" onClick={() => (setSel([]), setSelAll(false))}>
+              Clear selection
+            </button>
+          </div>
+        )}
+        {!pending && !selAll && data && pageAllSelected && data.total > rows.length && (
+          <div className="selmore">
+            All {rows.length} on this page are selected.{" "}
+            <button type="button" onClick={() => setSelAll(true)}>
+              Select all {data.total} that match
+            </button>
+          </div>
+        )}
+        {err && (
+          <div className="err" role="alert">
+            {err}
+          </div>
+        )}
         {list.error && (
           <div className="err" role="alert">
             Could not load the reporters ({list.error}).
@@ -207,6 +284,18 @@ export function ReportersTab(props: {
               <table className="ptab">
                 <thead>
                   <tr>
+                    <th className="chk">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select all ${rows.length} on this page`}
+                        checked={pageAllSelected}
+                        onChange={(e) => {
+                          setSelAll(false);
+                          setPending(null);
+                          setSel((cur) => (e.target.checked ? [...new Set([...cur, ...rows.map((r) => r.key)])] : cur.filter((k) => !rows.some((r) => r.key === k))));
+                        }}
+                      />
+                    </th>
                     {th("state", "State")}
                     {th("name", "Machine")}
                     {th("who", "Person")}
@@ -218,7 +307,10 @@ export function ReportersTab(props: {
                 </thead>
                 <tbody>
                   {data.rows.map((r) => (
-                    <tr key={r.key} className="rw" onClick={() => setOpen(r.key)}>
+                    <tr key={r.key} className={`rw${sel.includes(r.key) || selAll ? " sel" : ""}`} onClick={() => setOpen(r.key)}>
+                      <td className="chk" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" aria-label={`Select ${r.name}`} checked={sel.includes(r.key) || selAll} onChange={(e) => toggle(r.key, e.target.checked)} />
+                      </td>
                       <td>
                         <StateBadge r={r} serverTime={data.serverTime} serverStartedAt={data.serverStartedAt} />
                       </td>
@@ -259,9 +351,96 @@ export function ReportersTab(props: {
           <b>Not since restart</b> is what every reporter reads after this server restarts, until it reports again. Most rows show it for a short while after a restart; it does not mean they stopped.
           <br />
           A reporter with no name set (the <span className="mono">userName</span> option) is shown by its newest project, or its address, and is matched by its sessions, so a container that comes back on a new address stays one row.
+          <br />
+          <b>Remove from list</b> takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.
         </div>
+        <IgnoreRules api={api} rules={rules.data?.rules} error={rules.error} onLocked={props.onLocked} onChanged={() => (rules.reload(), list.reload())} />
       </Panel>
     </Section>
+  );
+}
+
+/** The ignore rules (issue #167): every rule can be removed, so a mistake can be undone. A matching reporter is refused. */
+function IgnoreRules(props: { api: AdminApi; rules: IgnoreRule[] | undefined; error: string | null; onLocked: () => void; onChanged: () => void }) {
+  const { api, rules } = props;
+  const [kind, setKind] = useState<IgnoreRule["kind"]>("address");
+  const [pattern, setPattern] = useState("");
+  const [err, setErr] = useState("");
+  const act = async (run: () => Promise<unknown>) => {
+    try {
+      await run();
+      setErr("");
+      props.onChanged();
+    } catch (e) {
+      if (e instanceof AdminError && e.status === 401) props.onLocked();
+      else setErr(failText(e));
+    }
+  };
+  return (
+    <section className="rules" aria-labelledby="rules-h">
+      <h3 id="rules-h">Ignore rules</h3>
+      <p className="lead2">
+        A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span className="mono">*</span> for “anything”, as in <span className="mono">10.88.*</span> or <span className="mono">*-sim</span>.
+      </p>
+      {rules && rules.length === 0 && <div className="none">No rules. Every reporter is accepted.</div>}
+      {rules && rules.length > 0 && (
+        <div className="tw2">
+          <table className="ptab" aria-label="Ignore rules">
+            <thead>
+              <tr>
+                <th>Matches</th>
+                <th>Pattern</th>
+                <th>Added</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((x) => (
+                <tr key={x.id}>
+                  <td>{x.kind === "key" ? "Key" : x.kind === "address" ? "Address" : "Version"}</td>
+                  <td className="mono">{x.pattern}</td>
+                  <td className="mono muted">{day(x.createdAt)}</td>
+                  <td className="n">
+                    <button type="button" className="btn sm" aria-label={`Remove the rule for ${x.pattern}`} onClick={() => void act(() => api("DELETE", `/reporters/ignores/${x.id}`))}>
+                      Remove rule
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {(err || props.error) && (
+        <div className="err" role="alert">
+          {err || `Could not load the ignore rules (${props.error}).`}
+        </div>
+      )}
+      <form
+        className="ruleform"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!pattern.trim()) return setErr("Enter what to match.");
+          void act(async () => {
+            await api("POST", "/reporters/ignores", { kind, pattern: pattern.trim() });
+            setPattern("");
+          });
+        }}
+      >
+        <label htmlFor="rule-kind" className="hint">
+          Rule matches
+        </label>
+        <select className="field sm" id="rule-kind" value={kind} onChange={(e) => setKind(e.target.value as IgnoreRule["kind"])}>
+          <option value="key">Key</option>
+          <option value="address">Address</option>
+          <option value="version">Version</option>
+        </select>
+        <input className="field mono" aria-label="Pattern" placeholder="10.88.* or *-sim" value={pattern} onChange={(e) => setPattern(e.target.value)} />
+        <button type="submit" className="btn sm">
+          Ignore matching reporters
+        </button>
+      </form>
+    </section>
   );
 }
 
@@ -271,8 +450,23 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
   const one = useList<ReporterDetail>(api, path, props.onLocked);
   useRefresh(one.reload);
   const [confirm, setConfirm] = useState(false);
+  const [ignoring, setIgnoring] = useState(false);
+  const [ignoreKind, setIgnoreKind] = useState<IgnoreRule["kind"]>("key");
   const [err, setErr] = useState("");
   const d = one.data;
+
+  const ignore = async () => {
+    if (!d) return;
+    const pattern = ignoreKind === "key" ? d.key : ignoreKind === "address" ? d.source : d.version;
+    if (!pattern) return setErr("This reporter has no address to ignore.");
+    try {
+      await api("POST", "/reporters/ignores", { kind: ignoreKind, pattern });
+      props.onBack();
+    } catch (e) {
+      if (e instanceof AdminError && e.status === 401) props.onLocked();
+      else setErr(failText(e));
+    }
+  };
 
   const remove = async () => {
     try {
@@ -320,6 +514,11 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
           {d.name} <StateBadge r={d} serverTime={d.serverTime} serverStartedAt={d.serverStartedAt} />
           {d.adminSecret && <Token r={d} />}
         </h2>
+        {!ignoring && !confirm && (
+          <button type="button" className="btn sm" onClick={() => setIgnoring(true)}>
+            Ignore…
+          </button>
+        )}
         {confirm ? (
           <div className="confirm">
             Remove {d.name} from the list? It comes back if it reports again. Its sessions are not touched.
@@ -336,6 +535,51 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
           </button>
         )}
       </div>
+      {ignoring && (
+        <form
+          className="ignform"
+          role="group"
+          aria-label={`Ignore ${d.name}`}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void ignore();
+          }}
+        >
+          <b>Ignore {d.name}?</b>
+          <label className="opt">
+            <input type="radio" name="ignore-kind" checked={ignoreKind === "key"} onChange={() => setIgnoreKind("key")} />
+            <span>
+              This reporter only <span className="hint mono">{d.key}</span>
+            </span>
+          </label>
+          {d.source && (
+            <label className="opt">
+              <input type="radio" name="ignore-kind" checked={ignoreKind === "address"} onChange={() => setIgnoreKind("address")} />
+              <span>
+                Everything from its address <span className="hint mono">{d.source}</span>
+              </span>
+            </label>
+          )}
+          <label className="opt">
+            <input type="radio" name="ignore-kind" checked={ignoreKind === "version"} onChange={() => setIgnoreKind("version")} />
+            <span>
+              Every reporter on version <span className="hint mono">{d.version}</span>
+            </span>
+          </label>
+          <div className="warnline">
+            <WarnIcon />
+            <span>Its reports are turned away, so its sessions stop appearing on the fleet. You can undo this from the Ignore rules list.</span>
+          </div>
+          <div className="confirm">
+            <button type="submit" className="btn sm dng">
+              Ignore and remove
+            </button>
+            <button type="button" className="btn sm" onClick={() => setIgnoring(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
       {err && (
         <div className="err" role="alert">
           {err}

@@ -36,6 +36,10 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     } as Record<string, { std: PriceSet; long?: PriceSet }>,
     builtin: { "sonnet-5-5": 2, "haiku-5-5": 0.1 } as Record<string, number>,
     priceError: "" as string,
+    removeBodies: [] as unknown[],
+    pageLimit: 50,
+    rules: [] as { id: number; kind: string; pattern: string; createdAt: number }[],
+    forget: { enabled: false, days: 30 },
     reporters: [
       { key: "9f3a1c7d2e40", state: "reporting", name: "studio-m2", named: true, who: "Dana", credential: "pdm_3f9a1c07b2e4", adminSecret: false, version: "0.13.0", compat: "ok", firstSeenAt: 1_000, lastSeenAt: 40_000, sessions: 142, live: 3 },
       { key: "addr:10.4.0.52", state: "silent", name: "10.4.0.52", named: false, who: "Admin", credential: "admin secret", adminSecret: true, version: "0.9.2", compat: "outdated", firstSeenAt: 1_000, lastSeenAt: 1_000, sessions: 9, live: 0 },
@@ -82,7 +86,31 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       const rows = state.reporters.filter((r) => (!st || r.state === st) && (!q || r.name.toLowerCase().includes(q)) && (!adminOnly || r.adminSecret));
       const counts = { all: state.reporters.length, reporting: 0, idle: 0, silent: 0, restart: 0 } as Record<string, number>;
       for (const r of state.reporters) counts[r.state]! += 1;
-      return json(200, { total: rows.length, page: 1, pageSize: 50, rows, counts, adminSecret: state.reporters.filter((r) => r.adminSecret).length, serverTime: 100_000, serverStartedAt: 50_000 });
+      return json(200, { total: rows.length, page: 1, pageSize: state.pageLimit, rows: rows.slice(0, state.pageLimit), counts, adminSecret: state.reporters.filter((r) => r.adminSecret).length, serverTime: 100_000, serverStartedAt: 50_000 });
+    }
+    if (path === "/reporters/remove" && method === "POST") {
+      const b = JSON.parse(String(init?.body)) as { keys?: string[]; state?: string; match?: { state?: string; q?: string } };
+      state.removeBodies.push(b);
+      const before = state.reporters.length;
+      state.reporters = state.reporters.filter((r) => !(b.keys?.includes(r.key) || (b.state && r.state === b.state) || (b.match && (!b.match.state || r.state === b.match.state) && (!b.match.q || r.name.toLowerCase().includes(b.match.q)))));
+      return json(200, { ok: true, removed: before - state.reporters.length });
+    }
+    if (path === "/reporters/ignores" && method === "GET") return json(200, { rules: state.rules });
+    if (path === "/reporters/ignores" && method === "POST") {
+      const b = JSON.parse(String(init?.body)) as { kind: string; pattern: string };
+      const rule = { id: state.rules.length + 1, kind: b.kind, pattern: b.pattern, createdAt: 90_000 };
+      state.rules.push(rule);
+      const field = b.kind === "key" ? "key" : b.kind === "version" ? "version" : "name";
+      const re = new RegExp("^" + b.pattern.split("*").join(".*") + "$", "i");
+      const before = state.reporters.length;
+      state.reporters = state.reporters.filter((r) => !re.test(r[field]));
+      return json(200, { ok: true, rule, removed: before - state.reporters.length });
+    }
+    if (path.startsWith("/reporters/ignores/") && method === "DELETE") {
+      const id = Number(path.slice("/reporters/ignores/".length));
+      if (!state.rules.some((r) => r.id === id)) return json(404, { ok: false, error: "unknown rule" });
+      state.rules = state.rules.filter((r) => r.id !== id);
+      return json(200, { ok: true });
     }
     if (path.startsWith("/reporters/")) {
       const key = decodeURIComponent(path.slice("/reporters/".length));
@@ -102,6 +130,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       if (b.features) for (const [id, on] of Object.entries(b.features)) state.features[id] = on as boolean;
       if (b.notices) for (const [id, on] of Object.entries(b.notices)) state.notices[id] = on as boolean;
       if ("showBackgroundSessions" in b) state.showBackground = b.showBackgroundSessions;
+      if (b.forgetReporters) state.forget = { ...state.forget, ...b.forgetReporters };
       if (b.modelPrice) {
         if (state.priceError) return json(400, { ok: false, error: state.priceError });
         state.prices[b.modelPrice.key] = { std: b.modelPrice.std, ...(b.modelPrice.long ? { long: b.modelPrice.long } : {}) };
@@ -133,7 +162,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
         description: "Shows an agent's recent tool calls and text in its panel while someone watches.",
         on,
       }));
-      return json(200, { allowAdminSecretReporting: true, features, notices, showBackgroundSessions: state.showBackground, modelPrices: { asOf: "2026-10-13", models } });
+      return json(200, { allowAdminSecretReporting: true, features, notices, showBackgroundSessions: state.showBackground, forgetReporters: state.forget, modelPrices: { asOf: "2026-10-13", models } });
     }
     return json(404, { ok: false, error: "nope" });
   });
@@ -543,6 +572,93 @@ describe("Reporters tab (#142)", () => {
     expect(screen.queryByText("studio-m2")).toBeNull();
   });
 
+  it("selects rows and removes them in one step, after a confirmation that says how many (issue #167)", async () => {
+    const state = await openReporters();
+    expect(screen.queryByRole("group", { name: "Selected reporters" })).toBeNull();
+    fireEvent.click(screen.getByLabelText("Select studio-m2"));
+    fireEvent.click(screen.getByLabelText("Select 10.4.0.52"));
+    const bar = screen.getByRole("group", { name: "Selected reporters" });
+    expect(bar).toHaveTextContent("2 selected");
+    fireEvent.click(within(bar).getByRole("button", { name: /Remove 2/ }));
+    const confirm = screen.getByRole("group", { name: "Confirm removal" });
+    expect(confirm).toHaveTextContent("Remove 2 reporters from the list?");
+    expect(confirm).toHaveTextContent("Their sessions are not touched");
+    expect(state.removeBodies).toEqual([]);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Keep them" }));
+    expect(state.removeBodies).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: /Remove 2/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove 2 reporters" }));
+    await waitFor(() => expect(state.removeBodies).toEqual([{ keys: ["9f3a1c7d2e40", "addr:10.4.0.52"] }]));
+    expect(await screen.findByText(/No reporter has connected yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Selected reporters" })).toBeNull();
+  });
+
+  it("selects every row on the page with the header box, and offers every match when there are more (issue #167)", async () => {
+    const state = await openReporters();
+    fireEvent.click(screen.getByLabelText("Select all 2 on this page"));
+    expect(screen.getByRole("group", { name: "Selected reporters" })).toHaveTextContent("2 selected");
+    fireEvent.click(screen.getByLabelText("Select all 2 on this page"));
+    expect(screen.queryByRole("group", { name: "Selected reporters" })).toBeNull();
+    state.reporters.push(...Array.from({ length: 3 }, (_, i) => ({ ...state.reporters[0]!, key: `k${i}`, name: `extra-${i}` })));
+    state.pageLimit = 2;
+    fireEvent.change(screen.getByLabelText("Search reporters"), { target: { value: "e" } });
+    await screen.findByText("extra-0");
+    fireEvent.click(await screen.findByLabelText("Select all 2 on this page"));
+    expect(screen.getByText(/All 2 on this page are selected/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Select all 3 that match" }));
+    expect(screen.getByRole("group", { name: "Selected reporters" })).toHaveTextContent("3 selected");
+    fireEvent.click(screen.getByRole("button", { name: /Remove 3/ }));
+    expect(screen.getByRole("group", { name: "Confirm removal" })).toHaveTextContent("Remove 3 reporters from the list?");
+    fireEvent.click(screen.getByRole("button", { name: "Remove 3 reporters" }));
+    await waitFor(() => expect(state.removeBodies).toEqual([{ match: { q: "e" } }]));
+  });
+
+  it("removes every reporter in a state from the state strip, with the count in the confirmation (issue #167)", async () => {
+    const state = await openReporters();
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
+    await waitFor(() => expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "Remove all Silent (1)" }));
+    expect(screen.getByRole("group", { name: "Confirm removal" })).toHaveTextContent("Remove 1 reporter from the list?");
+    expect(state.removeBodies).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove 1 reporter" }));
+    await waitFor(() => expect(state.removeBodies).toEqual([{ match: { state: "silent" } }]));
+    await waitFor(() => expect(state.reporters.map((r) => r.state)).toEqual(["reporting"]));
+  });
+
+  it("says what Remove does and does not do (issue #167)", async () => {
+    await openReporters();
+    expect(screen.getByText(/takes the row away and nothing else/)).toBeInTheDocument();
+  });
+
+  it("ignores a reporter from its detail, after saying that its reports are turned away (issue #167)", async () => {
+    const state = await openReporters();
+    fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ignore…" }));
+    const form = screen.getByRole("group", { name: "Ignore studio-m2" });
+    expect(form).toHaveTextContent("Its reports are turned away, so its sessions stop appearing on the fleet.");
+    expect(state.rules).toEqual([]);
+    fireEvent.click(within(form).getByLabelText(/This reporter only/));
+    fireEvent.click(within(form).getByRole("button", { name: "Ignore and remove" }));
+    await waitFor(() => expect(state.rules).toEqual([expect.objectContaining({ kind: "key", pattern: "9f3a1c7d2e40" })]));
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(screen.queryByText("studio-m2")).toBeNull();
+  });
+
+  it("lists the ignore rules, adds one by pattern, and removes one to undo it (issue #167)", async () => {
+    const state = await openReporters();
+    expect(await screen.findByText("No rules. Every reporter is accepted.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Rule matches"), { target: { value: "version" } });
+    fireEvent.change(screen.getByLabelText("Pattern"), { target: { value: "0.9.*" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ignore matching reporters" }));
+    await waitFor(() => expect(state.rules).toEqual([expect.objectContaining({ kind: "version", pattern: "0.9.*" })]));
+    const rules = await screen.findByRole("table", { name: "Ignore rules" });
+    expect(within(rules).getByText("0.9.*")).toBeInTheDocument();
+    expect(screen.getByText(/A reporter that matches a rule is refused/)).toBeInTheDocument();
+    fireEvent.click(within(rules).getByRole("button", { name: "Remove the rule for 0.9.*" }));
+    await waitFor(() => expect(state.rules).toEqual([]));
+    expect(await screen.findByText("No rules. Every reporter is accepted.")).toBeInTheDocument();
+  });
+
   it("asks the server again on its own, so a state that changed shows without a reload", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     try {
@@ -562,5 +678,36 @@ describe("Reporters tab (#142)", () => {
     state.expire = true;
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
     expect(await screen.findByLabelText("Admin secret")).toBeInTheDocument();
+  });
+});
+
+describe("Forget old reporters setting (issue #167)", () => {
+  async function openSettings() {
+    const state = fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+    await screen.findByRole("switch", { name: /Forget old reporters/ });
+    return state;
+  }
+
+  it("is off by default at 30 days, turns on, and saves a new number of days", async () => {
+    const state = await openSettings();
+    const sw = screen.getByRole("switch", { name: /Forget old reporters/ });
+    expect(sw).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByLabelText("Days")).toHaveValue(30);
+    fireEvent.click(sw);
+    await waitFor(() => expect(state.forget.enabled).toBe(true));
+    fireEvent.change(screen.getByLabelText("Days"), { target: { value: "14" } });
+    fireEvent.blur(screen.getByLabelText("Days"));
+    await waitFor(() => expect(state.forget.days).toBe(14));
+  });
+
+  it("does not send days outside 1 to 3650", async () => {
+    const state = await openSettings();
+    fireEvent.change(screen.getByLabelText("Days"), { target: { value: "0" } });
+    fireEvent.blur(screen.getByLabelText("Days"));
+    expect(await screen.findByText(/whole number of days from 1 to 3650/)).toBeInTheDocument();
+    expect(state.forget.days).toBe(30);
   });
 });

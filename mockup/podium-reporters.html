@@ -18,7 +18,12 @@
    it appears. The warning is always on, even on a one-person setup: a Token column with an "Admin secret" badge in the warning
    color, a banner above the list that counts them and filters to them, and a callout at the top of the reporter's detail that
    says what is wrong and how to fix it. The warning color is the status color, never the accent, and is always paired with
-   an icon and words. */
+   an icon and words.
+   Issue #167 additions: a checkbox column and a selection bar for removing many reporters in one step (with "select all that
+   match" past one page, and "Remove all <state>" beside the search); an Ignore action on a reporter and an "Ignore rules" list
+   under the table, each rule removable; and, in Settings, "Forget old reporters", off by default. Ignoring means refusing:
+   the server turns the reporter's reports away, so its sessions stop appearing on the fleet until the rule is removed, and the
+   page says so wherever a rule is made. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
@@ -157,6 +162,33 @@ select.field { width: auto; padding: 5px 8px; font-size: 12px; }
 .callout b { color: var(--ink); font-weight: 600; }
 .tt { border-bottom: 1px dotted var(--muted); cursor: help; }
 .tip { position: fixed; z-index: 20; pointer-events: none; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 260px; }
+
+/* issue #167: selection, bulk actions, ignore rules, settings */
+.ptab th.chk, .ptab td.chk { width: 34px; padding-right: 0; }
+.ptab input[type="checkbox"], .setrow input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; margin: 0; vertical-align: middle; }
+.ptab tbody tr.rw.sel td { background: var(--sel); }
+.selbar { display: flex; gap: 8px 14px; align-items: center; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--sel); box-shadow: inset 3px 0 0 var(--ink); }
+.selbar .count { font-weight: 650; }
+.selbar .grow { flex: 1 1 auto; }
+.selmore { padding: 7px 14px; border-bottom: 1px solid var(--border); color: var(--ink2); font-size: 12px; background: var(--raised); }
+.selmore button { text-decoration: underline; color: var(--ink); font-weight: 600; }
+.ptool .btn { white-space: nowrap; }
+.rules { border-top: 1px solid var(--border); }
+.rules h3 { margin: 0; padding: 12px 14px 4px; font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+.rules .lead2 { margin: 0; padding: 0 14px 10px; color: var(--ink2); max-width: 78ch; }
+.rules .none { padding: 0 14px 12px; color: var(--muted); }
+.ruleform { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--grid); }
+.ruleform select.field, .ruleform input.field { width: auto; }
+.ruleform input.field { flex: 1 1 200px; max-width: 320px; }
+.ignform { margin: 0 14px 14px; padding: 12px 14px; border: 1px solid var(--axis); border-radius: 8px; display: grid; gap: 8px; max-width: 640px; }
+.ignform label.opt { display: flex; gap: 8px; align-items: flex-start; }
+.ignform .warnline { color: var(--warn); display: flex; gap: 8px; align-items: flex-start; }
+.setrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 14px; }
+.setrow h3 { margin: 0 0 2px; font-size: 14px; font-weight: 650; }
+.setrow p { margin: 0; color: var(--ink2); max-width: 70ch; }
+.setrow .ctl { display: flex; gap: 10px; align-items: center; }
+.setrow input.num { width: 72px; text-align: right; }
+.setrow .saved { color: var(--good-text); font-size: 12px; min-height: 1em; }
 </style>
 </head>
 <body>
@@ -225,7 +257,7 @@ const DATA = [
     recent: [["scratch", "ended", "5 h ago", "$0.11"]], rej: [] }
 ];
 
-const A = { rows: DATA.map((r) => ({ ...r })), stopped: false, filter: "all", onlyAdmin: false, q: "", sort: "last", dir: -1, open: null, confirm: false, removed: [] };
+const A = { rows: DATA.map((r) => ({ ...r })), stopped: false, filter: "all", onlyAdmin: false, q: "", sort: "last", dir: -1, open: null, confirm: false, removed: [], sel: [], bulk: false, tab: "reporters", rules: [], ign: null, forget: { on: false, days: 30 }, saved: "" };
 
 const ago = (t, r) => { const d = NOW + (r ? skewOf(r) : 0) - t; if (d < 15e3) return "just now"; if (d < MIN) return Math.round(d / 1e3) + " s ago"; if (d < HOUR) return Math.round(d / MIN) + " min ago"; if (d < DAY) return Math.round(d / HOUR) + " h ago"; return Math.round(d / DAY) + " days ago"; };
 const date = (t) => new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -260,15 +292,44 @@ function listHtml() {
   const nAdmin = all.filter(isAdmin).length;
   const banner = nAdmin ? `<div class="warnbar" role="status">${WARN_ICON}<div class="tx"><b>${nAdmin} ${nAdmin === 1 ? "reporter uses" : "reporters use"} the admin secret.</b> They should each use a token made for one person, so their sessions have an owner and the admin secret stays private.</div><button type="button" class="btn sm" data-act="admin-filter" aria-pressed="${A.onlyAdmin}">${A.onlyAdmin ? "Show all reporters" : "Show only these"}</button></div>` : "";
   return `<div class="states" role="group" aria-label="Filter by state">${strip}</div>${banner}
-  <div class="ptool"><label for="rq" style="font-weight:600;white-space:nowrap">Find a reporter</label><input class="field" id="rq" type="search" placeholder="Machine, person, address or version" value="${esc(A.q)}"></div>
-  ${rows.length ? `<div class="tw2 scroll"><table class="ptab"><thead><tr>${th("state", "State")}${th("name", "Machine")}${th("who", "Person")}${th("tok", "Token")}${th("ver", "Reporter version")}${th("last", "Last report")}${th("sessions", "Sessions", "num")}</tr></thead>
-    <tbody>${rows.map((r) => `<tr class="rw" tabindex="0" data-open="${esc(r.key)}" aria-label="Open details for ${esc(r.name)}"><td>${stHtml(r)}</td>
+  <div class="ptool"><label for="rq" style="font-weight:600;white-space:nowrap">Find a reporter</label><input class="field" id="rq" type="search" placeholder="Machine, person, address or version" value="${esc(A.q)}">${A.filter !== "all" && rows.length ? `<button type="button" class="btn sm dng" data-act="state-all">Remove all ${STATE[A.filter].name} (${cnt(A.filter)})</button>` : ""}</div>
+  ${selBar(rows)}
+  ${rows.length ? `<div class="tw2 scroll"><table class="ptab"><thead><tr><th class="chk"><input type="checkbox" aria-label="Select all ${rows.length} on this page" data-selall ${rows.length && rows.every((r) => A.sel.includes(r.key)) ? "checked" : ""}></th>${th("state", "State")}${th("name", "Machine")}${th("who", "Person")}${th("tok", "Token")}${th("ver", "Reporter version")}${th("last", "Last report")}${th("sessions", "Sessions", "num")}</tr></thead>
+    <tbody>${rows.map((r) => `<tr class="rw${A.sel.includes(r.key) ? " sel" : ""}" tabindex="0" data-open="${esc(r.key)}" aria-label="Open details for ${esc(r.name)}"><td class="chk"><input type="checkbox" aria-label="Select ${esc(r.name)}" data-sel="${esc(r.key)}" ${A.sel.includes(r.key) ? "checked" : ""}></td><td>${stHtml(r)}</td>
       <td><span class="nm">${esc(r.name)}</span><span class="sub mono">${esc(r.id ? r.addr : "no machine id, matched by address " + r.addr)}</span></td>
       <td>${esc(r.who)}</td><td>${tokHtml(r)}</td><td>${compatHtml(r)}</td><td class="mono" style="color:var(--ink2);white-space:nowrap">${ago(r.last, r)}</td>
       <td class="num mono">${r.sessions}${r.live ? ` <span class="hint">· ${r.live} live</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="empty">${all.length ? "No reporter matches. Clear the search or pick another state." : "No reporter has connected yet. Install podium-reporter and point it at this server."}</div>`}
   <div class="pager"><span>${rows.length} of ${all.length} reporters</span><span class="hint">Page 1 of 1</span></div>
-  <div class="note"><b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.</div>`;
+  <div class="note"><b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.<br><b>Remove from list</b> takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.</div>
+  ${rulesHtml()}`;
+}
+
+function selBar(rows) {
+  if (!A.sel.length) return "";
+  const n = A.sel.length, plural = n === 1 ? "reporter" : "reporters";
+  const matching = visible().length;
+  const more = rows.length && rows.every((r) => A.sel.includes(r.key)) && n < matching ? `<div class="selmore">All ${n} on this page are selected. <button type="button" data-act="sel-matching">Select all ${matching} that match</button></div>` : "";
+  const bar = A.bulk
+    ? `<div class="selbar" role="group" aria-label="Confirm removal"><span>Remove ${n} ${plural} from the list? They come back if they report again, unless ignored. Their sessions are not touched.</span><span class="grow"></span><button type="button" class="btn sm dng" data-act="bulk-yes">Remove ${n} ${plural}</button><button type="button" class="btn sm" data-act="bulk-no">Keep them</button></div>`
+    : `<div class="selbar" role="group" aria-label="Selected reporters"><span class="count">${n} selected</span><span class="grow"></span><button type="button" class="btn sm dng" data-act="bulk">Remove ${n}…</button><button type="button" class="btn sm" data-act="sel-clear">Clear selection</button></div>`;
+  return bar + more;
+}
+
+const KIND = { key: "Key", address: "Address", version: "Version" };
+function rulesHtml() {
+  const rows = A.rules.map((x, i) => `<tr><td>${KIND[x.kind]}</td><td class="mono">${esc(x.pattern)}</td><td class="mono" style="color:var(--ink2)">${esc(x.added)}</td><td class="num"><button type="button" class="btn sm" data-rule-del="${i}" aria-label="Remove the rule for ${esc(x.pattern)}">Remove rule</button></td></tr>`).join("");
+  return `<section class="rules" aria-labelledby="rules-h"><h3 id="rules-h">Ignore rules</h3>
+  <p class="lead2">A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span class="mono">*</span> for “anything”, as in <span class="mono">10.88.*</span> or <span class="mono">*-sim</span>.</p>
+  ${A.rules.length ? `<div class="tw2"><table class="ptab"><thead><tr><th>Matches</th><th>Pattern</th><th>Added</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="none">No rules. Every reporter is accepted.</div>`}
+  <form class="ruleform" data-ruleform><label for="rk" class="hint">Add a rule</label><select class="field" id="rk"><option value="key">Key</option><option value="address">Address</option><option value="version">Version</option></select><input class="field mono" id="rp" placeholder="10.88.* or *-sim" aria-label="Pattern"><button type="submit" class="btn sm">Ignore matching reporters</button></form></section>`;
+}
+
+function settingsHtml() {
+  const f = A.forget;
+  return `<div class="setrow"><div><h3>Forget old reporters</h3><p>Remove a reporter from the list once the server has not heard from it for this many days. Its sessions are not touched, and it comes back if it reports again.</p></div>
+  <div class="ctl"><label><input type="checkbox" data-forget-on ${f.on ? "checked" : ""}> On</label><label class="hint" for="fd">After</label><input class="field mono num" id="fd" type="number" min="1" max="3650" value="${f.days}" data-forget-days><span class="hint">days</span></div>
+  <div class="saved" role="status">${esc(A.saved)}</div></div>`;
 }
 
 function detailHtml(r) {
@@ -278,8 +339,11 @@ function detailHtml(r) {
   const rem = A.confirm
     ? `<div class="confirm">Remove ${esc(r.name)} from the list? It comes back if it reports again. Its sessions are not touched.<button type="button" class="btn sm dng" data-act="remove-yes">Remove reporter</button><button type="button" class="btn sm" data-act="remove-no">Keep it</button></div>`
     : `<button type="button" class="btn sm dng" data-act="remove">Remove from list</button>`;
+  const ign = A.ign
+    ? `<form class="ignform" data-ignform><b>Ignore ${esc(r.name)}?</b><label class="opt"><input type="radio" name="ik" value="key" checked> <span>This reporter only <span class="hint mono">${esc(r.key)}</span></span></label><label class="opt"><input type="radio" name="ik" value="address"> <span>Everything from its address <span class="hint mono">${esc(r.addr)}</span></span></label><label class="opt"><input type="radio" name="ik" value="version"> <span>Every reporter on version <span class="hint mono">${esc(r.ver)}</span></span></label>
+      <div class="warnline">${WARN_ICON}<span>Its reports are turned away, so its sessions stop appearing on the fleet. You can undo this from the Ignore rules list.</span></div><div class="confirm"><button type="submit" class="btn sm dng">Ignore and remove</button><button type="button" class="btn sm" data-act="ign-no">Cancel</button></div></form>` : "";
   return `<button type="button" class="back" data-act="back"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>All reporters</button>
-  <div class="dhead"><div><h2>${esc(r.name)} ${stHtml(r)}${isAdmin(r) ? " " + tokHtml(r) : ""}</h2></div>${rem}</div>
+  <div class="dhead"><div><h2>${esc(r.name)} ${stHtml(r)}${isAdmin(r) ? " " + tokHtml(r) : ""}</h2></div><div class="confirm">${A.ign ? "" : `<button type="button" class="btn sm" data-act="ign">Ignore…</button>`}${rem}</div></div>${ign}
   ${isAdmin(r) ? `<div class="callout" role="alert">${WARN_ICON}<h3>This reporter is using the admin secret</h3>
     <p>${esc(r.name)} reports with the admin secret instead of a token made for one person. Its ${r.sessions} sessions belong to no one, and anyone who holds that secret can report as anyone. On a server only you use this is allowed, but it is not meant to stay that way.</p>
     <p><b>To fix it:</b></p>
@@ -300,21 +364,53 @@ function detailHtml(r) {
 function render() {
   const n = A.rows.filter((r) => !A.removed.includes(r.key)).length;
   $("#tabs").innerHTML = [["people", "People", 4], ["groups", "Groups", 3], ["reporters", "Reporters", n], ["reporting", "Reporting and security", null], ["settings", "Settings", null], ["log", "Admin log", 12]]
-    .map(([id, name, c]) => `<button type="button" role="tab" class="tab" id="tab-${id}" aria-selected="${id === "reporters"}" tabindex="${id === "reporters" ? 0 : -1}">${name}${c === null ? "" : `<span class="n">${c}</span>`}</button>`).join("");
+    .map(([id, name, c]) => `<button type="button" role="tab" class="tab" id="tab-${id}" aria-selected="${id === A.tab}" tabindex="${id === A.tab ? 0 : -1}" data-tab="${id}">${name}${c === null ? "" : `<span class="n">${c}</span>`}</button>`).join("");
   const r = A.open && A.rows.find((x) => x.key === A.open);
   const had = document.activeElement && document.activeElement.id;
-  $("#panel").innerHTML = r ? detailHtml(r) : listHtml();
+  $("#panel").innerHTML = A.tab === "settings" ? settingsHtml() : r ? detailHtml(r) : listHtml();
   if (had === "rq") { const i = $("#rq"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
 }
+const live = () => A.rows.filter((r) => !A.removed.includes(r.key));
+const globRe = (p) => new RegExp("^" + p.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$", "i");
+function addRule(kind, pattern) {
+  pattern = pattern.trim(); if (!pattern) return;
+  if (!A.rules.some((x) => x.kind === kind && x.pattern === pattern)) A.rules.push({ kind, pattern, added: "just now" });
+  const re = globRe(pattern), field = { key: "key", address: "addr", version: "ver" }[kind];
+  live().filter((r) => re.test(r[field] || "")).forEach((r) => A.removed.push(r.key));
+  A.sel = A.sel.filter((k) => !A.removed.includes(k));
+}
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.selall !== undefined) { const keys = visible().map((r) => r.key); A.sel = t.checked ? [...new Set([...A.sel, ...keys])] : A.sel.filter((k) => !keys.includes(k)); A.bulk = false; render(); }
+  else if (t.dataset.sel) { A.sel = t.checked ? [...A.sel, t.dataset.sel] : A.sel.filter((k) => k !== t.dataset.sel); A.bulk = false; render(); }
+  else if (t.dataset.forgetOn !== undefined) { A.forget.on = t.checked; A.saved = t.checked ? `Saved. Reporters not heard from for ${A.forget.days} days are removed at the next hourly check.` : "Saved. Reporters are kept until you remove them."; render(); }
+  else if (t.dataset.forgetDays !== undefined) { const n = Math.round(Number(t.value)); if (n >= 1 && n <= 3650) { A.forget.days = n; A.saved = "Saved."; } else A.saved = "Enter a whole number of days from 1 to 3650."; render(); }
+});
+document.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (e.target.dataset.ruleform !== undefined) { addRule($("#rk").value, $("#rp").value); render(); }
+  else if (e.target.dataset.ignform !== undefined) { const r = A.rows.find((x) => x.key === A.open); const k = e.target.elements.ik.value; addRule(k, k === "key" ? r.key : k === "address" ? r.addr : r.ver); A.open = null; A.ign = null; render(); }
+});
 document.addEventListener("click", (e) => {
+  const rd = e.target.closest("[data-rule-del]"); if (rd) { A.rules.splice(Number(rd.dataset.ruleDel), 1); render(); return; }
+  const tb = e.target.closest("[data-tab]"); if (tb) { A.tab = tb.dataset.tab === "settings" ? "settings" : "reporters"; A.open = null; render(); return; }
+  if (e.target.closest("input[type=checkbox],form")) { if (!e.target.closest("[data-act]")) return; }
   const t = e.target.closest("[data-filter],[data-sort],[data-open],[data-act]"); if (!t) return;
   if (t.dataset.filter) A.filter = t.dataset.filter;
   else if (t.dataset.sort) { A.dir = A.sort === t.dataset.sort ? -A.dir : 1; A.sort = t.dataset.sort; }
   else if (t.dataset.open) { A.open = t.dataset.open; A.confirm = false; }
-  else if (t.dataset.act === "back") { const k = A.open; A.open = null; A.confirm = false; render(); const row = document.querySelector(`[data-open="${k}"]`); if (row) row.focus(); return; }
+  else if (t.dataset.act === "back") { const k = A.open; A.open = null; A.confirm = false; A.ign = null; render(); const row = document.querySelector(`[data-open="${k}"]`); if (row) row.focus(); return; }
   else if (t.dataset.act === "admin-filter") A.onlyAdmin = !A.onlyAdmin;
   else if (t.dataset.act === "remove") A.confirm = true;
   else if (t.dataset.act === "remove-no") A.confirm = false;
+  else if (t.dataset.act === "bulk") A.bulk = true;
+  else if (t.dataset.act === "bulk-no") A.bulk = false;
+  else if (t.dataset.act === "bulk-yes") { A.removed.push(...A.sel); A.sel = []; A.bulk = false; }
+  else if (t.dataset.act === "sel-clear") { A.sel = []; A.bulk = false; }
+  else if (t.dataset.act === "sel-matching") A.sel = visible().map((r) => r.key);
+  else if (t.dataset.act === "state-all") { A.sel = visible().map((r) => r.key); A.bulk = true; }
+  else if (t.dataset.act === "ign") A.ign = true;
+  else if (t.dataset.act === "ign-no") A.ign = null;
   else if (t.dataset.act === "remove-yes") { A.removed.push(A.open); A.open = null; A.confirm = false; }
   render();
   if (A.open) { const b = document.querySelector(".back"); if (b) b.focus(); }
@@ -322,7 +418,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr.rw")) { e.preventDefault(); e.target.click(); } });
 document.addEventListener("input", (e) => { if (e.target.id === "rq") { A.q = e.target.value; render(); } });
 $("#stopBtn").onclick = () => { A.stopped = true; render(); };
-$("#resetBtn").onclick = () => { A.stopped = false; A.removed = []; A.filter = "all"; A.onlyAdmin = false; A.q = ""; A.open = null; render(); };
+$("#resetBtn").onclick = () => { A.sel = []; A.bulk = false; A.rules = []; A.ign = null; A.tab = "reporters"; A.forget = { on: false, days: 30 }; A.saved = ""; A.stopped = false; A.removed = []; A.filter = "all"; A.onlyAdmin = false; A.q = ""; A.open = null; render(); };
 $("#themeBtn").onclick = () => { const d = document.documentElement; const light = d.dataset.theme ? d.dataset.theme === "light" : matchMedia("(prefers-color-scheme: light)").matches; d.dataset.theme = light ? "dark" : "light"; };
 const tip = $("#tip");
 document.addEventListener("mouseover", (e) => { const h = e.target.closest("[data-hint]"); if (!h) { tip.hidden = true; return; } tip.textContent = h.dataset.hint; tip.hidden = false; const b = h.getBoundingClientRect(); tip.style.left = Math.max(8, Math.min(b.left, innerWidth - 270)) + "px"; const th = tip.offsetHeight; tip.style.top = (b.top - th - 8 >= 8 ? b.top - th - 8 : b.bottom + 8) + "px"; });

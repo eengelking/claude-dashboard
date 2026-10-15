@@ -292,9 +292,14 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   router.post('/reporters/remove', (req, res) => {
     if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
-    const { keys, state } = (req.body ?? {}) as { keys?: unknown; state?: unknown };
+    const { keys, state, match } = (req.body ?? {}) as { keys?: unknown; state?: unknown; match?: unknown };
     let removed: number;
-    if (Array.isArray(keys)) {
+    if (match !== undefined) {
+      // Every reporter a filter holds, which can be more than one page: what "select all that match" asks for.
+      const m = match as { q?: unknown; state?: unknown; admin?: unknown };
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return void res.status(400).json({ ok: false, error: 'match must be a filter' });
+      removed = reporters.removeMany(reporters.keys({ q: str(m.q), state: str(m.state), admin: m.admin === true }, now()));
+    } else if (Array.isArray(keys)) {
       if (keys.length < 1 || keys.length > MAX_BULK || keys.some((k) => typeof k !== 'string' || reporterKey(k) === null)) {
         return void res.status(400).json({ ok: false, error: `keys must be 1 to ${MAX_BULK} reporter keys` });
       }
@@ -302,7 +307,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     } else if (typeof state === 'string' && REPORTER_STATES.includes(state as ReporterState)) {
       removed = reporters.removeState(state as ReporterState, now());
     } else {
-      return void res.status(400).json({ ok: false, error: 'give keys or a state' });
+      return void res.status(400).json({ ok: false, error: 'give keys, a state or a match' });
     }
     audit(req, 'reporter_removed', `Removed ${plural(removed)} from the list`, { count: removed });
     res.json({ ok: true, removed });
