@@ -12,7 +12,9 @@ import { formatSse, SseHub } from './sse.js';
 import { ModelPriceStore } from './modelPrices.js';
 import { WallSettings } from './wallSettings.js';
 import { ActivityStore } from './activity.js';
-import { ACTIVITY_FEED, FeatureFlags } from './featureFlags.js';
+import { ACTIVITY_FEED, FeatureFlags, RESPOND } from './featureFlags.js';
+import { RespondStore } from './respond.js';
+import { MAIN_LOOP } from './protocol.js';
 import { checkReporter } from './compat.js';
 import { silentLogger, type Logger } from '../logging/logger.js';
 
@@ -94,6 +96,8 @@ export class Fleet {
   readonly activity: ActivityStore;
   /** The Admin's feature flags. Turning the activity feed off drops what it held; any change reaches open browsers. */
   readonly features: FeatureFlags;
+  /** Responding from Podium (#206): asks, answers and messages, in memory only. */
+  readonly respond: RespondStore;
   private readonly live = new Map<string, LiveEntry>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly startedAt: number;
@@ -112,9 +116,22 @@ export class Fleet {
     this.startedAt = now();
     this.features = new FeatureFlags(db.db, (id, on) => {
       if (id === ACTIVITY_FEED && !on) this.activity.clear();
+      // Responding needs both flags: either going off drops every ask and answer the server holds.
+      if ((id === ACTIVITY_FEED || id === RESPOND) && !on) this.respond.clear();
       this.hub.broadcast('snapshot', this.state());
     });
     this.activity = new ActivityStore(now, () => this.features.featureOn(ACTIVITY_FEED));
+    this.respond = new RespondStore(
+      now,
+      (sid) => {
+        if (this.live.has(sid)) this.scheduleSession(sid);
+      },
+      {
+        add: (sid, loop, ref, e) => this.activity.addPodium(sid, loop ?? MAIN_LOOP, ref, e),
+        update: (sid, ref, note) => this.activity.updatePodium(sid, ref, note),
+        remove: (sid, ref) => this.activity.removePodium(sid, ref),
+      },
+    );
     this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
     // A price change moves every cost on the wall, so open browsers get a fresh snapshot.
     this.prices = new ModelPriceStore(db.db, () => this.hub.broadcast('snapshot', this.state()));
@@ -127,6 +144,11 @@ export class Fleet {
 
   private get derive(): DeriveConfig {
     return { staleAfterMs: this.cfg.staleAfterMs, hookStaleAfterMs: this.cfg.hookStaleAfterMs, home: this.cfg.home };
+  }
+
+  /** Whether the Admin's switches let anyone respond: the respond and activity-feed flags. Authentication is the routes' check. */
+  respondFlagsOn(): boolean {
+    return this.features.featureOn(RESPOND) && this.features.featureOn(ACTIVITY_FEED);
   }
 
   isLive(id: string): boolean {
@@ -155,6 +177,7 @@ export class Fleet {
     const res = ingestReport(this.db, report, this.now(), owner);
     this.clockSkew.set(res.sessionId, res.clockSkewMs);
     this.activity.ingest(report, res.clockSkewMs);
+    this.respond.noteReport(report, this.respondFlagsOn());
     this.noteReporter(report, owner);
     const entry = this.live.get(res.sessionId);
     const row = this.db.getSession(res.sessionId);
@@ -265,6 +288,8 @@ export class Fleet {
         ownerGroup: this.db.groupOfOwner(row.owner),
         pricing: this.prices.pricing(),
         activityFeed: this.activity.feedOn(row.id),
+        respond: this.respond.info(row.id),
+        asks: this.respond.summaries(row.id),
       },
       now,
       this.derive,
@@ -395,6 +420,7 @@ export class Fleet {
     const wasLive = this.live.delete(id);
     this.clockSkew.delete(id);
     this.activity.dropSession(id);
+    this.respond.dropSession(id);
     const t = this.pending.get(id);
     if (t) clearTimeout(t);
     this.pending.delete(id);
@@ -431,6 +457,8 @@ export class Fleet {
     this.live.delete(row.id);
     this.clockSkew.delete(row.id);
     this.activity.dropSession(row.id);
+    this.respond.endSession(row.id);
+    this.respond.dropSession(row.id);
     const t = this.pending.get(row.id);
     if (t) clearTimeout(t);
     this.pending.delete(row.id);
@@ -458,6 +486,7 @@ export class Fleet {
   sweep(): void {
     const now = this.now();
     this.activity.expire();
+    this.respond.expire();
     const nowSec = Math.floor(now / 1000);
     const removed = { done: [] as string[], dropped: [] as string[] };
     for (const [id, entry] of [...this.live]) {

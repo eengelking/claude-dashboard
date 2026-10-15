@@ -12,6 +12,7 @@ import type { ModelPriceStore } from '../fleet/modelPrices.js';
 import { REPORTER_STATES, type IgnoreKind, type ReporterState, type ReporterStore } from '../fleet/reporters.js';
 import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
+import { Lockout } from '../fleet/lockout.js';
 import { createLogger, loggerFromLine, type Fields, type Logger } from '../logging/logger.js';
 
 export interface AdminRouterOptions {
@@ -32,6 +33,8 @@ export interface AdminRouterOptions {
   /** Wrong tries before a source is locked out, and for how long. */
   maxFails?: number;
   lockMs?: number;
+  /** The wrong-try counter, shared with the console's sign-in to respond (#206). Made from maxFails and lockMs when absent. */
+  lockout?: Lockout;
   /** The server's logger (#140): each Admin change is an `admin.<action>` event with the source address. */
   logger?: Logger;
   /** A plain line sink, kept for callers from before the logger. */
@@ -40,7 +43,6 @@ export interface AdminRouterOptions {
 
 const COOKIE = 'podium_admin';
 const MAX_SESSIONS = 20;
-const MAX_SOURCES = 1000;
 
 const sourceOf = (req: Request): string => sourceAddress(req.ip);
 
@@ -79,7 +81,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   const logger = opts.logger ?? (opts.log ? loggerFromLine(opts.log) : createLogger({ secrets: opts.secret ? [opts.secret] : [] }));
   // session id -> last activity, and the administrator who opened it (null for the admin secret)
   const sessions = new Map<string, { last: number; personId: number | null }>();
-  const fails = new Map<string, { n: number; lockedUntil: number }>();
+  const lockout = opts.lockout ?? new Lockout(now, maxFails, lockMs);
   const router = Router();
 
   /**
@@ -157,9 +159,9 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   router.post('/unlock', (req, res) => {
     const src = sourceOf(req);
-    const state = fails.get(src);
-    if (state && state.lockedUntil > now()) {
-      res.status(429).json({ ok: false, error: 'too many wrong tries', retryAfterSec: Math.ceil((state.lockedUntil - now()) / 1000) });
+    const lockedFor = lockout.lockedFor(src);
+    if (lockedFor > 0) {
+      res.status(429).json({ ok: false, error: 'too many wrong tries', retryAfterSec: Math.ceil(lockedFor / 1000) });
       return;
     }
     const given = typeof req.body?.secret === 'string' ? req.body.secret : '';
@@ -167,7 +169,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     const bySecret = given !== '' && opts.secret !== null && safeEqualStr(opts.secret, given);
     const administrator = bySecret || given === '' ? undefined : people.findAdministratorByToken(given);
     if (bySecret || administrator) {
-      fails.delete(src);
+      lockout.succeed(src);
       if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value as string);
       const sid = randomBytes(32).toString('hex');
       sessions.set(sid, { last: now(), personId: administrator?.id ?? null });
@@ -177,11 +179,8 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       res.json({ ok: true });
       return;
     }
-    const n = (state?.n ?? 0) + 1; // a lock resets the count, so an expired lock starts from zero
-    if (fails.size >= MAX_SOURCES) fails.delete(fails.keys().next().value as string);
-    const locked = n >= maxFails;
-    fails.set(src, { n: locked ? 0 : n, lockedUntil: locked ? now() + lockMs : 0 });
-    audit(req, 'unlock_failed', locked ? `Wrong secret (${n}); locked for ${Math.round(lockMs / 60_000)} minutes` : `Wrong secret (${n})`, { failures: n, locked });
+    const { n, locked } = lockout.fail(src);
+    audit(req, 'unlock_failed', locked ? `Wrong secret (${n}); locked for ${Math.round(lockout.lockMs / 60_000)} minutes` : `Wrong secret (${n})`, { failures: n, locked });
     res.status(401).json({ ok: false, error: 'wrong secret' });
   });
 
@@ -382,7 +381,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   // ---- settings and log -----------------------------------------------------------------------
 
-  const featureList = () => FEATURES.map((f) => ({ ...f, on: features ? features.featureOn(f.id) : true }));
+  const featureList = () => FEATURES.map(({ defaultOn, ...f }) => ({ ...f, on: features ? features.featureOn(f.id) : defaultOn }));
   const noticeList = () => NOTICES.map((n) => ({ ...n, on: wall ? wall.noticeOn(n.id) : true }));
 
   router.get('/settings', (_req, res) => {

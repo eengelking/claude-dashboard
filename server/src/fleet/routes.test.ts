@@ -319,7 +319,7 @@ describe('the activity feed (#118)', () => {
     const r = live();
     await request(app).post('/api/fleet/report').send(r);
     expect((await request(app).get(url(r, r.agents[0]!.id))).body).toMatchObject({ enabled: true, live: true });
-    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': true });
+    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': true, respond: false });
   });
 
   it('with the Admin flag off: no lease, enabled: false, nothing watched, nothing kept; back on resumes', async () => {
@@ -336,7 +336,7 @@ describe('the activity feed (#118)', () => {
     // Turning it off drops every lease and entry at once.
     fleet.features.setFeature('activity-feed', false);
     expect(fleet.activity.size).toBe(0);
-    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': false });
+    expect((await request(app).get('/api/fleet/state')).body.features).toEqual({ 'activity-feed': false, respond: false });
 
     const off = await request(app).get(url(r, aid));
     expect(off.status).toBe(200);
@@ -366,7 +366,7 @@ describe('the activity feed (#118)', () => {
     fleet.features.setFeature('activity-feed', false);
     const all = seen.join('');
     expect(all).toContain('event: snapshot');
-    expect(all).toContain('"features":{"activity-feed":false}');
+    expect(all).toContain('"features":{"activity-feed":false,"respond":false}');
   });
 
   it('a session that is deleted takes its feed with it', async () => {

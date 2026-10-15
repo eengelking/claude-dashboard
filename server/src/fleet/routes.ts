@@ -9,6 +9,8 @@ import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow }
 import { ReporterStore, type IgnoreRule, type IgnoreTarget, type ReporterSeen } from './reporters.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
+import { Lockout } from './lockout.js';
+import { mountRespondRoutes, replyFor } from './respondRoutes.js';
 
 export interface FleetRouterOptions {
   /** The admin secret (PODIUM_TOKEN). When set, POST /report, DELETE and POST /hook need a credential in X-Podium-Token: this, or a person's token. */
@@ -21,12 +23,14 @@ export interface FleetRouterOptions {
   logger?: Logger;
   /** A plain line sink, kept for callers from before the logger: text lines, as `logger` would print them. */
   log?: (line: string) => void;
+  /** Wrong-try counter shared with Admin's unlock, for the sign-in to respond (#206). A fresh one when absent. */
+  lockout?: Lockout;
 }
 
 export const BODY_LIMIT = '512kb';
 
 /** Who a request's X-Podium-Token says it is. */
-type Identity = { kind: 'person'; person: PersonRow } | { kind: 'admin' } | { kind: 'open' };
+export type Identity = { kind: 'person'; person: PersonRow } | { kind: 'admin' } | { kind: 'open' };
 
 /** Who a request is, or why it was refused (the reason goes to the log, never to the client, and never the token). */
 function identify(opts: FleetRouterOptions, given: unknown): Identity | { refused: string } {
@@ -205,7 +209,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
         status: result.report.session.status,
         reporter_version: result.report.reporter.version,
       });
-      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version), watch: fleet.activity.watched(out.sessionId) });
+      res.json({ ok: true, serverTime: fleet.now(), ackedEvents: result.report.events.length, sessionId: out.sessionId, liveSessions: fleet.visibleCount(), serverVersion: serverVersion(), reporterSupport: REPORTER_SUPPORT, reporterCompat: checkReporter(result.report.reporter.version), watch: fleet.activity.watched(out.sessionId), ...replyFor(fleet, opts.token ?? null, out.sessionId) });
     } catch (err) {
       if (err instanceof OwnerConflict) {
         logger.warn('report.conflict', `podium: refused a report for session ${result.report.session.id}: it belongs to someone else`, {
@@ -433,6 +437,17 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
 
   router.get('/health', (_req, res) => {
     res.json(fleet.health());
+  });
+
+  // Responding from Podium (#206): the mod's ask routes and the browser's /respond routes.
+  mountRespondRoutes(router, {
+    fleet,
+    token: opts.token ?? null,
+    people: opts.people ?? null,
+    logger,
+    lockout: opts.lockout ?? new Lockout(fleet.now),
+    requireToken,
+    identityOf,
   });
 
   router.use((_req, res) => {

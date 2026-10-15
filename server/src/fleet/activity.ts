@@ -18,9 +18,22 @@ export const ACTIVITY_EVERY_SECONDS = [5, 10, 20, 30, 60] as const;
  */
 export const ACTIVITY_LEASE_SLACK_MS = 15_000;
 
-/** A stored entry, numbered in the order the server took it, so a viewer can tell what is new. */
-export interface ActivityEntryView extends ActivityEntry {
+/**
+ * A stored entry, numbered in the order the server took it, so a viewer can tell what is new. `podium` is an answer,
+ * message or command sent from Podium (#206): the server adds it, with who sent it and an optional note.
+ */
+export interface ActivityEntryView {
   seq: number;
+  at: number;
+  kind: ActivityEntry['kind'] | 'podium';
+  text: string;
+  by?: string;
+  note?: string | null;
+}
+
+/** An entry as the lease holds it: a Podium entry also keeps the delivery it is about, to update it later. */
+interface HeldEntry extends ActivityEntryView {
+  ref?: string;
 }
 
 /**
@@ -39,7 +52,7 @@ interface Lease {
   since: number;
   until: number;
   seq: number;
-  entries: ActivityEntryView[];
+  entries: HeldEntry[];
 }
 
 /** The interval a request asked for, in seconds: one of ACTIVITY_EVERY_SECONDS, 5 for anything else. */
@@ -87,7 +100,7 @@ export class ActivityStore {
       loops.set(loop, lease);
     }
     lease.until = Math.max(lease.until, now + everySeconds * 1000 + ACTIVITY_LEASE_SLACK_MS);
-    return { entries: lease.entries.map((e) => ({ ...e })), since: lease.since };
+    return { entries: lease.entries.map(({ ref: _ref, ...e }) => e), since: lease.since };
   }
 
   /** The loops of a session someone is watching: the report reply's `watch`. */
@@ -121,13 +134,39 @@ export class ActivityStore {
     for (const a of report.agents) take(a.id, a.activity);
   }
 
+  /**
+   * An answer, message or command sent from Podium (#206), as an entry of the loop it is about, so the modal's feed shows
+   * it. Kept only while someone watches that loop, like every entry.
+   */
+  addPodium(sessionId: string, loop: string, ref: string, e: { at: number; text: string; by: string; note: string | null }): void {
+    if (!this.isOn()) return;
+    const lease = this.leases.get(sessionId)?.get(loop);
+    if (!lease) return;
+    lease.entries.push({ seq: ++lease.seq, at: e.at, kind: 'podium', text: e.text.slice(0, LIMITS.activityText), by: e.by, note: e.note, ref });
+    if (lease.entries.length > LIMITS.activityEntries) lease.entries.splice(0, lease.entries.length - LIMITS.activityEntries);
+  }
+
+  /** A Podium entry's note changed (queued, then taken). */
+  updatePodium(sessionId: string, ref: string, note: string | null): void {
+    for (const lease of this.leases.get(sessionId)?.values() ?? []) for (const e of lease.entries) if (e.ref === ref) e.note = note;
+  }
+
+  /** A Podium entry for something the session never took (discarded, refused, or the ask closed first). */
+  removePodium(sessionId: string, ref: string): void {
+    for (const lease of this.leases.get(sessionId)?.values() ?? []) {
+      const i = lease.entries.findIndex((e) => e.ref === ref);
+      if (i >= 0) lease.entries.splice(i, 1);
+    }
+  }
+
   /** Adds what is new in a reporter's snapshot (its last 20, oldest first) and keeps the last 20. */
   private merge(lease: Lease, list: ActivityEntry[], skewMs: number): void {
     for (const e of list) {
       if (e.at - skewMs < lease.since) continue;
-      const last = lease.entries[lease.entries.length - 1];
+      // Compared with the reporter's own entries only: a Podium entry carries the server's time, not the reporter's.
+      const last = lease.entries.filter((x) => x.kind !== 'podium').at(-1);
       if (last && e.at < last.at) continue;
-      if (last && e.at === last.at && lease.entries.some((x) => x.at === e.at && x.kind === e.kind && x.text === e.text)) continue;
+      if (last && e.at === last.at && lease.entries.some((x) => x.kind !== 'podium' && x.at === e.at && x.kind === e.kind && x.text === e.text)) continue;
       lease.entries.push({ seq: ++lease.seq, at: e.at, kind: e.kind, text: e.text });
     }
     if (lease.entries.length > LIMITS.activityEntries) lease.entries.splice(0, lease.entries.length - LIMITS.activityEntries);
