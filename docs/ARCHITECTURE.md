@@ -46,7 +46,7 @@ functions in `logic.ts` and `chart.ts`. Styles are `fleet.css`, the mockup's tok
 into `sessions.owner`; for a person's token the report's `userName` must also match, so the token decides who
 and the name is only a consistency check. `people.ts` owns the migration-6 tables (people, groups,
 person_machines, admin_log, settings) and every paged query. The Admin API is a separate router mounted at
-`/api/admin`: an unlock exchanges the admin secret for a random session id held in a process-memory map and an
+`/api/admin`: an unlock exchanges the admin secret, or the token of a person in the built-in Administrators group (#172), for a random session id held in a process-memory map (with who opened it, checked again on every request) and an
 `HttpOnly; SameSite=Strict` cookie, with idle expiry, a per-address lockout and a required `X-Podium-Admin`
 header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`) holds a new token in component
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the

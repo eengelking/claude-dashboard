@@ -91,6 +91,7 @@ export function PeopleTab(props: {
 
   const rows = list.data?.rows ?? [];
   const groups = list.data?.groups ?? [];
+  const adminIds = new Set(groups.filter((g) => g.builtIn).map((g) => g.id));
   return (
     <>
       <Section id="admin-create-h" title="Create user" help="Adds the person and makes their token. The token is shown once, right after you create it.">
@@ -111,7 +112,7 @@ export function PeopleTab(props: {
           )}
         </Panel>
       </Section>
-      <Section id="admin-people-h" title="Reporting people" help="Revoking a token takes effect on the next report.">
+      <Section id="admin-people-h" title="Reporting people" help="Revoking a token takes effect on the next report. People in the Administrators group can also open Admin with their token; moving one out of it, or revoking their token, locks their open Admin session.">
         <Panel>
           <div className="tool">
             <div className="f grow inline">
@@ -157,6 +158,7 @@ export function PeopleTab(props: {
                         <tr key={p.id} className={revoked ? "revoked" : ""}>
                           <td>
                             <span className="who">{p.name}</span>
+                            {adminIds.has(p.groupId ?? -1) && !revoked && <span className="tag">administrator</span>}
                           </td>
                           <td>
                             <label className="vh" htmlFor={`admin-grp-${p.id}`}>
@@ -197,7 +199,7 @@ export function PeopleTab(props: {
                           <td>
                             {pend ? (
                               <div className="confirm">
-                                <span>{pend.kind === "rotate" ? "Rotate? Their reporter stops until it has the new token." : "Revoke? Their reporter is refused at once."}</span>
+                                <span>{pend.kind === "rotate" ? "Rotate? Their reporter stops until it has the new token." : (adminIds.has(p.groupId ?? -1) ? "Revoke? Their reporter is refused at once and their open Admin session locks." : "Revoke? Their reporter is refused at once.")}</span>
                                 <button type="button" className={`btn sm ${pend.kind === "revoke" ? "dng" : ""}`} onClick={() => confirm(p, pend.kind)}>
                                   {pend.kind === "rotate" ? "Rotate token" : "Revoke token"}
                                 </button>

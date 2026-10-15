@@ -26,7 +26,7 @@ describe('openDb', () => {
     const db = openDb(':memory:');
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['admin_log', 'agent_texts', 'agents', 'blowouts', 'events', 'groups', 'people', 'person_machines', 'reporter_ignores', 'reporter_sessions', 'reporters', 'samples', 'schema_migrations', 'sessions', 'settings']));
-    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }]);
     db.close();
   });
 
@@ -35,7 +35,7 @@ describe('openDb', () => {
     tmpDirs.push(dir);
     const file = path.join(dir, 'fleet.db');
     const old = openDb(file);
-    old.exec('DELETE FROM schema_migrations WHERE version >= 12');
+    old.exec('DELETE FROM schema_migrations WHERE version BETWEEN 12 AND 13');
     old.exec(`INSERT INTO reporters (key, kind, machine_id, source_address, reporter_version, first_seen_at, last_seen_at) VALUES
       ('addr:10.0.0.1', 'mod', NULL, '10.0.0.1', '0.13.0', 100, 200),
       ('addr:10.0.0.2', 'mod', NULL, '10.0.0.2', '0.13.0', 300, 400),
@@ -61,7 +61,7 @@ describe('openDb', () => {
     tmpDirs.push(dir);
     const file = path.join(dir, 'fleet.db');
     const old = openDb(file);
-    old.exec('DELETE FROM schema_migrations WHERE version >= 12');
+    old.exec('DELETE FROM schema_migrations WHERE version BETWEEN 12 AND 13');
     old.exec(`INSERT INTO reporters (key, kind, machine_id, source_address, reporter_version, first_seen_at, last_seen_at) VALUES
       ('addr:a', 'mod', NULL, 'a', '0.13.0', 100, 200), ('addr:b', 'mod', NULL, 'b', '0.13.0', 300, 400), ('addr:c', 'mod', NULL, 'c', '0.13.0', 500, 600)`);
     old.exec(`INSERT INTO reporter_sessions (reporter_key, session_id) VALUES ('addr:a', 's1'), ('addr:b', 's1'), ('addr:b', 's2'), ('addr:c', 's2')`);
@@ -95,7 +95,7 @@ describe('openDb', () => {
     old.exec('DELETE FROM schema_migrations WHERE version >= 2');
     old.close();
     const db = openDb(file);
-    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }]);
     expect(db.prepare("SELECT tool_calls, tool_counts_json FROM agents WHERE id = 'a'").get()).toEqual({ tool_calls: 7, tool_counts_json: null });
     expect(db.prepare("SELECT name, loop_json, files_json, attached, detached_at, owner, machine_json FROM sessions WHERE id = 's1'").get()).toEqual({ name: 'demo', loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null });
     db.close();
@@ -110,7 +110,7 @@ describe('openDb', () => {
     a.close();
     const db = openDb(file);
     expect(db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 13 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 14 });
     expect(db.prepare('SELECT name FROM sessions').all()).toEqual([{ name: 'demo' }]);
     expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     db.close();

@@ -186,6 +186,13 @@ DROP TABLE rmap0;`,
   UNIQUE (kind, pattern)
 );`,
   },
+  {
+    version: 14,
+    // The built-in Administrators group and who made each Admin change (issue #172). A group already named
+    // Administrators is adopted as the built-in one. admin_log.actor is NULL for rows from before it existed.
+    sql: `INSERT OR IGNORE INTO groups (name, name_lower, created_at) VALUES ('Administrators', 'administrators', CAST(strftime('%s','now') AS INTEGER) * 1000);
+ALTER TABLE admin_log ADD COLUMN actor TEXT;`,
+  },
 ];
 
 export interface SessionRow {

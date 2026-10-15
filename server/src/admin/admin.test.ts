@@ -188,7 +188,7 @@ describe('groups and settings', () => {
     const p = await agent.post('/api/admin/people').set(H).send({ name: 'Dana' });
     expect((await agent.put(`/api/admin/people/${p.body.person.id}/group`).set(H).send({ groupId: g.body.id })).status).toBe(200);
     expect((await agent.put(`/api/admin/people/${p.body.person.id}/group`).set(H).send({ groupId: 999 })).status).toBe(404);
-    expect((await agent.get('/api/admin/groups').set(H)).body.rows[0]).toMatchObject({ name: 'Frontend', members: ['Dana'] });
+    expect((await agent.get('/api/admin/groups').set(H)).body.rows.find((r: { name: string }) => r.name === 'Frontend')).toMatchObject({ members: ['Dana'] });
     expect((await agent.delete(`/api/admin/groups/${g.body.id}`).set(H)).status).toBe(200);
     expect((await agent.get('/api/admin/people').set(H)).body.rows[0]).toMatchObject({ name: 'Dana', groupId: null });
     expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((x) => x.kind)).toEqual(

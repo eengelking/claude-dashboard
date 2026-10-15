@@ -4,7 +4,7 @@
 // in the response that creates or rotates it.
 import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
-import { PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
+import { ADMIN_SECRET_ACTOR, PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
 import { safeEqualStr } from '../fleet/tokens.js';
 import { serverVersion } from '../fleet/compat.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
@@ -77,7 +77,8 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   const maxFails = opts.maxFails ?? 5;
   const lockMs = opts.lockMs ?? 15 * 60_000;
   const logger = opts.logger ?? (opts.log ? loggerFromLine(opts.log) : createLogger({ secrets: opts.secret ? [opts.secret] : [] }));
-  const sessions = new Map<string, number>(); // session id -> last activity
+  // session id -> last activity, and the administrator who opened it (null for the admin secret)
+  const sessions = new Map<string, { last: number; personId: number | null }>();
   const fails = new Map<string, { n: number; lockedUntil: number }>();
   const router = Router();
 
@@ -85,11 +86,19 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
    * An Admin Log entry, and the same change as an `admin.<kind>` log event. The event carries the action, the
    * source address and the ids in `fields`, never the entry's free text (names, prices) or a token.
    */
-  const audit = (req: Request, kind: string, detail: string, fields: Fields = {}) => {
+  const audit = (req: Request, kind: string, detail: string, fields: Fields = {}, actor: string | null = actorOf(req)) => {
     const src = sourceOf(req);
-    people.log(kind, detail, src, now());
+    people.log(kind, detail, src, now(), actor);
     logger.log(kind === 'unlock_failed' ? 'warn' : 'info', `admin.${kind}`, `podium: admin ${kind.replace(/_/g, ' ')} from ${src}`, { action: kind, source: src, ...fields });
   };
+
+  /** Who an unlocked request is from: the administrator's name, or the admin secret. Null when there is no open session. */
+  function actorOf(req: Request): string | null {
+    const sid = readCookie(req, COOKIE);
+    const s = sid ? sessions.get(sid) : undefined;
+    if (!s) return null;
+    return s.personId === null ? ADMIN_SECRET_ACTOR : (people.getPerson(s.personId)?.name ?? null);
+  }
 
   router.use((_req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -134,14 +143,15 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   function sessionValid(req: Request): boolean {
     const sid = readCookie(req, COOKIE);
     if (!sid) return false;
-    const last = sessions.get(sid);
-    if (last === undefined) return false;
-    if (now() - last > idleMs) {
+    const s = sessions.get(sid);
+    if (s === undefined) return false;
+    // A session an administrator opened ends the moment they leave Administrators or their token is revoked.
+    if (now() - s.last > idleMs || (s.personId !== null && !people.isAdministrator(s.personId))) {
       sessions.delete(sid);
       return false;
     }
     sessions.delete(sid); // re-insert so the oldest entry is the least recently used, which is the one evicted at the cap
-    sessions.set(sid, now());
+    sessions.set(sid, { last: now(), personId: s.personId });
     return true;
   }
 
@@ -153,13 +163,17 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       return;
     }
     const given = typeof req.body?.secret === 'string' ? req.body.secret : '';
-    if (given && opts.secret !== null && safeEqualStr(opts.secret, given)) {
+    // The admin secret, or the token of a person in Administrators (issue #172). Both count toward the same lockout when wrong.
+    const bySecret = given !== '' && opts.secret !== null && safeEqualStr(opts.secret, given);
+    const administrator = bySecret || given === '' ? undefined : people.findAdministratorByToken(given);
+    if (bySecret || administrator) {
       fails.delete(src);
       if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value as string);
       const sid = randomBytes(32).toString('hex');
-      sessions.set(sid, now());
+      sessions.set(sid, { last: now(), personId: administrator?.id ?? null });
       res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'strict', path: '/api/admin', secure: req.secure });
-      audit(req, 'unlock', 'Admin unlocked');
+      const actor = administrator ? administrator.name : ADMIN_SECRET_ACTOR;
+      audit(req, 'unlock', 'Admin unlocked', administrator ? { person_id: administrator.id } : {}, actor);
       res.json({ ok: true });
       return;
     }
@@ -267,9 +281,13 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     const id = idParam(req.params.id);
     if (id === null) return void res.status(400).json({ ok: false, error: 'bad id' });
     const g = people.getGroup(id);
-    if (!g || !people.deleteGroup(id)) return void res.status(404).json({ ok: false, error: 'unknown group' });
-    audit(req, 'group_deleted', `Deleted the group ${g.name}`, { group_id: id });
-    res.json({ ok: true });
+    try {
+      if (!g || !people.deleteGroup(id)) return void res.status(404).json({ ok: false, error: 'unknown group' });
+      audit(req, 'group_deleted', `Deleted the group ${g.name}`, { group_id: id });
+      res.json({ ok: true });
+    } catch (err) {
+      fail(res, err);
+    }
   });
 
   // ---- reporters (#142) -----------------------------------------------------------------------

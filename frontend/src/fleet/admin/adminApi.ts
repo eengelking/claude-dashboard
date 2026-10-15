@@ -24,6 +24,8 @@ export interface GroupRow {
   name: string;
   createdAt: number;
   members: string[];
+  /** Administrators: cannot be deleted, and the admin secret is always a member. */
+  builtIn: boolean;
 }
 export interface LogRow {
   id: number;
@@ -31,6 +33,8 @@ export interface LogRow {
   kind: string;
   detail: string;
   source: string;
+  /** Who made the change: a person's name, or "Admin secret". Null for entries from before it was recorded. */
+  actor: string | null;
 }
 export type ReporterState = "reporting" | "idle" | "silent" | "restart";
 export type ReporterSort = "state" | "name" | "who" | "token" | "ver" | "last" | "sessions";
@@ -82,6 +86,7 @@ export type RemoveBody = { keys: string[] } | { match: { q?: string; state?: Rep
 export interface GroupChoice {
   id: number;
   name: string;
+  builtIn: boolean;
 }
 
 /** USD per million tokens (issue #117). */

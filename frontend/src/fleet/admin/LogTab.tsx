@@ -37,6 +37,7 @@ export function LogTab(props: {
                 <thead>
                   <tr>
                     <th>When</th>
+                    <th>Who</th>
                     <th>What happened</th>
                     <th>From</th>
                   </tr>
@@ -45,6 +46,7 @@ export function LogTab(props: {
                   {rows.map((r) => (
                     <tr key={r.id}>
                       <td className="mono muted nowrap">{when(r.t)}</td>
+                      <td className="nowrap">{r.actor ?? <span className="muted">Not recorded</span>}</td>
                       <td className={r.kind.includes("failed") ? "bad" : ""}>{r.detail}</td>
                       <td className="mono muted">{r.source}</td>
                     </tr>

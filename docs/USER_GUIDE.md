@@ -313,8 +313,8 @@ Effort is drawn as five bars with no text: more lit bars mean more effort, and t
 ## Admin
 
 Admin is for the person who runs the server. Open it with the **Admin** button in the top bar's upper right
-(or `#/admin`) and enter the admin secret, which `podiumctl token` prints. It locks again after 10 minutes
-without activity, and five wrong secrets lock it for 15 minutes. A server started without a token has no Admin,
+(or `#/admin`) and enter the admin secret, which `podiumctl token` prints, or your own token if you are in the **Administrators** group (see Groups). It locks again after 10 minutes
+without activity, and five wrong secrets or tokens lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
 Admin has seven pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
@@ -327,7 +327,9 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   stale and drop as usual. The search finds a person by name, group or machine.
 - **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is
   a label for arranging the console (Group by Group, see "People" above) and grants nothing. Deleting a group
-  moves its people to "No group". A change shows on the wall with each session's next report, within a few
+  moves its people to "No group". **Administrators** is built in and cannot be renamed or deleted. The admin secret is always
+  in it. Put a person in it and they can open Admin with their own token; move them out, or revoke their token, and their open
+  Admin session locks. A change shows on the wall with each session's next report, within a few
   seconds.
 - **Reporters.** Every machine that has reported to this server, one row each, kept after its sessions are
   deleted, so you can check that a reporter is connected and see which ones ever were. The strip on top counts
@@ -371,7 +373,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   Code reports which writes were 1-hour ones.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
-- **Admin log.** Unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
+- **Admin log.** Who made each change (a person, or the admin secret), unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.
 

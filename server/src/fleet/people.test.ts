@@ -97,7 +97,7 @@ describe('groups', () => {
     const a = store.createPerson('Dana');
     expect(store.setGroup(a.person.id, g.id)).toBe(true);
     expect(store.setGroup(a.person.id, 999)).toBe(false);
-    expect(store.listGroups({ page: 1, pageSize: 50 }).rows[0]).toMatchObject({ name: 'Frontend', members: ['Dana'] });
+    expect(store.listGroups({ page: 1, pageSize: 50 }).rows.find((r) => r.name === 'Frontend')).toMatchObject({ members: ['Dana'], builtIn: false });
   });
 
   it('deleting a group returns its people to no group and keeps them', () => {

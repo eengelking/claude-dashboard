@@ -177,7 +177,7 @@ afterEach(() => {
 });
 
 async function unlock() {
-  fireEvent.change(await screen.findByLabelText("Admin secret"), { target: { value: "right" } });
+  fireEvent.change(await screen.findByLabelText("Admin secret or personal token"), { target: { value: "right" } });
   fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
   await screen.findByRole("navigation", { name: "Admin sections" });
 }
@@ -186,11 +186,11 @@ describe("Admin lock screen", () => {
   it("asks for the secret, rejects a wrong one, and opens with the right one", async () => {
     fakeServer();
     render(<AdminView />);
-    fireEvent.change(await screen.findByLabelText("Admin secret"), { target: { value: "nope" } });
+    fireEvent.change(await screen.findByLabelText("Admin secret or personal token"), { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("That is not the admin secret.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("That is not the admin secret, or a token that can open Admin.");
     expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
-    expect((screen.getByLabelText("Admin secret") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Admin secret or personal token") as HTMLInputElement).value).toBe("");
     await unlock();
     expect(screen.getByRole("button", { name: /People/ })).toHaveAttribute("aria-current", "page");
   });
@@ -205,7 +205,7 @@ describe("Admin lock screen", () => {
     fakeServer({ enabled: false });
     render(<AdminView />);
     expect(await screen.findByText("Admin is off")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Admin secret")).toBeNull();
+    expect(screen.queryByLabelText("Admin secret or personal token")).toBeNull();
   });
 });
 
@@ -249,7 +249,7 @@ describe("tokens", () => {
     await screen.findByText(/token: pdm_/);
     s.expire = true;
     fireEvent.click(screen.getByRole("button", { name: /Admin log/ }));
-    expect(await screen.findByLabelText("Admin secret")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/locked after 10 minutes/);
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
   });
@@ -691,7 +691,7 @@ describe("Reporters tab (#142)", () => {
     const state = await openReporters();
     state.expire = true;
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
-    expect(await screen.findByLabelText("Admin secret")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
   });
 });
 

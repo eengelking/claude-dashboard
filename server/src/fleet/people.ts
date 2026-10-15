@@ -1,7 +1,7 @@
 // People, their tokens, groups, the admin log and server settings (issue #36). All statements are parameterized.
 // A token is returned once, at creation or rotation, and never stored; see tokens.ts.
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
-import { newPersonToken } from './tokens.js';
+import { newPersonToken, parsePersonToken, tokenMatches } from './tokens.js';
 
 export type PeopleErrorCode = 'duplicate' | 'invalid' | 'not_found';
 export class PeopleError extends Error {
@@ -14,6 +14,10 @@ export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 50;
 /** The owner of a session reported with the admin secret. */
 export const ADMIN_OWNER = 'Admin';
+/** The built-in group (issue #172) whose members can open Admin with their own token. It cannot be deleted. */
+export const ADMINISTRATORS_GROUP = 'Administrators';
+/** The actor the Admin log records for a change made with the admin secret. */
+export const ADMIN_SECRET_ACTOR = 'Admin secret';
 const NAME_MAX = 48;
 const GROUP_MAX = 24;
 
@@ -38,6 +42,8 @@ export interface GroupListRow {
   name: string;
   createdAt: number;
   members: string[];
+  /** True for Administrators: it cannot be deleted, and the admin secret is always a member. */
+  builtIn: boolean;
 }
 export interface LogRow {
   id: number;
@@ -45,6 +51,8 @@ export interface LogRow {
   kind: string;
   detail: string;
   source: string;
+  /** The person who made the change, 'Admin secret' for the secret; null for a row from before this was recorded. */
+  actor: string | null;
 }
 export interface Paged<T> {
   total: number;
@@ -246,6 +254,7 @@ export class PeopleStore {
 
   /** Deletes a group. Its people stay and move to no group (ON DELETE SET NULL). */
   deleteGroup(id: number): boolean {
+    if (id === this.administratorsGroupId()) throw new PeopleError('invalid', `${ADMINISTRATORS_GROUP} is built in and cannot be deleted`);
     return Number(this.stmt('DELETE FROM groups WHERE id = ?').run(id).changes) > 0;
   }
 
@@ -256,6 +265,7 @@ export class PeopleStore {
       pageSize,
       (page - 1) * pageSize,
     ) as unknown as { id: number; name: string; created_at: number }[];
+    const adminsId = this.administratorsGroupId();
     const members = new Map<number, string[]>();
     if (rows.length) {
       const ids = rows.map((g) => g.id);
@@ -268,13 +278,37 @@ export class PeopleStore {
       total,
       page,
       pageSize,
-      rows: rows.map((g) => ({ id: g.id, name: g.name, createdAt: g.created_at, members: members.get(g.id) ?? [] })),
+      rows: rows.map((g) => ({ id: g.id, name: g.name, createdAt: g.created_at, members: members.get(g.id) ?? [], builtIn: g.id === adminsId })),
     };
   }
 
   /** Every group, for the pick list on the People tab (groups are few; people are paged). */
-  allGroups(): { id: number; name: string }[] {
-    return this.stmt('SELECT id, name FROM groups ORDER BY name_lower').all() as unknown as { id: number; name: string }[];
+  allGroups(): { id: number; name: string; builtIn: boolean }[] {
+    const adminsId = this.administratorsGroupId();
+    const rows = this.stmt('SELECT id, name FROM groups ORDER BY name_lower').all() as unknown as { id: number; name: string }[];
+    return rows.map((g) => ({ ...g, builtIn: g.id === adminsId }));
+  }
+
+  // ---- administrators (issue #172) -------------------------------------------------------------
+
+  administratorsGroupId(): number | null {
+    const r = this.stmt('SELECT id FROM groups WHERE name_lower = ?').get(ADMINISTRATORS_GROUP.toLowerCase()) as { id: number } | undefined;
+    return r?.id ?? null;
+  }
+
+  /** True when the person exists, their token is not revoked and they are in Administrators. */
+  isAdministrator(personId: number): boolean {
+    const p = this.getPerson(personId);
+    return !!p && p.revokedAt === null && p.groupId !== null && p.groupId === this.administratorsGroupId();
+  }
+
+  /** The administrator a presented token belongs to, or undefined (unknown, revoked, wrong token or not in Administrators). */
+  findAdministratorByToken(token: string): PersonRow | undefined {
+    const parsed = parsePersonToken(token);
+    if (!parsed) return undefined;
+    const p = this.findByKeyId(parsed.keyId);
+    if (!p || !tokenMatches(token, p.tokenHash)) return undefined;
+    return this.isAdministrator(p.id) ? p : undefined;
   }
 
   // ---- settings and log -----------------------------------------------------------------------
@@ -292,19 +326,20 @@ export class PeopleStore {
   }
 
   /** Never pass a token or the admin secret in `detail`. */
-  log(kind: string, detail: string, source: string, now = Date.now()): void {
-    this.stmt('INSERT INTO admin_log (t, kind, detail, source) VALUES (?, ?, ?, ?)').run(
+  log(kind: string, detail: string, source: string, now = Date.now(), actor: string | null = null): void {
+    this.stmt('INSERT INTO admin_log (t, kind, detail, source, actor) VALUES (?, ?, ?, ?, ?)').run(
       now,
       kind.slice(0, 40),
       detail.slice(0, 300),
       source.slice(0, 80),
+      actor === null ? null : actor.slice(0, 80),
     );
   }
 
   listLog(opts: Partial<PageIn>): Paged<LogRow> {
     const { page, pageSize } = clampPage(opts);
     const total = (this.stmt('SELECT COUNT(*) AS n FROM admin_log').get() as { n: number }).n;
-    const rows = this.stmt('SELECT id, t, kind, detail, source FROM admin_log ORDER BY id DESC LIMIT ? OFFSET ?').all(
+    const rows = this.stmt('SELECT id, t, kind, detail, source, actor FROM admin_log ORDER BY id DESC LIMIT ? OFFSET ?').all(
       pageSize,
       (page - 1) * pageSize,
     ) as unknown as LogRow[];
