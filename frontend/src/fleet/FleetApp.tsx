@@ -331,8 +331,6 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
           reporters={reporters}
           outdated={outdated}
           newer={newer}
-          lastMessageAt={state.lastMessageAt}
-          now={now}
           collapsed={panes.collapsed.top}
           onCollapse={() => toggle("top")}
           wall={wallButton}

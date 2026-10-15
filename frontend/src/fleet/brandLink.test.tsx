@@ -15,7 +15,7 @@ function quietServer() {
 
 describe("logo link", () => {
   it("takes the wall's logo to the fleet page", () => {
-    render(<TopBar phase="live" reporters={1} lastMessageAt={0} now={0} />);
+    render(<TopBar phase="live" reporters={1} />);
     const link = screen.getByRole("link", { name: "Podium, fleet" });
     expect(link).toHaveAttribute("href", "#/");
     expect(link).toHaveTextContent("Podium");
