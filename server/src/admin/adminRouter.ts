@@ -273,7 +273,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
 
   // ---- reporters (#142) -----------------------------------------------------------------------
 
-  const reporterKey = (v: string): string | null => (/^[A-Za-z0-9_.:-]{1,150}$/.test(v) ? v : null);
+  const reporterKey = (v: string): string | null => (v.length >= 1 && v.length <= 150 ? v : null);
   const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
   router.get('/reporters', (req, res) => {

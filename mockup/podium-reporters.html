@@ -124,7 +124,8 @@ select.field { width: auto; padding: 5px 8px; font-size: 12px; }
 .dhead h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12.5px; padding: 12px 14px 0; }
 .back:hover { color: var(--ink); }
-.dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1px; background: var(--border); }
+.dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }
+@media (max-width: 760px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
 .dsec { background: var(--surface); padding: 12px 14px 14px; min-width: 0; }
 .dsec h3 { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--axis); font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--ink); }
 .kv { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr); gap: 6px 12px; margin: 0; }

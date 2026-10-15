@@ -47,13 +47,14 @@ const day = (t: number) => new Date(t).toLocaleDateString(undefined, { year: "nu
 const time = (t: number) => new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /** Asks again on an interval while the page is visible. */
-function useRefresh(reload: () => void) {
+function useRefresh(reload: () => void, enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => {
       if (document.visibilityState !== "hidden") reload();
     }, REFRESH_MS);
     return () => clearInterval(id);
-  }, [reload]);
+  }, [reload, enabled]);
 }
 
 function StateBadge({ id }: { id: ReporterState }) {
@@ -88,7 +89,7 @@ export function ReportersTab(props: {
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState(paging.q);
   const list = useList<ReporterList>(api, `/reporters${query({ page: paging.page, pageSize: paging.pageSize, q: paging.q, state: paging.state, sort: paging.sort, dir: paging.dir })}`, props.onLocked);
-  useRefresh(list.reload);
+  useRefresh(list.reload, open === null);
   const total = list.data?.counts.all;
   useEffect(() => {
     if (total !== undefined) onCount(total);

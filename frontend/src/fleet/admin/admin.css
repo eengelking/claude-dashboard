@@ -122,7 +122,8 @@
 .adminv .back:hover { color: var(--ink); }
 .adminv .dhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 10px 14px 14px; border-bottom: 1px solid var(--border); }
 .adminv .dhead h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.adminv .dgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1px; background: var(--border); }
+.adminv .dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }
+@media (max-width: 760px) { .adminv .dgrid { grid-template-columns: minmax(0, 1fr); } }
 .adminv .dsec { background: var(--surface); padding: 12px 14px 14px; min-width: 0; }
 .adminv .dsec h3, .adminv .dwide h3 { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--axis); font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--ink); }
 .adminv .dwide { grid-column: 1 / -1; background: var(--surface); padding: 12px 0 0; }

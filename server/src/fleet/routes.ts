@@ -6,7 +6,7 @@ import { MAIN_LOOP, validateReport } from './protocol.js';
 import { everyOf, type ActivityReply } from './activity.js';
 import { OwnerConflict } from './ingest.js';
 import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow } from './people.js';
-import type { ReporterStore } from './reporters.js';
+import type { ReporterSeen, ReporterStore } from './reporters.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
 
@@ -53,6 +53,15 @@ const machineOf = (req: Request): string | null => (req.ip ? sourceAddress(req.i
 
 /** How the Reporters page names the credential: a person's token by its key id (never the token), or the admin secret. */
 const credentialOf = (id: Identity): string | null => (id.kind === 'person' ? `pdm_${id.person.keyId}` : id.kind === 'admin' ? 'admin secret' : null);
+
+/** Bookkeeping for the Reporters page must never turn a stored report into a failed one. */
+function noteReporter(opts: FleetRouterOptions, logger: Logger, seen: ReporterSeen, now: number): void {
+  try {
+    opts.reporters?.record(seen, now);
+  } catch (err) {
+    logger.warn('reporter.record_failed', `podium: could not note the reporter: ${(err as Error).message}`, { reason: (err as Error).message });
+  }
+}
 
 const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
 
@@ -122,7 +131,9 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       const out = fleet.ingest(result.report, ownerOf(id));
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
       const r = result.report;
-      opts.reporters?.record(
+      noteReporter(
+        opts,
+        logger,
         {
           kind: r.reporter.hostSurface === 'settings-hooks' ? 'hooks' : 'mod',
           machineId: r.machine?.id ?? null,
@@ -184,7 +195,9 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
         return;
       }
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now());
-      opts.reporters?.record(
+      noteReporter(
+        opts,
+        logger,
         { kind: 'hooks', machineId: null, machineName: null, source: machineOf(req), owner: ownerOf(id), credential: credentialOf(id), version: 'hooks', engineVersion: null, sessionId: out.sessionId },
         fleet.now(),
       );
