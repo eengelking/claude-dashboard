@@ -252,6 +252,12 @@ describe('ignore rules (issue #167)', () => {
     expect(store.ignoredBy({ key: 'aaaa', source: null, version: '1' })).toBeUndefined();
   });
 
+  it('refuses a rule made only of *, which would turn every reporter away', () => {
+    expect(() => store.addIgnore('address', '*', START)).toThrow(/besides \*/);
+    expect(() => store.addIgnore('version', '**', START)).toThrow();
+    expect(store.addIgnore('version', '*-sim', START).pattern).toBe('*-sim');
+  });
+
   it('refuses a rule that is empty, too long, or of an unknown kind', () => {
     expect(() => store.addIgnore('key', '  ', START)).toThrow();
     expect(() => store.addIgnore('key', 'x'.repeat(200), START)).toThrow();

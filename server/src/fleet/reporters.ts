@@ -365,6 +365,7 @@ export class ReporterStore {
   addIgnore(kind: IgnoreKind, pattern: string, now: number): IgnoreRule {
     const p = pattern.trim();
     if (!IGNORE_KINDS.includes(kind)) throw new Error('kind must be key, address or version');
+    if (/^\*+$/.test(p)) throw new Error('pattern must name something besides *');
     if (p.length < 1 || p.length > MAX_PATTERN) throw new Error(`pattern must be 1 to ${MAX_PATTERN} characters`);
     this.stmt('INSERT OR IGNORE INTO reporter_ignores (kind, pattern, created_at) VALUES (?, ?, ?)').run(kind, p, now);
     const rule = ReporterStore.ruleOf(this.stmt('SELECT id, kind, pattern, created_at FROM reporter_ignores WHERE kind = ? AND pattern = ?').get(kind, p) as never);

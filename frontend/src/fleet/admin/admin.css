@@ -187,6 +187,8 @@
 .adminv .ptab input[type="checkbox"], .adminv .ignform input[type="radio"] { width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; margin: 0; vertical-align: middle; }
 .adminv .ptab tr.rw.sel td { background: var(--sel); }
 .adminv .selbar { display: flex; gap: 8px 14px; align-items: center; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--sel); box-shadow: inset 3px 0 0 var(--ink); color: var(--ink); font-size: 12.5px; }
+.adminv .selbar { min-height: 42px; }
+.adminv .selbar.idle { background: transparent; box-shadow: none; color: var(--muted); }
 .adminv .selbar .count { font-weight: 650; }
 .adminv .selbar .grow { flex: 1 1 auto; }
 .adminv .selmore { padding: 7px 16px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--ink2); font-size: 12px; }

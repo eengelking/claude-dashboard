@@ -104,7 +104,7 @@ describe('ignored reporters (issue #167)', () => {
 
   it('refuses by version pattern, and lets a reporter through once its rule is removed', async () => {
     const { app, reporters } = setup();
-    const rule = reporters.addIgnore('version', '*', Date.now());
+    const rule = reporters.addIgnore('version', '*.*.*', Date.now());
     const send = () => request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report());
     expect((await send()).status).toBe(403);
     reporters.removeIgnore(rule.id);
@@ -114,7 +114,7 @@ describe('ignored reporters (issue #167)', () => {
 
   it('refuses a settings hook from an ignored address', async () => {
     const { app, reporters, fleet } = setup();
-    reporters.addIgnore('address', '*', Date.now());
+    reporters.addIgnore('address', '*1', Date.now());
     const res = await request(app).post('/api/fleet/hook').set('X-Podium-Token', 'admin-secret').send({ session_id: 'h1', hook_event_name: 'SessionStart', cwd: '/x' });
     expect(res.status).toBe(403);
     expect(fleet.view('h1')).toBeUndefined();

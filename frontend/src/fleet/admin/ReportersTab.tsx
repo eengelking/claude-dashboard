@@ -246,6 +246,11 @@ export function ReportersTab(props: {
             </button>
           </div>
         )}
+        {!pending && nSel === 0 && (
+          <div className="selbar idle" aria-hidden="true">
+            Tick reporters to remove many at once.
+          </div>
+        )}
         {!pending && nSel > 0 && (
           <div className="selbar" role="group" aria-label="Selected reporters">
             <span className="count">{nSel} selected{selAll ? " (all that match)" : ""}</span>
