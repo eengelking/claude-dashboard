@@ -195,7 +195,9 @@ Only to the server URL above, and only this:
   the server can price them) and rate-limit percentages;
 - the paths of the files the session changed in its repository, each with its status and its added and
   removed line counts (at most 200 files; never file contents or diff text);
-- the plan's step titles (from TaskCreate, TaskUpdate or TodoWrite);
+- the plan's step titles (from TaskCreate, TaskUpdate or TodoWrite; a session that does not use these tools
+  shows "No plan reported. Agents were launched ad hoc.", and plan mode does not make a plan appear, see
+  [Gotchas](docs/GOTCHAS.md#a-session-shows-no-plan));
 - for the orchestrator's own loop: how many model requests it made, the name of every tool it used with how
   many times, and the skills it loaded;
 - per agent: type, description, model, effort, status, token counts, skills it loaded, the name of every

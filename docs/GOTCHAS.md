@@ -114,6 +114,18 @@ with their next report (the heartbeat is five seconds), not at once. The spend c
 
 ## What the dashboard shows
 
+### A session shows no plan
+
+The card reads "No plan reported. Agents were launched ad hoc." Podium builds the plan only from the
+session's task list: the `TaskCreate` and `TaskUpdate` tools (or `TodoWrite`). If Claude did not use them
+for the work, there is nothing to show. That happens when the tools are not available to the session, and
+also when they are, but Claude chose not to use them for a small job. Plan mode does not make a plan
+appear: Podium does not read it, so `ExitPlanMode` alone gives no steps.
+
+To get a plan, make sure the task tools are on. Start Claude Code with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`
+in its environment, or add it to the `env` block of `~/.claude/settings.json`, then ask Claude to track
+the work as a task list. The agent tree is shown either way.
+
 ### A plan step has no owner
 
 Podium links an agent to a plan step by matching the agent's description to the step's title, and the match

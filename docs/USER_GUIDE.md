@@ -93,7 +93,8 @@ context blowouts, plan steps done, estimated cost today and tokens in the last m
 - search by name, project or branch.
 
 A card shows the session's name and status, its project and git branch (or worktree, with ahead and behind
-counts and how many files changed), its model, effort and context fill, its plan with the current step,
+counts and how many files changed), its model, effort and context fill, its plan with the current step
+(or "No plan reported. Agents were launched ad hoc.", see [Gotchas](GOTCHAS.md#a-session-shows-no-plan)),
 a strip with one square per agent, and its cost, tokens and running time. Tokens is the context the session and its agents hold right now, the
 same figure Claude Code shows for an agent; hover it for the definition. A path or branch that is too long
 for the card is shortened (the path from the front, the branch at the end); hover it to see the full value.
@@ -197,7 +198,10 @@ version of the podium-reporter mod the session runs, "Settings hooks" when it ha
 amber with "update" or "upgrade server" when the server says it is outside the supported range.
 
 Below that, on the left, is the plan, as a checklist with the agent that owns each step, with a **Files** tab
-beside it. Files lists every file the session changed since it started, committed or not, each with how many
+beside it. The plan is Claude's task list, read from its `TaskCreate` and `TaskUpdate` tools (or
+`TodoWrite`). If those tools are not available to the session, or Claude does not use them for the work,
+the panel reads "No plan reported. Agents were launched ad hoc." Plan mode does not change that: Podium
+does not read it. See [Gotchas](GOTCHAS.md#a-session-shows-no-plan) for how to turn the tools on. Files lists every file the session changed since it started, committed or not, each with how many
 lines were added and removed (a binary file shows the word "binary"), 20 to a page. The column gets wider
 while Files is open. The list comes from `git diff` against the commit the session began on, so two sessions
 in the same checkout see the same changes; use a worktree to keep them apart. It needs podium-reporter 0.6.0

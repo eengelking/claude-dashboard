@@ -102,7 +102,7 @@ No other runtime dependencies without a written reason in `docs/ARCHITECTURE.md`
 | Subagent | An agent that starts from a blank slate (only its prompt). Model and effort can be set at spawn. |
 | Fork | An agent that is a copy of its parent: keeps the parent's whole context. Always uses the parent's model and effort. The Agent tool spells it `subagent_type: "fork"`. |
 | Loop | The main loop or any agent. Context is measured per loop. |
-| Plan | The orchestrator's task list (`TaskCreate`/`TaskUpdate` tools, or `TodoWrite`), shown as steps. |
+| Plan | The orchestrator's task list (`TaskCreate`/`TaskUpdate` tools, or `TodoWrite`), shown as steps. Without those tool calls there is no plan; plan mode is not a source (6.3). |
 | Blowout | A loop's context window filled up and was compacted automatically, or the API reported the window exceeded. The count per loop is the signal for lost context. |
 | Compaction | Summarizing older conversation to free context. Manual (`/compact`) is not a blowout. Automatic is. |
 | Reporter | The mod. Runs in the Claude Code process and posts reports. |
@@ -580,7 +580,7 @@ interface ActivityEvent {
 - Keep a map of tasks by id. `TaskCreate` result gives the id; `subject` becomes the step text; `activeForm` becomes `activeText`. `TaskUpdate` applies `status` (`pending`→`pending`, `in_progress`→`active`, `completed`→`done`, `deleted`→remove), `subject`, `activeForm`, `owner`, `addBlockedBy` (a step with an unfinished blocker is `blocked` unless it is `active` or `done`). `TodoWrite` replaces the whole list; ids are `todo-<index>`; the later of Task*/TodoWrite wins as `source`.
 - Plan title: the optional tool `mcp__podium-reporter__plan({ title, phase? })` sets it. Otherwise `metadata.planTitle` or `metadata.title` of the first TaskCreate. Otherwise `null` (the UI then shows "Plan").
 - Step owner: `TaskUpdate.owner` if it matches an agent `name`; else the running agent whose description, normalized (lowercase, alphanumerics only), equals or contains the step text or vice versa; else `null`. `ownerLabel` is `"<type> · <Model> <effort>"` for the matched agent.
-- No tasks yet ⇒ `plan: null`.
+- No tasks yet ⇒ `plan: null`. That is the case for a session whose Claude Code does not provide the task tools or does not use them, and plan mode (`ExitPlanMode`) is not read, so it gives no plan either. The user-facing explanation is in `docs/GOTCHAS.md` ("A session shows no plan").
 
 ### 6.4 Failure and excerpt rules (`failures.ts`, pure)
 

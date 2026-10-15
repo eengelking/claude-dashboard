@@ -50,6 +50,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Documentation
 
+- The README, the user guide, `docs/SPEC.md` and `docs/GOTCHAS.md` now say where a session's plan comes from: Claude's `TaskCreate` and `TaskUpdate` tools (or `TodoWrite`). A session that does not have those tools, or does not use them for the work, shows "No plan reported. Agents were launched ad hoc."; plan mode does not produce a plan, because Podium does not read it. A new gotcha, "A session shows no plan", says how to turn the task tools on. (#170)
 - Bug reports now ask for the output of `/podium`, run inside the Claude Code session that shows the problem, next to `podiumctl status`. The bug report template, `CONTRIBUTING.md` and the user guide's troubleshooting say how to run it, what it tells us, and to remove any secret before posting (it never prints the token). (#132)
 - Mockup for a session that is idle on a background process or a scheduled wake-up (#119): it says what it is waiting on, in blue, and is not counted as waiting on you.
 - The README and the user guide now say that load grows with the number of sessions and agents reporting, what grows on the server and in each open tab, an example measurement from #81, how to measure your own with `scripts/gpu-sample.sh`, and what lowers it. (#107)
