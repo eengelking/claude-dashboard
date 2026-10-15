@@ -279,6 +279,14 @@ body.modal-open { overflow: hidden; }
 .tb-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--ink2); }
 .tb-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
 .tb-sp { flex: 1; }
+.tb-sep { align-self: stretch; width: 1px; min-height: 22px; background: var(--axis); margin: 0 4px; }
+button.tb-btn { font-size: 12.5px; color: var(--ink); cursor: pointer; }
+button.tb-btn:hover { background: var(--sel); }
+.modal.sm { width: min(440px, 100%); height: auto; }
+.sm .sbody { padding: 14px 18px 4px; }
+.sm .sfoot { display: flex; align-items: center; gap: 8px; padding: 10px 18px 14px; flex-wrap: wrap; }
+.sm .sfoot .grow { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
+.sm .signin { grid-template-columns: 70px minmax(0, 1fr); }
 .tb-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); }
 #tbMe { display: inline-flex; align-items: center; gap: 8px; }
 #tbMe:empty { display: none; }
@@ -452,15 +460,16 @@ body.modal-open { overflow: hidden; }
   </div>
 
   <h2 class="s">6. Signing in</h2>
-  <p class="note">Anyone can watch, but answering needs Podium to know who you are. You sign in with the same name and token your podium-reporter uses. Signing in happens from Respond, in the modal (section 3, "Signing in"). Once you're signed in, the top bar shows your name next to Admin, with Sign out.</p>
+  <p class="note">Anyone can watch, but answering needs Podium to know who you are. You sign in with the same name and token your podium-reporter uses, from either of two places: Respond, when you're signed out (section 3, "Signing in"), or Sign in at the far right of the top bar, past a divider after History, Hide top bar and Admin. Signed in, that spot shows your name and Sign out.</p>
   <div class="tb" id="topbar" aria-label="Top bar">
     <span class="tb-brand">Podium</span><span class="tb-pill">Fleet</span><span class="tb-pill"><i class="dot"></i>Live · 4 reporters</span>
     <span class="tb-sp"></span>
-    <span class="tb-btn">History</span><span class="tb-btn">Hide top bar</span>
+    <span class="tb-btn">History</span><span class="tb-btn">Hide top bar</span><span class="tb-btn">Admin</span>
+    <span class="tb-sep" aria-hidden="true"></span>
     <span id="tbMe"></span>
-    <span class="tb-btn">Admin</span>
   </div>
   <p class="cap" id="tbCap"></p>
+  <figure class="case" id="case-s-dialog"><figcaption><b>Sign in from the top bar</b><span>The same form as in the modal, in a small dialog of its own. It closes once you're signed in and leaves the page as it was.</span></figcaption><div class="stage" inert id="signDlgStage"></div></figure>
   <div class="aside-note signrules">
     <h3>Rules for signing in</h3>
     <ul>
@@ -469,6 +478,7 @@ body.modal-open { overflow: hidden; }
       <li>One sign-in per browser, shared by its tabs. It ends after 12 hours without use, on Sign out, when the server restarts, and when your token is revoked or rotated.</li>
       <li>The page never keeps your token. Five wrong tries from one address lock signing in for 15 minutes, counted together with wrong Admin unlocks.</li>
       <li>Signed out, every card still shows Respond, because Podium doesn't know which sessions are yours. Signed in, other people's sessions show Respond dimmed, with their name.</li>
+      <li>Sign in and Sign out stay at the far right of the top bar, after the divider, so the buttons before it don't move when you sign in or out.</li>
     </ul>
   </div>
 </div>
@@ -496,6 +506,10 @@ body.modal-open { overflow: hidden; }
       <div class="compose" id="compose"></div>
     </div>
   </div>
+</div>
+
+<div class="scrim" id="signScrim" hidden>
+  <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="sTitle" id="signDlg"></div>
 </div>
 
 <script>
@@ -661,17 +675,28 @@ function askParts(st) {
   return r;
 }
 
-function signInParts(st, r) {
-  const p = st.p, locked = st.signErr === "locked";
+// The form is the same in the modal's panel and in the top bar's dialog; `p` keeps their ids apart.
+const SIGN_LEAD = `Use your name and token, the same ones as your podium-reporter's <code>userName</code> and <code>token</code> options. Only the session's owner, or an Admin, can respond.`;
+const SIGN_HINT = "Signs in this browser. An Admin can use the name Admin with the admin secret.";
+function signFields(st, p) {
+  const locked = st.signErr === "locked";
   const err = { wrong: "That name and token don't match. Check the userName and token options in podium-reporter.", empty: "Enter your name and your token.", locked: "Too many wrong tries from this address. Try again in 15 minutes." }[st.signErr];
-  r.body = `${st.expired ? `<p class="signnote">You were signed out. A sign-in ends after 12 hours without use, when the server restarts, and when your token changes.</p>` : ""}<p class="qh">Sign in to respond</p>
-    <p class="signlead">Use your name and token, the same ones as your podium-reporter's <code>userName</code> and <code>token</code> options. Only the session's owner, or an Admin, can respond.</p>
-    <div class="signin">
+  return `<div class="signin">
       <label for="${p}signName">Name</label><input id="${p}signName" type="text" autocomplete="username" spellcheck="false" value="${esc(st.signName)}" ${locked ? "disabled" : ""}>
       <label for="${p}signTok">Token</label><input id="${p}signTok" class="mono" type="password" autocomplete="off" value="${esc(st.signTok)}" ${locked ? "disabled" : ""}>
     </div>
     ${err ? `<div class="signerr" role="alert">${err}</div>` : ""}`;
-  r.foot = `<span class="grow">Signs in this browser. An Admin can use the name Admin with the admin secret.</span><button class="btn pri" type="button" data-act="signin" ${locked ? "disabled" : ""}>Sign in</button>`;
+}
+const signBtn = (st, p) => `<button class="btn pri" type="button" data-act="signin" data-p="${p}" ${st.signErr === "locked" ? "disabled" : ""}>Sign in</button>`;
+function signInParts(st, r) {
+  r.body = `${st.expired ? `<p class="signnote">You were signed out. A sign-in ends after 12 hours without use, when the server restarts, and when your token changes.</p>` : ""}<p class="qh">Sign in to respond</p>
+    <p class="signlead">${SIGN_LEAD}</p>${signFields(st, st.p)}`;
+  r.foot = `<span class="grow">${SIGN_HINT}</span>${signBtn(st, st.p)}`;
+}
+function signDialogHTML(st, p) {
+  return `<div class="mh"><div class="ttl"><h2 id="${p}sTitle">Sign in</h2><div class="sub2">To answer and message your own sessions</div></div><button type="button" class="x" data-act="sign-close" aria-label="Close (Esc)">&#x2715;</button></div>
+    <div class="sbody"><p class="signlead">${SIGN_LEAD}</p>${signFields(st, p)}</div>
+    <div class="sfoot"><span class="grow">${SIGN_HINT}</span>${signBtn(st, p)}</div>`;
 }
 
 function questionParts(st, r) {
@@ -832,21 +857,37 @@ function renderTerms() {
 }
 
 function renderTopBar() {
-  $("#tbMe").innerHTML = S.signed ? `<span class="tb-me">${icon("you", 14)}Signed in as <b>Ed</b></span><button class="tb-btn" type="button" data-act="signout">Sign out</button>` : "";
-  $("#tbCap").textContent = S.signed ? "Signed in. Sign out ends the sign-in for every tab in this browser." : "Signed out. Nothing shows here; you sign in from Respond.";
+  $("#tbMe").innerHTML = S.signed
+    ? `<span class="tb-me">${icon("you", 14)}Signed in as <b>Ed</b></span><button class="tb-btn" type="button" data-act="signout">Sign out</button>`
+    : `<button class="tb-btn" type="button" data-act="tb-signin" aria-haspopup="dialog">Sign in</button>`;
+  $("#tbCap").textContent = S.signed ? "Signed in. Sign out ends the sign-in for every tab in this browser." : "Signed out. Sign in opens the dialog below.";
+}
+function openSignDialog() {
+  S.signErr = ""; $("#signDlg").innerHTML = signDialogHTML(S, "d-");
+  $("#signScrim").hidden = false; document.body.classList.add("modal-open"); $("#d-signName").focus();
+}
+function closeSignDialog() {
+  if ($("#signScrim").hidden) return;
+  $("#signScrim").hidden = true; document.body.classList.remove("modal-open"); $("[data-act='tb-signin'], [data-act='signout']")?.focus();
 }
 
 // The live modal's own elements, so a lookup never lands in one of the gallery's copies.
 const M = () => $("#modal");
 function render() { renderBands(); renderFeed(); renderAsk(); renderCompose(); renderTerms(); renderTopBar(); }
 function syncSigned() { $$('input[name="signed"]').forEach(r => r.checked = r.value === (S.signed ? "yes" : "no")); }
-function signIn() {
-  const name = $("#signName")?.value.trim() || "", tok = $("#signTok")?.value || "";
+// `p` is "" for the form in the Activity modal and "d-" for the top bar's dialog.
+function signIn(p) {
+  const name = $(`#${p}signName`)?.value.trim() || "", tok = $(`#${p}signTok`)?.value || "";
   S.signName = name;
-  if (!name || !tok) { S.signErr = "empty"; renderAsk(); $(name ? "#signTok" : "#signName").focus(); return; }
+  if (!name || !tok) {
+    S.signErr = "empty";
+    if (p) $("#signDlg").innerHTML = signDialogHTML(S, p); else renderAsk();
+    $(`#${p}${name ? "signTok" : "signName"}`).focus(); return;
+  }
   // The mockup takes any name and token. The real check is the server's.
   S.signed = true; S.signErr = ""; S.expired = false; syncSigned(); render();
-  ($("#askBody input, #askBody button") || $("#draft") || $("#close")).focus();
+  if (p) closeSignDialog();
+  else ($("#askBody input, #askBody button") || $("#draft") || $("#close")).focus();
 }
 
 /* ---------- events ---------- */
@@ -886,8 +927,10 @@ document.addEventListener("click", e => {
   }
   else if (a === "discard") { S.edge = "ready"; syncEdge(); S.answers = {}; render(); }
   else if (a === "send") send();
-  else if (a === "signin") signIn();
-  else if (a === "signout") { S.signed = false; S.signErr = ""; syncSigned(); render(); }
+  else if (a === "signin") signIn(t.dataset.p || "");
+  else if (a === "signout") { S.signed = false; S.signErr = ""; syncSigned(); render(); $("[data-act='tb-signin']").focus(); }
+  else if (a === "tb-signin") openSignDialog();
+  else if (a === "sign-close") closeSignDialog();
   else if (a === "cancel-clear") { S.confirmClear = false; renderCompose(); $("#draft").focus(); }
   else if (a === "do-clear") { S.confirmClear = false; S.sent.push({ at: "50:12", text: "/clear", note: "(the conversation was cleared; a new session id follows)" }); S.draft = ""; render(); $("#draft").focus(); }
 });
@@ -925,7 +968,9 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("focusin", e => { if (/^q\dtext$/.test(e.target.id)) { const r = $(`#q${S.tab}other`); if (r && !r.checked) { r.checked = true; S.answers[QUESTIONS[S.tab].header] = "__other"; } } });
 document.addEventListener("keydown", e => {
-  if ((e.target.id === "signName" || e.target.id === "signTok") && e.key === "Enter") { e.preventDefault(); signIn(); return; }
+  const sm = /^(d-)?sign(Name|Tok)$/.exec(e.target.id);
+  if (sm && e.key === "Enter") { e.preventDefault(); signIn(sm[1] || ""); return; }
+  if (!$("#signScrim").hidden && e.key === "Escape") { e.preventDefault(); closeSignDialog(); return; }
   if (e.target.id === "draft") {
     const list = $$(".typeahead [data-cmd]", M());
     if (list.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); S.ta = (S.ta + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length; list.forEach((b, i) => b.classList.toggle("on", i === S.ta)); return; }
@@ -957,6 +1002,8 @@ function closeModal() {
 }
 $("#close").addEventListener("click", closeModal);
 $("#scrim").addEventListener("mousedown", e => { if (e.target === $("#scrim")) closeModal(); });
+$("#signScrim").addEventListener("mousedown", e => { if (e.target === $("#signScrim")) closeSignDialog(); });
+$("#signDlgStage").innerHTML = `<div class="modal sm" aria-hidden="true">${signDialogHTML({ ...BASE, signName: "Ed" }, "g-dlg-")}</div>`;
 $("#flagSw").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") === "true" ? "false" : "true"); });
 
 $("#theme").addEventListener("click", () => {
