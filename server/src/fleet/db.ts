@@ -193,6 +193,12 @@ DROP TABLE rmap0;`,
     sql: `INSERT OR IGNORE INTO groups (name, name_lower, created_at) VALUES ('Administrators', 'administrators', CAST(strftime('%s','now') AS INTEGER) * 1000);
 ALTER TABLE admin_log ADD COLUMN actor TEXT;`,
   },
+  {
+    version: 15,
+    // The session a session continues after a /clear (issue #206), so History can link the two. NULL otherwise.
+    sql: `ALTER TABLE sessions ADD COLUMN cleared_from TEXT;
+CREATE INDEX IF NOT EXISTS sessions_cleared_from ON sessions(cleared_from);`,
+  },
 ];
 
 export interface SessionRow {
@@ -234,6 +240,8 @@ export interface SessionRow {
   detached_at: number | null;
   owner: string | null;
   machine_json: string | null;
+  /** The session this one continues after a /clear (Report.session.clearedFrom, #206); NULL otherwise. */
+  cleared_from: string | null;
 }
 
 export interface AgentRow {
@@ -412,6 +420,12 @@ export class FleetDb {
       this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
       return Number(this.stmt('DELETE FROM sessions WHERE id = ?').run(id).changes) > 0;
     });
+  }
+
+  /** The session that continued `id` after a /clear, if any (the newest when there are several). */
+  clearedInto(id: string): string | null {
+    const r = this.stmt('SELECT id FROM sessions WHERE cleared_from = ? ORDER BY started_at DESC LIMIT 1').get(id) as { id: string } | undefined;
+    return r?.id ?? null;
   }
 
   /** Sessions that ended (or were dropped) in [from, to). */

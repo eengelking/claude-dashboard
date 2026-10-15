@@ -95,6 +95,19 @@ describe('ingestReport', () => {
     expect(f.getSession(old.session.id)!.files_json).toBeNull();
   });
 
+  it('links a session to the one it continues after a /clear, and keeps the link when a later report leaves it out (#206)', () => {
+    const old = fixtureReport();
+    ingestReport(f, { ...old, session: { ...old.session, status: 'done', endReason: 'clear' } }, T0);
+    const next = { ...old, session: { ...old.session, id: 'after-clear', clearedFrom: old.session.id } };
+    ingestReport(f, next, T0 + 1000);
+    expect(f.getSession('after-clear')!.cleared_from).toBe(old.session.id);
+    expect(f.clearedInto(old.session.id)).toBe('after-clear');
+    ingestReport(f, { ...old, session: { ...old.session, id: 'after-clear' } }, T0 + 2000);
+    expect(f.getSession('after-clear')!.cleared_from).toBe(old.session.id);
+    expect(f.getSession(old.session.id)!.cleared_from).toBeNull();
+    expect(f.clearedInto('after-clear')).toBeNull();
+  });
+
   it('is idempotent: a repeat changes only last_seen_at', () => {
     const r = fixtureReport();
     ingestReport(f, r, T0);

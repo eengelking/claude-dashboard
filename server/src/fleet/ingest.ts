@@ -88,6 +88,8 @@ function sessionRow(r: Report, prev: SessionRow | undefined, serverTime: number,
     owner: owner ?? prev?.owner ?? null,
     // A settings hook carries no machine, so a session keeps the one its reporter last sent.
     machine_json: r.machine ? JSON.stringify(r.machine) : prev?.machine_json ?? null,
+    // Set once: a later report that leaves it out (an older reporter, a hook) keeps the link.
+    cleared_from: s.clearedFrom ?? prev?.cleared_from ?? null,
   };
 }
 

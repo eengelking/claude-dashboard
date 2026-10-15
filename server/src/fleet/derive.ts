@@ -8,6 +8,7 @@ import type { ModelUsage, Pricing } from './pricing.js';
 import type {
   ActivityView,
   AgentView,
+  AskSummary,
   BackgroundWait,
   EventKind,
   Failure,
@@ -19,6 +20,7 @@ import type {
   ModelFamily,
   OwnerSpend,
   Plan,
+  RespondInfo,
   SessionStatusView,
   SessionView,
 } from './protocol.js';
@@ -197,6 +199,10 @@ export interface SessionInput {
   pricing?: Pricing;
   /** Whether the reporter has the activityFeed option on, from the activity store; null when unknown. */
   activityFeed?: boolean | null;
+  /** Report.session.respond as last reported (#206), held in memory; null when unknown. */
+  respond?: RespondInfo | null;
+  /** The session's asks without their content, from the respond store. */
+  asks?: AskSummary[];
 }
 
 export function sessionStatus(row: SessionRow, heard: boolean, now: number, staleAfterMs: number): SessionStatusView {
@@ -260,6 +266,9 @@ export function sessionView(input: SessionInput, now: number, cfg: DeriveConfig)
     ownerGroup: input.ownerGroup ?? null,
     machine: parse<MachineInfo | null>(row.machine_json, null),
     activityFeed: input.activityFeed ?? null,
+    respond: input.respond ?? null,
+    asks: input.asks ?? [],
+    clearedFrom: row.cleared_from ?? null,
     agents,
     series: buildSeries(input.samples, input.blowouts, now),
   };

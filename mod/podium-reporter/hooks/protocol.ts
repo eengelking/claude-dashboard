@@ -242,6 +242,12 @@ export interface SessionReport {
   activityFeed?: boolean;
   /** The main loop's last 20 activity entries, as on an agent: only while someone watches the orchestrator. */
   activity?: ActivityEntry[];
+  /** Whether and how far the session can be answered from Podium (#206). Absent from a reporter older than 0.14.0. */
+  respond?: RespondInfo;
+  /** The asks open now, at most 8; sent only while the last reply said `respond: true`. */
+  asks?: Ask[];
+  /** The session id this one continues after a /clear (SPEC 5.8). */
+  clearedFrom?: string | null;
 }
 
 export interface Report {
@@ -272,6 +278,156 @@ export function backgroundSummary(b: BackgroundWait): string {
 /** A waiting session whose only wait is on background work or a wake-up, not on the person (#119). */
 export function idleOnBackground<T extends { status: string; waitReason: string | null; background?: BackgroundWait | null }>(s: T): s is T & { background: BackgroundWait } {
   return s.status === 'waiting' && s.waitReason === null && !!s.background;
+}
+
+// ---- Responding (#206, SPEC 5.3, 6.2, 7.1) --------------------------------------------------
+
+/** The reporter's `respond` option: what this session accepts from Podium. */
+export type RespondLevel = 'off' | 'questions' | 'questions-and-plans' | 'everything';
+export const RESPOND_LEVELS: readonly RespondLevel[] = ['off', 'questions', 'questions-and-plans', 'everything'];
+
+/** One kind of answer a session can take from Podium. */
+export type RespondKind = 'question' | 'plan-approve' | 'plan-feedback' | 'permission' | 'message' | 'command';
+export const RESPOND_KINDS: readonly RespondKind[] = ['question', 'plan-approve', 'plan-feedback', 'permission', 'message', 'command'];
+
+/** Why a kind the level allows is missing from `accepts`. */
+export type RespondLimit = 'no-permission-hooks' | 'not-interactive';
+export const RESPOND_LIMIT_NAMES: readonly RespondLimit[] = ['no-permission-hooks', 'not-interactive'];
+
+/** The kinds each level allows. Each level allows what the one before it does. */
+export const LEVEL_KINDS: Record<RespondLevel, readonly RespondKind[]> = {
+  off: [],
+  questions: ['question', 'message'],
+  'questions-and-plans': ['question', 'message', 'plan-approve', 'plan-feedback'],
+  everything: ['question', 'message', 'plan-approve', 'plan-feedback', 'permission', 'command'],
+};
+
+/** Whether and how far a session can be answered from Podium (Report.session.respond). */
+export interface RespondInfo {
+  level: RespondLevel;
+  /** What the session takes now: the level's kinds, less what `limits` removes; empty while the activityFeed option is off. */
+  accepts: RespondKind[];
+  limits: RespondLimit[];
+}
+
+/** The kinds a level allows once the limits are applied. */
+export function acceptsFor(level: RespondLevel, limits: readonly RespondLimit[], activityFeed: boolean): RespondKind[] {
+  if (!activityFeed || limits.includes('not-interactive')) return [];
+  const drop: RespondKind[] = limits.includes('no-permission-hooks') ? ['plan-approve', 'permission'] : [];
+  return LEVEL_KINDS[level].filter((k) => !drop.includes(k));
+}
+
+export type AskKind = 'question' | 'plan' | 'permission';
+
+export interface AskOption {
+  label: string;
+  description: string;
+  preview: string | null;
+}
+
+export interface AskQuestion {
+  question: string;
+  header: string;
+  multiSelect: boolean;
+  options: AskOption[];
+}
+
+/**
+ * One thing a session waits on its person for that Podium can answer. Its id is the tool call's `tool_use_id`.
+ * Redacted by the reporter, and cut to RESPOND_LIMITS with a visible marker.
+ */
+export interface Ask {
+  id: string;
+  kind: AskKind;
+  /** The loop that asked: set for a subagent's permission prompt; null for the main loop. */
+  agentId: string | null;
+  openedAt: number;
+  questions?: AskQuestion[];
+  plan?: { text: string; filePath: string | null };
+  /** The tool and its arguments; `cut` when anything was cut off, and then Podium cannot allow it. */
+  tool?: { name: string; input: Record<string, unknown>; cut: boolean };
+}
+
+export const RESPOND_LIMITS = {
+  asks: 8,
+  questions: 4,
+  options: 4,
+  question: 1000,
+  header: 40,
+  label: 200,
+  description: 1000,
+  preview: 4000,
+  plan: 40_000,
+  toolInput: 20_000,
+  /** A typed answer, a deny reason, a close's answer summary. */
+  answer: 2000,
+  /** A message, a reply in place of an answer, plan feedback. */
+  message: 20_000,
+  /** Messages and commands waiting for one session. */
+  deliveries: 20,
+  /** The longest a held request for an answer waits, in seconds ($.http.fetch gives up at 30). */
+  holdSeconds: 20,
+} as const;
+
+/** What a delivery carries. `reply` is a message sent in place of an answer. */
+export type DeliveryKind = 'question' | 'reply' | 'plan-approve' | 'plan-feedback' | 'allow-once' | 'deny' | 'message' | 'command';
+export const DELIVERY_KINDS: readonly DeliveryKind[] = ['question', 'reply', 'plan-approve', 'plan-feedback', 'allow-once', 'deny', 'message', 'command'];
+
+/** One question's answer by position: the chosen options' indexes, a typed answer, or null for skipped. */
+export type QuestionAnswer = { options: number[] } | { text: string } | null;
+
+export type PlanMode = 'auto' | 'acceptEdits' | 'default';
+export const PLAN_MODES: readonly PlanMode[] = ['auto', 'acceptEdits', 'default'];
+
+export type PodiumCommand = 'clear' | 'compact';
+export const PODIUM_COMMANDS: readonly PodiumCommand[] = ['clear', 'compact'];
+
+/** One answer or message sent from Podium, as the server hands it to the mod. */
+export interface Delivery {
+  id: string;
+  /** The ask it answers; null for a message or a command. */
+  askId: string | null;
+  /** Who sent it: a person's name, or `Admin` for the admin secret. */
+  by: string;
+  at: number;
+  kind: DeliveryKind;
+  answers?: QuestionAnswer[];
+  mode?: PlanMode;
+  text?: string;
+  command?: PodiumCommand;
+}
+
+/** What became of a delivery, as the mod reports it. */
+export type DeliveryResult = 'took' | 'queued' | 'not-taken' | 'refused' | 'closed';
+export const DELIVERY_RESULTS: readonly DeliveryResult[] = ['took', 'queued', 'not-taken', 'refused', 'closed'];
+
+/** How an ask closed without an answer from Podium. */
+export type AskCloseOutcome = 'terminal' | 'closed' | 'ended';
+
+export interface AskClose {
+  outcome: AskCloseOutcome;
+  at: number;
+  /** A short summary of the terminal's answer: a question's answers joined with "; ", `No, keep planning`, `allowed` or `denied`. */
+  answer?: string | null;
+  /** True for a plan approved in the terminal (which mode is not known). */
+  planApproved?: boolean;
+}
+
+/** The reply to an accepted report. Older servers send only some of it. */
+export interface ReportReply {
+  ok: true;
+  serverTime: number;
+  ackedEvents: number;
+  sessionId: string;
+  liveSessions: number;
+  serverVersion: string;
+  reporterSupport: { min: string; max: string };
+  reporterCompat: 'ok' | 'outdated' | 'newer' | 'unknown';
+  watch: string[];
+  /** Whether the server takes answers for this session now; the mod announces asks only while it is true. */
+  respond: boolean;
+  /** Messages and commands from Podium waiting for this session, oldest first; empty while `respond` is false. */
+  deliveries: Delivery[];
 }
 
 // <protocol:end>

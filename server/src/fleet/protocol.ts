@@ -245,6 +245,12 @@ export interface SessionReport {
   activityFeed?: boolean;
   /** The main loop's last 20 activity entries, as on an agent: only while someone watches the orchestrator. */
   activity?: ActivityEntry[];
+  /** Whether and how far the session can be answered from Podium (#206). Absent from a reporter older than 0.14.0. */
+  respond?: RespondInfo;
+  /** The asks open now, at most 8; sent only while the last reply said `respond: true`. */
+  asks?: Ask[];
+  /** The session id this one continues after a /clear (SPEC 5.8). */
+  clearedFrom?: string | null;
 }
 
 export interface Report {
@@ -275,6 +281,156 @@ export function backgroundSummary(b: BackgroundWait): string {
 /** A waiting session whose only wait is on background work or a wake-up, not on the person (#119). */
 export function idleOnBackground<T extends { status: string; waitReason: string | null; background?: BackgroundWait | null }>(s: T): s is T & { background: BackgroundWait } {
   return s.status === 'waiting' && s.waitReason === null && !!s.background;
+}
+
+// ---- Responding (#206, SPEC 5.3, 6.2, 7.1) --------------------------------------------------
+
+/** The reporter's `respond` option: what this session accepts from Podium. */
+export type RespondLevel = 'off' | 'questions' | 'questions-and-plans' | 'everything';
+export const RESPOND_LEVELS: readonly RespondLevel[] = ['off', 'questions', 'questions-and-plans', 'everything'];
+
+/** One kind of answer a session can take from Podium. */
+export type RespondKind = 'question' | 'plan-approve' | 'plan-feedback' | 'permission' | 'message' | 'command';
+export const RESPOND_KINDS: readonly RespondKind[] = ['question', 'plan-approve', 'plan-feedback', 'permission', 'message', 'command'];
+
+/** Why a kind the level allows is missing from `accepts`. */
+export type RespondLimit = 'no-permission-hooks' | 'not-interactive';
+export const RESPOND_LIMIT_NAMES: readonly RespondLimit[] = ['no-permission-hooks', 'not-interactive'];
+
+/** The kinds each level allows. Each level allows what the one before it does. */
+export const LEVEL_KINDS: Record<RespondLevel, readonly RespondKind[]> = {
+  off: [],
+  questions: ['question', 'message'],
+  'questions-and-plans': ['question', 'message', 'plan-approve', 'plan-feedback'],
+  everything: ['question', 'message', 'plan-approve', 'plan-feedback', 'permission', 'command'],
+};
+
+/** Whether and how far a session can be answered from Podium (Report.session.respond). */
+export interface RespondInfo {
+  level: RespondLevel;
+  /** What the session takes now: the level's kinds, less what `limits` removes; empty while the activityFeed option is off. */
+  accepts: RespondKind[];
+  limits: RespondLimit[];
+}
+
+/** The kinds a level allows once the limits are applied. */
+export function acceptsFor(level: RespondLevel, limits: readonly RespondLimit[], activityFeed: boolean): RespondKind[] {
+  if (!activityFeed || limits.includes('not-interactive')) return [];
+  const drop: RespondKind[] = limits.includes('no-permission-hooks') ? ['plan-approve', 'permission'] : [];
+  return LEVEL_KINDS[level].filter((k) => !drop.includes(k));
+}
+
+export type AskKind = 'question' | 'plan' | 'permission';
+
+export interface AskOption {
+  label: string;
+  description: string;
+  preview: string | null;
+}
+
+export interface AskQuestion {
+  question: string;
+  header: string;
+  multiSelect: boolean;
+  options: AskOption[];
+}
+
+/**
+ * One thing a session waits on its person for that Podium can answer. Its id is the tool call's `tool_use_id`.
+ * Redacted by the reporter, and cut to RESPOND_LIMITS with a visible marker.
+ */
+export interface Ask {
+  id: string;
+  kind: AskKind;
+  /** The loop that asked: set for a subagent's permission prompt; null for the main loop. */
+  agentId: string | null;
+  openedAt: number;
+  questions?: AskQuestion[];
+  plan?: { text: string; filePath: string | null };
+  /** The tool and its arguments; `cut` when anything was cut off, and then Podium cannot allow it. */
+  tool?: { name: string; input: Record<string, unknown>; cut: boolean };
+}
+
+export const RESPOND_LIMITS = {
+  asks: 8,
+  questions: 4,
+  options: 4,
+  question: 1000,
+  header: 40,
+  label: 200,
+  description: 1000,
+  preview: 4000,
+  plan: 40_000,
+  toolInput: 20_000,
+  /** A typed answer, a deny reason, a close's answer summary. */
+  answer: 2000,
+  /** A message, a reply in place of an answer, plan feedback. */
+  message: 20_000,
+  /** Messages and commands waiting for one session. */
+  deliveries: 20,
+  /** The longest a held request for an answer waits, in seconds ($.http.fetch gives up at 30). */
+  holdSeconds: 20,
+} as const;
+
+/** What a delivery carries. `reply` is a message sent in place of an answer. */
+export type DeliveryKind = 'question' | 'reply' | 'plan-approve' | 'plan-feedback' | 'allow-once' | 'deny' | 'message' | 'command';
+export const DELIVERY_KINDS: readonly DeliveryKind[] = ['question', 'reply', 'plan-approve', 'plan-feedback', 'allow-once', 'deny', 'message', 'command'];
+
+/** One question's answer by position: the chosen options' indexes, a typed answer, or null for skipped. */
+export type QuestionAnswer = { options: number[] } | { text: string } | null;
+
+export type PlanMode = 'auto' | 'acceptEdits' | 'default';
+export const PLAN_MODES: readonly PlanMode[] = ['auto', 'acceptEdits', 'default'];
+
+export type PodiumCommand = 'clear' | 'compact';
+export const PODIUM_COMMANDS: readonly PodiumCommand[] = ['clear', 'compact'];
+
+/** One answer or message sent from Podium, as the server hands it to the mod. */
+export interface Delivery {
+  id: string;
+  /** The ask it answers; null for a message or a command. */
+  askId: string | null;
+  /** Who sent it: a person's name, or `Admin` for the admin secret. */
+  by: string;
+  at: number;
+  kind: DeliveryKind;
+  answers?: QuestionAnswer[];
+  mode?: PlanMode;
+  text?: string;
+  command?: PodiumCommand;
+}
+
+/** What became of a delivery, as the mod reports it. */
+export type DeliveryResult = 'took' | 'queued' | 'not-taken' | 'refused' | 'closed';
+export const DELIVERY_RESULTS: readonly DeliveryResult[] = ['took', 'queued', 'not-taken', 'refused', 'closed'];
+
+/** How an ask closed without an answer from Podium. */
+export type AskCloseOutcome = 'terminal' | 'closed' | 'ended';
+
+export interface AskClose {
+  outcome: AskCloseOutcome;
+  at: number;
+  /** A short summary of the terminal's answer: a question's answers joined with "; ", `No, keep planning`, `allowed` or `denied`. */
+  answer?: string | null;
+  /** True for a plan approved in the terminal (which mode is not known). */
+  planApproved?: boolean;
+}
+
+/** The reply to an accepted report. Older servers send only some of it. */
+export interface ReportReply {
+  ok: true;
+  serverTime: number;
+  ackedEvents: number;
+  sessionId: string;
+  liveSessions: number;
+  serverVersion: string;
+  reporterSupport: { min: string; max: string };
+  reporterCompat: 'ok' | 'outdated' | 'newer' | 'unknown';
+  watch: string[];
+  /** Whether the server takes answers for this session now; the mod announces asks only while it is true. */
+  respond: boolean;
+  /** Messages and commands from Podium waiting for this session, oldest first; empty while `respond` is false. */
+  deliveries: Delivery[];
 }
 
 // <protocol:end>
@@ -403,8 +559,60 @@ export interface SessionView {
    * than 0.13.0, a settings-hooks session, or no report since the server started. Held in memory, not stored.
    */
   activityFeed: boolean | null;
+  /** Report.session.respond (#206); null for a reporter older than 0.14.0, a settings-hooks session, or no report since the server started (held in memory). */
+  respond: RespondInfo | null;
+  /** The session's asks, open or closed in the last 10 minutes, without their content (served only to the owner or an Admin). */
+  asks: AskSummary[];
+  /** The session this one continues after a /clear. */
+  clearedFrom: string | null;
   agents: AgentView[];
   series: { tokensPerSec: number[]; peakContext: number[]; running: number[]; blowoutSecondsAgo: number[] };
+}
+
+/** Where an ask stands: open, an answer taken but not yet confirmed, an approval Claude Code did not take, or closed. */
+export type AskState = 'open' | 'pending' | 'not-taken' | 'closed';
+
+/** An ask as the state and the stream carry it: no question, plan or tool input (#206). */
+export interface AskSummary {
+  id: string;
+  kind: AskKind;
+  agentId: string | null;
+  openedAt: number;
+  /** The questions in a question ask (the Respond button's number); 1 otherwise. */
+  count: number;
+  state: AskState;
+}
+
+/** How an ask closed, as the modal shows it. `podium` is an answer from Podium that the session took. */
+export type AskOutcome = 'podium' | 'terminal' | 'closed' | 'ended';
+
+/** One delivery as the modal reads it back: what was sent, by whom, and what became of it. */
+export interface DeliveryView extends Delivery {
+  result: DeliveryResult | null;
+  /** Whether the signed-in person sent it. */
+  mine: boolean;
+  /** Whether the mod has been handed it (it can no longer be discarded). */
+  handedOver: boolean;
+}
+
+/** GET /api/fleet/respond/sessions/:id/asks/:askId: the whole ask, for its owner or an Admin. */
+export interface AskDetail {
+  ask: Ask;
+  state: AskState;
+  delivery: DeliveryView | null;
+  closed: { outcome: AskOutcome; at: number; by: string | null; answer: string | null; planApproved: boolean } | null;
+  lastSeenAt: number;
+}
+
+/** GET /api/fleet/respond/me. */
+export interface RespondMe {
+  /** Authentication on and the Admin's respond flag on. */
+  enabled: boolean;
+  signedIn: boolean;
+  /** The signed-in person's name, or `Admin`. */
+  name: string | null;
+  /** The admin secret, or a person in Administrators. */
+  admin: boolean;
 }
 
 /** One stored activity event as the UI shows it: the event plus who it is about. */
@@ -495,6 +703,9 @@ export interface HistoryRow {
   blowouts: number;
   agents: number;
   endReason: string | null;
+  /** The session this one continues after a /clear, and the one that continued it (#206). */
+  clearedFrom: string | null;
+  clearedInto: string | null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -533,6 +744,9 @@ export const LIMITS = {
   activityText: 300,
   activityChars: 60_000,
 } as const;
+
+/** Room past a respond limit for the reporter's "[cut off at N characters]" marker. */
+const CUT_MARKER_ROOM = 60;
 
 export type ValidateResult = { ok: true; report: Report } | { ok: false; error: string; path: string };
 
@@ -902,7 +1116,75 @@ function session(v: unknown, path: string): SessionReport {
     ...(bg ? { background: bg } : {}),
     ...(o.activityFeed === undefined || o.activityFeed === null ? {} : { activityFeed: bool(o.activityFeed, `${path}.activityFeed`) }),
     ...activity(o.activity, `${path}.activity`),
+    ...respondInfo(o.respond, `${path}.respond`),
+    ...(o.asks === undefined || o.asks === null ? {} : { asks: asks(o.asks, `${path}.asks`) }),
+    ...(o.clearedFrom === undefined ? {} : { clearedFrom: strOrNull(o.clearedFrom, `${path}.clearedFrom`, LIMITS.id) }),
   };
+}
+
+/** Report.session.respond. `accepts` is kept only where the level allows it, so a reporter cannot claim more than its level. */
+function respondInfo(v: unknown, path: string): { respond?: RespondInfo } {
+  if (v === undefined || v === null) return {};
+  const o = obj(v, path);
+  const level = oneOf(o.level, `${path}.level`, RESPOND_LEVELS);
+  const accepts = arr(o.accepts, `${path}.accepts`, RESPOND_KINDS.length).map((k, i) => oneOf(k, `${path}.accepts[${i}]`, RESPOND_KINDS));
+  const limits = arr(o.limits, `${path}.limits`, RESPOND_LIMIT_NAMES.length).map((k, i) => oneOf(k, `${path}.limits[${i}]`, RESPOND_LIMIT_NAMES));
+  const allowed = LEVEL_KINDS[level];
+  return { respond: { level, accepts: [...new Set(accepts)].filter((k) => allowed.includes(k)), limits: [...new Set(limits)] } };
+}
+
+function asks(v: unknown, path: string): Ask[] {
+  return arr(v, path, RESPOND_LIMITS.asks).map((a, i) => ask(a, `${path}[${i}]`));
+}
+
+/** One ask (6.2): strings clamped to their limits (with room for the cut-off marker), lists over their limit rejected. */
+function ask(v: unknown, path: string): Ask {
+  const o = obj(v, path);
+  const id = str(o.id, `${path}.id`, LIMITS.id);
+  if (!id) throw new Invalid(`${path}.id`, 'must not be empty');
+  const kind = oneOf(o.kind, `${path}.kind`, ['question', 'plan', 'permission'] as const);
+  const out: Ask = { id, kind, agentId: strOrNull(o.agentId, `${path}.agentId`, LIMITS.id), openedAt: num(o.openedAt, `${path}.openedAt`) };
+  const room = (n: number) => n + CUT_MARKER_ROOM;
+  if (kind === 'question') {
+    const qs = arr(o.questions, `${path}.questions`, RESPOND_LIMITS.questions);
+    if (!qs.length) throw new Invalid(`${path}.questions`, 'expected at least one question');
+    out.questions = qs.map((q, i) => {
+      const p = `${path}.questions[${i}]`;
+      const qo = obj(q, p);
+      const opts = arr(qo.options, `${p}.options`, RESPOND_LIMITS.options);
+      if (!opts.length) throw new Invalid(`${p}.options`, 'expected at least one option');
+      return {
+        question: text(qo.question, `${p}.question`, room(RESPOND_LIMITS.question)),
+        header: str(qo.header, `${p}.header`, RESPOND_LIMITS.header),
+        multiSelect: bool(qo.multiSelect, `${p}.multiSelect`),
+        options: opts.map((op, j) => {
+          const pp = `${p}.options[${j}]`;
+          const oo = obj(op, pp);
+          const preview = oo.preview === undefined || oo.preview === null ? null : text(oo.preview, `${pp}.preview`, room(RESPOND_LIMITS.preview));
+          return { label: str(oo.label, `${pp}.label`, room(RESPOND_LIMITS.label)), description: text(oo.description, `${pp}.description`, room(RESPOND_LIMITS.description)), preview };
+        }),
+      };
+    });
+  } else if (kind === 'plan') {
+    const po = obj(o.plan, `${path}.plan`);
+    out.plan = { text: text(po.text, `${path}.plan.text`, room(RESPOND_LIMITS.plan)), filePath: strOrNull(po.filePath, `${path}.plan.filePath`, LIMITS.path) };
+  } else {
+    const to = obj(o.tool, `${path}.tool`);
+    const input = obj(to.input, `${path}.tool.input`);
+    if (JSON.stringify(input).length > room(RESPOND_LIMITS.toolInput)) throw new Invalid(`${path}.tool.input`, `at most ${RESPOND_LIMITS.toolInput} characters of input allowed`);
+    out.tool = { name: str(to.name, `${path}.tool.name`, LIMITS.short), input, cut: bool(to.cut, `${path}.tool.cut`) };
+  }
+  return out;
+}
+
+/** Validates one ask as the mod announces it (PUT …/asks/:askId). Never throws. */
+export function validateAsk(body: unknown): { ok: true; ask: Ask } | { ok: false; error: string; path: string } {
+  try {
+    return { ok: true, ask: ask(body, '$') };
+  } catch (err) {
+    if (err instanceof Invalid) return { ok: false, error: err.message, path: err.path };
+    return { ok: false, error: 'invalid ask', path: '$' };
+  }
 }
 
 const ACTIVITY_KINDS: readonly ActivityKind[] = ['tool', 'text', 'reasoning'];

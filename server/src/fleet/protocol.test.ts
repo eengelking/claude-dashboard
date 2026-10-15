@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { validateReport, LIMITS } from './protocol.js';
+import { validateReport, validateAsk, acceptsFor, LIMITS, RESPOND_LIMITS } from './protocol.js';
 import { loadFixture, REPO_ROOT as repo } from './testing.js';
 
 const here = path.join(repo, 'server', 'src', 'fleet');
@@ -515,6 +515,87 @@ describe('protocol', () => {
       expect(chars).toBeLessThanOrEqual(LIMITS.activityChars);
       expect(r.report.session.activity).toHaveLength(LIMITS.activityEntries);
       expect(r.report.agents.at(-1)!.activity).toBeUndefined();
+    });
+  });
+
+  describe('responding (#206)', () => {
+    const withSession = (over: Record<string, unknown>) => {
+      const f = loadFixture() as { session: Record<string, unknown> };
+      Object.assign(f.session, over);
+      return f;
+    };
+    const question = {
+      id: 'toolu_q1',
+      kind: 'question',
+      agentId: null,
+      openedAt: 1_800_000_000_000,
+      questions: [{ question: 'Which color?', header: 'Color', multiSelect: false, options: [{ label: 'Blue', description: 'The sky', preview: null }, { label: 'Red', description: 'A brick' }] }],
+    };
+
+    it('leaves respond, asks and clearedFrom out for a reporter older than 0.14.0', () => {
+      const r = validateReport(loadFixture());
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.session.respond).toBeUndefined();
+      expect(r.report.session.asks).toBeUndefined();
+      expect(r.report.session.clearedFrom).toBeUndefined();
+    });
+
+    it('keeps the level, accepts, limits, asks and clearedFrom as sent', () => {
+      const r = validateReport(withSession({ respond: { level: 'everything', accepts: ['question', 'message', 'plan-feedback'], limits: ['no-permission-hooks'] }, asks: [question], clearedFrom: 'old-id' }));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.session.respond).toEqual({ level: 'everything', accepts: ['question', 'message', 'plan-feedback'], limits: ['no-permission-hooks'] });
+      expect(r.report.session.asks).toEqual([{ ...question, questions: [{ ...question.questions[0], options: [{ label: 'Blue', description: 'The sky', preview: null }, { label: 'Red', description: 'A brick', preview: null }] }] }]);
+      expect(r.report.session.clearedFrom).toBe('old-id');
+    });
+
+    it('never lets a reporter claim a kind its level does not allow', () => {
+      const r = validateReport(withSession({ respond: { level: 'questions', accepts: ['question', 'permission', 'command'], limits: [] } }));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.report.session.respond?.accepts).toEqual(['question']);
+    });
+
+    it('rejects an unknown level, kind or limit with a path', () => {
+      for (const [respond, path] of [
+        [{ level: 'all', accepts: [], limits: [] }, '$.session.respond.level'],
+        [{ level: 'off', accepts: ['everything'], limits: [] }, '$.session.respond.accepts[0]'],
+        [{ level: 'off', accepts: [], limits: ['managed'] }, '$.session.respond.limits[0]'],
+      ] as const) {
+        const r = validateReport(withSession({ respond }));
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.path).toBe(path);
+      }
+    });
+
+    it('rejects more than 8 open asks, and a question ask with more than 4 questions or options', () => {
+      expect(validateReport(withSession({ asks: Array.from({ length: RESPOND_LIMITS.asks + 1 }, (_, i) => ({ ...question, id: `t${i}` })) })).ok).toBe(false);
+      const five = { ...question, questions: Array.from({ length: 5 }, () => question.questions[0]) };
+      expect(validateAsk(five)).toMatchObject({ ok: false, path: '$.questions' });
+      const opts = { ...question, questions: [{ ...question.questions[0], options: Array.from({ length: 5 }, () => ({ label: 'x', description: '' })) }] };
+      expect(validateAsk(opts)).toMatchObject({ ok: false, path: '$.questions[0].options' });
+    });
+
+    it('validates a plan ask and a tool ask, and refuses a tool input past its limit', () => {
+      expect(validateAsk({ id: 'p1', kind: 'plan', agentId: null, openedAt: 1, plan: { text: '# Plan\n\n1. Do it', filePath: '/Users/dev/.claude/plans/x.md' } })).toEqual({
+        ok: true,
+        ask: { id: 'p1', kind: 'plan', agentId: null, openedAt: 1, plan: { text: '# Plan\n\n1. Do it', filePath: '/Users/dev/.claude/plans/x.md' } },
+      });
+      const tool = { id: 't1', kind: 'permission', agentId: 'agent-7', openedAt: 1, tool: { name: 'Bash', input: { command: 'git push' }, cut: false } };
+      expect(validateAsk(tool)).toEqual({ ok: true, ask: tool });
+      expect(validateAsk({ ...tool, tool: { ...tool.tool, input: { command: 'x'.repeat(RESPOND_LIMITS.toolInput + 100) } } })).toMatchObject({ ok: false, path: '$.tool.input' });
+      expect(validateAsk({ ...tool, kind: 'other' })).toMatchObject({ ok: false, path: '$.kind' });
+      expect(validateAsk({ ...tool, id: '' })).toMatchObject({ ok: false, path: '$.id' });
+    });
+
+    it('works out what each level accepts, less its limits', () => {
+      expect(acceptsFor('off', [], true)).toEqual([]);
+      expect(acceptsFor('questions', [], true)).toEqual(['question', 'message']);
+      expect(acceptsFor('questions-and-plans', [], true)).toEqual(['question', 'message', 'plan-approve', 'plan-feedback']);
+      expect(acceptsFor('everything', ['no-permission-hooks'], true)).toEqual(['question', 'message', 'plan-feedback', 'command']);
+      expect(acceptsFor('everything', ['not-interactive'], true)).toEqual([]);
+      expect(acceptsFor('everything', [], false)).toEqual([]);
     });
   });
 });

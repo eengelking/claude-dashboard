@@ -347,6 +347,8 @@ export class Fleet {
         blowouts: row.blowouts + agents.reduce((n, a) => n + a.blowouts, 0),
         agents: agents.length,
         endReason: row.dropped_at !== null ? 'heartbeat lost' : row.end_reason,
+        clearedFrom: row.cleared_from ?? null,
+        clearedInto: this.db.clearedInto(row.id),
       };
     });
   }
