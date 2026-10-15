@@ -264,6 +264,28 @@ body.modal-open { overflow: hidden; }
 .levels li b { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
 @media (max-width: 560px) { .levels li { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 
+/* signing in: the form in the answer panel, and the top bar once signed in */
+.signnote { font-size: 12.5px; color: var(--ink2); margin: 0 0 10px; padding: 7px 10px; border: 1px solid var(--grid); border-radius: 6px; background: var(--bg); }
+.signlead { font-size: 12.5px; color: var(--ink2); margin: -4px 0 12px; max-width: 70ch; }
+.signin { display: grid; grid-template-columns: 70px minmax(0, 300px); gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+.signin label { font-size: 12.5px; font-weight: 600; }
+.signin input { width: 100%; font-size: 13px; background: var(--bg); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 9px; }
+.signin input.mono { font-family: var(--font-mono); }
+.signin input:disabled { opacity: .5; cursor: not-allowed; }
+.signerr { font-size: 12.5px; color: var(--crit-text); margin: 0 0 10px; }
+@media (max-width: 560px) { .signin { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.tb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; }
+.tb-brand { font-weight: 700; font-size: 14px; margin-right: 4px; }
+.tb-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--ink2); }
+.tb-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.tb-sp { flex: 1; }
+.tb-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--raised); }
+#tbMe { display: inline-flex; align-items: center; gap: 8px; }
+#tbMe:empty { display: none; }
+.tb-me { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); }
+.tb-me b { color: var(--ink); font-weight: 600; }
+.signrules { margin-top: 14px; max-width: 80ch; }
+
 /* gallery: the modal drawn once per case, on a stand-in for the blurred page */
 .casenav { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 20px; }
 .casenav a { text-decoration: none; }
@@ -298,7 +320,7 @@ body.modal-open { overflow: hidden; }
 <div id="app">
 <div class="wrap">
   <h1>Respond to a waiting session from Podium</h1>
-  <p class="note">When a session stops to ask something, the amber band gets a <b>Respond</b> button. It opens the Activity modal, where you can answer the question, approve or reject a plan, allow or deny a tool, or send a new message or <code>/clear</code>. The answer goes to the session through podium-reporter. The terminal or desktop app still works the whole time, and whichever answers first wins. Section 3 shows the modal in every case. To click through one yourself, pick a kind of wait and a state, then press Respond on the card.</p>
+  <p class="note">When a session stops to ask something, the amber band gets a <b>Respond</b> button. It opens the Activity modal, where you can answer the question, approve or reject a plan, allow or deny a tool, or send a new message or <code>/clear</code>. The answer goes to the session through podium-reporter, and only after you sign in with your name and token (section 6). The terminal or desktop app still works the whole time, and whichever answers first wins. Section 3 shows the modal in every case. To click through one yourself, pick a kind of wait and a state, then press Respond on the card.</p>
 
   <div class="controls" role="group" aria-label="Mockup controls">
     <div class="row" role="radiogroup" aria-label="What the session waits on">
@@ -320,6 +342,11 @@ body.modal-open { overflow: hidden; }
       <label class="seg"><input type="radio" name="edge" value="old"> Reporter can't answer</label>
       <label class="seg"><input type="radio" name="edge" value="off"> Turned off</label>
       <label class="seg"><input type="radio" name="edge" value="owner"> Someone else's session</label>
+    </div>
+    <div class="row" role="radiogroup" aria-label="Signed in">
+      <span class="rl">Signed in</span>
+      <label class="seg"><input type="radio" name="signed" value="yes" checked> As Ed</label>
+      <label class="seg"><input type="radio" name="signed" value="no"> Signed out</label>
     </div>
     <div class="row"><span class="rl">Theme</span><button class="chipbtn" id="theme" type="button">Switch theme</button></div>
   </div>
@@ -355,6 +382,7 @@ body.modal-open { overflow: hidden; }
       <ul>
         <li>Shown only while the session waits on you, and only when every switch in section 5 is on.</li>
         <li>One name in every case: <b>Respond</b>. The modal says what kind of answer is needed.</li>
+        <li>Signed out, it is shown on every waiting card and leads to signing in (section 6).</li>
         <li>Not on a card that waits on background work (blue band), since nothing there needs you.</li>
         <li>The card's own click target is unchanged: it still opens the orchestrator page. Respond opens the modal straight from the wall.</li>
       </ul>
@@ -421,6 +449,27 @@ body.modal-open { overflow: hidden; }
       </span>
       <span class="fc"><select aria-label="respond option" id="optSel"><option>off</option><option>questions</option><option>questions-and-plans</option><option selected>everything</option></select></span>
     </div>
+  </div>
+
+  <h2 class="s">6. Signing in</h2>
+  <p class="note">Anyone can watch, but answering needs Podium to know who you are. You sign in with the same name and token your podium-reporter uses. Signing in happens from Respond, in the modal (section 3, "Signing in"). Once you're signed in, the top bar shows your name next to Admin, with Sign out.</p>
+  <div class="tb" id="topbar" aria-label="Top bar">
+    <span class="tb-brand">Podium</span><span class="tb-pill">Fleet</span><span class="tb-pill"><i class="dot"></i>Live · 4 reporters</span>
+    <span class="tb-sp"></span>
+    <span class="tb-btn">History</span><span class="tb-btn">Hide top bar</span>
+    <span id="tbMe"></span>
+    <span class="tb-btn">Admin</span>
+  </div>
+  <p class="cap" id="tbCap"></p>
+  <div class="aside-note signrules">
+    <h3>Rules for signing in</h3>
+    <ul>
+      <li><b>Name</b> is your name as Admin &gt; People shows it, the same as the reporter's <code>userName</code> option. Upper or lower case doesn't matter.</li>
+      <li><b>Token</b> is your own token, the reporter's <code>token</code> option. Someone in Administrators signs in the same way and can respond to every session. The admin secret signs in with the name <b>Admin</b>.</li>
+      <li>One sign-in per browser, shared by its tabs. It ends after 12 hours without use, on Sign out, when the server restarts, and when your token is revoked or rotated.</li>
+      <li>The page never keeps your token. Five wrong tries from one address lock signing in for 15 minutes, counted together with wrong Admin unlocks.</li>
+      <li>Signed out, every card still shows Respond, because Podium doesn't know which sessions are yours. Signed in, other people's sessions show Respond dimmed, with their name.</li>
+    </ul>
   </div>
 </div>
 </div>
@@ -505,7 +554,7 @@ const FEED_KIND = {
 
 // Every piece of the modal is a pure function of a state object `st`, so the live modal and the gallery of cases
 // draw from the same code. `st.p` prefixes ids and radio names, so the gallery's copies never collide with the live one.
-const BASE = { kind: "question", edge: "ready", tab: 0, answers: {}, other: {}, plan: "auto", planFb: "", perm: "allow", permFb: "", draft: "", sent: [], confirmClear: false, ta: 0, submitted: false, p: "", feed: null, tail: 0 };
+const BASE = { kind: "question", edge: "ready", tab: 0, answers: {}, other: {}, plan: "auto", planFb: "", perm: "allow", permFb: "", draft: "", sent: [], confirmClear: false, ta: 0, submitted: false, p: "", feed: null, tail: 0, signed: true, signErr: "", expired: false, signName: "", signTok: "" };
 let S = { ...BASE, answers: {}, other: {}, sent: [] };
 
 /* ---------- the band on the card and the page ---------- */
@@ -517,9 +566,11 @@ function renderBands() {
     const sub = $("[data-sub]", b); if (sub) sub.textContent = k.sub;
     const btn = $("[data-respond]", b), why = $("[data-why]", b);
     btn.hidden = off;
-    btn.disabled = S.edge === "owner";
-    btn.title = S.edge === "owner" ? "Only Alex, who owns this session, or an Admin can respond." : "";
-    why.hidden = S.edge !== "owner";
+    // Signed out, Podium doesn't know whose session this is, so the button stays live and leads to signing in.
+    const notYours = S.edge === "owner" && S.signed;
+    btn.disabled = notYours;
+    btn.title = notYours ? "Only Alex, who owns this session, or an Admin can respond." : "";
+    why.hidden = !notYours;
     why.textContent = "Alex's session";
     const n = $("[data-count]", b); n.textContent = k.count; n.hidden = !k.count;
   });
@@ -565,6 +616,13 @@ const WHAT = { question: "question", plan: "plan", permission: "request", idle: 
 function askParts(st) {
   const k = KIND[st.kind];
   const r = { hidden: st.kind === "idle" || st.edge === "off" || st.edge === "old", lead: k.lead, ago: st.kind === "permission" ? "asked 0:54 ago" : "asked 0:42 ago", also: "Also open in the terminal", body: "", foot: "" };
+  // Signed out, the panel asks you to sign in first, even for a turn that ended, since sending a message needs it too.
+  if (!st.signed && st.edge !== "off" && st.edge !== "old") {
+    r.hidden = false;
+    if (st.kind === "idle") r.ago = r.also = "";
+    signInParts(st, r);
+    return r;
+  }
   if (r.hidden) return r;
   const what = WHAT[st.kind];
   if (st.edge === "sending" || st.edge === "nottaken" || st.submitted) {
@@ -601,6 +659,19 @@ function askParts(st) {
   else if (st.kind === "plan") planParts(st, r);
   else permissionParts(st, r);
   return r;
+}
+
+function signInParts(st, r) {
+  const p = st.p, locked = st.signErr === "locked";
+  const err = { wrong: "That name and token don't match. Check the userName and token options in podium-reporter.", empty: "Enter your name and your token.", locked: "Too many wrong tries from this address. Try again in 15 minutes." }[st.signErr];
+  r.body = `${st.expired ? `<p class="signnote">You were signed out. A sign-in ends after 12 hours without use, when the server restarts, and when your token changes.</p>` : ""}<p class="qh">Sign in to respond</p>
+    <p class="signlead">Use your name and token, the same ones as your podium-reporter's <code>userName</code> and <code>token</code> options. Only the session's owner, or an Admin, can respond.</p>
+    <div class="signin">
+      <label for="${p}signName">Name</label><input id="${p}signName" type="text" autocomplete="username" spellcheck="false" value="${esc(st.signName)}" ${locked ? "disabled" : ""}>
+      <label for="${p}signTok">Token</label><input id="${p}signTok" class="mono" type="password" autocomplete="off" value="${esc(st.signTok)}" ${locked ? "disabled" : ""}>
+    </div>
+    ${err ? `<div class="signerr" role="alert">${err}</div>` : ""}`;
+  r.foot = `<span class="grow">Signs in this browser. An Admin can use the name Admin with the admin secret.</span><button class="btn pri" type="button" data-act="signin" ${locked ? "disabled" : ""}>Sign in</button>`;
 }
 
 function questionParts(st, r) {
@@ -651,7 +722,7 @@ const COMMANDS = [
 function composeHTML(st) {
   if (st.edge === "off") return `<div class="offnote"><b>Responding from Podium is turned off.</b><span>The Admin's Respond from Podium switch, this session's <code>respond</code> option, or the activity feed is off. Answer in the terminal or desktop app. Admin &gt; Settings &gt; Feature flags has the server's switch.</span></div>`;
   if (st.edge === "old") return `<div class="offnote"><b>This session can't be answered from Podium.</b><span>It reports with podium-reporter 0.13.0. Responding needs a newer reporter with the <code>respond</code> option on: run <code>claude plugin update podium-reporter@eengelking-marketplace</code>, then <code>/reload-plugins</code> in that session. Sessions reported by the settings hooks or run with <code>claude -p</code> can't be answered at all.</span></div>`;
-  if (st.edge === "owner") return "";
+  if (st.edge === "owner" || !st.signed) return "";
   const pending = st.kind !== "idle" && st.edge === "ready" && !st.submitted;
   const val = st.draft;
   const slash = val.startsWith("/") ? val.split(/\s/)[0] : null;
@@ -686,6 +757,11 @@ function renderCompose() { const c = $("#compose"); c.innerHTML = composeHTML(S)
 /* ---------- the gallery: the same modal, drawn once per case ---------- */
 const PS = "25/50/100, default 50", DS = "Keep it, page within the day";
 const CASES = [
+  { group: "Signing in" },
+  { id: "s-signin", title: "Signed out", cap: "Respond opens the modal as usual, and the feed shows, but the panel asks you to sign in first. The message box comes back once you're signed in.", st: { kind: "question", signed: false } },
+  { id: "s-wrong", title: "Wrong name or token", cap: "The name stays filled in and the token field is cleared. The message doesn't say which of the two was wrong.", st: { kind: "question", signed: false, signErr: "wrong", signName: "Ed" } },
+  { id: "s-locked", title: "Too many wrong tries", cap: "After five wrong tries from one address, counted with wrong Admin unlocks, signing in is locked for 15 minutes.", st: { kind: "question", signed: false, signErr: "locked", signName: "Ed" } },
+  { id: "s-ended", title: "Signed out by the server", cap: "Your sign-in ended while the page was open. The next Respond says why before asking again.", st: { kind: "idle", signed: false, expired: true } },
   { group: "A question" },
   { id: "q-first", title: "Opened from Respond", cap: "The questions Claude Code shows as tabs in the terminal show as tabs here. The recommended option is marked, and Type something takes your own answer.", st: { kind: "question" } },
   { id: "q-preview", title: "An option with a preview", cap: "When the options come with a preview, it shows beside them for the one selected.", st: { kind: "question", tab: 1, answers: { "Page size": PS, "Day selector": "One paged list, newest first" } } },
@@ -755,9 +831,23 @@ function renderTerms() {
   $("#termDone").innerHTML = done;
 }
 
+function renderTopBar() {
+  $("#tbMe").innerHTML = S.signed ? `<span class="tb-me">${icon("you", 14)}Signed in as <b>Ed</b></span><button class="tb-btn" type="button" data-act="signout">Sign out</button>` : "";
+  $("#tbCap").textContent = S.signed ? "Signed in. Sign out ends the sign-in for every tab in this browser." : "Signed out. Nothing shows here; you sign in from Respond.";
+}
+
 // The live modal's own elements, so a lookup never lands in one of the gallery's copies.
 const M = () => $("#modal");
-function render() { renderBands(); renderFeed(); renderAsk(); renderCompose(); renderTerms(); }
+function render() { renderBands(); renderFeed(); renderAsk(); renderCompose(); renderTerms(); renderTopBar(); }
+function syncSigned() { $$('input[name="signed"]').forEach(r => r.checked = r.value === (S.signed ? "yes" : "no")); }
+function signIn() {
+  const name = $("#signName")?.value.trim() || "", tok = $("#signTok")?.value || "";
+  S.signName = name;
+  if (!name || !tok) { S.signErr = "empty"; renderAsk(); $(name ? "#signTok" : "#signName").focus(); return; }
+  // The mockup takes any name and token. The real check is the server's.
+  S.signed = true; S.signErr = ""; S.expired = false; syncSigned(); render();
+  ($("#askBody input, #askBody button") || $("#draft") || $("#close")).focus();
+}
 
 /* ---------- events ---------- */
 function syncDraft() {
@@ -796,6 +886,8 @@ document.addEventListener("click", e => {
   }
   else if (a === "discard") { S.edge = "ready"; syncEdge(); S.answers = {}; render(); }
   else if (a === "send") send();
+  else if (a === "signin") signIn();
+  else if (a === "signout") { S.signed = false; S.signErr = ""; syncSigned(); render(); }
   else if (a === "cancel-clear") { S.confirmClear = false; renderCompose(); $("#draft").focus(); }
   else if (a === "do-clear") { S.confirmClear = false; S.sent.push({ at: "50:12", text: "/clear", note: "(the conversation was cleared; a new session id follows)" }); S.draft = ""; render(); $("#draft").focus(); }
 });
@@ -807,6 +899,7 @@ document.addEventListener("change", e => {
     if (S.edge === "nottaken" && (S.kind === "question" || S.kind === "idle")) { S.edge = "sending"; syncEdge(); }
     render(); return;
   }
+  if (t.name === "signed") { S.signed = t.value === "yes"; S.signErr = ""; S.expired = false; render(); return; }
   if (t.name === "edge") {
     S.edge = t.value; S.submitted = false;
     if (S.edge === "nottaken" && (S.kind === "question" || S.kind === "idle")) { S.kind = "plan"; syncRadios(); }
@@ -832,6 +925,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("focusin", e => { if (/^q\dtext$/.test(e.target.id)) { const r = $(`#q${S.tab}other`); if (r && !r.checked) { r.checked = true; S.answers[QUESTIONS[S.tab].header] = "__other"; } } });
 document.addEventListener("keydown", e => {
+  if ((e.target.id === "signName" || e.target.id === "signTok") && e.key === "Enter") { e.preventDefault(); signIn(); return; }
   if (e.target.id === "draft") {
     const list = $$(".typeahead [data-cmd]", M());
     if (list.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); S.ta = (S.ta + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length; list.forEach((b, i) => b.classList.toggle("on", i === S.ta)); return; }
