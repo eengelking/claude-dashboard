@@ -96,6 +96,8 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
 
   useEffect(() => {
     const onPop = () => {
+      // A Back or link click to another page also fires popstate; leave the list alone while it unmounts.
+      if (!window.location.hash.startsWith("#/history")) return;
       const p = parseHash(window.location.hash);
       const next = { day: p.day ?? whereRef.current.day, page: p.page ?? 1, size: p.size ?? DEFAULT_SIZE, open: p.open ?? null };
       whereRef.current = next;
