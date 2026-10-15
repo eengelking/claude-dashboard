@@ -103,13 +103,16 @@ code, .mono { font-family: var(--font-mono); }
 .blow { display: inline-flex; align-items: center; gap: 2px; color: var(--crit-text); font: 600 11px var(--font-mono); }
 .blow svg { width: 11px; height: 11px; }
 /* The status band: always the last thing in the card, always full width, always the same place. */
-.band { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); font-size: 13px; }
+.band { display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 8px 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); font-size: 13px; }
+.band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); }
 .card.detached .band { background: color-mix(in srgb, var(--c) 12%, transparent); }
 .band .bi { flex: none; display: inline-flex; color: var(--c-text); }
 .band .bi svg { width: 16px; height: 16px; }
 .band .bl { font-weight: 600; min-width: 0; }
 .band .bd { margin-left: auto; color: var(--ink2); font-size: 12px; text-align: right; flex: none; max-width: 45%; }
-.remove-bar { display: flex; justify-content: flex-end; padding: 6px 2px 0; }
+.slot { position: relative; }
+.remove-bar { position: absolute; right: 12px; bottom: 1px; height: 52px; display: flex; align-items: center; }
+.slot .band { padding-right: 92px; }
 .btn { font: 12px var(--font-ui); color: var(--ink); background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; }
 .slot { display: flex; flex-direction: column; min-width: 0; height: 100%; }
 .slot > .card { flex: 1; }
@@ -234,7 +237,7 @@ td:first-child { color: var(--pg-ink); min-width: 0; }
         <div class="note" data-for="1"><b>Who is this, and where?</b><span>Name, model and effort. Below it the folder, the branch and whether the tree is clean. Notes such as “nobody attached” or a reporter warning sit last in this layer, and only appear when they apply.</span></div>
         <div class="note" data-for="2"><b>What is it doing?</b><span>The plan step and its progress, then the agents it launched and how busy the session is right now (tokens per second). Without a plan this layer shrinks to one quiet line.</span></div>
         <div class="note" data-for="3"><b>What is it costing, and how full is it?</b><span>Four readouts in fixed columns: cost, tokens, time and context. A blowout count joins the context column and turns the card’s top edge red.</span></div>
-        <div class="note" data-for="4"><b>Does it need me?</b><span>The status band. Same position, same height, same size icon on every card. Every state has the same weight: a light tint and a thin top line in its own color, so the color and the shape tell them apart.</span></div>
+        <div class="note" data-for="4"><b>Does it need me?</b><span>The status band. Same position, same height, same size icon on every card. Calm states (running, done, background wait) are a light tint. Waiting and heartbeat lost are a heavier tint. Every band has the same thin top line.</span></div>
       </div>
     </div>
   </div>
@@ -354,7 +357,7 @@ td:first-child { color: var(--pg-ink); min-width: 0; }
         '<div class="c ctx' + (hi ? ' hi' : '') + '"><span class="k">Context' + (hi ? ' <span class="blow" title="Context window exceeded ' + s.blow + ' times. Earlier work was compacted away; output may be unreliable.">' + ICON.warn + s.blow + '×</span>' : '') + '</span>' +
           '<span class="v' + (na ? ' na' : '') + '">' + (na ? '—' : pct + '%') + '</span>' + (na ? '' : '<span class="ctxbar"><i style="width:' + pct + '%"></i></span>') + '</div>' +
       '</div>' +
-      '<div class="band" data-zone="4"><span class="bi" aria-hidden="true">' + ICON[s.kind] + '</span><span class="bl">' + s.band + '</span>' + (s.bd ? '<span class="bd">' + s.bd + '</span>' : '') + '</div>' +
+      '<div class="band' + (s.kind === 'waiting' || s.kind === 'stale' ? ' hot' : '') + '" data-zone="4"><span class="bi" aria-hidden="true">' + ICON[s.kind] + '</span><span class="bl">' + s.band + '</span>' + (s.bd ? '<span class="bd">' + s.bd + '</span>' : '') + '</div>' +
       '</div>';
     if (extra) html = '<div class="slot">' + html + extra + '</div>';
     return html;
@@ -364,11 +367,11 @@ td:first-child { color: var(--pg-ink); min-width: 0; }
   var STATES = [
     { id: 'running', title: 'Running', why: 'The usual case. Calm green band, plan step in the middle, totals below.', kind: 'running', name: 'claude-dashboard', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: P, branch: 'issue/144-fleet-card-redesign', wt: 'main checkout', tree: '3 changed', plan: ['Fleet card redesign', 'Build the mockup', 2, 6], crew: 's.r s.r h.r o.d s.d', spark: BUSY, cost: '$1.42', tok: '214k', time: '18:40', ctx: 31, blow: 0, band: 'Running' },
     { id: 'deleg', title: 'Delegating', why: 'The orchestrator is waiting on agents it launched. Blue ring, and the band says how many.', kind: 'deleg', name: 'podium', model: 'Opus 5.5', fam: 'o', eff: 'high', path: '~/dev/podium', branch: 'main', tree: 'clean', plan: ['Release 0.9', 'Run the review agents', 3, 5], crew: 'o.r s.r s.r h.r s.d', spark: CALM, cost: '$3.08', tok: '402k', time: '41:12', ctx: 48, blow: 0, band: 'Delegating to 3 agents', bd: 'Not waiting on you' },
-    { id: 'wait-approval', title: 'Waiting for your approval', why: 'Needs you. Same weight as every other band; the amber and the “!” ring carry it. The tool name stays on the orchestrator page, as today.', kind: 'waiting', name: 'skills', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/skills', branch: 'main', tree: 'clean', plan: ['Tidy the skill index', 'Rename two skills', 1, 4], crew: 's.r s.d', spark: FLAT, cost: '$0.06', tok: '51.3k', time: '58:14', ctx: 5, blow: 0, band: 'Waiting for your approval.' },
+    { id: 'wait-approval', title: 'Waiting for your approval', why: 'Needs you. Heavier amber tint, same thin top line as the others. The tool name stays on the orchestrator page, as today.', kind: 'waiting', name: 'skills', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/skills', branch: 'main', tree: 'clean', plan: ['Tidy the skill index', 'Rename two skills', 1, 4], crew: 's.r s.d', spark: FLAT, cost: '$0.06', tok: '51.3k', time: '58:14', ctx: 5, blow: 0, band: 'Waiting for your approval.' },
     { id: 'wait-input', title: 'Waiting for your input, no plan', why: 'The card from your screenshot. With no plan the middle layer shrinks to one line and the band is still last.', kind: 'waiting', name: 'FortressMaximus', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '/var/home/eengelking/dev/centrlized-logging', branch: 'main', tree: 'clean', plan: null, crew: 's.r', spark: FLAT, cost: '$0.08', tok: '43.2k', time: '58:06', ctx: 4, blow: 0, band: 'Waiting for your input.' },
     { id: 'bg', title: 'Waiting on background work', why: 'Not waiting on you, so it is blue and calm: a dashed ring with a clock, not the amber “!”.', kind: 'bg', name: 'logship', model: 'Haiku 5.5', fam: 'h', eff: 'low', path: '~/dev/logship', branch: 'fix/retry-backoff', tree: 'clean', plan: null, crew: 'h.r h.d', spark: FLAT, cost: '$0.21', tok: '88k', time: '12:30', ctx: 14, blow: 0, band: 'Waiting for 1 background shell to finish.' },
     { id: 'failed', title: 'Failed', why: 'A failed agent. Red band, a square X, and the failed agent keeps its red outline in the strip. The reason is on the orchestrator page, as today.', kind: 'failed', name: 'ingest-api', model: 'Sonnet 5.5', fam: 's', eff: 'high', path: '~/dev/ingest-api', branch: 'feat/batch-upload', tree: '1 changed', plan: ['Batch upload', 'Run the migration', 4, 7], crew: 's.r s.d s.d s.f h.d', spark: CALM, cost: '$2.17', tok: '330k', time: '1:12:03', ctx: 62, blow: 0, band: '1 agent failed.', bd: 'Open for the reason' },
-    { id: 'stale', title: 'Stale', why: 'No heartbeat for a while. Orange band with a clock. The Remove button stays where it is today, just under the card.', kind: 'stale', name: 'notes-sync', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/notes-sync', branch: 'main', tree: 'clean', plan: null, crew: 's.d', spark: FLAT, cost: '$0.44', tok: '120k', time: '2:04:10', ctx: 22, blow: 0, band: 'Last heartbeat 4m 12s ago. Goes away in 3:20.', extra: '<div class="remove-bar"><span class="btn">Remove</span></div>' },
+    { id: 'stale', title: 'Stale', why: 'No heartbeat for a while. Orange band with a clock. Remove is its own button laid over the right end of the band, so the countdown text cannot move it.', kind: 'stale', name: 'notes-sync', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/notes-sync', branch: 'main', tree: 'clean', plan: null, crew: 's.d', spark: FLAT, cost: '$0.44', tok: '120k', time: '2:04:10', ctx: 22, blow: 0, band: 'Last heartbeat 4m 12s ago. Goes away in 3:20.', extra: '<div class="remove-bar"><span class="btn">Remove</span></div>' },
     { id: 'blowout', title: 'Context blowout', why: 'The context window ran over three times. The card’s top edge turns red and the context figure turns red with a count. The band still reports the session’s actual state.', kind: 'running', name: 'data-pipeline', model: 'Opus 5.5', fam: 'o', eff: 'xhigh', path: '~/dev/data-pipeline', branch: 'refactor/loaders', tree: '9 changed', plan: ['Loader refactor', 'Port the CSV loader', 5, 8], crew: 'o.r s.r s.r s.d s.d h.d', spark: BUSY, cost: '$7.90', tok: '1.4M', time: '2:31:48', ctx: 96, blow: 3, band: 'Running' },
     { id: 'done', title: 'Done', why: 'Finished. Neutral band, no plan bar movement, sparkline flat.', kind: 'done', name: 'docs-pass', model: 'Haiku 5.5', fam: 'h', eff: 'low', path: '~/dev/podium/docs', branch: 'docs/spec-tidy', tree: 'clean', plan: ['Spec tidy', 'Done', 4, 4], crew: 'h.d h.d s.d', spark: FLAT, cost: '$0.37', tok: '96k', time: '9:21', ctx: 18, blow: 0, band: 'Done' },
     { id: 'detached', title: 'Nobody attached', why: 'No terminal window is open on it. Dashed outline and muted text, with tags in the first layer. The band still tells its real state.', kind: 'running', name: 'overnight-eval', model: 'Sonnet 5.5', fam: 's', eff: 'medium', path: '~/dev/evals', branch: 'main', tree: 'clean', det: '4:12', plan: ['Nightly eval', 'Score the batch', 6, 12], crew: 's.r s.r s.d', spark: CALM, cost: '$0.93', tok: '260k', time: '6:02:44', ctx: 37, blow: 0, band: 'Running' },
@@ -430,7 +433,7 @@ td:first-child { color: var(--pg-ink); min-width: 0; }
     ['Context percent', 'Chip in the meta row', 'Layer 3, readout with a thin bar'],
     ['Context blowouts', 'Badge, red alert sentence, red top edge', 'Layer 3 count, red top edge, red context figure. The sentence moves to the hover text and the orchestrator page'],
     ['Waiting, background wait, stale sentences', 'Colored alert mid-card', 'The band'],
-    ['Remove (stale only)', 'Button under the card', 'Unchanged']
+    ['Remove (stale only)', 'Button under the card', 'Its own button at the right end of the band']
   ];
   document.getElementById('facts').innerHTML = FACTS.map(function (f) { return '<tr><td>' + f[0] + '</td><td>' + f[1] + '</td><td>' + f[2] + '</td></tr>'; }).join('');
 })();

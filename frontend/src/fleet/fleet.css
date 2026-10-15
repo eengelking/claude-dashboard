@@ -254,7 +254,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .card.sc { padding: 0; overflow: hidden; text-align: left; align-items: stretch; --c: var(--muted); }
 .podium .card.sc .z1 { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
 .podium .card.sc .z2 { margin-top: auto; padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
-.podium .card.sc .z3 { height: 58px; border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
+.podium .card.sc .z3 { border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
 .podium .card.sc .h { min-width: 0; }
 .podium .card.sc .sd { flex: none; display: inline-flex; color: var(--muted); }
 .podium .card.sc .sd .si { width: 13px; height: 13px; }
@@ -278,6 +278,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .band .bi { flex: none; display: inline-flex; color: var(--c-text); }
 .podium .band .bi .si { width: 16px; height: 16px; }
 .podium .band .bl { font-weight: 600; min-width: 0; }
+.podium .band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); }
 .podium .band.running { --c: var(--good); --c-text: var(--good-text); }
 .podium .band.waiting { --c: var(--warn); --c-text: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
 .podium .band.bg { --c: var(--deleg); --c-text: var(--deleg-text); }
@@ -643,14 +644,14 @@ body.modal-open #root { filter: blur(5px); }
 @media (max-width: 1040px) { .podium .history { display: block; } .podium .history > .side { width: auto; } }
 
 /* Remove on a heartbeat-lost card or rail row (#41). The card and the row are buttons, so the control sits beside them:
-   under the card in its own strip, and at the end of the row's first line. */
+   on a card laid over the right end of its status band (#144), and at the end of the row's first line. */
 .podium .card-slot { position: relative; display: flex; flex-direction: column; min-width: 0; }
 .podium .card-slot > .card { flex: 1; }
-/* A heartbeat-lost card's Remove button (#144) is laid over a reserved fifth column of the readouts row: it cannot sit inside the card's own button.
-   The readouts row and the band have fixed minimum heights (58 px and 52 px), which is what lets it be placed from the bottom edge. */
-.podium .card-slot.has-remove .card.sc .z3 { grid-template-columns: repeat(4, minmax(0, 1fr)) 72px; }
-.podium .card-slot.has-remove .card.sc .z3 .c { padding-inline: 8px; }
-.podium .card-slot.has-remove > .remove-bar { position: absolute; right: 1px; bottom: 53px; width: 71px; height: 58px; display: flex; align-items: center; justify-content: center; }
+/* A heartbeat-lost card's Remove button (#144) is its own element laid over the right end of the status band, so the countdown text can
+   change without moving it. It cannot sit inside the card's own button. The band has a fixed minimum height (52 px), which lets the
+   button be placed from the bottom edge, and the band's text keeps clear of it. */
+.podium .card-slot.has-remove > .remove-bar { position: absolute; right: 12px; bottom: 1px; height: 52px; display: flex; align-items: center; }
+.podium .card-slot.has-remove .band { padding-right: 92px; }
 .podium .card-slot .remove { padding: 2px 8px; }
 .podium .ritem-slot { position: relative; min-width: 0; flex-shrink: 0; }
 .podium .ritem-slot .rx { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--raised); color: var(--ink2); font-size: 14px; line-height: 1; }

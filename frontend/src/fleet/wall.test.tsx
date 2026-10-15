@@ -167,25 +167,22 @@ describe("session card", () => {
     expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Goes away in 37 s.");
   });
 
-  it("Remove sits over a reserved fifth column of the readouts row, not under the card (#144)", () => {
+  it("Remove is its own element laid over the right end of the band, so the countdown text cannot move it (#144)", () => {
     const draw = (s = makeSession()) => render(<SessionCard s={s} now={2_000_000} config={CFG} entering={false} leaving={false} onOpen={() => {}} onRemove={() => {}} />);
     const stale = draw(makeSession({ status: "stale", dropAt: 2_037_000 }));
-    expect(stale.container.querySelectorAll(".z3 .c")).toHaveLength(5);
-    expect(stale.container.querySelector(".z3 .c.rm")).not.toBeNull();
+    expect(stale.container.querySelectorAll(".z3 .c")).toHaveLength(4);
     expect(stale.container.querySelector(".card-slot > .remove-bar .remove")).not.toBeNull();
+    expect(stale.container.querySelector(".band .remove")).toBeNull();
     cleanup();
     const live = draw(makeSession({ status: "running" }));
-    expect(live.container.querySelectorAll(".z3 .c")).toHaveLength(4);
     expect(live.container.querySelector(".remove-bar")).toBeNull();
   });
 
-  it("a heartbeat-lost card with a blowout badge shortens the Context label so the badge clears Remove", () => {
-    const draw = (s: ReturnType<typeof makeSession>, remove: boolean) => render(<SessionCard s={s} now={2_000_000} config={CFG} entering={false} leaving={false} onOpen={() => {}} onRemove={remove ? () => {} : undefined} />);
-    const stale = draw(makeSession({ status: "stale", dropAt: 2_037_000, blowouts: blow(0, 2, 2) }), true);
-    expect(stale.container.querySelector(".z3 .ctx .k")!.textContent).toContain("Ctx");
-    cleanup();
-    const running = draw(makeSession({ status: "running", blowouts: blow(0, 2, 2) }), false);
-    expect(running.container.querySelector(".z3 .ctx .k")!.textContent).toContain("Context");
+  it("a countdown sets its number in the monospace face and its unit in the normal one, so no wide gap opens before the s", () => {
+    const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: 2_000_000 + 37_000 }));
+    const monos = [...container.querySelectorAll(".band .mono")].map((e) => e.textContent);
+    expect(monos).toEqual(["0:38", "37"]);
+    expect(container.querySelector(".band")!.textContent).toBe("Last heartbeat 0:38 ago. Goes away in 37 s.");
   });
 
   it("the status band is the last thing in every card, whatever the card holds (#144)", () => {
@@ -206,15 +203,16 @@ describe("session card", () => {
     }
   });
 
-  it("every status reads in the band, with the same weight for every state", () => {
+  it("every status reads in the band, and a calm one is not 'hot'", () => {
     const run = renderCard(makeSession({ status: "running" }));
     expect(run.container.querySelector(".band")!.textContent).toBe("Running");
+    expect(run.container.querySelector(".band")!.className).not.toContain("hot");
     cleanup();
     const done = renderCard(makeSession({ status: "done" }));
     expect(done.container.querySelector(".band")!.textContent).toBe("Done");
     cleanup();
     const stale = renderCard(makeSession({ status: "stale", dropAt: 2_037_000 }));
-    expect(stale.container.querySelector(".band")!.className).toBe("band stale");
+    expect(stale.container.querySelector(".band")!.className).toBe("band stale hot");
   });
 
   it("the heartbeat-lost message is one flex child, so the band's gap cannot split the sentence (#87)", () => {
@@ -539,9 +537,10 @@ describe("card layout CSS (#144)", () => {
     expect(rule(".podium .card.sc .z3")).not.toContain("margin-top");
   });
 
-  it("the readouts row and the band have fixed minimum heights, so Remove can be laid over the row's last column", () => {
-    expect(rule(".podium .card.sc .z3")).toContain("height: 58px");
+  it("the band has a fixed minimum height, so Remove can be laid over its right end from the bottom edge", () => {
     expect(rule(".podium .band")).toContain("min-height: 52px");
-    expect(rule(".podium .card-slot.has-remove > .remove-bar")).toContain("position: absolute");
+    const bar = rule(".podium .card-slot.has-remove > .remove-bar");
+    expect(bar).toContain("position: absolute");
+    expect(bar).toContain("bottom: 1px");
   });
 });

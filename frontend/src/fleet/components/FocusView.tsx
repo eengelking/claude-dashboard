@@ -5,6 +5,7 @@ import { dropAtOf, type AgentSortKey } from "../logic";
 import { AgentTree, type AgentSort } from "./AgentTree";
 import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
+import { Countdown } from "./Chips";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel, type PlanTab } from "./PlanPanel";
 import { HOOKS_NOTE, versionNote, waitSummary } from "./SessionCard";
@@ -50,7 +51,7 @@ export function FocusView(props: {
             <span>
               No heartbeat for <span className="mono">{fmtDur(Math.max(0, (now - s.lastSeenAt) / 1000))}</span>. The session may have crashed or
               been closed without a clean exit. It goes away in{" "}
-              <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>
+              <Countdown text={fmtCountdown((dropAtOf(s, config) - now) / 1000)} />
               {props.onRemove ? ", or you can remove it now." : "."}
               {props.onRemove && (
                 <button type="button" className="btn remove-inline" onClick={() => props.onRemove?.(s.id)}>

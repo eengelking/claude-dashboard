@@ -1,7 +1,7 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
 import { COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
-import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
+import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, Countdown, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
 import { backgroundLead, backgroundTitle, toolOfNote, waitLead } from "../waiting";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
@@ -49,7 +49,7 @@ function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now: number
   if (kind === "stale") {
     return (
       <span className="bl">
-        Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>.
+        Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in <Countdown text={fmtCountdown((dropAtOf(s, config) - now) / 1000)} />.
       </span>
     );
   }
@@ -66,6 +66,8 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const vNote = versionNote(s);
   const detached = s.attached === false;
   const kind = cardKind(s);
+  // The states that want the person (or say the session is lost) get the heavier tint; a calm state a lighter one. The top line is the same thin line on every band.
+  const hot = kind === "waiting" || kind === "stale";
   const hooks = s.reporter === "hooks";
   const cls = `card sc${props.entering ? " enter" : ""}${props.leaving ? " leave" : ""}${risk ? " risk" : ""}${detached ? " detached" : ""}`;
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
@@ -98,7 +100,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
             )}
             {detached && s.hideAt !== null && s.hideAt > now && (
               <span className="chip">
-                hides in <span className="mono">{fmtCountdown((s.hideAt - now) / 1000)}</span>
+                hides in <Countdown text={fmtCountdown((s.hideAt - now) / 1000)} />
               </span>
             )}
             {hooks && (
@@ -163,18 +165,15 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
           <span className="v mono">{fmtDur(sessionElapsedSec(s, now))}</span>
         </div>
         <div className={`c ctx${risk ? " hi" : ""}`} title={risk ? riskText(s) : undefined}>
-          {/* A heartbeat-lost card gives its last readout column to Remove, so with a blowout badge beside it the label is shortened to fit. */}
-          <span className="k" title="Context">
-            {s.status === "stale" && props.onRemove && s.blowouts.total > 0 ? "Ctx" : "Context"}
+          <span className="k">
+            Context
             <BlowBadge n={s.blowouts.total} level={s.blowouts.level} />
           </span>
           <span className="v mono">{fmtPct(s.context.percent)}</span>
           {s.context.percent !== null && <ContextBar percent={s.context.percent} blowouts={s.blowouts.total} />}
         </div>
-        {/* Room for the Remove button, which cannot sit inside this button and is laid over this cell instead. */}
-        {s.status === "stale" && props.onRemove && <div className="c rm" aria-hidden="true" />}
       </div>
-      <div className={`band ${kind}`}>
+      <div className={`band ${kind}${hot ? " hot" : ""}`}>
         <span className="bi"><StateIcon kind={kind} /></span>
         {bandLine(s, kind, sinceSeen, now, config)}
       </div>

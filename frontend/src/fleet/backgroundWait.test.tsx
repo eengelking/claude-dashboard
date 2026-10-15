@@ -53,12 +53,14 @@ describe("the card", () => {
     expect(container.querySelector(".card .sd .si-waiting")).toBeNull();
     expect(container.querySelector(".band .si-bg")).not.toBeNull();
     expect(container.querySelector(".band")!.className).toContain("bg");
+    expect(container.querySelector(".band")!.className).not.toContain("hot");
   });
 
   it("a session that waits on the person still reads as before", () => {
     const { container } = renderCard(makeSession({ status: "waiting", waitReason: "input" }));
     expect(container.querySelector(".band")!.textContent).toBe("Waiting for your input.");
     expect(container.querySelector(".band")!.className).toContain("waiting");
+    expect(container.querySelector(".band")!.className).toContain("hot");
     expect(container.querySelector(".card .sd .si-waiting")).not.toBeNull();
   });
 
