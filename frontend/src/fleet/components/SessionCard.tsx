@@ -1,7 +1,7 @@
 import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
 import { COST_HINT_SESSION, currentStep, dropAtOf, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
-import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, Countdown, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
+import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
 import { backgroundLead, backgroundTitle, toolOfNote, waitLead } from "../waiting";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
@@ -49,7 +49,7 @@ function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now: number
   if (kind === "stale") {
     return (
       <span className="bl">
-        Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in <Countdown text={fmtCountdown((dropAtOf(s, config) - now) / 1000)} />.
+        Last heartbeat <span className="mono">{fmtDur(sinceSeen)}</span> ago. Goes away in <span className="mono">{fmtCountdown((dropAtOf(s, config) - now) / 1000)}</span>.
       </span>
     );
   }
@@ -100,7 +100,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
             )}
             {detached && s.hideAt !== null && s.hideAt > now && (
               <span className="chip">
-                hides in <Countdown text={fmtCountdown((s.hideAt - now) / 1000)} />
+                hides in <span className="mono">{fmtCountdown((s.hideAt - now) / 1000)}</span>
               </span>
             )}
             {hooks && (

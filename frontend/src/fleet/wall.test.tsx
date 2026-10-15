@@ -164,7 +164,7 @@ describe("session card", () => {
     expect(q.container.textContent).not.toContain("Which branch should I use?");
     cleanup();
     const s = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: 2_000_000 + 37_000 }));
-    expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Goes away in 37 s.");
+    expect(s.container.textContent).toContain("Last heartbeat 0:38 ago. Goes away in 37s.");
   });
 
   it("Remove is its own element laid over the right end of the band, so the countdown text cannot move it (#144)", () => {
@@ -178,11 +178,11 @@ describe("session card", () => {
     expect(live.container.querySelector(".remove-bar")).toBeNull();
   });
 
-  it("a countdown sets its number in the monospace face and its unit in the normal one, so no wide gap opens before the s", () => {
+  it("a countdown under a minute has no space before the s, so the monospace face cannot open a wide gap", () => {
     const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: 2_000_000 + 37_000 }));
     const monos = [...container.querySelectorAll(".band .mono")].map((e) => e.textContent);
-    expect(monos).toEqual(["0:38", "37"]);
-    expect(container.querySelector(".band")!.textContent).toBe("Last heartbeat 0:38 ago. Goes away in 37 s.");
+    expect(monos).toEqual(["0:38", "37s"]);
+    expect(container.querySelector(".band")!.textContent).toBe("Last heartbeat 0:38 ago. Goes away in 37s.");
   });
 
   it("the status band is the last thing in every card, whatever the card holds (#144)", () => {
@@ -218,10 +218,10 @@ describe("session card", () => {
   it("the heartbeat-lost message is one flex child, so the band's gap cannot split the sentence (#87)", () => {
     const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 34_000, dropAt: 2_000_000 + 41_000 }));
     const band = container.querySelector(".band.stale")!;
-    expect(band.textContent).toBe("Last heartbeat 0:34 ago. Goes away in 41 s.");
+    expect(band.textContent).toBe("Last heartbeat 0:34 ago. Goes away in 41s.");
     // .band is display: flex with a gap; the icon and the sentence are its only children, and the sentence is one element.
     expect(band.childNodes).toHaveLength(2);
-    expect(band.querySelector(".bl")!.textContent).toBe("Last heartbeat 0:34 ago. Goes away in 41 s.");
+    expect(band.querySelector(".bl")!.textContent).toBe("Last heartbeat 0:34 ago. Goes away in 41s.");
   });
 
   it("a heartbeat-lost card counts down to the server's drop time, which can be later than the last heartbeat plus 75 s (#41)", () => {
@@ -232,7 +232,7 @@ describe("session card", () => {
 
   it("falls back to the lifecycle windows when the server sent no drop time", () => {
     const { container } = renderCard(makeSession({ status: "stale", lastSeenAt: 2_000_000 - 38_000, dropAt: null }));
-    expect(container.textContent).toContain("Goes away in 37 s.");
+    expect(container.textContent).toContain("Goes away in 37s.");
   });
 
   it("Remove is on a heartbeat-lost card only, and does not open the card (#41)", () => {
@@ -244,7 +244,7 @@ describe("session card", () => {
     expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
     cleanup();
     const { container } = draw(makeSession({ id: "lost", name: "billing", status: "stale", dropAt: 2_037_000 }));
-    expect(container.textContent).toContain("Goes away in 37 s.");
+    expect(container.textContent).toContain("Goes away in 37s.");
     fireEvent.click(screen.getByRole("button", { name: "Remove billing from the fleet" }));
     expect(removed).toEqual(["lost"]);
     expect(opened).toEqual([]);

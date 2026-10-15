@@ -28,10 +28,10 @@ export function fmtDur(seconds: number): string {
   return `${m}:${String(x).padStart(2, "0")}`;
 }
 
-/** Seconds left on a countdown: "37 s" under a minute, "1:12" after. */
+/** Seconds left on a countdown: "37s" under a minute, "1:12" after. No space before the s: these are set in the monospace face, where a space is a full character wide. */
 export function fmtCountdown(seconds: number): string {
   const s = Math.max(0, Math.ceil(Number.isFinite(seconds) ? seconds : 0));
-  return s < 60 ? `${s} s` : fmtDur(s);
+  return s < 60 ? `${s}s` : fmtDur(s);
 }
 
 /** Epoch milliseconds as local "HH:MM:SS". */

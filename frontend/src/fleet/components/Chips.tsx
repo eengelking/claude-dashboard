@@ -70,17 +70,6 @@ export function StatusIcon({ status }: { status: StatusKind }) {
   return <IconClock />;
 }
 
-/** A countdown such as "37 s" or "1:15": the number in the monospace face, the unit in the normal one (a monospace space is a full character wide). */
-export function Countdown({ text }: { text: string }) {
-  const m = /^(\S+) (\S+)$/.exec(text);
-  if (!m) return <span className="mono">{text}</span>;
-  return (
-    <>
-      <span className="mono">{m[1]}</span> {m[2]}
-    </>
-  );
-}
-
 /** The state a card shows: its own shape and color, so state is never color alone (#144). */
 export type CardKind = "running" | "waiting" | "bg" | "stale" | "done";
 
