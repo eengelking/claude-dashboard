@@ -71,6 +71,10 @@ export interface ReporterDetail extends ReporterRow {
   source: string | null;
   engineVersion: string | null;
   recent: { id: string; name: string; status: string; lastSeenAt: number; costUsd: number | null }[];
+  /** How many of its sessions the server still holds, and the page of them `recent` is. */
+  recentTotal: number;
+  recentPage: number;
+  recentPageSize: number;
   rejected: { t: number; reason: string }[];
   serverTime: number;
 }

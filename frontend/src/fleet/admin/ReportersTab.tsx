@@ -454,7 +454,9 @@ function IgnoreRules(props: { api: AdminApi; rules: IgnoreRule[] | undefined; er
 function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked: () => void }) {
   const { api, id } = props;
   const path = `/reporters/${encodeURIComponent(id)}`;
-  const one = useList<ReporterDetail>(api, path, props.onLocked);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const one = useList<ReporterDetail>(api, `${path}${query({ page, pageSize })}`, props.onLocked);
   useRefresh(one.reload);
   const [confirm, setConfirm] = useState(false);
   const [ignoring, setIgnoring] = useState(false);
@@ -514,6 +516,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
     </dl>
   );
   return (
+    <>
     <Panel>
       {back}
       <div className="dhead">
@@ -636,9 +639,13 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
             ["Token", d.adminSecret ? <Token key="t" r={d} /> : d.credential ? <span key="t" className="mono tt" title="The token's key id, which finds the person. The secret part is never shown or kept.">{d.credential}</span> : "none"],
           ])}
         </section>
-        <div className="dwide">
-          <h3>Recent sessions</h3>
-          {d.recent.length ? (
+      </div>
+    </Panel>
+    <Section id="rep-sessions-h" title="Recent sessions" help="The sessions this reporter sent that the server still holds, newest first.">
+      <Panel>
+        {d.recentTotal ? (
+          <>
+            {d.recent.length ? (
             <div className="tw2">
               <table className="ptab">
                 <thead>
@@ -661,30 +668,36 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="empty">
-              <span className="tt" title="Sessions are deleted 30 days after they end.">
-                No sessions left.
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="dwide">
-          <h3>Reports the server turned away</h3>
-          {d.rejected.length ? (
-            <ul className="rej">
-              {d.rejected.map((x, i) => (
-                <li key={`${x.t}-${i}`}>
-                  <span className="mono muted">{time(x.t)}</span>
-                  <span className="bad">{x.reason}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty">None lately.</div>
-          )}
-        </div>
-      </div>
-    </Panel>
+            ) : (
+              <div className="empty">No sessions on this page.</div>
+            )}
+            <Pager id="rep-sessions" page={d.recentPage} pageSize={d.recentPageSize} total={d.recentTotal} onPage={setPage} onSize={(n) => (setPageSize(n), setPage(1))} />
+          </>
+        ) : (
+          <div className="empty">
+            <span className="tt" title="Sessions are deleted 30 days after they end.">
+              No sessions left.
+            </span>
+          </div>
+        )}
+      </Panel>
+    </Section>
+    <Section id="rep-turned-h" title="Reports the server turned away" help="The latest refusals from this reporter's address. The server keeps them in memory only, so a restart clears them.">
+      <Panel>
+        {d.rejected.length ? (
+          <ul className="rej">
+            {d.rejected.map((x, i) => (
+              <li key={`${x.t}-${i}`}>
+                <span className="mono muted">{time(x.t)}</span>
+                <span className="bad">{x.reason}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="empty">None lately.</div>
+        )}
+      </Panel>
+    </Section>
+    </>
   );
 }

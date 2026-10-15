@@ -13,7 +13,6 @@ export const REPORTING_MS = 2 * 60_000;
 export const IDLE_MS = 60 * 60_000;
 const MAX_REJECTED = 200;
 const SHOWN_REJECTED = 20;
-const SHOWN_SESSIONS = 10;
 const DAY_MS = 24 * 60 * 60_000;
 /** After a start, reporters are not forgotten for this long, so a long outage does not empty the list before anyone could report. */
 const FORGET_GRACE_MS = 60 * 60_000;
@@ -73,6 +72,10 @@ export interface ReporterDetail extends ReporterRow {
   source: string | null;
   engineVersion: string | null;
   recent: { id: string; name: string; status: string; lastSeenAt: number; costUsd: number | null }[];
+  /** How many of its sessions the server still holds, and which page of them `recent` is. */
+  recentTotal: number;
+  recentPage: number;
+  recentPageSize: number;
   rejected: { t: number; reason: string }[];
 }
 
@@ -294,15 +297,19 @@ export class ReporterStore {
     return (this.stmt(`SELECT q.key FROM (${sub}) q${filter}`).all(params) as unknown as { key: string }[]).map((r) => r.key);
   }
 
-  get(key: string, now: number): ReporterDetail | undefined {
+  get(key: string, now: number, opts: { page?: number; pageSize?: number } = {}): ReporterDetail | undefined {
     const r = this.stmt(
       `SELECT r.*, ${STATE_SQL} AS state, (${SESSIONS_SQL}) AS sessions, (${LIVE_SQL}) AS live, (${PROJECT_SQL}) AS project FROM reporters r WHERE r.key = :key`,
     ).get({ key, now, started: this.startedAt }) as unknown as DbReporter | undefined;
     if (!r) return undefined;
+    const { page, pageSize } = clampPage(opts);
+    const recentTotal = (
+      this.stmt('SELECT COUNT(*) AS n FROM reporter_sessions x JOIN sessions s ON s.id = x.session_id WHERE x.reporter_key = ?').get(key) as { n: number }
+    ).n;
     const recent = this.stmt(
       `SELECT s.id, s.name, s.status, s.last_seen_at, s.cost_usd FROM reporter_sessions x JOIN sessions s ON s.id = x.session_id
-       WHERE x.reporter_key = ? ORDER BY s.last_seen_at DESC LIMIT ${SHOWN_SESSIONS}`,
-    ).all(key) as unknown as { id: string; name: string; status: string; last_seen_at: number; cost_usd: number | null }[];
+       WHERE x.reporter_key = ? ORDER BY s.last_seen_at DESC, s.id LIMIT ? OFFSET ?`,
+    ).all(key, pageSize, (page - 1) * pageSize) as unknown as { id: string; name: string; status: string; last_seen_at: number; cost_usd: number | null }[];
     const rejected = r.source_address
       ? this.rejections
           .filter((x) => x.source === r.source_address)
@@ -319,6 +326,9 @@ export class ReporterStore {
       credential: r.credential,
       engineVersion: r.engine_version,
       recent: recent.map((s) => ({ id: s.id, name: s.name, status: s.status, lastSeenAt: s.last_seen_at, costUsd: s.cost_usd })),
+      recentTotal,
+      recentPage: page,
+      recentPageSize: pageSize,
       rejected,
     };
   }

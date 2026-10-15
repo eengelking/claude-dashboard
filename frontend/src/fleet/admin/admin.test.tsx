@@ -49,6 +49,12 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
   };
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   const row = (p: P) => ({ id: p.id, name: p.name, last4: "ab12", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
+  /** The sessions of one page of a reporter's details: session-1 is the newest. */
+  const recentPage = (total: number, url: URL) => {
+    const size = Number(url.searchParams.get("pageSize") ?? 50);
+    const from = (Number(url.searchParams.get("page") ?? 1) - 1) * size;
+    return Array.from({ length: Math.max(0, Math.min(size, total - from)) }, (_, i) => ({ id: `s${from + i + 1}`, name: `session-${from + i + 1}`, status: "ended", lastSeenAt: 99_000 - from - i, costUsd: 1.84 }));
+  };
   const fetchFn = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://x");
     const method = init?.method ?? "GET";
@@ -128,7 +134,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
         state.reporters = state.reporters.filter((x) => x.key !== key);
         return json(200, { ok: true });
       }
-      return json(200, { ...r, kind: "mod", machineId: key.includes(":") ? null : key, source: "192.168.1.24", credential: "pdm_3f9a1c07b2e4", engineVersion: "2.1.299", recent: [{ id: "s1", name: "api-gateway", status: "running", lastSeenAt: 99_000, costUsd: 1.84 }], rejected: [{ t: 50_000, reason: "wrong token" }], serverTime: 100_000, serverStartedAt: 50_000 });
+      return json(200, { ...r, kind: "mod", machineId: key.includes(":") ? null : key, source: "192.168.1.24", credential: "pdm_3f9a1c07b2e4", engineVersion: "2.1.299", recent: recentPage(r.sessions, url), recentTotal: r.sessions, recentPage: Number(url.searchParams.get("page") ?? 1), recentPageSize: Number(url.searchParams.get("pageSize") ?? 50), rejected: [{ t: 50_000, reason: "wrong token" }], serverTime: 100_000, serverStartedAt: 50_000 });
     }
     if (path === "/groups") return json(200, { total: 0, page: 1, pageSize: 50, rows: [] });
     if (path === "/log") return json(200, { total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
@@ -573,6 +579,25 @@ describe("Reporters tab (#142)", () => {
     expect(alert).toHaveTextContent("/plugin configure podium-reporter");
   });
 
+  it("pages a reporter's recent sessions and shows them and the turned-away reports as their own panels (issue #188)", async () => {
+    const state = await openReporters();
+    fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
+    const sessions = await screen.findByRole("region", { name: "Recent sessions" });
+    expect(within(sessions).getByRole("heading", { name: "Recent sessions" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Reports the server turned away" })).getByText("wrong token")).toBeInTheDocument();
+    expect(within(sessions).getByText("session-1")).toBeInTheDocument();
+    expect(within(sessions).queryByText("session-51")).toBeNull();
+    expect(within(sessions).getByRole("status")).toHaveTextContent("Showing 1 to 50 of 142");
+    fireEvent.click(within(sessions).getByRole("button", { name: "Next" }));
+    expect(await within(sessions).findByText("session-51")).toBeInTheDocument();
+    expect(within(sessions).queryByText("session-1")).toBeNull();
+    expect(state.calls).toContain("GET /reporters/9f3a1c7d2e40?page=2&pageSize=50");
+    expect(within(sessions).getByRole("status")).toHaveTextContent("Showing 51 to 100 of 142");
+    fireEvent.change(within(sessions).getByLabelText("Rows per page"), { target: { value: "100" } });
+    expect(await within(sessions).findByText("session-100")).toBeInTheDocument();
+    expect(state.calls.some((c) => c.includes("pageSize=100") && c.includes("page=1"))).toBe(true);
+  });
+
   it("shows no admin-secret warning when no reporter uses it", async () => {
     const state = await openReporters();
     state.reporters = state.reporters.map((r) => ({ ...r, adminSecret: false, credential: "pdm_3f9a1c07b2e4" }));
@@ -596,10 +621,10 @@ describe("Reporters tab (#142)", () => {
     const state = await openReporters();
     fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
     expect(await screen.findByRole("heading", { name: /studio-m2/ })).toBeInTheDocument();
-    expect(state.calls).toContain("GET /reporters/9f3a1c7d2e40");
+    expect(state.calls).toContain("GET /reporters/9f3a1c7d2e40?page=1&pageSize=50");
     expect(screen.getByText("pdm_3f9a1c07b2e4")).toBeInTheDocument();
     expect(screen.getByText("192.168.1.24")).toBeInTheDocument();
-    expect(screen.getByText("api-gateway")).toBeInTheDocument();
+    expect(screen.getByText("session-1")).toBeInTheDocument();
     expect(screen.getByText("wrong token")).toBeInTheDocument();
     expect(screen.getByText("Supported")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /All reporters/ }));

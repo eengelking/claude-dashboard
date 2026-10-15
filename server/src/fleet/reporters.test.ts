@@ -174,6 +174,21 @@ describe('reporters', () => {
     expect(store.get('nope', START)).toBeUndefined();
   });
 
+  it('pages the sessions it holds for a reporter, newest first, with the total (issue #188)', () => {
+    const add = db.prepare(`INSERT INTO sessions (id, name, status, started_at, last_seen_at, cwd, cost_usd) VALUES (?, ?, 'ended', ?, ?, '/x', NULL)`);
+    for (let i = 1; i <= 30; i++) {
+      store.record(seen({ sessionId: `s${i}` }), START + i);
+      add.run(`s${i}`, `n${i}`, START, START + i);
+    }
+    const one = store.get('9f3a1c7d2e40', START + MIN, { page: 1, pageSize: 25 })!;
+    expect(one).toMatchObject({ recentTotal: 30, recentPage: 1, recentPageSize: 25 });
+    expect(one.recent.map((s) => s.id)).toEqual(Array.from({ length: 25 }, (_, i) => `s${30 - i}`));
+    const two = store.get('9f3a1c7d2e40', START + MIN, { page: 2, pageSize: 25 })!;
+    expect(two.recent.map((s) => s.id)).toEqual(['s5', 's4', 's3', 's2', 's1']);
+    expect(store.get('9f3a1c7d2e40', START + MIN)!).toMatchObject({ recentPage: 1, recentPageSize: 50, recentTotal: 30 });
+    expect(store.get('9f3a1c7d2e40', START + MIN, { page: 1, pageSize: 5000 })!.recentPageSize).toBeLessThanOrEqual(100);
+  });
+
   it('lists recent refusals from the reporter\'s address, newest first, and forgets the oldest', () => {
     store.record(seen(), START);
     store.rejected('192.168.1.24', 'wrong token', START + 1);

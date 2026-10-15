@@ -382,6 +382,8 @@ describe('reporters (#142)', () => {
     expect(d.status).toBe(200);
     expect(d.body).toMatchObject({ name: 'studio-m2', credential: 'pdm_3f9a1c07b2e4', source: '192.168.1.24' });
     expect((await agent.get(`/api/admin/reporters/${encodeURIComponent('addr:::1')}`).set(H)).status).toBe(200);
+    expect(d.body).toMatchObject({ recentTotal: 0, recentPage: 1, recentPageSize: 50 });
+    expect((await agent.get('/api/admin/reporters/9f3a1c7d2e40?page=3&pageSize=50').set(H)).body).toMatchObject({ recentPage: 3, recentPageSize: 50 });
     expect((await agent.get('/api/admin/reporters/nope').set(H)).status).toBe(404);
     expect((await agent.get('/api/admin/reporters/' + 'x'.repeat(200)).set(H)).status).toBe(400);
   });

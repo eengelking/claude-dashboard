@@ -339,7 +339,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   reach it (hover or focus the state for this). The list updates by itself every few seconds. Each row shows the machine, the person, the token it uses, the reporter
   version (with a warning when it is older or newer than this Podium supports), the last report and the number
   of sessions. Select a row for its details: version and compatibility, machine id, source address, the token's
-  key id (never the token), its recent sessions and any reports the server turned away. A reporter with no user
+  key id (never the token), then two panels: **Recent sessions**, paged like the other Admin lists so you can reach every session the server still holds for it, and **Reports the server turned away**. A reporter with no user
   name (the `userName` option) sends no machine id, so the row shows its newest project, or its address, with
   "no name set" beside it, and it is matched by its sessions: a container that comes back on a new address
   stays one row. Hover or focus a state, or "no name set", for what it means for that row. After the server

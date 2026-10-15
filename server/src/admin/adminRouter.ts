@@ -365,7 +365,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
     const key = reporterKey(req.params.key);
     if (key === null) return void res.status(400).json({ ok: false, error: 'bad key' });
-    const d = reporters.get(key, now());
+    const d = reporters.get(key, now(), paging(req));
     if (!d) return void res.status(404).json({ ok: false, error: 'unknown reporter' });
     res.json({ ...d, serverTime: now() });
   });
