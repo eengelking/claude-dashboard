@@ -9,7 +9,7 @@ import { safeEqualStr } from '../fleet/tokens.js';
 import { serverVersion } from '../fleet/compat.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
-import type { ReporterStore } from '../fleet/reporters.js';
+import { REPORTER_STATES, type IgnoreKind, type ReporterState, type ReporterStore } from '../fleet/reporters.js';
 import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
 import { createLogger, loggerFromLine, type Fields, type Logger } from '../logging/logger.js';
@@ -286,6 +286,57 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     });
   });
 
+  // Bulk removal and ignore rules (issue #167). These come before `/reporters/:key`, which would take "ignores" for a key.
+  const MAX_BULK = 500;
+  const plural = (n: number) => `${n} reporter${n === 1 ? '' : 's'}`;
+
+  router.post('/reporters/remove', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const { keys, state } = (req.body ?? {}) as { keys?: unknown; state?: unknown };
+    let removed: number;
+    if (Array.isArray(keys)) {
+      if (keys.length < 1 || keys.length > MAX_BULK || keys.some((k) => typeof k !== 'string' || reporterKey(k) === null)) {
+        return void res.status(400).json({ ok: false, error: `keys must be 1 to ${MAX_BULK} reporter keys` });
+      }
+      removed = reporters.removeMany(keys as string[]);
+    } else if (typeof state === 'string' && REPORTER_STATES.includes(state as ReporterState)) {
+      removed = reporters.removeState(state as ReporterState, now());
+    } else {
+      return void res.status(400).json({ ok: false, error: 'give keys or a state' });
+    }
+    audit(req, 'reporter_removed', `Removed ${plural(removed)} from the list`, { count: removed });
+    res.json({ ok: true, removed });
+  });
+
+  router.get('/reporters/ignores', (_req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    res.json({ rules: reporters.listIgnores() });
+  });
+
+  router.post('/reporters/ignores', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const { kind, pattern } = (req.body ?? {}) as { kind?: unknown; pattern?: unknown };
+    if (typeof kind !== 'string' || typeof pattern !== 'string') return void res.status(400).json({ ok: false, error: 'give a kind and a pattern' });
+    try {
+      const before = reporters.list({}, now()).counts.all;
+      const rule = reporters.addIgnore(kind as IgnoreKind, pattern, now());
+      const removed = before - reporters.list({}, now()).counts.all;
+      audit(req, 'reporter_ignore_added', `Ignoring reporters whose ${rule.kind} matches ${rule.pattern}; ${plural(removed)} removed from the list`, { rule: rule.id });
+      res.json({ ok: true, rule, removed });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  router.delete('/reporters/ignores/:id', (req, res) => {
+    if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
+    const id = Number(req.params.id);
+    const rule = Number.isInteger(id) ? reporters.listIgnores().find((r) => r.id === id) : undefined;
+    if (!rule || !reporters.removeIgnore(id)) return void res.status(404).json({ ok: false, error: 'unknown rule' });
+    audit(req, 'reporter_ignore_removed', `Stopped ignoring reporters whose ${rule.kind} matches ${rule.pattern}`, { rule: id });
+    res.json({ ok: true });
+  });
+
   router.get('/reporters/:key', (req, res) => {
     if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
     const key = reporterKey(req.params.key);
@@ -317,6 +368,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       notices: noticeList(),
       showBackgroundSessions: wall?.showBackgroundSessions() ?? false,
       modelPrices: prices?.view() ?? { asOf: PRICES_AS_OF, models: [] },
+      forgetReporters: reporters?.forgetSetting() ?? { enabled: false, days: 30 },
     });
   });
 
@@ -330,6 +382,19 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       people.setAdminReporting(v);
       audit(req, 'admin_reporting_changed', `Reporting with the admin secret turned ${v ? 'on' : 'off'}`, { on: v });
       return void res.json({ ok: true, allowAdminSecretReporting: v });
+    }
+    if ('forgetReporters' in body) {
+      const f = body.forgetReporters;
+      const okShape = f && typeof f === 'object' && !Array.isArray(f) && ('enabled' in f || 'days' in f) && (f.enabled === undefined || typeof f.enabled === 'boolean');
+      if (!reporters || !okShape) return void res.status(400).json({ ok: false, error: 'forgetReporters must give enabled (true or false) and/or days' });
+      try {
+        reporters.setForgetSetting({ enabled: f.enabled, days: f.days });
+      } catch (err) {
+        return void res.status(400).json({ ok: false, error: (err as Error).message });
+      }
+      const now_ = reporters.forgetSetting();
+      audit(req, 'reporters_forget_changed', now_.enabled ? `Forgetting reporters not heard from for ${now_.days} days turned on` : 'Forgetting reporters by age turned off', { on: now_.enabled, days: now_.days });
+      return void res.json({ ok: true, forgetReporters: now_ });
     }
     if ('showBackgroundSessions' in body) {
       const v = body.showBackgroundSessions;

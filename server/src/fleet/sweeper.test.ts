@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openDb, FleetDb } from './db.js';
 import { DEFAULT_CONFIG, Fleet, type FleetConfig } from './fleet.js';
-import { startSweeper } from './sweeper.js';
+import { forgetReporters, startSweeper } from './sweeper.js';
+import { PeopleStore } from './people.js';
+import { ReporterStore } from './reporters.js';
 import type { Report } from './protocol.js';
 import { fixtureReport } from './testing.js';
 
@@ -256,6 +258,47 @@ describe('startSweeper', () => {
     stop();
     vi.advanceTimersByTime(4000);
     expect(sweep).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('forgetting reporters by age (issue #167)', () => {
+  it('runs the retention hook at start and every hour, and a throwing hook does not stop retention', () => {
+    vi.useFakeTimers();
+    const fleet = makeFleet();
+    const retain = vi.spyOn(fleet, 'retain');
+    const hook = vi.fn().mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    const logs: string[] = [];
+    const stop = startSweeper(fleet, { sweepMs: 1000, tickMs: 2000, retentionMs: 3600_000 }, (l) => logs.push(l), hook);
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(retain).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(3600_000);
+    expect(hook).toHaveBeenCalledTimes(2);
+    expect(retain).toHaveBeenCalledTimes(2);
+    expect(logs.filter((l) => l.includes('boom'))).toHaveLength(1);
+    stop();
+  });
+
+  it('removes stale reporters when the setting is on, and logs what it removed to the Admin log', () => {
+    const raw = openDb(':memory:');
+    const reporters = new ReporterStore(raw, T0);
+    const people = new PeopleStore(raw);
+    const seen = (id: string) => ({ kind: 'mod' as const, machineId: id, machineName: id, source: '1.1.1.1', owner: null, credential: null, version: '0.13.0', engineVersion: null, sessionId: id });
+    reporters.record(seen('old'), T0 - 40 * 86_400_000);
+    reporters.record(seen('new'), T0 - 86_400_000);
+    const lines: string[] = [];
+    const logger = { info: (_e: string, m: string) => lines.push(m) } as never;
+    forgetReporters(reporters, people, logger, T0);
+    expect(reporters.list({}, T0).total).toBe(2); // off by default
+    reporters.setForgetSetting({ enabled: true, days: 30 });
+    forgetReporters(reporters, people, logger, T0);
+    expect(reporters.list({}, T0).rows.map((r) => r.key)).toEqual(['new']);
+    expect(people.listLog({ page: 1, pageSize: 10 }).rows[0]).toMatchObject({ kind: 'reporters_forgotten', source: 'sweeper' });
+    expect(people.listLog({ page: 1, pageSize: 10 }).rows[0]!.detail).toContain('1 reporter');
+    expect(lines).toHaveLength(1);
+    forgetReporters(reporters, people, logger, T0);
+    expect(people.listLog({ page: 1, pageSize: 10 }).total).toBe(1); // nothing removed, nothing logged
   });
 });
 

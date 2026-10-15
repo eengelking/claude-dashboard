@@ -6,7 +6,7 @@ import { MAIN_LOOP, validateReport } from './protocol.js';
 import { everyOf, type ActivityReply } from './activity.js';
 import { OwnerConflict } from './ingest.js';
 import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow } from './people.js';
-import type { ReporterSeen, ReporterStore } from './reporters.js';
+import { ReporterStore, type IgnoreRule, type IgnoreTarget, type ReporterSeen } from './reporters.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
 
@@ -64,6 +64,22 @@ function noteReporter(opts: FleetRouterOptions, logger: Logger, seen: ReporterSe
   } catch (err) {
     logger.warn('reporter.record_failed', `podium: could not note the reporter: ${(err as Error).message}`, { reason: (err as Error).message });
   }
+}
+
+/** Refuses a report from a reporter the Admin ignores (issue #167): says so, notes it, and returns true. Nothing is stored. */
+function refuseIgnored(opts: FleetRouterOptions, logger: Logger, fleet: Fleet, req: Request, res: Response, who: IgnoreTarget): boolean {
+  let rule: IgnoreRule | undefined;
+  try {
+    rule = opts.reporters?.ignoredBy(who);
+  } catch (err) {
+    logger.warn('reporter.ignore_check_failed', `podium: could not check the ignore rules: ${(err as Error).message}`, { reason: (err as Error).message });
+  }
+  if (!rule) return false;
+  const reason = 'this reporter is ignored by the Admin';
+  logger.warn('report.ignored', `podium: refused ${routeName(req)} from ${machineOf(req) ?? 'unknown'}: ${reason}`, { route: routeName(req), method: req.method, status: 403, reason, rule_id: rule.id, source: machineOf(req) });
+  opts.reporters?.rejected(machineOf(req), reason, fleet.now());
+  res.status(403).json({ ok: false, error: reason, path: '$' });
+  return true;
 }
 
 const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
@@ -130,6 +146,18 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       res.status(401).json({ ok: false, error: 'the token does not belong to that name', path: '$.userName' });
       return;
     }
+    const machineId = result.report.machine?.id ?? null;
+    const asHooks = result.report.reporter.hostSurface === 'settings-hooks';
+    if (
+      result.report.reporter.hostSurface !== SIMULATOR_SURFACE &&
+      refuseIgnored(opts, logger, fleet, req, res, {
+        key: ReporterStore.keyOf({ kind: asHooks ? 'hooks' : 'mod', machineId, source: machineOf(req) }),
+        source: machineOf(req),
+        version: result.report.reporter.version,
+      })
+    ) {
+      return;
+    }
     try {
       const out = fleet.ingest(result.report, ownerOf(id));
       if (id.kind === 'person') opts.people?.touch(id.person.id, machineOf(req), fleet.now()); // only a report that was stored counts
@@ -188,6 +216,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   router.post('/hook', requireToken, json, (req, res) => {
     try {
       const id = identityOf(res);
+      if (refuseIgnored(opts, logger, fleet, req, res, { key: ReporterStore.keyOf({ kind: 'hooks', machineId: null, source: machineOf(req) }), source: machineOf(req), version: 'hooks' })) return;
       const out = fleet.ingestHook(req.body, ownerOf(id));
       if (!out.ok) {
         logger.warn('hook.rejected', `podium: rejected hook payload at ${out.path}: ${out.error}`, {

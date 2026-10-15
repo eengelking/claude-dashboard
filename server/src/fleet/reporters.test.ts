@@ -197,3 +197,96 @@ describe('reporters', () => {
     expect(store.list({}, START + MIN).total).toBe(1);
   });
 });
+
+const DAY = 24 * 60 * MIN;
+
+describe('removing many reporters (issue #167)', () => {
+  const three = () => {
+    store.record(seen({ machineId: 'aaaa', machineName: 'a', sessionId: 'a1' }), START + MIN);
+    store.record(seen({ machineId: 'bbbb', machineName: 'b', sessionId: 'b1' }), START - 5 * MIN);
+    store.record(seen({ machineId: 'cccc', machineName: 'c', sessionId: 'c1' }), START - 9 * MIN);
+  };
+
+  it('removes the keys it is given in one step, skips unknown ones, and says how many went', () => {
+    three();
+    expect(store.removeMany(['aaaa', 'bbbb', 'nope'])).toBe(2);
+    expect(store.list({}, START + MIN).rows.map((r) => r.key)).toEqual(['cccc']);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM reporter_sessions').get()).toEqual({ n: 1 });
+  });
+
+  it('removes every reporter in one state', () => {
+    three();
+    expect(store.removeState('restart', START + MIN)).toBe(2);
+    expect(store.list({}, START + MIN).rows.map((r) => r.key)).toEqual(['aaaa']);
+    expect(store.removeState('restart', START + MIN)).toBe(0);
+  });
+
+  it('lists the keys of a filtered view, so "select all in this filter" can reach past one page', () => {
+    three();
+    expect(store.keys({ state: 'restart' }, START + MIN).sort()).toEqual(['bbbb', 'cccc']);
+    expect(store.keys({ q: 'bbb' }, START + MIN)).toEqual(['bbbb']);
+  });
+});
+
+describe('ignore rules (issue #167)', () => {
+  it('matches a reporter by key, by address pattern and by version pattern', () => {
+    const k = store.addIgnore('key', 'aaaa', START);
+    const a = store.addIgnore('address', '10.88.*', START);
+    const v = store.addIgnore('version', '*-sim', START);
+    expect(store.ignoredBy({ key: 'aaaa', source: null, version: '0.13.0' })?.id).toBe(k.id);
+    expect(store.ignoredBy({ key: 'x', source: '10.88.0.133', version: '0.13.0' })?.id).toBe(a.id);
+    expect(store.ignoredBy({ key: 'x', source: '192.168.1.24', version: '0.1.0-sim' })?.id).toBe(v.id);
+    expect(store.ignoredBy({ key: 'x', source: '192.168.1.24', version: '0.13.0' })).toBeUndefined();
+    // A pattern is text with * for "anything", never a regular expression.
+    store.addIgnore('address', '1.2.3.4', START);
+    expect(store.ignoredBy({ key: 'x', source: '1x2y3z4', version: '1' })).toBeUndefined();
+  });
+
+  it('keeps one copy of a rule, lists rules oldest first, and removes one by id', () => {
+    const first = store.addIgnore('key', 'aaaa', START);
+    expect(store.addIgnore('key', 'aaaa', START + MIN).id).toBe(first.id);
+    store.addIgnore('version', '*-sim', START + 2 * MIN);
+    expect(store.listIgnores().map((r) => [r.kind, r.pattern])).toEqual([['key', 'aaaa'], ['version', '*-sim']]);
+    expect(store.removeIgnore(first.id)).toBe(true);
+    expect(store.removeIgnore(first.id)).toBe(false);
+    expect(store.ignoredBy({ key: 'aaaa', source: null, version: '1' })).toBeUndefined();
+  });
+
+  it('refuses a rule that is empty, too long, or of an unknown kind', () => {
+    expect(() => store.addIgnore('key', '  ', START)).toThrow();
+    expect(() => store.addIgnore('key', 'x'.repeat(200), START)).toThrow();
+    expect(() => store.addIgnore('who' as 'key', 'x', START)).toThrow();
+  });
+
+  it('removes an ignored reporter\'s row when the rule is made', () => {
+    store.record(seen(), START);
+    store.addIgnore('key', '9f3a1c7d2e40', START);
+    expect(store.list({}, START).total).toBe(0);
+  });
+});
+
+describe('forgetting reporters by age (issue #167)', () => {
+  it('is off, at 30 days, until the Admin turns it on', () => {
+    expect(store.forgetSetting()).toEqual({ enabled: false, days: 30 });
+    store.record(seen(), START - 90 * DAY);
+    expect(store.forgetStale(START)).toBe(0);
+    expect(store.list({}, START).total).toBe(1);
+  });
+
+  it('removes reporters not heard from for N days and keeps the rest', () => {
+    store.record(seen({ machineId: 'old', sessionId: 'o' }), START - 31 * DAY);
+    store.record(seen({ machineId: 'new', sessionId: 'n' }), START - 29 * DAY);
+    store.setForgetSetting({ enabled: true, days: 30 });
+    expect(store.forgetStale(START)).toBe(1);
+    expect(store.list({}, START).rows.map((r) => r.key)).toEqual(['new']);
+  });
+
+  it('keeps the days when it is switched off and on, and refuses days outside 1 to 3650', () => {
+    store.setForgetSetting({ enabled: true, days: 7 });
+    store.setForgetSetting({ enabled: false });
+    expect(store.forgetSetting()).toEqual({ enabled: false, days: 7 });
+    expect(() => store.setForgetSetting({ days: 0 })).toThrow();
+    expect(() => store.setForgetSetting({ days: 1.5 })).toThrow();
+    expect(() => store.setForgetSetting({ days: 4000 })).toThrow();
+  });
+});

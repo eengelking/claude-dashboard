@@ -174,6 +174,18 @@ DELETE FROM reporters WHERE key IN (SELECT from_key FROM rmap);
 DROP TABLE rmap;
 DROP TABLE rmap0;`,
   },
+  {
+    version: 13,
+    // Ignore rules (issue #167): a report from a reporter that matches one is refused. `kind` is key, address or version;
+    // `pattern` is exact text with * for "anything".
+    sql: `CREATE TABLE IF NOT EXISTS reporter_ignores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE (kind, pattern)
+);`,
+  },
 ];
 
 export interface SessionRow {

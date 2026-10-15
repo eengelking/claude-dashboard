@@ -87,3 +87,36 @@ describe('recording reporters', () => {
     expect(d.rejected).toHaveLength(2);
   });
 });
+
+describe('ignored reporters (issue #167)', () => {
+  it('refuses a report from an ignored reporter, stores nothing, and records the refusal', async () => {
+    const { app, reporters, fleet } = setup();
+    reporters.addIgnore('key', '9f3a1c7d2e40', Date.now());
+    const res = await request(app)
+      .post('/api/fleet/report')
+      .set('X-Podium-Token', 'admin-secret')
+      .send(report({ machine: { name: 'studio-m2', id: '9f3a1c7d2e40' } }));
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ ok: false, error: 'this reporter is ignored by the Admin' });
+    expect(fleet.view('sess-1')).toBeUndefined();
+    expect(list(reporters)).toHaveLength(0);
+  });
+
+  it('refuses by version pattern, and lets a reporter through once its rule is removed', async () => {
+    const { app, reporters } = setup();
+    const rule = reporters.addIgnore('version', '*', Date.now());
+    const send = () => request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report());
+    expect((await send()).status).toBe(403);
+    reporters.removeIgnore(rule.id);
+    expect((await send()).status).toBe(200);
+    expect(list(reporters)).toHaveLength(1);
+  });
+
+  it('refuses a settings hook from an ignored address', async () => {
+    const { app, reporters, fleet } = setup();
+    reporters.addIgnore('address', '*', Date.now());
+    const res = await request(app).post('/api/fleet/hook').set('X-Podium-Token', 'admin-secret').send({ session_id: 'h1', hook_event_name: 'SessionStart', cwd: '/x' });
+    expect(res.status).toBe(403);
+    expect(fleet.view('h1')).toBeUndefined();
+  });
+});

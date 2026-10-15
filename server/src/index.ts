@@ -15,7 +15,7 @@ import { createFleetRouter } from "./fleet/routes.js";
 import { createAdminRouter } from "./admin/adminRouter.js";
 import { PeopleStore } from "./fleet/people.js";
 import { ReporterStore } from "./fleet/reporters.js";
-import { startSweeper } from "./fleet/sweeper.js";
+import { forgetReporters, startSweeper } from "./fleet/sweeper.js";
 import { REPORTER_SUPPORT } from "./fleet/compat.js";
 import { createServerLogging } from "./logging/setup.js";
 import { requestLog } from "./logging/requestLog.js";
@@ -34,7 +34,7 @@ const fleetConfig = configFromEnv(process.env, { home: os.homedir(), dbPath: DB_
 const fleet = new Fleet(fleetDb, fleetConfig, Date.now, logger);
 const people = new PeopleStore(fleetDb.db);
 const reporters = new ReporterStore(fleetDb.db, Date.now());
-const stopSweeper = startSweeper(fleet, undefined, logger);
+const stopSweeper = startSweeper(fleet, undefined, logger, () => forgetReporters(reporters, people, logger, Date.now()));
 
 const app = express();
 app.disable("x-powered-by");

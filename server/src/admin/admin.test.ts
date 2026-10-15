@@ -397,4 +397,47 @@ describe('reporters (#142)', () => {
     const log = people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'reporter_removed');
     expect(log?.detail).toContain('studio-m2');
   });
+  it('removes many reporters at once, by key or by state, and logs one entry with the count (issue #167)', async () => {
+    const { agent, reporters, people, clock } = await unlocked();
+    for (const k of ['aaaa', 'bbbb', 'cccc']) reporters.record(seen({ machineId: k, machineName: k, sessionId: k }), clock.t);
+    expect((await agent.post('/api/admin/reporters/remove').send({ keys: ['aaaa'] })).status).toBe(403);
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({})).status).toBe(400);
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({ keys: [] })).status).toBe(400);
+    expect((await agent.post('/api/admin/reporters/remove').set(H).send({ keys: Array.from({ length: 501 }, (_, i) => `k${i}`) })).status).toBe(400);
+    const res = await agent.post('/api/admin/reporters/remove').set(H).send({ keys: ['aaaa', 'bbbb', 'nope'] });
+    expect(res.body).toEqual({ ok: true, removed: 2 });
+    expect(reporters.list({}, clock.t).rows.map((r) => r.key)).toEqual(['cccc']);
+    const byState = await agent.post('/api/admin/reporters/remove').set(H).send({ state: 'reporting' });
+    expect(byState.body).toEqual({ ok: true, removed: 1 });
+    const log = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'reporter_removed');
+    expect(log.map((r) => r.detail)).toEqual([expect.stringContaining('1 reporter'), expect.stringContaining('2 reporters')]);
+  });
+
+  it('keeps ignore rules: add, list, remove, and log each (issue #167)', async () => {
+    const { agent, reporters, people } = await unlocked();
+    reporters.record(seen(), Date.now());
+    expect((await agent.post('/api/admin/reporters/ignores').send({ kind: 'key', pattern: 'x' })).status).toBe(403);
+    expect((await agent.post('/api/admin/reporters/ignores').set(H).send({ kind: 'who', pattern: 'x' })).status).toBe(400);
+    expect((await agent.post('/api/admin/reporters/ignores').set(H).send({ kind: 'key', pattern: '' })).status).toBe(400);
+    const add = await agent.post('/api/admin/reporters/ignores').set(H).send({ kind: 'key', pattern: '9f3a1c7d2e40' });
+    expect(add.status).toBe(200);
+    expect(reporters.list({}, Date.now()).total).toBe(0);
+    const l = await agent.get('/api/admin/reporters/ignores').set(H);
+    expect(l.body.rules).toEqual([expect.objectContaining({ id: add.body.rule.id, kind: 'key', pattern: '9f3a1c7d2e40' })]);
+    expect((await agent.delete(`/api/admin/reporters/ignores/${add.body.rule.id}`).set(H)).status).toBe(200);
+    expect((await agent.delete(`/api/admin/reporters/ignores/${add.body.rule.id}`).set(H)).status).toBe(404);
+    const kinds = people.listLog({ page: 1, pageSize: 50 }).rows.map((r) => r.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['reporter_ignore_added', 'reporter_ignore_removed']));
+  });
+
+  it('shows and changes the forget-by-age setting (issue #167)', async () => {
+    const { agent, reporters, people } = await unlocked();
+    expect((await agent.get('/api/admin/settings').set(H)).body.forgetReporters).toEqual({ enabled: false, days: 30 });
+    expect((await agent.put('/api/admin/settings').set(H).send({ forgetReporters: { enabled: true, days: 0 } })).status).toBe(400);
+    expect((await agent.put('/api/admin/settings').set(H).send({ forgetReporters: { enabled: 'yes' } })).status).toBe(400);
+    const ok = await agent.put('/api/admin/settings').set(H).send({ forgetReporters: { enabled: true, days: 14 } });
+    expect(ok.body).toEqual({ ok: true, forgetReporters: { enabled: true, days: 14 } });
+    expect(reporters.forgetSetting()).toEqual({ enabled: true, days: 14 });
+    expect(people.listLog({ page: 1, pageSize: 50 }).rows.some((r) => r.kind === 'reporters_forget_changed')).toBe(true);
+  });
 });

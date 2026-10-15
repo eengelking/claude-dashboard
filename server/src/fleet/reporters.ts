@@ -14,6 +14,10 @@ export const IDLE_MS = 60 * 60_000;
 const MAX_REJECTED = 200;
 const SHOWN_REJECTED = 20;
 const SHOWN_SESSIONS = 10;
+const DAY_MS = 24 * 60 * 60_000;
+const MAX_PATTERN = 120;
+const MAX_FORGET_DAYS = 3650;
+const DEFAULT_FORGET_DAYS = 30;
 
 export type ReporterState = 'reporting' | 'idle' | 'silent' | 'restart';
 export const REPORTER_STATES: readonly ReporterState[] = ['reporting', 'idle', 'silent', 'restart'];
@@ -68,6 +72,25 @@ export interface ReporterDetail extends ReporterRow {
   engineVersion: string | null;
   recent: { id: string; name: string; status: string; lastSeenAt: number; costUsd: number | null }[];
   rejected: { t: number; reason: string }[];
+}
+
+export type IgnoreKind = 'key' | 'address' | 'version';
+export const IGNORE_KINDS: readonly IgnoreKind[] = ['key', 'address', 'version'];
+export interface IgnoreRule {
+  id: number;
+  kind: IgnoreKind;
+  pattern: string;
+  createdAt: number;
+}
+/** What a rule is matched against: a reporter's key, source address and reporter version. */
+export interface IgnoreTarget {
+  key: string;
+  source: string | null;
+  version: string;
+}
+export interface ForgetSetting {
+  enabled: boolean;
+  days: number;
 }
 
 interface DbReporter {
@@ -210,20 +233,11 @@ export class ReporterStore {
     };
   }
 
-  list(opts: { page?: number; pageSize?: number; q?: string; state?: string; sort?: string; dir?: number; admin?: boolean }, now: number): ReporterList {
-    const { page, pageSize } = clampPage(opts);
+  /** The query behind `list` and `keys`: the filtered rows with their state, the parameters, and the state filter. */
+  private view(opts: { q?: string; state?: string; admin?: boolean }, now: number) {
     const q = (opts.q ?? '').trim().slice(0, 100);
     const state = REPORTER_STATES.find((s) => s === opts.state);
-    const sort = SORTS.find((s) => s === opts.sort) ?? 'last';
-    const dir = opts.dir !== undefined ? (opts.dir > 0 ? 'ASC' : 'DESC') : sort === 'last' ? 'DESC' : 'ASC';
     const base = { now, started: this.startedAt };
-
-    const counts: ReporterList['counts'] = { all: 0, reporting: 0, idle: 0, silent: 0, restart: 0 };
-    for (const c of this.stmt(`SELECT ${STATE_SQL} AS state, COUNT(*) AS n FROM reporters r GROUP BY state`).all(base) as unknown as { state: ReporterState; n: number }[]) {
-      counts[c.state] = c.n;
-      counts.all += c.n;
-    }
-
     const where: string[] = [];
     const params: Record<string, string | number> = { ...base };
     if (opts.admin) {
@@ -239,6 +253,21 @@ export class ReporterStore {
     const sub = `SELECT r.*, ${STATE_SQL} AS state, (${SESSIONS_SQL}) AS sessions, (${LIVE_SQL}) AS live, (${PROJECT_SQL}) AS project FROM reporters r${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`;
     const filter = state ? ' WHERE q.state = :state' : '';
     if (state) params.state = state;
+    return { sub, params, filter, base };
+  }
+
+  list(opts: { page?: number; pageSize?: number; q?: string; state?: string; sort?: string; dir?: number; admin?: boolean }, now: number): ReporterList {
+    const { page, pageSize } = clampPage(opts);
+    const sort = SORTS.find((s) => s === opts.sort) ?? 'last';
+    const dir = opts.dir !== undefined ? (opts.dir > 0 ? 'ASC' : 'DESC') : sort === 'last' ? 'DESC' : 'ASC';
+    const { sub, params, filter, base } = this.view(opts, now);
+
+    const counts: ReporterList['counts'] = { all: 0, reporting: 0, idle: 0, silent: 0, restart: 0 };
+    for (const c of this.stmt(`SELECT ${STATE_SQL} AS state, COUNT(*) AS n FROM reporters r GROUP BY state`).all(base) as unknown as { state: ReporterState; n: number }[]) {
+      counts[c.state] = c.n;
+      counts.all += c.n;
+    }
+
     const total = (this.stmt(`SELECT COUNT(*) AS n FROM (${sub}) q${filter}`).get(params) as { n: number }).n;
     const rows = this.stmt(`SELECT q.* FROM (${sub}) q${filter} ORDER BY ${ORDER[sort]} ${dir}, q.key LIMIT :limit OFFSET :offset`).all({
       ...params,
@@ -246,6 +275,12 @@ export class ReporterStore {
       offset: (page - 1) * pageSize,
     }) as unknown as DbReporter[];
     return { total, page, pageSize, rows: rows.map((r) => this.toRow(r)), counts, serverStartedAt: this.startedAt, adminSecret: (this.stmt('SELECT COUNT(*) AS n FROM reporters WHERE credential = ?').get(ADMIN_SECRET) as { n: number }).n };
+  }
+
+  /** Every key a filtered view holds, not one page of it: what "select all in this filter" removes. */
+  keys(opts: { q?: string; state?: string; admin?: boolean }, now: number): string[] {
+    const { sub, params, filter } = this.view(opts, now);
+    return (this.stmt(`SELECT q.key FROM (${sub}) q${filter}`).all(params) as unknown as { key: string }[]).map((r) => r.key);
   }
 
   get(key: string, now: number): ReporterDetail | undefined {
@@ -280,5 +315,102 @@ export class ReporterStore {
   /** Takes a reporter off the list; it comes back if it reports again. Its sessions are not touched. */
   remove(key: string): boolean {
     return Number(this.stmt('DELETE FROM reporters WHERE key = ?').run(key).changes) > 0;
+  }
+
+  /** Removes these reporters in one step; unknown keys are skipped. Returns how many went. Sessions are not touched. */
+  removeMany(keys: string[]): number {
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      for (const k of keys) n += Number(this.stmt('DELETE FROM reporters WHERE key = ?').run(k).changes);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return n;
+  }
+
+  /** Removes every reporter in one state ("Not since restart", say). Returns how many went. */
+  removeState(state: ReporterState, now: number): number {
+    return Number(
+      this.stmt(`DELETE FROM reporters WHERE key IN (SELECT r.key FROM reporters r WHERE ${STATE_SQL} = :state)`).run({ now, started: this.startedAt, state }).changes,
+    );
+  }
+
+  // ---- ignore rules (issue #167) --------------------------------------------------------------
+
+  /** A pattern is exact text, compared without regard to case, with * for "anything". Never a regular expression. */
+  private static matches(pattern: string, value: string): boolean {
+    return new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`, 'i').test(value);
+  }
+
+  private static ruleOf(r: { id: number; kind: string; pattern: string; created_at: number }): IgnoreRule {
+    return { id: r.id, kind: r.kind as IgnoreKind, pattern: r.pattern, createdAt: r.created_at };
+  }
+
+  listIgnores(): IgnoreRule[] {
+    return (this.stmt('SELECT id, kind, pattern, created_at FROM reporter_ignores ORDER BY id').all() as unknown as Parameters<typeof ReporterStore.ruleOf>[0][]).map(ReporterStore.ruleOf);
+  }
+
+  /** The first rule a reporter matches, or undefined. */
+  ignoredBy(t: IgnoreTarget): IgnoreRule | undefined {
+    return this.listIgnores().find((r) => {
+      const v = r.kind === 'key' ? t.key : r.kind === 'address' ? t.source : t.version;
+      return v !== null && ReporterStore.matches(r.pattern, v);
+    });
+  }
+
+  /** Adds a rule (an identical one is kept once) and takes the reporters it matches off the list. Throws on a bad rule. */
+  addIgnore(kind: IgnoreKind, pattern: string, now: number): IgnoreRule {
+    const p = pattern.trim();
+    if (!IGNORE_KINDS.includes(kind)) throw new Error('kind must be key, address or version');
+    if (p.length < 1 || p.length > MAX_PATTERN) throw new Error(`pattern must be 1 to ${MAX_PATTERN} characters`);
+    this.stmt('INSERT OR IGNORE INTO reporter_ignores (kind, pattern, created_at) VALUES (?, ?, ?)').run(kind, p, now);
+    const rule = ReporterStore.ruleOf(this.stmt('SELECT id, kind, pattern, created_at FROM reporter_ignores WHERE kind = ? AND pattern = ?').get(kind, p) as never);
+    const all = this.stmt('SELECT key, source_address, reporter_version FROM reporters').all() as unknown as { key: string; source_address: string | null; reporter_version: string }[];
+    this.removeMany(
+      all
+        .filter((r) => {
+          const v = kind === 'key' ? r.key : kind === 'address' ? r.source_address : r.reporter_version;
+          return v !== null && ReporterStore.matches(p, v);
+        })
+        .map((r) => r.key),
+    );
+    return rule;
+  }
+
+  removeIgnore(id: number): boolean {
+    return Number(this.stmt('DELETE FROM reporter_ignores WHERE id = ?').run(id).changes) > 0;
+  }
+
+  // ---- forgetting by age (issue #167) ---------------------------------------------------------
+
+  private setting(key: string): string | undefined {
+    return (this.stmt('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value;
+  }
+
+  private putSetting(key: string, value: string): void {
+    this.stmt('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+  }
+
+  /** Off until the Admin turns it on; the days are kept while it is off. */
+  forgetSetting(): ForgetSetting {
+    const days = Number(this.setting('forget_reporters_days'));
+    return { enabled: this.setting('forget_reporters_enabled') === '1', days: Number.isInteger(days) && days >= 1 ? days : DEFAULT_FORGET_DAYS };
+  }
+
+  /** Throws when `days` is not a whole number from 1 to 3650. */
+  setForgetSetting(s: Partial<ForgetSetting>): void {
+    if (s.days !== undefined && (!Number.isInteger(s.days) || s.days < 1 || s.days > MAX_FORGET_DAYS)) throw new Error(`days must be a whole number from 1 to ${MAX_FORGET_DAYS}`);
+    if (s.days !== undefined) this.putSetting('forget_reporters_days', String(s.days));
+    if (s.enabled !== undefined) this.putSetting('forget_reporters_enabled', s.enabled ? '1' : '0');
+  }
+
+  /** Removes reporters not heard from for the set number of days, when the setting is on. Returns how many went. */
+  forgetStale(now: number): number {
+    const f = this.forgetSetting();
+    if (!f.enabled) return 0;
+    return Number(this.stmt('DELETE FROM reporters WHERE last_seen_at < ?').run(now - f.days * DAY_MS).changes);
   }
 }
