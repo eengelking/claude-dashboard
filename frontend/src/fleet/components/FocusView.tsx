@@ -1,12 +1,12 @@
 import { useId, useState } from "react";
-import type { AgentSortKey } from "../logic";
+import { ORCHESTRATOR_ROW, waitingOnByRow, type AgentSortKey } from "../logic";
 import type { LifecycleConfig, SessionView } from "../types";
 import { AgentTree, type AgentSort } from "./AgentTree";
 import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel, type PlanTab } from "./PlanPanel";
-import { StatusBand } from "./StatusBand";
+import { pageKind, StatusBand } from "./StatusBand";
 
 /**
  * The orchestrator page (#165): one bordered surface of fixed layers, then the work. Header, the blowout detail when it is
@@ -31,18 +31,23 @@ export function FocusView(props: {
   const detailId = useId();
   const hasBlowouts = s.blowouts.total > 0;
   const open = hasBlowouts && openFor === s.id;
+  // Computed once per render and shared, so the header's shape, the band and the tree cannot disagree.
+  const waiting = waitingOnByRow(s);
+  const delegates = waiting.get(ORCHESTRATOR_ROW) ?? [];
+  const kind = pageKind(s, delegates);
   return (
     <div className="op">
       <div className={`osum${s.blowouts.level === 2 ? " risk" : ""}`}>
-        <FocusHeader s={s} now={now} />
+        <FocusHeader s={s} kind={kind} now={now} />
         {open && <BlowoutCallout s={s} onAgent={props.onAgent} id={detailId} />}
         <FactsBar s={s} now={now} onAgent={props.onAgent} blow={{ open, onToggle: () => setOpenFor(open ? null : s.id), controls: detailId }} />
-        <StatusBand s={s} now={now} config={config} onRemove={props.onRemove} />
+        <StatusBand s={s} kind={kind} delegates={delegates} now={now} config={config} onRemove={props.onRemove} />
       </div>
       <div className={`two${tab === "files" ? " wide" : ""}`}>
         <PlanPanel s={s} onTab={setTab} />
         <AgentTree
           s={s}
+          waiting={waiting}
           now={now}
           sort={props.sort}
           onSort={props.onSort}

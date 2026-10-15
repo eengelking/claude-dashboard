@@ -1,11 +1,10 @@
 import { currentStep, inferredStep, planComplete } from "../logic";
 import type { SessionView } from "../types";
-import { GitLine, StateIcon } from "./Chips";
+import { GitLine, StateIcon, type StateKind } from "./Chips";
 import { MiniCharts } from "./MiniCharts";
-import { pageKind } from "./StatusBand";
 
 /** Layer one of the summary surface: who it is, what it is doing, where. The state shape beside the name is the status band's shape. */
-export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
+export function FocusHeader({ s, kind, now }: { s: SessionView; kind: StateKind; now: number }) {
   const step = currentStep(s.plan);
   const next = step ? null : inferredStep(s.plan);
   return (
@@ -13,7 +12,7 @@ export function FocusHeader({ s, now }: { s: SessionView; now: number }) {
       <div className="id">
         <h1>
           <span className="sd">
-            <StateIcon kind={pageKind(s)} />
+            <StateIcon kind={kind} />
           </span>
           {s.name}
         </h1>

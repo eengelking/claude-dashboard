@@ -1,16 +1,15 @@
 import type { ReactNode } from "react";
 import { fmtCountdown, fmtDur } from "../format";
-import { delegateText, dropAtOf, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
-import type { LifecycleConfig, SessionView } from "../types";
+import { delegateText, dropAtOf } from "../logic";
+import type { AgentView, LifecycleConfig, SessionView } from "../types";
 import { backgroundDetail, backgroundTitle } from "../waiting";
 import { cardKind, StateIcon, type StateKind } from "./Chips";
 import { bandLine, waitSummary } from "./SessionCard";
 
 /** The card's states plus delegating, which SPEC 8.1 (#98) shows on this page and not on the cards. */
-export function pageKind(s: SessionView): StateKind {
+export function pageKind(s: SessionView, delegates: readonly AgentView[]): StateKind {
   const kind = cardKind(s);
-  if (kind === "running" && waitingOnByRow(s).get(ORCHESTRATOR_ROW)?.length) return "deleg";
-  return kind;
+  return kind === "running" && delegates.length ? "deleg" : kind;
 }
 
 /**
@@ -18,15 +17,28 @@ export function pageKind(s: SessionView): StateKind {
  * line. Failed agents do not change it (SPEC has no failed band state). Remove now is its own element laid over the right
  * end, so a changing countdown cannot move it (#144, #165).
  */
-export function StatusBand({ s, now, config, onRemove }: { s: SessionView; now: number; config: LifecycleConfig; onRemove?: (id: string) => void }) {
-  const kind = pageKind(s);
+export function StatusBand({
+  s,
+  kind,
+  delegates,
+  now,
+  config,
+  onRemove,
+}: {
+  s: SessionView;
+  kind: StateKind;
+  delegates: readonly AgentView[];
+  now: number;
+  config: LifecycleConfig;
+  onRemove?: (id: string) => void;
+}) {
   const hot = kind === "waiting" || kind === "stale";
   const sinceSeen = Math.max(0, (now - s.lastSeenAt) / 1000);
   let lead: ReactNode;
   let detail: string | null = null;
   let title: string | undefined;
   if (kind === "deleg") {
-    const kids = waitingOnByRow(s).get(ORCHESTRATOR_ROW) ?? [];
+    const kids = delegates;
     lead = <span className="bl">{`Delegating to ${kids.length} agent${kids.length === 1 ? "" : "s"}.`}</span>;
     detail = kids.map((a) => a.description).join(", ");
     title = delegateText(kids);

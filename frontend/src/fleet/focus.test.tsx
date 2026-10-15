@@ -523,17 +523,17 @@ describe("inferred current step (#179)", () => {
   const withSteps = (states: Array<"done" | "active" | "pending" | "blocked">) =>
     makeSession({ plan: { ...base.plan!, steps: states.map((state, i) => ({ id: String(i + 1), text: `Task ${i + 1}`, state, activeText: null, ownerAgentId: null, ownerLabel: null })) } });
   it("goal line shows the first pending step as inferred when none is active", () => {
-    const { container } = render(<FocusHeader s={withSteps(["done", "pending", "pending"])} now={0} />);
+    const { container } = render(<FocusHeader s={withSteps(["done", "pending", "pending"])} kind="running" now={0} />);
     expect(container.querySelector(".goal")!.textContent).toContain("now: Task 2");
     expect(container.querySelector(".goal")!.textContent).toContain("inferred");
   });
   it("goal line prefers a step Claude marked active, with no inferred note", () => {
-    const { container } = render(<FocusHeader s={withSteps(["done", "active", "pending"])} now={0} />);
+    const { container } = render(<FocusHeader s={withSteps(["done", "active", "pending"])} kind="running" now={0} />);
     expect(container.querySelector(".goal")!.textContent).toContain("now: Task 2");
     expect(container.querySelector(".goal")!.textContent).not.toContain("inferred");
   });
   it("goal line says the plan is complete when every step is done", () => {
-    const { container } = render(<FocusHeader s={withSteps(["done", "done"])} now={0} />);
+    const { container } = render(<FocusHeader s={withSteps(["done", "done"])} kind="running" now={0} />);
     expect(container.querySelector(".goal")!.textContent).toContain("plan complete");
   });
   it("checklist marks the inferred step as current", () => {

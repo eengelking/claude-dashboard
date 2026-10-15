@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { fmtDur, fmtPct, fmtTok } from "../format";
-import { agentOrder, buildTree, COST_HINT_HEADER, COST_HINT_ORCHESTRATOR, delegateText, ORCHESTRATOR_ROW, orchestratorCostUsd, sessionElapsedSec, TOKENS_HINT, treeDepth, waitingOnByRow, type AgentSortKey } from "../logic";
-import type { SessionView } from "../types";
+import { agentOrder, buildTree, COST_HINT_HEADER, COST_HINT_ORCHESTRATOR, delegateText, ORCHESTRATOR_ROW, orchestratorCostUsd, sessionElapsedSec, TOKENS_HINT, treeDepth, type AgentSortKey } from "../logic";
+import type { AgentView, SessionView } from "../types";
 import { AgentRow } from "./AgentRow";
 import { backgroundOf, BlowBadge, Cost, ContextBar, EffortMeter, ModelChip, StatusChip } from "./Chips";
 import { IconOrch } from "./Icons";
@@ -23,6 +23,7 @@ const HEADERS: { key: AgentSortKey; label: string; cls?: string }[] = [
 
 export function AgentTree(props: {
   s: SessionView;
+  waiting: ReadonlyMap<string, AgentView[]>;
   now: number;
   sort: AgentSort;
   onSort: (key: AgentSortKey | null) => void;
@@ -30,14 +31,13 @@ export function AgentTree(props: {
   flashAgent: string | null;
   onSelect: (id: string) => void;
 }) {
-  const { s, now, sort } = props;
+  const { s, now, sort, waiting } = props;
   // A sort orders each parent's children and keeps the tree (#101); with none the rows are in launch order.
   const rows = buildTree(s.agents, sort.key ? agentOrder(sort.key, sort.dir, now) : undefined);
   // Each level past the second widens the Task column by one guide, so a deep row keeps as much room for its
   // task as a second-level one; the table scrolls sideways inside its own box (#101).
   const deep = Math.max(0, treeDepth(rows) - 2);
   const nested = s.agents.filter((a) => a.parentId && a.parentId !== a.id && s.agents.some((x) => x.id === a.parentId)).length;
-  const waiting = waitingOnByRow(s);
   const delegating = (id: string) => {
     const kids = waiting.get(id);
     return kids ? delegateText(kids) : undefined;
