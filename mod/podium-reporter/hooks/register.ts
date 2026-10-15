@@ -246,15 +246,17 @@ function safe(where: string, fn: (r: Runtime) => void): void {
   }
 }
 
-/** What the session says about responding in its reports; null while the option is off. */
-function respondNow(r: Runtime): RespondInfo | null {
-  if (opts.respond === 'off') return null;
+/**
+ * What the session says about responding in its reports. Sent with level `off` too: only a reporter older than 0.14.0
+ * leaves it out, which Podium reads as "Reporter can't answer" (SPEC 6.2), so off has to say so.
+ */
+function respondNow(r: Runtime): RespondInfo {
   return respondInfo(opts.respond, opts.activityFeed, r.interactive, permissionHooks);
 }
 
 /** Whether the mod answers anything from Podium now: its own switches, and the server's last word. */
 function responding(r: Runtime | null, kind: RespondKind): boolean {
-  return !!r && r.transport.respond && !r.state.ended && !!respondNow(r)?.accepts.includes(kind);
+  return !!r && r.transport.respond && !r.state.ended && respondNow(r).accepts.includes(kind);
 }
 
 function openAsks(r: Runtime): Ask[] {

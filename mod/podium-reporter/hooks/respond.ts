@@ -81,15 +81,32 @@ export function planAsk(id: string, agentId: string | null, input: Record<string
   return { id, kind: 'plan', agentId, openedAt: now, plan: { text: cut(input.plan ?? '', L.plan), filePath } };
 }
 
-/** A tool's arguments, redacted string by string and held to RESPOND_LIMITS.toolInput as JSON; `cut` when anything was. */
+const cutMark = (n: number) => ` [cut off at ${thousands(n)} characters]`;
+const CUT_MARK = / \[cut off at [\d,]+ characters\]$/;
+
+/** Every string in a parsed tool input, as the container and key that hold it. */
+function stringLeaves(v: unknown, out: { at: Record<string | number, unknown>; key: string | number }[] = []) {
+  if (!v || typeof v !== 'object') return out;
+  for (const [k, x] of Object.entries(v)) {
+    const key = Array.isArray(v) ? Number(k) : k;
+    if (typeof x === 'string') out.push({ at: v as Record<string | number, unknown>, key });
+    else stringLeaves(x, out);
+  }
+  return out;
+}
+
+/**
+ * A tool's arguments, redacted string by string and held to RESPOND_LIMITS.toolInput (20,000) as JSON; `cut` when
+ * anything was. Past the limit the longest text is cut, with its marker, until the whole fits, and the rest is kept.
+ */
 export function toolInput(input: unknown): { input: Record<string, unknown>; cut: boolean } {
   let wasCut = false;
   const walk = (v: unknown, depth: number): unknown => {
     if (typeof v === 'string') {
       const r = redact(v);
-      if (r.length > 4000) {
+      if (r.length > L.toolInput) {
         wasCut = true;
-        return `${r.slice(0, 4000)} [cut off at 4,000 characters]`;
+        return `${r.slice(0, L.toolInput)}${cutMark(L.toolInput)}`;
       }
       return r;
     }
@@ -107,6 +124,20 @@ export function toolInput(input: unknown): { input: Record<string, unknown>; cut
     return v;
   };
   const obj = input && typeof input === 'object' && !Array.isArray(input) ? (walk(input, 0) as Record<string, unknown>) : {};
+  // Each pass takes the overflow (plus room for a marker) off the longest text. JSON escaping only makes a text count
+  // for more, so this shrinks the whole by at least the overflow and settles in a few passes.
+  for (let pass = 0; pass < 20; pass++) {
+    const over = JSON.stringify(obj).length - L.toolInput;
+    if (over <= 0) break;
+    const leaves = stringLeaves(obj);
+    if (!leaves.length) break;
+    const text = (l: (typeof leaves)[number]) => String(l.at[l.key]);
+    const longest = leaves.reduce((a, b) => (text(b).length > text(a).length ? b : a));
+    const raw = text(longest).replace(CUT_MARK, '');
+    const keep = Math.max(0, raw.length - over - 40);
+    longest.at[longest.key] = `${raw.slice(0, keep)}${cutMark(keep)}`;
+    wasCut = true;
+  }
   if (JSON.stringify(obj).length > L.toolInput) return { input: { note: 'The input is too long to show here.' }, cut: true };
   return { input: obj, cut: wasCut };
 }

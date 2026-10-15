@@ -117,6 +117,8 @@ describe("the Respond button", () => {
   it("tells a switch that is off from a reporter that can't", () => {
     expect(canAnswer(session(), "question")).toBe("ok");
     expect(canAnswer(session({ respond: null }), "question")).toBe("old");
+    // A current reporter with its respond option off is a switch that is off, not a reporter that can't.
+    expect(canAnswer(session({ respond: { level: "off", accepts: [], limits: [] } }), "question")).toBe("off");
     expect(canAnswer(session({ respond: { level: "questions", accepts: ["question", "message"], limits: [] } }), "permission")).toBe("off");
     expect(canAnswer(session({ respond: { level: "everything", accepts: ["question", "message", "plan-feedback", "command"], limits: ["no-permission-hooks"] } }), "permission")).toBe("old");
     expect(canAnswer(session({ respond: { level: "everything", accepts: [], limits: ["not-interactive"] } }), null)).toBe("old");

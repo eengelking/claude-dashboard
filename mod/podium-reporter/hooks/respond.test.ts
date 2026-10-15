@@ -204,13 +204,25 @@ describe('respond: the pure parts', () => {
 
   test('redacts and cuts what an ask carries, and marks a tool input that was cut', async () => {
     expect(toolInput({ command: 'curl -H "Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123"' }).input.command).toContain('[redacted]')
-    expect(toolInput({ content: 'x'.repeat(5000) }).cut).toBe(true)
     expect(cut('y'.repeat(50), 10)).toBe(`${'y'.repeat(10)}\n\n[cut off at 10 characters]`)
+  })
+
+  test('a tool input is cut only past 20,000 characters, and then only its longest text, with the rest kept', async () => {
+    // Up to the SPEC's 20,000 (6.2) nothing is cut, so Allow once stays possible.
+    const mid = toolInput({ command: 'x'.repeat(5000), description: 'Write the file' })
+    expect(mid.cut).toBe(false)
+    expect(mid.input.command).toBe('x'.repeat(5000))
+    // Past it, the longest text is cut with its marker so the whole input fits; other fields stay.
+    const long = toolInput({ command: 'x'.repeat(25_000), description: 'Write the file' })
+    expect(long.cut).toBe(true)
+    expect(long.input.description).toBe('Write the file')
+    expect(String(long.input.command)).toMatch(/^x+ \[cut off at [\d,]+ characters\]$/)
+    expect(JSON.stringify(long.input).length).toBeLessThanOrEqual(20_000)
   })
 })
 
 describe('respond: off', () => {
-  test('off by default: a question passes through, nothing is announced, and the report says nothing', async ($, on) => {
+  test('off by default: a question passes through, nothing is announced, and the report says the option is off', async ($, on) => {
     const w = world(on)
     await started($, w)
     const call = $.tool.call({ tool: 'AskUserQuestion', questions: QUESTIONS } as never)
@@ -218,7 +230,9 @@ describe('respond: off', () => {
     w.dialog.resolve!({ result: { questions: QUESTIONS, answers: { 'How many rows per page?': 'Fixed 50' } } })
     await call
     expect(puts(w)).toEqual([])
-    expect(w.posts.at(-1)!.session.respond).toBeUndefined()
+    // Present with level off, so Podium shows "Turned off" rather than "Reporter can't answer" (SPEC 6.2: absent only
+    // from a reporter older than 0.14.0).
+    expect(w.posts.at(-1)!.session.respond).toEqual({ level: 'off', accepts: [], limits: [] })
     expect(w.posts.at(-1)!.session.asks).toBeUndefined()
   })
 
