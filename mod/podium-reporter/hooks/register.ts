@@ -793,8 +793,11 @@ async function planRace($: Engine, r: Runtime, e: { tool_use_id: string; agentId
   const approved = !res.isError && res.deny === undefined;
   const approval = a.notTaken ? null : a.approval;
   finish(a);
-  if (approval && approved) queueResult(a.sessionId, approval.id, 'took');
-  else {
+  if (approval && approved) {
+    queueResult(a.sessionId, approval.id, 'took');
+    // Only now, once Claude Code took it: the terminal never reads "Approved from Podium" for one that didn't.
+    transcriptLine($, answeredLine(approval, nowMs()));
+  } else {
     if (approval) queueResult(a.sessionId, approval.id, 'closed');
     if (approved) queueClose(a, 'terminal', { planApproved: true });
     else if (planRejection(res.text) === 'feedback') queueClose(a, 'terminal', { answer: 'No, keep planning' });
@@ -943,7 +946,7 @@ async function runCommand($: Engine, sid: string, d: Delivery, command: 'clear' 
   }
 }
 
-/** "messages from Podium are on." once, the first time the session is idle with messages allowed, and again only after it stopped. */
+/** "messages from Podium are on." once, the first time the session is idle with messages allowed; again after it stopped, or after a /clear (a new, empty transcript). */
 function messagesLine($: Engine, r: Runtime): void {
   const on = responding(r, 'message');
   if (!on) {
@@ -1292,7 +1295,7 @@ export const register: Register = (on, rawOptions) => {
       const a = responding(r, 'plan-approve') ? planAskOf(agentId) : undefined;
       const d = a ? await approvalOf(a) : null;
       if (!d || !d.mode) return next(e);
-      transcriptLine($, answeredLine(d, nowMs()));
+      // The transcript line waits for the call to resolve approved (planRace), so it never claims one that didn't take.
       return planApproval(e.tool_input, d.mode);
     }
     if (!responding(r, 'permission')) return next(e);

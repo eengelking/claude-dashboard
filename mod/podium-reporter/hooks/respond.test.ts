@@ -1,7 +1,7 @@
 import { describe, test, expect, mock, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Ask, Delivery, Report } from './protocol.ts'
-import { answersMap, planApproval, respondInfo, respondLevel, toolDecision, toolDenied, toolInput, planRejection, cut } from './respond.ts'
+import { answersMap, planApproval, respondInfo, respondLevel, toolDecision, toolDenied, toolInput, planRejection, cut, terminalAnswers } from './respond.ts'
 
 // Responding to a waiting session from Podium (#206, SPEC 5.3). The world beneath the plugin is a fake Podium server
 // and a terminal whose dialogs the test answers by hand.
@@ -207,6 +207,11 @@ describe('respond: the pure parts', () => {
     expect(cut('y'.repeat(50), 10)).toBe(`${'y'.repeat(10)}\n\n[cut off at 10 characters]`)
   })
 
+  test('a question answered in the terminal reads without Claude Code’s "(Recommended)" mark, as the mockup shows it', async () => {
+    const res = { result: { answers: { 'Page size?': '25/50/100, default 50 (Recommended)', 'Back?': 'The page number (Recommended), The scroll' } } }
+    expect(terminalAnswers(res)).toBe('25/50/100, default 50; The page number, The scroll')
+  })
+
   test('a tool input is cut only past 20,000 characters, and then only its longest text, with the rest kept', async () => {
     // Up to the SPEC's 20,000 (6.2) nothing is cut, so Allow once stays possible.
     const mid = toolInput({ command: 'x'.repeat(5000), description: 'Write the file' })
@@ -340,9 +345,11 @@ describe('respond: a plan', () => {
     const decision = await pr
     // The regression guard, end to end: the decision carries the event's own input back.
     expect(decision).toEqual({ decision: { behavior: 'allow', updatedInput: PLAN_INPUT, updatedPermissions: [{ type: 'setMode', mode: 'default', destination: 'session' }] } })
-    expect(w.logs.some((l) => l.startsWith('Approved from Podium by Ed at '))).toBe(true)
+    // The terminal hears of the approval only once Claude Code took it, never before.
+    expect(w.logs.some((l) => l.startsWith('Approved from Podium by Ed at '))).toBe(false)
     w.dialog.resolve!({ result: { plan: PLAN_INPUT.plan, isAgent: false } })
     await call
+    expect(w.logs.some((l) => l.startsWith('Approved from Podium by Ed at '))).toBe(true)
     await w.clock.advance(1000)
     expect(results(w)).toEqual([[`dlv_plan-approve_${ask.id}`, 'took']])
   })
@@ -353,12 +360,14 @@ describe('respond: a plan', () => {
     const call = $.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never)
     await settle(w)
     const ask = puts(w)[0]!
-    void $.classic.PermissionRequest({ tool_name: 'ExitPlanMode', tool_input: PLAN_INPUT } as never)
+    leaveOpen($.classic.PermissionRequest({ tool_name: 'ExitPlanMode', tool_input: PLAN_INPUT } as never))
     await settle(w)
     w.deliver(by('plan-approve', ask.id, { mode: 'auto' }))
     await settle(w)
     await w.clock.advance(6000)
     expect(results(w)).toContainEqual([`dlv_plan-approve_${ask.id}`, 'not-taken'])
+    // The approval didn't take, so the terminal never says it was approved from Podium.
+    expect(w.logs.some((l) => l.startsWith('Approved from Podium'))).toBe(false)
     w.dialog.resolve!({ result: { plan: PLAN_INPUT.plan } })
     await call
     await w.clock.advance(1000)

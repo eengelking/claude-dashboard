@@ -440,7 +440,7 @@ button.tb-btn:hover { background: var(--sel); }
       <p class="cap">The other answers from Podium: a Deny, a plan sent back, and a message in place of an answer.</p>
     </div>
   </div>
-  <p class="note">While responding is on and the session is idle, podium-reporter writes <b>messages from Podium are on.</b> once, the first time the session is idle with messages from Podium allowed, and again only after responding was turned off and back on.</p>
+  <p class="note">While responding is on and the session is idle, podium-reporter writes <b>messages from Podium are on.</b> once, the first time the session is idle with messages from Podium allowed. It writes it again after <code>/clear</code>, which empties the transcript, and after responding was turned off and back on.</p>
 
   <h2 class="s">5. The switches</h2>
   <p class="note">Off by default, and every one is needed. The Admin decides whether this server may send anything; the person running the session decides how much their session accepts, and can always say no. Answering also needs the activity feed, which already has both kinds of switch.</p>

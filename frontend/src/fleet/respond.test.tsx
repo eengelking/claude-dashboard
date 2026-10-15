@@ -355,6 +355,8 @@ describe("when Podium can't send the answer", () => {
   it("Someone else's session", async () => {
     await modal(session({ owner: "Alex" }), fakeApi());
     expect(screen.getByText("This is Alex's session.")).toBeInTheDocument();
+    // In the panel's body, like every other outcome, so it keeps the panel's padding.
+    expect(screen.getByText("This is Alex's session.").closest(".ab")).not.toBeNull();
     expect(screen.getByText("Only Alex, or an Admin, can respond to it from Podium. You can still watch its activity.")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Message to claude-dashboard" })).toBeNull();
   });

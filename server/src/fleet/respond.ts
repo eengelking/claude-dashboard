@@ -126,7 +126,8 @@ export function questionSummary(ask: Ask, answers: readonly QuestionAnswer[]): s
       const a = answers[i];
       if (!a) return '';
       if ('text' in a) return a.text.trim();
-      return a.options.map((n) => q.options[n]?.label ?? '').join(', ');
+      // Without Claude Code's "(Recommended)" mark, as the console shows the option (cleanLabel) and the mockup the answer.
+      return a.options.map((n) => (q.options[n]?.label ?? '').replace(/\s*\(Recommended\)\s*$/i, '')).join(', ');
     })
     .filter(Boolean)
     .join('; ');
@@ -565,7 +566,10 @@ export function commandOf(text: string): { command: PodiumCommand } | { refused:
   const t = text.trim();
   if (!t.startsWith('/')) return null;
   const name = t.slice(1).split(/\s/)[0] ?? '';
-  if ((name === 'clear' || name === 'compact') && t === `/${name}`) return { command: name };
+  if (name === 'clear' || name === 'compact') {
+    if (t === `/${name}`) return { command: name };
+    return { refused: `/${name} takes nothing after it from here. Send /${name} on its own, or use the terminal.` };
+  }
   return { refused: `/${name} runs only in the terminal. From here you can send /clear and /compact.` };
 }
 

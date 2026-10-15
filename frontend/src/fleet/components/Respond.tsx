@@ -196,9 +196,11 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
     const owner = s.owner ?? "Unassigned";
     panel = (
       <Panel lead={lead} ago={ago} also="">
-        <Outcome cls="info" icon={ICONS.info} title={`This is ${owner}'s session.`}>
-          Only {owner}, or an Admin, can respond to it from Podium. You can still watch its activity.
-        </Outcome>
+        <div className="ab">
+          <Outcome cls="info" icon={ICONS.info} title={`This is ${owner}'s session.`}>
+            Only {owner}, or an Admin, can respond to it from Podium. You can still watch its activity.
+          </Outcome>
+        </div>
       </Panel>
     );
   } else if (!edge && ask && detail && detail.ask.id === ask.id && kase !== "hidden") {

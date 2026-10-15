@@ -190,6 +190,9 @@ describe('RespondStore', () => {
     expect(parseAnswer({ kind: 'plan-approve', mode: 'yolo' }, PLAN, ALL)).toMatchObject({ ok: false, err: { path: '$.mode' } });
     expect(parseAnswer({ kind: 'question', answers: [] }, PLAN, ALL)).toMatchObject({ ok: false, err: { status: 422 } });
     expect(questionSummary(QUESTION, [{ text: 'Mine' }, { options: [0, 1] }])).toBe('Mine; Page, Rows');
+    // Claude Code marks an option "(Recommended)" in its label; the feed reads the answer as the mockup does, without it.
+    const rec = { ...QUESTION, questions: [{ ...QUESTION.questions![0]!, options: [{ label: '25/50/100, default 50 (Recommended)', description: '', preview: null }, ...QUESTION.questions![0]!.options.slice(1)] }] };
+    expect(questionSummary(rec, [{ options: [0] }])).toBe('25/50/100, default 50');
   });
 
   it('takes as closed an open ask a later report no longer lists, but not one opened since that report began', () => {
@@ -258,7 +261,9 @@ describe('RespondStore', () => {
     expect(s.message(sid, 'Ed', { text: '/model haiku' })).toEqual({ ok: false, err: { status: 400, error: '/model runs only in the terminal. From here you can send /clear and /compact.', path: '$.text' } });
     expect(s.message(sid, 'Ed', { command: 'effort' })).toMatchObject({ ok: false, err: { status: 400 } });
     expect(commandOf('/clear')).toEqual({ command: 'clear' });
-    expect(commandOf('/clear now')).toEqual({ refused: '/clear runs only in the terminal. From here you can send /clear and /compact.' });
+    // A known command with something after it gets the console's own line (decided 2026-10-15), not "runs only in the terminal".
+    expect(commandOf('/clear now')).toEqual({ refused: '/clear takes nothing after it from here. Send /clear on its own, or use the terminal.' });
+    expect(commandOf('/compact focus on tests')).toEqual({ refused: '/compact takes nothing after it from here. Send /compact on its own, or use the terminal.' });
     expect(commandOf('hello')).toBeNull();
     const narrow = store(['question', 'message']);
     expect(narrow.s.message(narrow.sid, 'Ed', { text: '/compact' })).toMatchObject({ ok: false, err: { status: 422, kind: 'command' } });

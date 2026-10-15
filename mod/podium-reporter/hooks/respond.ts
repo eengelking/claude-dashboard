@@ -211,8 +211,10 @@ export function toolDenied(res: { deny?: string; isError?: boolean; text?: strin
 export function terminalAnswers(result: unknown): string | null {
   const answers = (result as { result?: { answers?: unknown } } | null)?.result?.answers;
   if (!answers || typeof answers !== 'object') return null;
+  // Claude Code's option labels carry "(Recommended)"; Podium shows the answer without it, as the mockup does.
   const s = Object.values(answers as Record<string, unknown>)
     .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+    .map((v) => v.replace(/\s*\(Recommended\)/gi, ''))
     .join('; ');
   return s ? line(s, RESPOND_LIMITS.answer) : null;
 }
