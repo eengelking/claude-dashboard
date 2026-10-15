@@ -53,7 +53,7 @@ code, .mono { font-family: var(--font-mono); }
 .card.detached { background: transparent; border-style: dashed; }
 .card.detached .nm, .card.detached .path, .card.detached .z3 .v { color: var(--muted); }
 .z1 { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
-.z2 { padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
+.z2 { margin-top: auto; padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
 .z3 { border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
 .r1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sd { flex: none; display: inline-flex; color: var(--c-text, var(--muted)); }
@@ -103,7 +103,7 @@ code, .mono { font-family: var(--font-mono); }
 .blow { display: inline-flex; align-items: center; gap: 2px; color: var(--crit-text); font: 600 11px var(--font-mono); }
 .blow svg { width: 11px; height: 11px; }
 /* The status band: always the last thing in the card, always full width, always the same place. */
-.band { margin-top: auto; display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); font-size: 13px; }
+.band { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); font-size: 13px; }
 .band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); border-top: 2px solid var(--c); }
 .card.detached .band { background: color-mix(in srgb, var(--c) 12%, transparent); }
 .band .bi { flex: none; display: inline-flex; color: var(--c-text); }

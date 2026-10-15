@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, within, fireEvent, cleanup } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
@@ -504,5 +506,16 @@ describe("wall columns (#145)", () => {
     measured(1600);
     const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession()] })} />);
     expect(wallArea(container).style.getPropertyValue("--wall-cols")).toBe("2");
+  });
+});
+
+describe("card layout CSS (#144)", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/fleet/fleet.css"), "utf8");
+  const rule = (sel: string) => css.split("\n").find((l) => l.startsWith(`${sel} {`)) ?? "";
+
+  it("spare height opens between the first two layers, so readouts and band stay together at the bottom", () => {
+    expect(rule(".podium .card.sc .z2")).toContain("margin-top: auto");
+    expect(rule(".podium .band")).not.toContain("margin-top");
+    expect(rule(".podium .card.sc .z3")).not.toContain("margin-top");
   });
 });

@@ -248,10 +248,12 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .crew .cnt { margin-left: 6px; color: var(--ink2); font-size: 12px; }
 .podium .card .noplan { margin-top: 10px; color: var(--muted); font-size: 12px; }
 /* The fleet card (#144, mockup/podium-card.html): four layers, always in this order. z1 who and where, z2 what it is doing,
-   z3 what it costs and how full it is, then the status band, which is always last and full width. */
+   z3 what it costs and how full it is, then the status band, which is always last and full width. When a row of cards makes
+   one taller than its own content, the spare height opens between z1 and z2, so z2, z3 and the band stay together at the
+   bottom edge and line up across the row. */
 .podium .card.sc { padding: 0; overflow: hidden; text-align: left; align-items: stretch; --c: var(--muted); }
 .podium .card.sc .z1 { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
-.podium .card.sc .z2 { padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
+.podium .card.sc .z2 { margin-top: auto; padding: 10px 12px 11px; border-top: 1px solid var(--grid); display: flex; flex-direction: column; gap: 9px; }
 .podium .card.sc .z3 { border-top: 1px solid var(--grid); display: grid; grid-template-columns: 1.15fr 1fr .8fr 1fr; }
 .podium .card.sc .h { min-width: 0; }
 .podium .card.sc .sd { flex: none; display: inline-flex; color: var(--muted); }
@@ -271,7 +273,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .card.sc .z3 .blow { padding: 0 4px; font-size: 11px; }
 .podium .card.sc .z3 .bar.ctx { height: 3px; margin-top: 4px; }
 .podium .card.sc .z3 .ctx.hi .v { color: var(--crit-text); }
-.podium .band { margin-top: auto; display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; font-size: 13px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+.podium .band { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 8px 12px; font-size: 13px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-top: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
 .podium .band.hot { background: color-mix(in srgb, var(--c) 26%, var(--surface)); border-top: 2px solid var(--c); }
 .podium .card.detached .band { background: color-mix(in srgb, var(--c) 12%, transparent); }
 .podium .band .bi { flex: none; display: inline-flex; color: var(--c-text); }
