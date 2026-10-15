@@ -153,12 +153,15 @@ export function PeopleTab(props: {
                   <tbody>
                     {rows.map((p) => {
                       const revoked = p.revokedAt !== null;
+                      const isAdmin = adminIds.has(p.groupId ?? -1) && !revoked;
                       const pend = pending && pending.id === p.id ? pending : null;
                       return (
                         <tr key={p.id} className={revoked ? "revoked" : ""}>
                           <td>
-                            <span className="who">{p.name}</span>
-                            {adminIds.has(p.groupId ?? -1) && !revoked && <span className="atag">administrator</span>}
+                            <span className={isAdmin ? "who isadmin" : "who"} title={isAdmin ? "Administrator: can open Admin with their own token" : undefined}>
+                              {p.name}
+                            </span>
+                            {isAdmin && <span className="vh"> (administrator)</span>}
                           </td>
                           <td>
                             <label className="vh" htmlFor={`admin-grp-${p.id}`}>

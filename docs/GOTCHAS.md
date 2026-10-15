@@ -257,5 +257,5 @@ mod reports; a test checks the two match). CI (`mod-version-check`) fails a PR t
 
 A theme lives in three places: its entry in `frontend/src/fleet/themes.ts`, its light and dark token blocks
 in `themes.css`, and the id list in the inline script in `frontend/index.html` that applies the choice
-before first paint. `themes.test.ts` fails if they disagree, or if a block lacks a color token such as `--deleg` and `--deleg-text`. A new palette also needs an entry in
+before first paint. `themes.test.ts` fails if they disagree, or if a block lacks a color token such as `--deleg`, `--deleg-text` and `--admin-text`. A new palette also needs an entry in
 `THIRD_PARTY_NOTICES.md` and a clean run of `npx tsx scripts/theme-contrast.ts`.

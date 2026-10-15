@@ -324,7 +324,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   choose "I have saved it", because Podium keeps only a hash and cannot show the token again. The list shows
   the last four characters, when each person last reported and from which machines. Rotate gives a person a
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
-  stale and drop as usual. The search finds a person by name, group or machine.
+  stale and drop as usual. The search finds a person by name, group or machine. A person in the Administrators group has their name in orange.
 - **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is
   a label for arranging the console (Group by Group, see "People" above). Only Administrators grants anything. Deleting a group
   moves its people to "No group". **Administrators** is built in and cannot be renamed or deleted. The admin secret is always

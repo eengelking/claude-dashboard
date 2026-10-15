@@ -23,7 +23,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     enabled: opts.enabled ?? true,
     unlocked: opts.unlocked ?? false,
     people: Array.from({ length: opts.people ?? 0 }, (_, i): P => ({ id: i + 1, name: `person-${String(i).padStart(3, "0")}`, groupId: null, revokedAt: null })),
-    groups: [] as { id: number; name: string }[],
+    groups: [] as { id: number; name: string; builtIn?: boolean }[],
     calls: [] as string[],
     expire: false,
     notices: { "background-sessions": true } as Record<string, boolean>,
@@ -72,6 +72,12 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       const all = state.people.filter((p) => p.name.toLowerCase().includes(q));
       return json(200, { total: all.length, page, pageSize: size, rows: all.slice((page - 1) * size, page * size).map(row), groups: state.groups });
+    }
+    const grp = /^\/people\/(\d+)\/group$/.exec(path);
+    if (grp && method === "PUT") {
+      const who = state.people.find((x) => x.id === Number(grp[1]))!;
+      who.groupId = (JSON.parse(String(init?.body)) as { groupId: number | null }).groupId;
+      return json(200, { ok: true });
     }
     if (path === "/people" && method === "POST") {
       const name = JSON.parse(String(init?.body)).name as string;
@@ -252,6 +258,30 @@ describe("tokens", () => {
     expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/locked after 10 minutes/);
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
+  });
+});
+
+describe("administrator names (#182)", () => {
+  it("draws an administrator's name in the admin color, with no pill, and follows a group change without a reload", async () => {
+    const s = fakeServer({ people: 3 });
+    s.groups.push({ id: 1, name: "Administrators", builtIn: true }, { id: 2, name: "Team" });
+    s.people[0]!.groupId = 1;
+    s.people[1]!.groupId = 2;
+    s.people[2]!.groupId = 1;
+    s.people[2]!.revokedAt = 5;
+    render(<AdminView />);
+    await unlock();
+    const adm = await screen.findByText("person-000");
+    expect(adm).toHaveClass("isadmin");
+    expect(adm).toHaveAttribute("title", "Administrator: can open Admin with their own token");
+    expect(within(adm.parentElement!).getByText("(administrator)")).toHaveClass("vh");
+    expect(screen.getByText("person-001")).not.toHaveClass("isadmin");
+    expect(screen.getByText("person-002")).not.toHaveClass("isadmin");
+    expect(screen.queryByText("administrator")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Group for person-001"), { target: { value: "1" } });
+    await waitFor(() => expect(screen.getByText("person-001")).toHaveClass("isadmin"));
+    fireEvent.change(screen.getByLabelText("Group for person-000"), { target: { value: "2" } });
+    await waitFor(() => expect(screen.getByText("person-000")).not.toHaveClass("isadmin"));
   });
 });
 

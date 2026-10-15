@@ -58,4 +58,13 @@ describe("themes", () => {
       expect(b, b.slice(0, 80)).toMatch(/--deleg-text:\s*#/);
     }
   });
+
+  it("defines the administrator name color in Podium's dark base and light blocks and in every palette block (#182)", () => {
+    const fleet = readFileSync(resolve(__dirname, "fleet.css"), "utf8");
+    const themes = readFileSync(resolve(__dirname, "themes.css"), "utf8");
+    const blocks = (css: string) => css.split("}").filter((b) => /--bg:|--good-text:/.test(b));
+    const all = [...blocks(fleet), ...blocks(themes)];
+    expect(all.length).toBeGreaterThanOrEqual(13);
+    for (const b of all) expect(b, b.slice(0, 80)).toMatch(/--admin-text:\s*#/);
+  });
 });

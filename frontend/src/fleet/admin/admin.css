@@ -83,6 +83,7 @@
 .adminv .ptab th.n, .adminv .ptab td.n { text-align: right; }
 .adminv .ptab tr.revoked td { color: var(--muted); }
 .adminv .who { font-weight: 600; white-space: nowrap; }
+.adminv .who.isadmin { color: var(--admin-text); }
 .adminv .acts { display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .adminv .confirm { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; color: var(--ink2); font-size: 12px; }
 .adminv .mchips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
