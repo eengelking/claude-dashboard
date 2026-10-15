@@ -17,8 +17,10 @@ const SHOWN_SESSIONS = 10;
 
 export type ReporterState = 'reporting' | 'idle' | 'silent' | 'restart';
 export const REPORTER_STATES: readonly ReporterState[] = ['reporting', 'idle', 'silent', 'restart'];
-export type ReporterSort = 'state' | 'name' | 'who' | 'ver' | 'last' | 'sessions';
-const SORTS: readonly ReporterSort[] = ['state', 'name', 'who', 'ver', 'last', 'sessions'];
+export type ReporterSort = 'state' | 'name' | 'who' | 'token' | 'ver' | 'last' | 'sessions';
+const SORTS: readonly ReporterSort[] = ['state', 'name', 'who', 'token', 'ver', 'last', 'sessions'];
+/** The credential the server records for a report made with the admin secret. */
+export const ADMIN_SECRET = 'admin secret';
 
 /** What one accepted report says about its sender. Never a token: `credential` is a key id or the words "admin secret". */
 export interface ReporterSeen {
@@ -40,6 +42,10 @@ export interface ReporterRow {
   /** False when the reporter sends no machine name and `name` is made up from its newest project or its address (issue #166). */
   named: boolean;
   who: string;
+  /** The token's key id (`pdm_...`) or the words "admin secret"; null when the server had no authentication. Never a token. */
+  credential: string | null;
+  /** True when it reports with the admin secret instead of a token made for a person (issue #166). Always warned about. */
+  adminSecret: boolean;
   version: string;
   compat: ReporterCompat;
   firstSeenAt: number;
@@ -50,6 +56,8 @@ export interface ReporterRow {
 export interface ReporterList extends Paged<ReporterRow> {
   /** When this server started: what "not since restart" is counted from. */
   serverStartedAt: number;
+  /** How many reporters use the admin secret, whatever filter is on. */
+  adminSecret: number;
   counts: Record<'all' | ReporterState, number>;
 }
 export interface ReporterDetail extends ReporterRow {
@@ -57,7 +65,6 @@ export interface ReporterDetail extends ReporterRow {
   kind: 'mod' | 'hooks';
   machineId: string | null;
   source: string | null;
-  credential: string | null;
   engineVersion: string | null;
   recent: { id: string; name: string; status: string; lastSeenAt: number; costUsd: number | null }[];
   rejected: { t: number; reason: string }[];
@@ -96,6 +103,7 @@ const ORDER: Record<ReporterSort, string> = {
   state: `CASE state WHEN 'reporting' THEN 0 WHEN 'idle' THEN 1 WHEN 'silent' THEN 2 ELSE 3 END`,
   name: `lower(${NAME_SQL.replace(/r\./g, 'q.')})`,
   who: `lower(COALESCE(q.owner, 'Unassigned'))`,
+  token: `CASE WHEN q.credential = '${ADMIN_SECRET}' THEN 0 ELSE 1 END, q.credential`,
   ver: 'q.reporter_version',
   last: 'q.last_seen_at',
   sessions: 'q.sessions',
@@ -191,6 +199,8 @@ export class ReporterStore {
       name: r.machine_name ?? (r.kind === 'hooks' ? 'Hooks only' : (r.project ?? r.source_address ?? 'Unnamed reporter')),
       named: r.machine_name !== null,
       who: r.owner ?? 'Unassigned',
+      credential: r.credential,
+      adminSecret: r.credential === ADMIN_SECRET,
       version: r.reporter_version,
       compat: checkReporter(r.reporter_version),
       firstSeenAt: r.first_seen_at,
@@ -200,7 +210,7 @@ export class ReporterStore {
     };
   }
 
-  list(opts: { page?: number; pageSize?: number; q?: string; state?: string; sort?: string; dir?: number }, now: number): ReporterList {
+  list(opts: { page?: number; pageSize?: number; q?: string; state?: string; sort?: string; dir?: number; admin?: boolean }, now: number): ReporterList {
     const { page, pageSize } = clampPage(opts);
     const q = (opts.q ?? '').trim().slice(0, 100);
     const state = REPORTER_STATES.find((s) => s === opts.state);
@@ -216,6 +226,10 @@ export class ReporterStore {
 
     const where: string[] = [];
     const params: Record<string, string | number> = { ...base };
+    if (opts.admin) {
+      where.push('r.credential = :adminSecret');
+      params.adminSecret = ADMIN_SECRET;
+    }
     if (q) {
       where.push(`(lower(${NAME_SQL}) LIKE :like ESCAPE '\\' OR lower(COALESCE(r.owner, 'unassigned')) LIKE :like ESCAPE '\\'
         OR lower(COALESCE(r.source_address, '')) LIKE :like ESCAPE '\\' OR lower(COALESCE(r.machine_id, '')) LIKE :like ESCAPE '\\'
@@ -231,7 +245,7 @@ export class ReporterStore {
       limit: pageSize,
       offset: (page - 1) * pageSize,
     }) as unknown as DbReporter[];
-    return { total, page, pageSize, rows: rows.map((r) => this.toRow(r)), counts, serverStartedAt: this.startedAt };
+    return { total, page, pageSize, rows: rows.map((r) => this.toRow(r)), counts, serverStartedAt: this.startedAt, adminSecret: (this.stmt('SELECT COUNT(*) AS n FROM reporters WHERE credential = ?').get(ADMIN_SECRET) as { n: number }).n };
   }
 
   get(key: string, now: number): ReporterDetail | undefined {

@@ -281,7 +281,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     if (!reporters) return void res.status(404).json({ ok: false, error: 'not available' });
     const dir = Number(req.query.dir);
     res.json({
-      ...reporters.list({ ...paging(req), q: str(req.query.q), state: str(req.query.state), sort: str(req.query.sort), dir: Number.isFinite(dir) && dir !== 0 ? dir : undefined }, now()),
+      ...reporters.list({ ...paging(req), q: str(req.query.q), state: str(req.query.state), sort: str(req.query.sort), admin: req.query.admin === '1', dir: Number.isFinite(dir) && dir !== 0 ? dir : undefined }, now()),
       serverTime: now(),
     });
   });

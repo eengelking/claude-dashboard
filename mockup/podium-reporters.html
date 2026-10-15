@@ -13,11 +13,16 @@
    state column: a dot and a word, with a count of each state above the table that doubles as the filter. Everything else
    stays in Podium's own quiet tokens. Clicking a row opens the detail in place, with a way back to the list.
    "Silent" means the server has heard nothing for a while. It does not mean the reporter is turned off, and the page says so.
-   Admin only: it shows machine names and source addresses. Dark first, as Podium is. Example data only. */
+   Admin only: it shows machine names and source addresses. Dark first, as Podium is. Example data only.
+   Issue #166 addition: a reporter that reports with the admin secret instead of its own person token is flagged everywhere
+   it appears. The warning is always on, even on a one-person setup: a Token column with an "Admin secret" badge in the warning
+   color, a banner above the list that counts them and filters to them, and a callout at the top of the reporter's detail that
+   says what is wrong and how to fix it. The warning color is the status color, never the accent, and is always paired with
+   an icon and words. */
 :root {
   --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
-  --sonnet: #3987e5;
+  --sonnet: #3987e5; --warnbg: rgba(250,178,25,0.10);
   --good: #0ca30c; --good-text: #3dbb3d; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --crit-text: #ee6a6a;
   --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -27,14 +32,14 @@
   :root:not([data-theme="dark"]) {
     --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
     --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
-    --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; --warn: #9a6200; --serious: #b8481f;
+    --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; --warn: #9a6200; --serious: #b8481f; --warnbg: rgba(154,98,0,0.08);
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
   --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
   --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
-  --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; --warn: #9a6200; --serious: #b8481f;
+  --sonnet: #2a78d6; --good-text: #006300; --crit-text: #b52a2a; --warn: #9a6200; --serious: #b8481f; --warnbg: rgba(154,98,0,0.08);
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -124,11 +129,11 @@ select.field { width: auto; padding: 5px 8px; font-size: 12px; }
 .dhead h2 { margin: 0; font-size: 17px; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); font-size: 12.5px; padding: 12px 14px 0; }
 .back:hover { color: var(--ink); }
-.dgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); }
-@media (max-width: 760px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+.dgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--border); }
+@media (max-width: 900px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
 .dsec { background: var(--surface); padding: 12px 14px 14px; min-width: 0; }
 .dsec h3 { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--axis); font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--ink); }
-.kv { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+.kv { display: grid; grid-template-columns: minmax(84px, 34%) minmax(0, 1fr); gap: 6px 12px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; color: var(--ink); word-break: break-word; }
 .dwide { grid-column: 1 / -1; background: var(--surface); padding: 12px 0 0; }
@@ -138,6 +143,18 @@ select.field { width: auto; padding: 5px 8px; font-size: 12px; }
 .rej .t { color: var(--muted); font-size: 11.5px; }
 .rej .bad { color: var(--crit-text); }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--ink2); font-size: 12px; }
+.adm { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 600; white-space: nowrap; color: var(--warn); border: 1px solid var(--warn); background: var(--warnbg); }
+.tokid { color: var(--muted); font-size: 11.5px; }
+.warnbar { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--warnbg); box-shadow: inset 3px 0 0 var(--warn); }
+.warnbar svg.i { color: var(--warn); width: 16px; height: 16px; }
+.warnbar .tx { flex: 1 1 320px; min-width: 0; color: var(--ink); }
+.warnbar .tx b { font-weight: 650; }
+.callout { margin: 14px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 8px; background: var(--warnbg); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; }
+.callout svg.i { color: var(--warn); width: 18px; height: 18px; margin-top: 1px; }
+.callout h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--ink); }
+.callout p, .callout ol { grid-column: 2; margin: 0; color: var(--ink2); max-width: 70ch; }
+.callout ol { padding-left: 18px; display: grid; gap: 2px; }
+.callout b { color: var(--ink); font-weight: 600; }
 .tt { border-bottom: 1px dotted var(--muted); cursor: help; }
 .tip { position: fixed; z-index: 20; pointer-events: none; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.35); max-width: 260px; }
 </style>
@@ -180,6 +197,7 @@ const STATE = {
 };
 const SERVER_STARTED = NOW - 3 * HOUR;
 const skewOf = (r) => (A.stopped && r.id === "9f3a1c7d2e40" ? 3 * HOUR : 0);
+const isAdmin = (r) => r.tok === "admin secret";
 const stateOf = (r) => { if (r.last < SERVER_STARTED) return "restart"; const age = NOW + skewOf(r) - r.last; return age < 2 * MIN ? "reporting" : age < HOUR ? "idle" : "silent"; };
 
 /* key: machine id when the reporter names itself, else the source address */
@@ -193,9 +211,12 @@ const DATA = [
   { key: "5c27f9ab01de", name: "air-travel", id: "5c27f9ab01de", addr: "172.20.8.203", who: "Dana Ortiz", tok: "pdm_3f9a1c07b2e4", first: NOW - 90 * DAY, last: NOW - 33 * DAY, ver: "0.9.2", eng: "2.0.71", compat: "outdated", sessions: 31, live: 0,
     opts: [["Server URL", "http://podium.lan:3117"], ["Report interval", "5 s"], ["Send file names", "on"], ["Send tool names", "on"], ["User name", "Dana Ortiz"]],
     recent: [], rej: [] },
-  { key: "addr:10.4.0.52", name: "Unnamed reporter", id: null, addr: "10.4.0.52", who: "none (admin secret)", tok: "admin secret", first: NOW - 6 * DAY, last: NOW - 2 * HOUR - 10 * MIN, ver: "0.13.0", eng: "2.1.299", compat: "ok", sessions: 9, live: 0,
+  { key: "addr:10.4.0.52", name: "legacy-job", id: null, addr: "10.4.0.52", who: "Admin", tok: "admin secret", first: NOW - 6 * DAY, last: NOW - 2 * HOUR - 10 * MIN, ver: "0.13.0", eng: "2.1.299", compat: "ok", sessions: 9, live: 0,
     opts: [["Server URL", "http://podium.lan:3117"], ["Report interval", "5 s"], ["User name", "not set"]],
     recent: [["legacy-job", "ended", "2 h ago", "$0.30"]], rej: [["2 h ago", "Refused: reporting with the admin secret is turned off"], ["2 h ago", "Refused: reporting with the admin secret is turned off"]] },
+  { key: "addr:10.88.0.128", name: "eengelking/podium", id: null, addr: "10.88.0.128", who: "Admin", tok: "admin secret", first: NOW - 2 * DAY, last: NOW - 8e3, ver: "0.13.0", eng: "2.1.299", compat: "ok", sessions: 101, live: 2,
+    opts: [["Server URL", "http://podium.lan:3117"], ["Report interval", "5 s"], ["User name", "not set"]],
+    recent: [["podium", "running", "now", "$2.31"], ["podium", "ended", "3 h ago", "$4.02"]], rej: [] },
   { key: "e20b7733c9f5", name: "pi-garage", id: "e20b7733c9f5", addr: "192.168.1.61", who: "Lee Park", tok: "pdm_7be2058d3c19", first: NOW - 70 * DAY, last: NOW - 40 * DAY, ver: "0.14.0", eng: "2.2.4", compat: "newer", sessions: 17, live: 0,
     opts: [["Server URL", "http://podium.lan:3117"], ["Report interval", "30 s"], ["User name", "Lee Park"]],
     recent: [], rej: [] },
@@ -204,7 +225,7 @@ const DATA = [
     recent: [["scratch", "ended", "5 h ago", "$0.11"]], rej: [] }
 ];
 
-const A = { rows: DATA.map((r) => ({ ...r })), stopped: false, filter: "all", q: "", sort: "last", dir: -1, open: null, confirm: false, removed: [] };
+const A = { rows: DATA.map((r) => ({ ...r })), stopped: false, filter: "all", onlyAdmin: false, q: "", sort: "last", dir: -1, open: null, confirm: false, removed: [] };
 
 const ago = (t, r) => { const d = NOW + (r ? skewOf(r) : 0) - t; if (d < 15e3) return "just now"; if (d < MIN) return Math.round(d / 1e3) + " s ago"; if (d < HOUR) return Math.round(d / MIN) + " min ago"; if (d < DAY) return Math.round(d / HOUR) + " h ago"; return Math.round(d / DAY) + " days ago"; };
 const date = (t) => new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -214,11 +235,18 @@ const COMPAT = {
 const compatHtml = (r) => { const [c, t] = COMPAT[r.compat]; return `<span class="compat ${c}" data-hint="${esc(t)}">${c === "outdated" || c === "newer" ? "⚠ " : ""}<span class="mono">${esc(r.ver)}</span>${c === "outdated" || c === "newer" ? " " + c : c === "unknown" ? " no mod" : ""}</span>`; };
 const stHtml = (r) => { const s = stateOf(r); return `<span class="st ${s}" data-hint="${esc(STATE[s].def + (s === "silent" ? ". It may be off, offline or blocked; the server cannot tell which." : "") + ".")}"><span class="dot ${s}"></span>${STATE[s].name}</span>`; };
 
+const WARN_ICON = `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2L14.4 13H1.6L8 2.2z"/><path d="M8 6.6v3"/><path d="M8 11.4v.1"/></svg>`;
+const ADMIN_HINT = "This reporter sends the admin secret instead of a token made for a person. Anyone holding it can report as anyone, and its sessions belong to no one. Make a token for this person in Admin > People, then enter it, and their name, in the reporter's options.";
+const tokHtml = (r) => isAdmin(r)
+  ? `<span class="adm" tabindex="0" data-hint="${esc(ADMIN_HINT)}">${WARN_ICON}Admin secret</span>`
+  : `<span class="tokid mono">${esc(r.tok)}</span>`;
+
 function visible() {
   const q = A.q.trim().toLowerCase();
   let rows = A.rows.filter((r) => !A.removed.includes(r.key)).filter((r) => A.filter === "all" || stateOf(r) === A.filter)
+    .filter((r) => !A.onlyAdmin || isAdmin(r))
     .filter((r) => !q || [r.name, r.who, r.addr, r.id || "", r.ver].some((s) => s.toLowerCase().includes(q)));
-  const get = { name: (r) => r.name.toLowerCase(), state: (r) => ["reporting", "idle", "silent", "restart"].indexOf(stateOf(r)), ver: (r) => r.ver, last: (r) => r.last, sessions: (r) => r.sessions, who: (r) => r.who.toLowerCase() }[A.sort];
+  const get = { name: (r) => r.name.toLowerCase(), state: (r) => ["reporting", "idle", "silent", "restart"].indexOf(stateOf(r)), ver: (r) => r.ver, last: (r) => r.last, sessions: (r) => r.sessions, who: (r) => r.who.toLowerCase(), tok: (r) => (isAdmin(r) ? "0" : "1") + r.tok }[A.sort];
   return rows.sort((a, b) => (get(a) < get(b) ? -1 : get(a) > get(b) ? 1 : 0) * A.dir);
 }
 const th = (id, label, cls = "") => `<th class="${cls}" aria-sort="${A.sort === id ? (A.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" data-sort="${id}">${label}${A.sort === id ? (A.dir > 0 ? " ↑" : " ↓") : ""}</button></th>`;
@@ -229,12 +257,14 @@ function listHtml() {
   const rows = visible();
   const strip = [["all", "All reporters", all.length, ""], ...["reporting", "idle", "silent", "restart"].map((s) => [s, STATE[s].name, cnt(s), s])]
     .map(([id, label, n, dot]) => `<button type="button" class="sbtn" data-filter="${id}" aria-pressed="${A.filter === id}"><span class="k">${dot ? `<span class="dot ${dot}"></span>` : ""}${label}</span><span class="v mono">${n}</span></button>`).join("");
-  return `<div class="states" role="group" aria-label="Filter by state">${strip}</div>
+  const nAdmin = all.filter(isAdmin).length;
+  const banner = nAdmin ? `<div class="warnbar" role="status">${WARN_ICON}<div class="tx"><b>${nAdmin} ${nAdmin === 1 ? "reporter uses" : "reporters use"} the admin secret.</b> They should each use a token made for one person, so their sessions have an owner and the admin secret stays private.</div><button type="button" class="btn sm" data-act="admin-filter" aria-pressed="${A.onlyAdmin}">${A.onlyAdmin ? "Show all reporters" : "Show only these"}</button></div>` : "";
+  return `<div class="states" role="group" aria-label="Filter by state">${strip}</div>${banner}
   <div class="ptool"><label for="rq" style="font-weight:600;white-space:nowrap">Find a reporter</label><input class="field" id="rq" type="search" placeholder="Machine, person, address or version" value="${esc(A.q)}"></div>
-  ${rows.length ? `<div class="tw2 scroll"><table class="ptab"><thead><tr>${th("state", "State")}${th("name", "Machine")}${th("who", "Person")}${th("ver", "Reporter version")}${th("last", "Last report")}${th("sessions", "Sessions", "num")}</tr></thead>
+  ${rows.length ? `<div class="tw2 scroll"><table class="ptab"><thead><tr>${th("state", "State")}${th("name", "Machine")}${th("who", "Person")}${th("tok", "Token")}${th("ver", "Reporter version")}${th("last", "Last report")}${th("sessions", "Sessions", "num")}</tr></thead>
     <tbody>${rows.map((r) => `<tr class="rw" tabindex="0" data-open="${esc(r.key)}" aria-label="Open details for ${esc(r.name)}"><td>${stHtml(r)}</td>
       <td><span class="nm">${esc(r.name)}</span><span class="sub mono">${esc(r.id ? r.addr : "no machine id, matched by address " + r.addr)}</span></td>
-      <td>${esc(r.who)}</td><td>${compatHtml(r)}</td><td class="mono" style="color:var(--ink2);white-space:nowrap">${ago(r.last, r)}</td>
+      <td>${esc(r.who)}</td><td>${tokHtml(r)}</td><td>${compatHtml(r)}</td><td class="mono" style="color:var(--ink2);white-space:nowrap">${ago(r.last, r)}</td>
       <td class="num mono">${r.sessions}${r.live ? ` <span class="hint">· ${r.live} live</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="empty">${all.length ? "No reporter matches. Clear the search or pick another state." : "No reporter has connected yet. Install podium-reporter and point it at this server."}</div>`}
   <div class="pager"><span>${rows.length} of ${all.length} reporters</span><span class="hint">Page 1 of 1</span></div>
@@ -249,14 +279,18 @@ function detailHtml(r) {
     ? `<div class="confirm">Remove ${esc(r.name)} from the list? It comes back if it reports again. Its sessions are not touched.<button type="button" class="btn sm dng" data-act="remove-yes">Remove reporter</button><button type="button" class="btn sm" data-act="remove-no">Keep it</button></div>`
     : `<button type="button" class="btn sm dng" data-act="remove">Remove from list</button>`;
   return `<button type="button" class="back" data-act="back"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>All reporters</button>
-  <div class="dhead"><div><h2>${esc(r.name)} ${stHtml(r)}</h2></div>${rem}</div>
+  <div class="dhead"><div><h2>${esc(r.name)} ${stHtml(r)}${isAdmin(r) ? " " + tokHtml(r) : ""}</h2></div>${rem}</div>
+  ${isAdmin(r) ? `<div class="callout" role="alert">${WARN_ICON}<h3>This reporter is using the admin secret</h3>
+    <p>${esc(r.name)} reports with the admin secret instead of a token made for one person. Its ${r.sessions} sessions belong to no one, and anyone who holds that secret can report as anyone. On a server only you use this is allowed, but it is not meant to stay that way.</p>
+    <p><b>To fix it:</b></p>
+    <ol><li>In Admin > People, make a person for whoever runs this reporter, and copy their token.</li><li>In Claude Code on ${esc(r.addr)}, run <span class="mono">/plugin configure podium-reporter</span>.</li><li>Enter that token as <span class="mono">token</span> and the person's name as <span class="mono">userName</span>.</li></ol></div>` : ""}
   <div class="dgrid">
     <section class="dsec"><h3>Reporter</h3>${kv([
       ["Version", `<span class="mono">${esc(r.ver)}</span>`], ["Compatibility", `<span class="compat ${cc}">${cc === "ok" ? "Supported" : esc(ct)}</span>`],
       ["Claude Code", `<span class="mono">${esc(r.eng)}</span>`], ["First seen", `${date(r.first)} <span class="hint">(${ago(r.first)})</span>`], ["Last report", `${ago(r.last, r)}`], ["Sessions seen", `<span class="tt" data-hint="Totals outlive the sessions themselves, which are deleted 30 days after they end."><span class="mono">${r.sessions}</span> in total, ${r.live} running now</span>`]])}</section>
     <section class="dsec"><h3>Where it comes from</h3>${kv([
       ["Machine", esc(r.name)], ["Machine id", r.id ? `<span class="mono">${esc(r.id)}</span>` : `<span class="tt" data-hint="The reporter has no user name set, so it sends no machine id and is matched by source address.">Not sent</span>`],
-      ["Source address", `<span class="mono">${esc(r.addr)}</span>`], ["Person", esc(r.who)], ["Token", `<span class="mono tt" data-hint="The token's key id, which finds the person. The secret part is never shown or kept.">${esc(r.tok)}</span>`]])}</section>
+      ["Source address", `<span class="mono">${esc(r.addr)}</span>`], ["Person", esc(r.who)], ["Token", isAdmin(r) ? tokHtml(r) : `<span class="mono tt" data-hint="The token's key id, which finds the person. The secret part is never shown or kept.">${esc(r.tok)}</span>`]])}</section>
     <section class="dsec"><h3>Options it reports</h3>${kv(r.opts.map(([k, v]) => [esc(k), esc(v)]))}</section>
     <div class="dwide"><h3>Recent sessions</h3>${r.recent.length ? `<table class="ptab"><thead><tr><th>Session</th><th>State</th><th>Last report</th><th class="num">Cost</th></tr></thead><tbody>${r.recent.map(([n, st, t, c]) => `<tr><td class="nm" style="font-weight:600">${esc(n)}</td><td>${esc(st)}</td><td class="mono" style="color:var(--ink2)">${esc(t)}</td><td class="num mono">${esc(c)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty"><span class="tt" data-hint="Sessions are deleted 30 days after they end.">No sessions left.</span></div>`}</div>
     <div class="dwide"><h3>Reports the server turned away</h3>${r.rej.length ? `<ul class="rej">${r.rej.map(([t, m]) => `<li><span class="t mono">${esc(t)}</span><span class="bad">${esc(m)}</span></li>`).join("")}</ul>` : `<div class="empty">None lately.</div>`}</div>
@@ -278,6 +312,7 @@ document.addEventListener("click", (e) => {
   else if (t.dataset.sort) { A.dir = A.sort === t.dataset.sort ? -A.dir : 1; A.sort = t.dataset.sort; }
   else if (t.dataset.open) { A.open = t.dataset.open; A.confirm = false; }
   else if (t.dataset.act === "back") { const k = A.open; A.open = null; A.confirm = false; render(); const row = document.querySelector(`[data-open="${k}"]`); if (row) row.focus(); return; }
+  else if (t.dataset.act === "admin-filter") A.onlyAdmin = !A.onlyAdmin;
   else if (t.dataset.act === "remove") A.confirm = true;
   else if (t.dataset.act === "remove-no") A.confirm = false;
   else if (t.dataset.act === "remove-yes") { A.removed.push(A.open); A.open = null; A.confirm = false; }
@@ -287,7 +322,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr.rw")) { e.preventDefault(); e.target.click(); } });
 document.addEventListener("input", (e) => { if (e.target.id === "rq") { A.q = e.target.value; render(); } });
 $("#stopBtn").onclick = () => { A.stopped = true; render(); };
-$("#resetBtn").onclick = () => { A.stopped = false; A.removed = []; A.filter = "all"; A.q = ""; A.open = null; render(); };
+$("#resetBtn").onclick = () => { A.stopped = false; A.removed = []; A.filter = "all"; A.onlyAdmin = false; A.q = ""; A.open = null; render(); };
 $("#themeBtn").onclick = () => { const d = document.documentElement; const light = d.dataset.theme ? d.dataset.theme === "light" : matchMedia("(prefers-color-scheme: light)").matches; d.dataset.theme = light ? "dark" : "light"; };
 const tip = $("#tip");
 document.addEventListener("mouseover", (e) => { const h = e.target.closest("[data-hint]"); if (!h) { tip.hidden = true; return; } tip.textContent = h.dataset.hint; tip.hidden = false; const b = h.getBoundingClientRect(); tip.style.left = Math.max(8, Math.min(b.left, innerWidth - 270)) + "px"; const th = tip.offsetHeight; tip.style.top = (b.top - th - 8 >= 8 ? b.top - th - 8 : b.bottom + 8) + "px"; });

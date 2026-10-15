@@ -83,6 +83,26 @@ describe('reporters', () => {
     expect(store.list({ q: 'studio' }, START + 2 * MIN).rows[0]).toMatchObject({ name: 'studio-m2', named: true });
   });
 
+  it('flags a reporter that uses the admin secret, counts them and filters to them (issue #166)', () => {
+    store.record(seen({ machineId: null, machineName: null, owner: 'Admin', credential: 'admin secret', source: '10.88.0.1', sessionId: 'a1' }), START + MIN);
+    store.record(seen({ machineId: null, machineName: null, owner: 'Admin', credential: 'admin secret', source: '10.88.0.2', sessionId: 'a2' }), START + MIN);
+    store.record(seen(), START + MIN);
+    store.record(seen({ machineId: 'bbbbbbbbbbbb', machineName: 'open', owner: null, credential: null, sessionId: 's9' }), START + MIN);
+    const l = store.list({}, START + MIN);
+    expect(l.adminSecret).toBe(2);
+    const by = Object.fromEntries(l.rows.map((r) => [r.key, r]));
+    expect(by['addr:10.88.0.1']).toMatchObject({ adminSecret: true, credential: 'admin secret' });
+    expect(by['9f3a1c7d2e40']).toMatchObject({ adminSecret: false, credential: 'pdm_3f9a1c07b2e4' });
+    // With authentication off there is no credential, so there is nothing to warn about.
+    expect(by['bbbbbbbbbbbb']).toMatchObject({ adminSecret: false, credential: null });
+    const only = store.list({ admin: true }, START + MIN);
+    expect(only.rows.map((r) => r.key).sort()).toEqual(['addr:10.88.0.1', 'addr:10.88.0.2']);
+    expect(only.total).toBe(2);
+    expect(only.adminSecret).toBe(2);
+    expect(store.list({ sort: 'token', dir: 1 }, START + MIN).rows.slice(0, 2).every((r) => r.adminSecret)).toBe(true);
+    expect(store.get('addr:10.88.0.1', START + MIN)!.adminSecret).toBe(true);
+  });
+
   it('does not fold a hooks-only report into a mod reporter that shares its session', () => {
     store.record(seen({ machineId: null, machineName: null, source: '10.88.0.133' }), START + MIN);
     store.record(seen({ kind: 'hooks', machineId: null, machineName: null, source: '10.88.0.134', version: 'hooks', engineVersion: null }), START + MIN);

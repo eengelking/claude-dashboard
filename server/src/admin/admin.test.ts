@@ -368,7 +368,10 @@ describe('reporters (#142)', () => {
     expect((await agent.get('/api/admin/reporters?q=sam').set(H)).body.rows.map((r: { name: string }) => r.name)).toEqual(['ci']);
     expect((await agent.get('/api/admin/reporters?sort=name&dir=1').set(H)).body.rows.map((r: { name: string }) => r.name)).toEqual(['ci', 'studio-m2']);
     expect((await agent.get('/api/admin/reporters?state=silent').set(H)).body.total).toBe(0);
-    expect((await agent.get('/api/admin/reporters?page=2&pageSize=1&sort=name&dir=1').set(H)).body.rows).toHaveLength(1);
+    reporters.record(seen({ machineId: null, machineName: null, owner: 'Admin', credential: 'admin secret', source: '10.0.0.7', sessionId: 'a1' }), now);
+    expect((await agent.get('/api/admin/reporters').set(H)).body.adminSecret).toBe(1);
+    expect((await agent.get('/api/admin/reporters?admin=1').set(H)).body.rows.map((r: { key: string }) => r.key)).toEqual(['addr:10.0.0.7']);
+    expect((await agent.get('/api/admin/reporters?page=2&pageSize=1&sort=name&dir=1&admin=0').set(H)).body.rows).toHaveLength(1);
   });
 
   it('shows one reporter by key, including an address key, and answers 404 for an unknown one', async () => {

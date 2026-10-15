@@ -13,6 +13,8 @@ export interface ReporterPaging {
   pageSize: number;
   q: string;
   state: "" | ReporterState;
+  /** Only the reporters that use the admin secret. */
+  admin: boolean;
   sort: ReporterSort;
   dir: 1 | -1;
 }
@@ -75,6 +77,32 @@ export function nameDetail(r: Pick<ReporterRow, "name" | "named" | "key">): stri
   return `No name is set on this reporter, so it is shown by its newest project, or its address. Set the userName option in podium-reporter to name it.${addr ? ` Until then it is matched by session, or by source address ${addr}.` : ""}`;
 }
 
+const ADMIN_HINT =
+  "This reporter sends the admin secret instead of a token made for one person. Anyone holding the secret can report as anyone, and its sessions belong to no one. Make a token for the person in Admin > People, then enter it, and their name, in the reporter's options.";
+
+function WarnIcon() {
+  return (
+    <svg className="wicon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2.2L14.4 13H1.6L8 2.2z" />
+      <path d="M8 6.6v3" />
+      <path d="M8 11.4v.1" />
+    </svg>
+  );
+}
+
+/** The token a reporter uses. The admin secret is a warning, always: an icon and words, focusable, with its reason. */
+function Token({ r }: { r: Pick<ReporterRow, "adminSecret" | "credential"> }) {
+  if (r.adminSecret) {
+    return (
+      <span className="admsec" tabIndex={0} title={ADMIN_HINT} aria-label={`Admin secret. ${ADMIN_HINT}`}>
+        <WarnIcon />
+        Admin secret
+      </span>
+    );
+  }
+  return r.credential ? <span className="tokid mono">{r.credential}</span> : <span className="tokid">none</span>;
+}
+
 /** A hover and keyboard-focus note: the same text as the title and as a line a screen reader reads. */
 function StateBadge({ r, serverTime, serverStartedAt }: { r: Pick<ReporterRow, "state" | "lastSeenAt">; serverTime: number; serverStartedAt: number }) {
   const s = stateOf(r.state);
@@ -108,7 +136,7 @@ export function ReportersTab(props: {
   const { api, paging, onPaging, onCount } = props;
   const [open, setOpen] = useState<string | null>(null);
   const [search, setSearch] = useState(paging.q);
-  const list = useList<ReporterList>(api, `/reporters${query({ page: paging.page, pageSize: paging.pageSize, q: paging.q, state: paging.state, sort: paging.sort, dir: paging.dir })}`, props.onLocked);
+  const list = useList<ReporterList>(api, `/reporters${query({ page: paging.page, pageSize: paging.pageSize, q: paging.q, state: paging.state, sort: paging.sort, dir: paging.dir, admin: paging.admin ? 1 : "" })}`, props.onLocked);
   useRefresh(list.reload, open === null);
   const total = list.data?.counts.all;
   useEffect(() => {
@@ -146,6 +174,20 @@ export function ReportersTab(props: {
             </button>
           ))}
         </div>
+        {(data?.adminSecret ?? 0) > 0 && (
+          <div className="warnbar" role="status" aria-label="Reporters using the admin secret">
+            <WarnIcon />
+            <div className="tx">
+              <b>
+                {data!.adminSecret} {data!.adminSecret === 1 ? "reporter uses" : "reporters use"} the admin secret.
+              </b>{" "}
+              They should each use a token made for one person, so their sessions have an owner and the admin secret stays private.
+            </div>
+            <button type="button" className="btn sm" aria-pressed={paging.admin} onClick={() => onPaging({ admin: !paging.admin, page: 1 })}>
+              {paging.admin ? "Show all reporters" : "Show only these"}
+            </button>
+          </div>
+        )}
         <div className="tool">
           <div className="f grow inline">
             <label htmlFor="reporters-search">Search reporters</label>
@@ -168,6 +210,7 @@ export function ReportersTab(props: {
                     {th("state", "State")}
                     {th("name", "Machine")}
                     {th("who", "Person")}
+                    {th("token", "Token")}
                     {th("ver", "Reporter version")}
                     {th("last", "Last report")}
                     {th("sessions", "Sessions", "n")}
@@ -191,6 +234,9 @@ export function ReportersTab(props: {
                         <span className="sub mono">{r.key.startsWith("addr:") || r.key.startsWith("hooks:") ? `no machine id, matched by address ${r.key.slice(r.key.indexOf(":") + 1)}` : r.key}</span>
                       </td>
                       <td>{r.who}</td>
+                      <td>
+                        <Token r={r} />
+                      </td>
                       <td>
                         <Version r={r} />
                       </td>
@@ -272,6 +318,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
       <div className="dhead">
         <h2>
           {d.name} <StateBadge r={d} serverTime={d.serverTime} serverStartedAt={d.serverStartedAt} />
+          {d.adminSecret && <Token r={d} />}
         </h2>
         {confirm ? (
           <div className="confirm">
@@ -294,6 +341,27 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
           {err}
         </div>
       )}
+      {d.adminSecret && (
+        <div className="callout" role="alert">
+          <WarnIcon />
+          <h3>This reporter is using the admin secret</h3>
+          <p>
+            {d.name} reports with the admin secret instead of a token made for one person. Its {d.sessions} {d.sessions === 1 ? "session belongs" : "sessions belong"} to no one, and anyone who holds that secret can report as anyone. On a server only you use this is allowed, but it is not meant to stay that way.
+          </p>
+          <p>
+            <b>To fix it:</b>
+          </p>
+          <ol>
+            <li>In Admin &gt; People, make a person for whoever runs this reporter, and copy their token.</li>
+            <li>
+              In Claude Code{d.source ? ` on ${d.source}` : ""}, run <span className="mono">/plugin configure podium-reporter</span>.
+            </li>
+            <li>
+              Enter that token as <span className="mono">token</span> and the person's name as <span className="mono">userName</span>.
+            </li>
+          </ol>
+        </div>
+      )}
       <div className="dgrid">
         <section className="dsec" aria-labelledby="rep-h1">
           <h3 id="rep-h1">Reporter</h3>
@@ -314,7 +382,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
             ["Machine id", d.machineId ? <span key="m" className="mono">{d.machineId}</span> : <span key="m" className="tt" title="The reporter has no user name set, so it sends no machine id and is matched by source address.">Not sent</span>],
             ["Source address", <span key="a" className="mono">{d.source ?? "unknown"}</span>],
             ["Person", d.who],
-            ["Token", d.credential ? <span key="t" className="mono tt" title="The token's key id, which finds the person. The secret part is never shown or kept.">{d.credential}</span> : "none"],
+            ["Token", d.adminSecret ? <Token key="t" r={d} /> : d.credential ? <span key="t" className="mono tt" title="The token's key id, which finds the person. The secret part is never shown or kept.">{d.credential}</span> : "none"],
           ])}
         </section>
         <div className="dwide">

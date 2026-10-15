@@ -48,7 +48,7 @@ export function AdminView({ base = "/api/admin" }: { base?: string }) {
   const [paging, setPaging] = useState({
     people: { page: 1, pageSize: 50, q: "" },
     groups: { page: 1, pageSize: 50 },
-    reporters: { page: 1, pageSize: 50, q: "", state: "", sort: "last", dir: -1 } as ReporterPaging,
+    reporters: { page: 1, pageSize: 50, q: "", state: "", admin: false, sort: "last", dir: -1 } as ReporterPaging,
     log: { page: 1, pageSize: 50 },
   });
 
