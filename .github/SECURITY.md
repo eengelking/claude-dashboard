@@ -22,8 +22,11 @@ problems that matter here are:
 - **`podiumctl` and the container.** Command injection through a config value, the server listening on
   more than the user asked for, the container running as root, or a boot service file that does more
   than it should.
-- **The mod acting on a session.** Podium only observes. A way for the mod or the server to send a prompt
-  to, stop, or change a session is a security bug.
+- **The mod acting on a session.** Podium can answer a session that waits on its person, and nothing else (see
+  "Responding from Podium" below). A way for the mod or the server to do more than that is a security bug: to send
+  a prompt or an answer to a session whose owner didn't turn the `respond` option on, past the Admin's switch, at a
+  level the session didn't allow, or from anyone but the session's owner or an Admin; to run any command but
+  `/clear` and `/compact`; to change a session's permission rules ("always allow"); or to stop or start a session.
 
 A few things are by design, so they are not vulnerabilities on their own. Reads (`GET /api/fleet/*`) are
 open on localhost; only reports, hooks and deletes need a token. Tokens travel in a header over plain HTTP, so a
@@ -37,6 +40,30 @@ person's name and machine name. A reporter sends a name and its machine's host n
 auth turned off, is not shown as a person at all. The README ("Several people on one Podium") and
 `docs/GOTCHAS.md` say all of this. A session shown under a person whose token did not send it, or a name or
 machine name sent while `userName` is empty, is in scope. A report that shows a way to do those things *without* the setting that allows them is in scope.
+
+## Responding from Podium
+
+Since #206 Podium can answer a session that waits on its person: an AskUserQuestion form, a plan to approve, a
+tool's permission prompt, a new message, `/clear` and `/compact`. What that exposes:
+
+- **Who can.** Only the session's owner (the person whose token reports it) or an Admin (the admin secret, or a
+  person in Administrators). The browser signs in with a name and a token, the same pair as the reporter's
+  `userName` and `token`. Anyone who holds a person's token, or the admin secret, can put text into that person's
+  sessions, as far as each session's `respond` level allows.
+- **What it needs.** It is off unless all of these are on: authentication (`PODIUM_TOKEN`), the Admin's Respond
+  from Podium flag, the Admin's activity feed flag, and on the session's machine the reporter's `respond` option and
+  `activityFeed` option. The reporter checks its own level itself and never relies on the server for it.
+- **The sign-in.** A random id in an `HttpOnly; SameSite=Strict` cookie scoped to `/api/fleet/respond`, held in the
+  server's memory; it ends after 12 hours without use, on sign-out, on restart, and when the person's token is
+  rotated or revoked. Every change needs the header `X-Podium-Respond: 1` and a same-site `Origin`, and no CORS is
+  offered. Five wrong tries from one address lock signing in for 15 minutes, counted together with Admin unlocks.
+- **What is seen and kept.** A question, a plan or a tool's input is shown only to the session's owner or an Admin,
+  and kept in the server's memory only. Each answer is written to the admin log with who sent it, the session and
+  the kind of answer, never its text. The token, and the session cookie, travel over plain HTTP unless you put a TLS
+  proxy in front, so on any network but your own machine use one.
+
+A way to answer a session without the switches above, without being its owner or an Admin, from another site, or
+by sending more than the session's level allows, is in scope.
 
 If you think you have found something like this, please report it rather than opening a public issue.
 

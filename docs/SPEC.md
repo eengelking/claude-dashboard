@@ -158,6 +158,7 @@ mod/podium-reporter/                 the Claude Code mod
   hooks/failures.ts                  classify and excerpt failures
   hooks/models.ts                    model family, context windows, price table
   hooks/protocol.ts                  Report types (kept identical to server/src/fleet/protocol.ts)
+  hooks/respond.ts                   responding from Podium (#206): asks, answers, terminal lines (pure)
   hooks/*.test.ts                    run by `claude plugin test`
 server/src/fleet/
   protocol.ts                        Report + view types, validators
@@ -167,6 +168,8 @@ server/src/fleet/
   sweeper.ts                         stale / linger / drop timers
   sse.ts                             client registry and broadcast
   routes.ts                          Express router mounted at /api/fleet
+  respond.ts, respondRoutes.ts       responding from Podium (#206): the in-memory store, the mod's and the browser's routes
+  lockout.ts                         wrong-credential lockout shared by Admin and the sign-in to respond
   *.test.ts
 frontend/src/fleet/
   FleetApp.tsx, useFleet.ts (SSE + reducer), store.ts, format.ts
@@ -175,6 +178,7 @@ frontend/src/fleet/
   *.test.tsx
 scripts/podium-sim.ts                simulator (has --help)
 scripts/podium-smoke.sh              end-to-end smoke check (has --help)
+scripts/podium-respond-demo.mjs      seeds a throwaway server with waiting sessions to answer (#206; has --help)
 scripts/podiumctl.test.ts            tests for podiumctl (4.4)
 bin/podiumctl.mjs                    command-line manager for the server (4.4; has --help)
 Containerfile, .containerignore      the server and UI as a Podman image (4.4)

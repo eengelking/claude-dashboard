@@ -167,7 +167,7 @@ The rule is in SPEC.md, section 7.5.
 
 ### Closing a background session
 
-Podium only observes, so it cannot close a session for you. Claude Code can:
+Podium cannot close a session for you. Claude Code can:
 
 1. **List them.** `claude agents` opens Claude Code's agent view, with each background session and whether it
    needs input. For a plain list, run `claude agents --json --cwd ~/dev/skills` (use your own project
@@ -290,6 +290,51 @@ and reads "Waited for your approval." A session idle on background work gets a b
 A turn that ended after a failing call, a session ending or starting, and an agent seen only by settings hooks
 also read as plain sentences, such as "Session ended (cleared)."
 
+### Answering a session from Podium
+
+When a session stops to ask you something, its amber band gets a **Respond** button at the right end, on the card
+and on the orchestrator page. It opens the Activity modal with the question, the plan or the tool's request under
+the feed, and a message box at the bottom. The terminal keeps working the whole time, and whichever answers
+first wins. `mockup/podium-respond.html` shows every case.
+
+It is off until all of these are on: the server's **Respond from Podium** switch (Admin > Settings > Feature
+flags), the **Agent activity feed** switch next to it, and on the session's machine the mod's **Respond from
+Podium** option (`respond`) together with **Send an agent's recent activity** (`activityFeed`). Set the option in
+Claude Code with `/plugin configure podium-reporter@eengelking-marketplace`. It needs podium-reporter 0.14.0 or
+later and a server started with a token. Its levels:
+
+- `off`: nothing. The default.
+- `questions`: answers to questions, and new messages while idle.
+- `questions-and-plans`: the above, plus approving or rejecting a plan.
+- `everything`: the above, plus allowing or denying a tool (allow once only), and `/clear`, `/compact`.
+
+To answer you sign in with your name and token, the same ones as the mod's `userName` and `token` options (an
+Admin can use the name **Admin** with the admin secret), either from the modal or from **Sign in** at the far right
+of the top bar. Only the session's owner, or an Admin, can respond; on anyone else's card **Respond** is dimmed
+with their name. A sign-in ends after 12 hours without use, on **Sign out**, when the server restarts, and when
+your token changes.
+
+What you can send:
+
+- **A question.** Pick an option on each tab (or **Type something**), check **Review**, then **Submit answers**.
+  Writing in the message box instead replaces the answer, like "Chat about this" in the terminal.
+- **A plan.** **Yes, and use auto mode**, **Yes, auto-accept edits**, **Yes, manually approve edits**, or **No,
+  keep planning** with what to change. If Claude Code doesn't take an approval, the modal says so and you approve
+  it in the terminal. On a computer where an organization manages Claude Code, only **No, keep planning** is
+  offered.
+- **A tool's request.** **Allow once**, or **Deny** with an optional reason. "Always allow" stays in the terminal.
+- **A message.** While the session is idle it starts the next turn. Sent while it runs, it waits until the session
+  is idle. Type `/` for the two commands Podium can send: `/clear` (it asks first) and `/compact`. Anything else
+  runs only in the terminal.
+
+An answer counts once the session confirms it, usually within 2 seconds; until then the modal says **Sending**.
+If the terminal answered first, if someone else answered first, or if the question closed in the session, the
+modal says so and nothing is sent. If the session has stopped checking in, your answer waits and goes out when
+it reports again, unless the terminal answered by then; **Discard my answer** takes it back. In the terminal,
+podium-reporter writes "also open in Podium. Answer here or there." while a question is open, and names who
+answered from Podium and when. A tool request answered in the terminal still looks open in Podium until the
+command finishes, since Claude Code says nothing sooner.
+
 ### History
 
 - `#/history` lists the sessions that ended on a day you pick, with their agent detail from stored data. It
@@ -356,8 +401,10 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   then turned away, so its sessions stop appearing on the fleet. The **Ignore rules** section after the table shows
   every rule (a key, an address or a version, with `*` for "anything", as in `10.88.*` or `*-sim`), and
   **Remove rule** undoes one. A source address and a machine name are personal data, so only Admin shows them.
-- **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
-  today is **Agent activity feed** (`activity-feed`), on by default. Turned off, every agent and orchestrator
+- **Settings.** **Feature flags**, at the top, turn a feature on or off for everyone on this server. **Respond from
+  Podium** (`respond`), off by default, lets people answer and message the sessions they own (see "Answering a
+  session from Podium" above); each answer is written to the Admin log with who sent it. **Agent activity feed**
+  (`activity-feed`) is on by default. Turned off, every agent and orchestrator
   panel says the Admin turned the feed off, the server asks no mod for activity and forgets what it held,
   whatever each machine's `activityFeed` option says. Turned back on, open panels start the feed again,
   empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
@@ -552,6 +599,10 @@ if you turn on the mod's `fullPrompts` option, which is off by default. What an 
 calls and the text it writes, each cut to 300 characters) leaves the session only if you turn on the mod's
 `activityFeed` option, also off by default, and even then only while someone has that agent's panel open in the
 console. The model's thinking is never sent.
+
+What a session waits on you for (a question with its options, a plan, or a tool's arguments) leaves the session
+only if you set the mod's `respond` option, which is `off` by default, and the server takes answers. Only the
+session's owner and an Admin can see it, and the server keeps it in memory only.
 
 Your name and your machine leave the session only once you set the mod's `userName` option, which is empty
 by default. Then each report carries that name, the machine's short host name and a random id the mod keeps

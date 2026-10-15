@@ -119,6 +119,26 @@ section sits in `AgentDetail` and `OrchestratorDetail` (loop `@orchestrator`, wh
 simulator (`scripts/podium-sim.ts`) reads `watch` from each reply too and sends a scripted entry a second for each
 watched loop that is still working, so the panel can be seen filling without a real session.
 
+**Responding** (#206, SPEC 5.3, 7.1, 7.2, 7.7). The server side is `server/src/fleet/respond.ts` (`RespondStore`,
+on the `Fleet`, in memory only: each session's last `respond` info, its asks with content, a closed ask's outcome
+for 10 minutes, the one answer taken per ask and up to 20 waiting messages, plus the held requests) and
+`respondRoutes.ts` (mounted on the fleet router: the mod's routes behind `requireToken` and an owner check, and the
+browser's under `/respond` with their own `HttpOnly` sign-in cookie, header and `Origin` checks). `Fleet.ingest`
+hands each report to the store, which learns asks a restarted server lost and takes as closed an open one a report
+stops listing (5 s grace). Answers and messages become `podium` entries in the watched loop's activity feed
+(`ActivityStore.addPodium`), updated or removed as the mod reports results. `lockout.ts` is shared with the Admin
+router. The Respond flag is `respond` in `FEATURES`, which now carries a per-flag default. The only database change
+is migration 15's `sessions.cleared_from`. In the mod, `respond.ts` holds the pure parts (what the level accepts, the
+asks, `planApproval` with `updatedInput`, `toolDecision`, the terminal lines) and `register.ts` the races:
+`questionRace` and `planRace` inside the generic `tool.call` hook, `permissionAsk` from `classic.PermissionRequest`,
+`settleToolAsk` when a tool's call ends, `startPermissionCheck` from `tool.check`, and `handleDeliveries` for the
+reply's messages and commands. Closes and results queue in `outbox` and go out from the flush timer, since Esc
+aborts a hook's own fetches; delivery ids already acted on are kept in `$.store`. In the UI, `useRespond.tsx`
+provides who is signed in (asked only while the Admin's flags are on) and which session's modal is open;
+`components/Respond.tsx` is the button and the modal, with `RespondForms.tsx`, `Compose.tsx` and `SignIn.tsx`;
+`respond.ts` holds the rules for the button and the frames. The modal lets its fields keep their own keys
+(`Modal.tsx`), and `useActivityFeed` follows a Podium entry's note as it changes.
+
 **The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
 `sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to
@@ -453,7 +473,8 @@ would not resize the window that narrow. Touch input and screen reader output we
 ## Mod API findings
 
 Checked against the engine 2.1.296 type declarations, `claude plugin validate`, `claude plugin test`,
-and two real `claude -p` runs (haiku) on 2026-10-10.
+and two real `claude -p` runs (haiku) on 2026-10-10. The rows marked #206 were checked on 2.1.301 on 2026-10-15
+with a throwaway mod that recorded every hook's input and timing in an interactive session (SPEC 5.3).
 
 | Assumption (SPEC 5 and 12) | Result | Evidence |
 |---|---|---|
@@ -467,6 +488,11 @@ and two real `claude -p` runs (haiku) on 2026-10-10.
 | `$.session.usage().cost.usd` includes subagent spend | **Yes.** Run 1: ledger $0.014450 equals the CLI's `total_cost_usd` ($0.014450345); the main loop's own token estimate is $0.006628 and the agent's $0.005742 (sum $0.01237, the rest is pricing detail the estimate does not model). | run 1, database |
 | Windows: 200,000 for haiku, 1,000,000 for others | **Wrong for the current Haiku.** Haiku 5.5 has a 1M window; only Haiku 4.5 (and older) has 200K. `windowOf` uses 200K only for `haiku-4`, `haiku-3`, `claude-3` ids. | `claude-api` skill, model table cached 2026-10-06 |
 | Bash exit code in an error result | No field: `tool.call` error results carry `text` ("Exit code 1 ..."); the reporter parses it. | `BuiltinToolResults.Bash` has no exit code |
+| #206: plan text and path on ExitPlanMode's `tool.call` | **Yes.** The input carries `plan` and `planFilePath`, though the declared type lists only `allowedPrompts`; `classic.PermissionRequest`'s `tool_input` has the same two. | recorded hook inputs |
+| #206: Esc told apart from plan feedback | **Yes, by the text.** Both are `isError`; feedback reads "... To tell you how to proceed, the user said:\n<feedback>", Esc "... STOP what you are doing ...". | recorded results |
+| #206: the engine ends a waiting PermissionRequest hook when the terminal answers first | **No.** `next.signal` never aborted; the hook held on for 60 s, past the command's end. The only signal is the call's `tool.call` resolving, so a tool ask stays open while a terminal-allowed command runs. | two Bash prompts answered "Yes" in the terminal |
+| #206: `$.http.fetch` time limit | **30 s**: "no complete answer within 30000ms". Held requests wait 20 s at most. | recorded rejection |
+| #206: `tool.check` before a prompt | Carries `tool_use_id`; resolves to `ask` 3 to 11 ms before `classic.PermissionRequest` fires (Bash and ExitPlanMode). The managed-setup case, where no PermissionRequest fires, is **unverified**. | recorded timings |
 | Worktree detection when started inside a worktree | **Works.** Run 2 in a scratch worktree: `isWorktree: true`, `worktreePath` the worktree, branch `feat/wt-check`, `dirty: 1`, name `wt-check`, project the main checkout. | run 2 |
 | Teammates | Reported as `kind: 'teammate'` from `agent.spawn.isTeammate`; not observed for real. | types |
 | `$.session.version()` | Returns `{ version, base?, builtAt? }`, not a string. | types |

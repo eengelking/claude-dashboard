@@ -8,8 +8,9 @@ Two dashboards for Claude Code on one machine, served by one local server:
   Podium reporter mod shows up in one browser tab within about two seconds of its first prompt, with its model and effort,
   its plan, the agents it launched (subagents and forks), what each costs, how full each context window
   is, how often a window blew out, why anything failed, and which git branch or worktree it works in.
-  Sessions appear when they start and leave when they end, with no refresh. Podium only observes: it
-  never sends prompts or touches a session.
+  Sessions appear when they start and leave when they end, with no refresh. Podium watches; the one thing it
+  can send is an answer to a session that waits on you (a question, a plan, a tool's permission prompt, a message,
+  `/clear` or `/compact`), and only once the server's Admin and the session's owner have both turned that on.
 
 New here? [docs/USER_GUIDE.md](docs/USER_GUIDE.md) walks through setup and reading the dashboard.
 
@@ -184,6 +185,7 @@ instead. Everything except `token` also has a row in the `/config` menu.
 | `showStatus` | `true` | Show the status line entry |
 | `fullPrompts` | `false` | Send each agent's whole task prompt and final answer (up to 20,000 characters each, secrets redacted) so the console can open them in a modal. Off by default: only the first 400 characters leave the session. Everyone who can open the console can read them |
 | `activityFeed` | `false` | Send an agent's recent activity: while someone has that agent's panel open in the console, its last 20 tool calls (the tool's name and a short summary of its arguments) and the text it writes between them, each cut to 300 characters with secrets redacted. Nothing is sent for an agent nobody is watching, and the server keeps it in memory only. The orchestrator's own loop works the same way. Everyone who can open the console can watch. The server's Admin can also switch the feed off for everyone under Admin > Settings > Feature flags (on by default); while it is off the server asks no mod for it |
+| `respond` | `off` | Respond from Podium: what this session accepts from Podium, sent by its owner or an Admin. `off` (nothing), `questions` (answers to questions, and new messages while idle), `questions-and-plans` (the above, plus approving or rejecting a plan), `everything` (the above, plus allowing or denying a tool, allow once only, and `/clear`, `/compact`). It needs `activityFeed` on too, and the server's Respond from Podium switch in Admin > Settings > Feature flags (off by default) |
 | `explainFailures` | `false` | Ask a small model (Haiku, low effort) for a two-sentence explanation of each failed agent, from the redacted failure record only. Costs a little; off by default |
 
 ### What leaves the session
@@ -212,6 +214,11 @@ Only to the server URL above, and only this:
   summary of its arguments (a Bash command, a file path, a search pattern), and the text the model wrote
   between them, each cut to 300 characters. The model's thinking is never sent. When nobody is watching,
   nothing of it is read or sent, and the server forgets it soon after the panel closes;
+- only when you have set `respond` (and `activityFeed`), and the server takes answers: what the session accepts, and
+  while it waits on you, the open question (its questions, options and previews), plan (its text and file path) or
+  tool call (the tool and its arguments), each cut to fixed limits and redacted, so its owner can answer from the
+  console. It is shown only to the session's owner or an Admin, and the server keeps it in memory only. After a
+  `/clear`, the new session also names the one it continues, so History can link them;
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
   and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two

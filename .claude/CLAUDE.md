@@ -8,7 +8,9 @@ Podium is a live fleet console for Claude Code. It shows every session running o
 browser tab: each orchestrator's model, effort, plan, the agents it launched, what they cost, how full
 their context windows are, why anything failed, and which git branch it works in. It is for someone who
 runs several Claude Code sessions and agents at once and wants to see what they are doing and costing
-without watching each terminal. Podium only observes. It never sends a prompt or touches a session.
+without watching each terminal. Podium watches, and since #206 it can also answer a session that waits on its person
+(a question, a plan, a tool's permission prompt, a message, `/clear` or `/compact`), only where the Admin and the
+session's owner have both turned that on. It never types into a terminal or changes a session's permission rules.
 
 It ships as a server and UI (this repo, run with `podiumctl` in a Podman container or as a plain Node
 process) and a reporter mod, `podium-reporter`, installed from `eengelking-marketplace`. `docs/SPEC.md` is
