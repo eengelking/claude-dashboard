@@ -38,10 +38,9 @@ export function StatusBand({
   let detail: string | null = null;
   let title: string | undefined;
   if (kind === "deleg") {
-    const kids = delegates;
-    lead = <span className="bl">{`Delegating to ${kids.length} agent${kids.length === 1 ? "" : "s"}.`}</span>;
-    detail = kids.map((a) => a.description).join(", ");
-    title = delegateText(kids);
+    lead = <span className="bl">{`Delegating to ${delegates.length} agent${delegates.length === 1 ? "" : "s"}.`}</span>;
+    detail = delegates.map((a) => a.description).join(", ");
+    title = delegateText(delegates);
   } else if (kind === "stale") {
     lead = (
       <span className="bl">
