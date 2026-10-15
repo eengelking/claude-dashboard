@@ -1,6 +1,6 @@
 // #/history (SPEC T5.3): sessions that ended or were dropped on a day, and a read-only orchestrator
 // page for one of them, built from its stored rows.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./fleet.css";
 import { fmtClock, fmtDur } from "./format";
 import type { AgentSortKey } from "./logic";
@@ -12,6 +12,7 @@ import { Cost, ModelChip } from "./components/Chips";
 import { FocusView } from "./components/FocusView";
 import { BrandLink } from "./components/BrandLink";
 import { ThemePicker } from "./components/ThemePicker";
+import { PAGE_SIZES, Pager } from "./admin/Pager";
 import { useTheme } from "./useTheme";
 import { APP_NAME, type HistoryRow, type SessionView } from "./types";
 
@@ -19,6 +20,42 @@ import { APP_NAME, type HistoryRow, type SessionView } from "./types";
 export function localDay(t: number): string {
   const d = new Date(t);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** What the address holds so a reload, a shared link and the browser's Back button all land on the same list (#195). */
+interface Where {
+  day: string;
+  page: number;
+  size: number;
+  open: string | null;
+}
+
+const DEFAULT_SIZE = 50;
+
+function parseHash(hash: string): Partial<Where> {
+  const q = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+  const day = q.get("day");
+  const page = Number(q.get("page"));
+  const size = Number(q.get("size"));
+  return {
+    day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : undefined,
+    page: Number.isInteger(page) && page >= 1 ? page : 1,
+    size: PAGE_SIZES.includes(size) ? size : DEFAULT_SIZE,
+    open: q.get("open") || null,
+  };
+}
+
+function hashFor(w: Where): string {
+  const q = new URLSearchParams({ day: w.day, page: String(w.page), size: String(w.size) });
+  if (w.open) q.set("open", w.open);
+  return `#/history?${q.toString()}`;
+}
+
+interface Paged {
+  rows: HistoryRow[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ok"; data: T };
@@ -33,27 +70,58 @@ const CONFIG = { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, det
 
 export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string; initialDay?: string }) {
   const theme = useTheme();
-  const [day, setDay] = useState(initialDay ?? localDay(Date.now()));
-  const [rows, setRows] = useState<Load<HistoryRow[]>>({ state: "loading" });
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [where, setWhere] = useState<Where>(() => {
+    const p = parseHash(window.location.hash);
+    return { day: p.day ?? initialDay ?? localDay(Date.now()), page: p.page ?? 1, size: p.size ?? DEFAULT_SIZE, open: p.open ?? null };
+  });
+  const whereRef = useRef(where);
+  const [rows, setRows] = useState<Load<Paged>>({ state: "loading" });
   const [session, setSession] = useState<Load<SessionView> | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [sort, setSort] = useState<AgentSort>({ key: null, dir: 1 });
+
+  const { day, page, size, open: openId } = where;
+
+  /** Changes part of the address. Opening a session pushes an entry so Back returns to the list; every other change replaces the current one. */
+  const go = (patch: Partial<Where>, mode: "push" | "replace" = "replace") => {
+    const next = { ...whereRef.current, ...patch };
+    whereRef.current = next;
+    setWhere(next);
+    window.history[mode === "push" ? "pushState" : "replaceState"]({ open: next.open !== null }, "", hashFor(next));
+  };
 
   useEffect(() => {
     document.title = `${APP_NAME} history`;
   }, []);
 
   useEffect(() => {
+    const onPop = () => {
+      const p = parseHash(window.location.hash);
+      const next = { day: p.day ?? whereRef.current.day, page: p.page ?? 1, size: p.size ?? DEFAULT_SIZE, open: p.open ?? null };
+      whereRef.current = next;
+      setWhere(next);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
     let live = true;
     setRows({ state: "loading" });
-    getJson<{ sessions: HistoryRow[] }>(`${base}/history?day=${encodeURIComponent(day)}`)
-      .then((b) => live && setRows({ state: "ok", data: b.sessions.slice().sort((a, b) => b.endedAt - a.endedAt) }))
+    getJson<{ sessions: HistoryRow[]; total: number; page: number; pageSize: number }>(
+      `${base}/history?day=${encodeURIComponent(day)}&page=${page}&pageSize=${size}`,
+    )
+      .then((b) => {
+        if (!live) return;
+        setRows({ state: "ok", data: { rows: b.sessions, total: b.total, page: b.page, pageSize: b.pageSize } });
+        // The server moves a page past the end back to the last one; the address follows.
+        if (b.page !== page) go({ page: b.page });
+      })
       .catch((e: Error) => live && setRows({ state: "error", message: e.message }));
     return () => {
       live = false;
     };
-  }, [base, day]);
+  }, [base, day, page, size]);
 
   useEffect(() => {
     if (!openId) {
@@ -98,7 +166,7 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
           <main className="main">
             {s ? (
               <>
-                <button type="button" className="back" style={{ padding: "0 0 10px" }} onClick={() => setOpenId(null)}>
+                <button type="button" className="back" style={{ padding: "0 0 10px" }} onClick={() => (window.history.state?.open ? window.history.back() : go({ open: null }))}>
                   ← Back to {day}
                 </button>
                 <FocusView s={s} now={s.lastSeenAt} config={CONFIG} sort={sort} onSort={onSort} selectedAgent={agent} flashAgent={null} onAgent={setAgent} />
@@ -113,15 +181,15 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
                   <label className="sortlab" htmlFor="podium-day">
                     Day
                   </label>
-                  <input id="podium-day" className="search" type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+                  <input id="podium-day" className="search" type="date" value={day} onChange={(e) => e.target.value && go({ day: e.target.value, page: 1 })} />
                   <span className="spacer" />
-                  {rows.state === "ok" && <span className="kpi-cap">{rows.data.length} sessions ended</span>}
+                  {rows.state === "ok" && <span className="kpi-cap">{rows.data.total} sessions ended</span>}
                 </div>
                 {rows.state === "loading" ? (
                   <div className="none">Loading…</div>
                 ) : rows.state === "error" ? (
                   <div className="none">Cannot reach the Podium server ({rows.message}). Start it with npm run dev.</div>
-                ) : rows.data.length === 0 ? (
+                ) : rows.data.total === 0 ? (
                   <div className="none">No sessions ended on {day}.</div>
                 ) : (
                   <div className="sec tw">
@@ -140,10 +208,10 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.data.map((r) => (
+                        {rows.data.rows.map((r) => (
                           <tr key={r.id}>
                             <td>
-                              <button type="button" className="lk" onClick={() => setOpenId(r.id)}>
+                              <button type="button" className="lk" onClick={() => go({ open: r.id }, "push")}>
                                 {r.name}
                               </button>
                             </td>
@@ -161,6 +229,7 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
                         ))}
                       </tbody>
                     </table>
+                    <Pager id="history" page={rows.data.page} pageSize={rows.data.pageSize} total={rows.data.total} onPage={(n) => go({ page: n })} onSize={(n) => go({ size: n, page: 1 })} />
                   </div>
                 )}
               </>

@@ -682,6 +682,13 @@ body.modal-open #root { filter: blur(5px); }
 .podium .htable td { padding: 7px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 .podium .htable th.num, .podium .htable td.num { text-align: right; }
 .podium .htable .lk { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+/* The pager under the table (#195): the same markup as Admin's pager, dressed with the History page's own controls. */
+.podium .history .apager { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid var(--border); color: var(--ink2); font-size: 12px; }
+.podium .history .apager .row2 { display: inline-flex; align-items: center; gap: 8px; }
+.podium .history .apager .hint { color: var(--muted); }
+.podium .history .apager .field.sm { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; min-height: 26px; padding: 0 6px; font: inherit; font-size: 12px; }
+.podium .history .apager .btn.sm { min-height: 26px; padding: 0 8px; justify-content: center; white-space: nowrap; }
+.podium .history .apager .btn:disabled { opacity: .5; cursor: default; }
 @media (max-width: 1040px) { .podium .history { display: block; } .podium .history > .side { width: auto; } }
 
 /* Remove on a heartbeat-lost card or rail row (#41). The card and the row are buttons, so the control sits beside them:

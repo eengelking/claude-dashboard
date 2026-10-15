@@ -95,6 +95,10 @@ function refuseIgnored(opts: FleetRouterOptions, logger: Logger, fleet: Fleet, r
 
 const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
 
+/** Rows per page on `GET /history` (#195): the choices the page offers, and the default. */
+const HISTORY_PAGE_SIZES = [25, 50, 100];
+const HISTORY_PAGE_SIZE = 50;
+
 function intParam(v: unknown): number | null | 'bad' {
   if (v === undefined || v === '') return null;
   if (typeof v !== 'string' || !/^\d+$/.test(v)) return 'bad';
@@ -410,10 +414,21 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
       res.status(400).json({ ok: false, error: 'day is not a real date', path: '$.query.day' });
       return;
     }
+    const page = intParam(req.query.page);
+    const size = intParam(req.query.pageSize);
+    if (page === 'bad' || size === 'bad' || page === 0 || (size !== null && !HISTORY_PAGE_SIZES.includes(size))) {
+      res.status(400).json({ ok: false, error: `page must be 1 or more and pageSize one of ${HISTORY_PAGE_SIZES.join(', ')}`, path: '$.query' });
+      return;
+    }
+    const pageSize = size ?? HISTORY_PAGE_SIZE;
     // The day's boundaries are the server's local midnight (the dashboard is for one machine).
     const from = start.getTime();
     const to = new Date(y, mo - 1, d + 1).getTime();
-    res.json({ day, sessions: fleet.history(from, to) });
+    // Newest first, with the id breaking ties, so a row never moves between pages.
+    const all = fleet.history(from, to).sort((a, b) => b.endedAt - a.endedAt || (a.id < b.id ? -1 : 1));
+    // A page past the end is the last page, so a day that shrank under an open tab still shows rows.
+    const at = Math.min(page ?? 1, Math.max(1, Math.ceil(all.length / pageSize)));
+    res.json({ day, sessions: all.slice((at - 1) * pageSize, at * pageSize), total: all.length, page: at, pageSize });
   });
 
   router.get('/health', (_req, res) => {

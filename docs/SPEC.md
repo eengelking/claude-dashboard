@@ -649,7 +649,7 @@ A mismatch is a warning, never an error. The server still accepts and shows ever
 | `GET /api/fleet/sessions/:id/agents/:agentId/text` | `{ prompt: string \| null, answer: string \| null }`: the agent's whole task prompt and final answer (6.4). 404 if the server holds neither. No token, like the other reads. |
 | `GET /api/fleet/sessions/:id/agents/:agentId/activity?every=` | `{ entries: (ActivityEntry & { seq })[], since, live, enabled, serverTime }`: a loop's activity feed (6.4); `@orchestrator` is the main loop. Each call takes or renews a lease on that loop for `every` seconds (5, 10, 20, 30 or 60; anything else is 5) plus 15 seconds, and while a lease is live the reply to each report lists the loop in `watch`. `seq` numbers entries in the order the server took them. For a session that is not live it answers `live: false`, `since: null` and no entries, and takes no lease. `enabled` is false while the Admin has the activity feed turned off (8.1): the reply then has no entries and `since: null`, `live` as usual, and no lease is taken. 404 for an unknown session or agent. In memory only, never in the state or the stream. No token, like the other reads. |
 | `GET /api/fleet/events?sessionId=&before=&limit=` | Page through stored events newest first (`limit` ≤ 200, default 50, `before` = event time). |
-| `GET /api/fleet/history?day=YYYY-MM-DD` | Ended or dropped sessions that day, summary rows only (name, project, model, duration, cost, blowouts, end reason). Phase 4. |
+| `GET /api/fleet/history?day=YYYY-MM-DD&page=N&pageSize=N` | Ended or dropped sessions that day, newest first, summary rows only (name, project, model, duration, cost, blowouts, end reason), one page at a time (#195). `page` is 1 or more (default 1; a page past the end answers the last page) and `pageSize` is 25, 50 or 100 (default 50); anything else is a 400. The body is `{ day, sessions, total, page, pageSize }`, where `total` counts the whole day. Phase 4. |
 | `POST /api/fleet/notices/:id/close` | Turn a wall notice off for everyone (8.1). No token, like Remove. 400 for an id that is not a known notice. |
 | `PUT /api/fleet/wall/background-sessions` | Body `{ show: boolean }`: the Show them / Hide them link on the background-sessions note changes this setting. No token. 400 unless `show` is a boolean. |
 | `POST /api/fleet/sessions/:id/drop` | Remove a heartbeat-lost session from the live view now: the same exit as the automatic drop (7.5). No token. 404 if the session is not live, 409 if it is not `stale`. |
@@ -1128,7 +1128,7 @@ Phases run in order. Each ends with committed, passing, runnable work. Inside a 
 
 #### T5.3 History page
 - **Scope:** `GET /api/fleet/history`, a `#/history` view.
-- **Acceptance:** lists past sessions by day with summary columns and opens a read-only orchestrator page from stored rows.
+- **Acceptance:** lists past sessions by day with summary columns and opens a read-only orchestrator page from stored rows. The list is paged (#195): 25, 50 or 100 rows per page (default 50) with Previous, Next and a "Showing N to M of T" line, the same pager as Admin > Reporters, and the day selector stays a single day. "N sessions ended" is the day's total, not the rows on the page. Changing the day or the rows per page returns to page 1. The day, page, rows per page and opened session are kept in the address (`#/history?day=&page=&size=[&open=]`); opening a session adds a browser history entry, so Back returns to the same page. Empty, loading and error states are unchanged.
 
 ---
 

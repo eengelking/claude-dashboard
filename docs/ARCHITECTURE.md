@@ -664,6 +664,13 @@ Done after Phases 0 to 4 passed.
   opens a read-only orchestrator page with agent detail from stored rows. Tested with a mocked server and
   checked in Chrome by DOM (86 sessions listed for the day, one opened, no horizontal overflow); the
   window was hidden by then, so no screenshot.
+- **History paging (#195).** The server pages: `GET /history` takes `page` and `pageSize` (25, 50 or 100, default 50)
+  and answers `{ day, sessions, total, page, pageSize }`, so a busy day is not sent whole. It sorts newest first
+  with the session id breaking ties, so a row does not move between pages, and clamps a page past the end to
+  the last one. The page reuses Admin's `Pager`. Day, page, size and the opened session live in the hash
+  (`#/history?day=&page=&size=&open=`); `HistoryView` writes it with `pushState` when a session opens and
+  `replaceState` for every other change, and re-reads it on `popstate`, so the browser's Back button returns to the
+  same page. `main.tsx` listens only to `hashchange`, which neither call fires, so the view is not remounted.
 
 ### Code review pass (before the PR)
 

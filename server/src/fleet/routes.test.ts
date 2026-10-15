@@ -177,6 +177,61 @@ describe('reads', () => {
     }
     expect((await request(app).get('/api/fleet/history?day=2024-02-29')).status).toBe(200);
   });
+
+  describe('paging (#195)', () => {
+    /** Ends `n` sessions named s1..sn, and returns the app and today's date. */
+    const endMany = async (n: number) => {
+      const ctx = setup();
+      const r = fixtureReport();
+      for (let i = 1; i <= n; i++) {
+        const session = { ...r.session, id: `5f0c2a8e-1b7d-4c3e-9a51-${String(i).padStart(12, '0')}`, name: `s${i}`, status: 'done' as const, endReason: 'clear' };
+        await request(ctx.app).post('/api/fleet/report').send({ ...r, session });
+      }
+      const d = new Date(ctx.fleet.now());
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return { ...ctx, day };
+    };
+
+    it('returns the first page of 50 with the whole day as the total', async () => {
+      const { app, day } = await endMany(60);
+      const res = await request(app).get(`/api/fleet/history?day=${day}`);
+      expect(res.body).toMatchObject({ day, total: 60, page: 1, pageSize: 50 });
+      expect(res.body.sessions).toHaveLength(50);
+    });
+
+    it('returns the rest on page 2 and does not repeat rows between pages', async () => {
+      const { app, day } = await endMany(60);
+      const one = await request(app).get(`/api/fleet/history?day=${day}&page=1&pageSize=25`);
+      const two = await request(app).get(`/api/fleet/history?day=${day}&page=2&pageSize=25`);
+      const three = await request(app).get(`/api/fleet/history?day=${day}&page=3&pageSize=25`);
+      expect([one, two, three].map((r) => r.body.sessions.length)).toEqual([25, 25, 10]);
+      const ids = [one, two, three].flatMap((r) => r.body.sessions.map((s: { id: string }) => s.id));
+      expect(new Set(ids).size).toBe(60);
+      const ended = [one, two, three].flatMap((r) => r.body.sessions.map((s: { endedAt: number }) => s.endedAt));
+      expect(ended).toEqual([...ended].sort((a, b) => b - a));
+    });
+
+    it('clamps a page past the end to the last page', async () => {
+      const { app, day } = await endMany(60);
+      const res = await request(app).get(`/api/fleet/history?day=${day}&page=9&pageSize=25`);
+      expect(res.body).toMatchObject({ total: 60, page: 3, pageSize: 25 });
+      expect(res.body.sessions).toHaveLength(10);
+    });
+
+    it('answers an empty day with page 1 and a total of 0', async () => {
+      const { app } = setup();
+      const res = await request(app).get('/api/fleet/history?day=2020-01-01');
+      expect(res.body).toMatchObject({ sessions: [], total: 0, page: 1, pageSize: 50 });
+    });
+
+    it('rejects a page or page size that is not allowed', async () => {
+      const { app } = setup();
+      for (const q of ['page=0', 'page=abc', 'page=-1', 'pageSize=10', 'pageSize=abc', 'pageSize=1000']) {
+        const r = await request(app).get(`/api/fleet/history?day=2024-02-29&${q}`);
+        expect(r.status, q).toBe(400);
+      }
+    });
+  });
 });
 
 describe('the activity feed (#118)', () => {
