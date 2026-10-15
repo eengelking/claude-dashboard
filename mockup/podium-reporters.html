@@ -224,8 +224,8 @@ const NOW = Date.now();
 const STATE = {
   reporting: { name: "Reporting", def: "Heard from in the last 2 minutes" },
   idle:      { name: "Idle",      def: "Last report 2 minutes to 1 hour ago" },
-  silent:    { name: "Silent",    def: "Nothing for over 1 hour" },
-  restart:   { name: "Not since restart", def: "Known from before this server started; no report since" }
+  silent:    { name: "Silent",    def: "Silent means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives." },
+  restart:   { name: "Not since restart", def: "Not since restart is what every reporter reads after this server restarts, until it reports again. Most rows show it for a short while after a restart; it does not mean they stopped." }
 };
 const SERVER_STARTED = NOW - 3 * HOUR;
 const skewOf = (r) => (A.stopped && r.id === "9f3a1c7d2e40" ? 3 * HOUR : 0);
@@ -265,7 +265,7 @@ const COMPAT = {
   ok: ["ok", "Supported"], outdated: ["outdated", "Older than supported. Update the mod."], newer: ["newer", "Newer than this server knows. Update Podium."], unknown: ["unknown", "No version to check"]
 };
 const compatHtml = (r) => { const [c, t] = COMPAT[r.compat]; return `<span class="compat ${c}" data-hint="${esc(t)}">${c === "outdated" || c === "newer" ? "⚠ " : ""}<span class="mono">${esc(r.ver)}</span>${c === "outdated" || c === "newer" ? " " + c : c === "unknown" ? " no mod" : ""}</span>`; };
-const stHtml = (r) => { const s = stateOf(r); return `<span class="st ${s}" data-hint="${esc(STATE[s].def + (s === "silent" ? ". It may be off, offline or blocked; the server cannot tell which." : "") + ".")}"><span class="dot ${s}"></span>${STATE[s].name}</span>`; };
+const stHtml = (r) => { const s = stateOf(r); return `<span class="st ${s}" data-hint="${esc(STATE[s].def + "")}"><span class="dot ${s}"></span>${STATE[s].name}</span>`; };
 
 const WARN_ICON = `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2L14.4 13H1.6L8 2.2z"/><path d="M8 6.6v3"/><path d="M8 11.4v.1"/></svg>`;
 const ADMIN_HINT = "This reporter sends the admin secret instead of a token made for a person. Anyone holding it can report as anyone, and its sessions belong to no one. Make a token for this person in Admin > People, then enter it, and their name, in the reporter's options.";
@@ -288,7 +288,7 @@ function listHtml() {
   const cnt = (s) => all.filter((r) => stateOf(r) === s).length;
   const rows = visible();
   const strip = [["all", "All reporters", all.length, ""], ...["reporting", "idle", "silent", "restart"].map((s) => [s, STATE[s].name, cnt(s), s])]
-    .map(([id, label, n, dot]) => `<button type="button" class="sbtn" data-filter="${id}" aria-pressed="${A.filter === id}"><span class="k">${dot ? `<span class="dot ${dot}"></span>` : ""}${label}</span><span class="v mono">${n}</span></button>`).join("");
+    .map(([id, label, n, dot]) => `<button type="button" class="sbtn" data-filter="${id}"${STATE[id] ? ` data-hint="${esc(STATE[id].def)}"` : ""} aria-pressed="${A.filter === id}"><span class="k">${dot ? `<span class="dot ${dot}"></span>` : ""}${label}</span><span class="v mono">${n}</span></button>`).join("");
   const nAdmin = all.filter(isAdmin).length;
   const banner = nAdmin ? `<div class="warnbar" role="status">${WARN_ICON}<div class="tx"><b>${nAdmin} ${nAdmin === 1 ? "reporter uses" : "reporters use"} the admin secret.</b> They should each use a token made for one person, so their sessions have an owner and the admin secret stays private.</div><button type="button" class="btn sm" data-act="admin-filter" aria-pressed="${A.onlyAdmin}">${A.onlyAdmin ? "Show all reporters" : "Show only these"}</button></div>` : "";
   return `<div class="states" role="group" aria-label="Filter by state">${strip}</div>${banner}
@@ -301,7 +301,6 @@ function listHtml() {
       <td class="num mono">${r.sessions}${r.live ? ` <span class="hint">· ${r.live} live</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="empty">${all.length ? "No reporter matches. Clear the search or pick another state." : "No reporter has connected yet. Install podium-reporter and point it at this server."}</div>`}
   <div class="pager"><span>${rows.length} of ${all.length} reporters</span><span class="hint">Page 1 of 1</span></div>
-  <div class="note"><b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.<br><b>Remove from list</b> takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.</div>
   ${rulesHtml()}`;
 }
 
@@ -319,8 +318,8 @@ function selBar(rows) {
 const KIND = { key: "Key", address: "Address", version: "Version" };
 function rulesHtml() {
   const rows = A.rules.map((x, i) => `<tr><td>${KIND[x.kind]}</td><td class="mono">${esc(x.pattern)}</td><td class="mono" style="color:var(--ink2)">${esc(x.added)}</td><td class="num"><button type="button" class="btn sm" data-rule-del="${i}" aria-label="Remove the rule for ${esc(x.pattern)}">Remove rule</button></td></tr>`).join("");
-  return `<section class="rules" aria-labelledby="rules-h"><h3 id="rules-h">Ignore rules</h3>
-  <p class="lead2">A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span class="mono">*</span> for “anything”, as in <span class="mono">10.88.*</span> or <span class="mono">*-sim</span>.</p>
+  return `<section class="rules" aria-labelledby="rules-h" style="margin-top:20px"><h2 id="rules-h" style="margin:0;font-size:15px;font-weight:650">Ignore rules</h2>
+  <p class="hint" style="margin:2px 0 8px">A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span class="mono">*</span> for “anything”, as in <span class="mono">10.88.*</span> or <span class="mono">*-sim</span>.</p>
   ${A.rules.length ? `<div class="tw2"><table class="ptab"><thead><tr><th>Matches</th><th>Pattern</th><th>Added</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="none">No rules. Every reporter is accepted.</div>`}
   <form class="ruleform" data-ruleform><label for="rk" class="hint">Add a rule</label><select class="field" id="rk"><option value="key">Key</option><option value="address">Address</option><option value="version">Version</option></select><input class="field mono" id="rp" placeholder="10.88.* or *-sim" aria-label="Pattern"><button type="submit" class="btn sm">Ignore matching reporters</button></form></section>`;
 }
@@ -338,7 +337,7 @@ function detailHtml(r) {
   const [cc, ct] = COMPAT[r.compat];
   const rem = A.confirm
     ? `<div class="confirm">Remove ${esc(r.name)} from the list? It comes back if it reports again. Its sessions are not touched.<button type="button" class="btn sm dng" data-act="remove-yes">Remove reporter</button><button type="button" class="btn sm" data-act="remove-no">Keep it</button></div>`
-    : `<button type="button" class="btn sm dng" data-act="remove">Remove from list</button>`;
+    : `<button type="button" class="btn sm dng" data-act="remove" data-hint="Remove from list takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.">Remove from list</button>`;
   const ign = A.ign
     ? `<form class="ignform" data-ignform><b>Ignore ${esc(r.name)}?</b><label class="opt"><input type="radio" name="ik" value="key" checked> <span>This reporter only <span class="hint mono">${esc(r.key)}</span></span></label><label class="opt"><input type="radio" name="ik" value="address"> <span>Everything from its address <span class="hint mono">${esc(r.addr)}</span></span></label><label class="opt"><input type="radio" name="ik" value="version"> <span>Every reporter on version <span class="hint mono">${esc(r.ver)}</span></span></label>
       <div class="warnline">${WARN_ICON}<span>Its reports are turned away, so its sessions stop appearing on the fleet. You can undo this from the Ignore rules list.</span></div><div class="confirm"><button type="submit" class="btn sm dng">Ignore and remove</button><button type="button" class="btn sm" data-act="ign-no">Cancel</button></div></form>` : "";

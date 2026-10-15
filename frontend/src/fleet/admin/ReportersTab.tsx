@@ -25,8 +25,8 @@ export const REFRESH_MS = 10_000;
 const STATES: { id: ReporterState; name: string; def: string }[] = [
   { id: "reporting", name: "Reporting", def: "Heard from in the last 2 minutes." },
   { id: "idle", name: "Idle", def: "Last report between 2 minutes and 1 hour ago." },
-  { id: "silent", name: "Silent", def: "Nothing for over 1 hour. It may be off, offline or blocked; the server cannot tell which." },
-  { id: "restart", name: "Not since restart", def: "Known from before this server started, and not heard from since." },
+  { id: "silent", name: "Silent", def: "Silent means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives." },
+  { id: "restart", name: "Not since restart", def: "Not since restart is what every reporter reads after this server restarts, until it reports again. Most rows show it for a short while after a restart; it does not mean they stopped." },
 ];
 const stateOf = (id: ReporterState) => STATES.find((s) => s.id === id)!;
 
@@ -65,7 +65,7 @@ export function stateDetail(r: Pick<ReporterRow, "state" | "lastSeenAt">, server
   const s = stateOf(r.state);
   const heard = `Last heard ${ago(serverTime, r.lastSeenAt)} (${time(r.lastSeenAt)}).`;
   if (r.state === "restart") {
-    return `${s.def} ${heard} This server started ${ago(serverTime, serverStartedAt)} (${time(serverStartedAt)}). The server cannot tell whether the reporter is still running; the row moves to Reporting when it reports again.`;
+    return `${s.def} ${heard} This server started ${ago(serverTime, serverStartedAt)} (${time(serverStartedAt)}).`;
   }
   return `${s.def} ${heard}`;
 }
@@ -76,6 +76,8 @@ export function nameDetail(r: Pick<ReporterRow, "name" | "named" | "key">): stri
   const addr = r.key.startsWith("addr:") ? r.key.slice(5) : null;
   return `No name is set on this reporter, so it is shown by its newest project, or its address. Set the userName option in podium-reporter to name it.${addr ? ` Until then it is matched by session, or by source address ${addr}.` : ""}`;
 }
+
+const REMOVE_HINT = "Remove from list takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.";
 
 const ADMIN_HINT =
   "This reporter sends the admin secret instead of a token made for one person. Anyone holding the secret can report as anyone, and its sessions belong to no one. Make a token for the person in Admin > People, then enter it, and their name, in the reporter's options.";
@@ -108,7 +110,7 @@ function StateBadge({ r, serverTime, serverStartedAt }: { r: Pick<ReporterRow, "
   const s = stateOf(r.state);
   const text = stateDetail(r, serverTime, serverStartedAt);
   return (
-    <span className={`rstate ${r.state}`} title={text} tabIndex={0} aria-label={`${s.name}. ${text}`}>
+    <span className={`rstate ${r.state}`} title={text} tabIndex={0} aria-label={text}>
       <span className={`rdot ${r.state}`} aria-hidden="true" />
       {s.name}
     </span>
@@ -197,6 +199,7 @@ export function ReportersTab(props: {
     </th>
   );
   return (
+    <>
     <Section id="admin-reporters-h" title="Heard from">
       <Panel>
         <div className="states" role="group" aria-label="Filter by state">
@@ -351,18 +354,10 @@ export function ReportersTab(props: {
           )
         )}
         {data && data.total > 0 && <Pager id="reporters" page={data.page} pageSize={data.pageSize} total={data.total} onPage={(n) => onPaging({ page: n })} onSize={(n) => onPaging({ pageSize: n, page: 1 })} />}
-        <div className="rnote">
-          <b>Silent</b> means the server has not heard from this reporter for a while. It does not mean the reporter is turned off: Podium can only see what arrives.
-          <br />
-          <b>Not since restart</b> is what every reporter reads after this server restarts, until it reports again. Most rows show it for a short while after a restart; it does not mean they stopped.
-          <br />
-          A reporter with no name set (the <span className="mono">userName</span> option) is shown by its newest project, or its address, and is matched by its sessions, so a container that comes back on a new address stays one row.
-          <br />
-          <b>Remove from list</b> takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.
-        </div>
-        <IgnoreRules api={api} rules={rules.data?.rules} error={rules.error} onLocked={props.onLocked} onChanged={() => (rules.reload(), list.reload())} />
       </Panel>
     </Section>
+    <IgnoreRules api={api} rules={rules.data?.rules} error={rules.error} onLocked={props.onLocked} onChanged={() => (rules.reload(), list.reload())} />
+    </>
   );
 }
 
@@ -383,11 +378,16 @@ function IgnoreRules(props: { api: AdminApi; rules: IgnoreRule[] | undefined; er
     }
   };
   return (
-    <section className="rules" aria-labelledby="rules-h">
-      <h3 id="rules-h">Ignore rules</h3>
-      <p className="lead2">
-        A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span className="mono">*</span> for “anything”, as in <span className="mono">10.88.*</span> or <span className="mono">*-sim</span>.
-      </p>
+    <Section
+      id="rules-h"
+      title="Ignore rules"
+      help={
+        <>
+          A reporter that matches a rule is refused. Its sessions stop appearing on the fleet until you remove the rule. Use <span className="mono">*</span> for “anything”, as in <span className="mono">10.88.*</span> or <span className="mono">*-sim</span>.
+        </>
+      }
+    >
+      <Panel>
       {rules && rules.length === 0 && <div className="none">No rules. Every reporter is accepted.</div>}
       {rules && rules.length > 0 && (
         <div className="tw2">
@@ -446,7 +446,8 @@ function IgnoreRules(props: { api: AdminApi; rules: IgnoreRule[] | undefined; er
           Ignore matching reporters
         </button>
       </form>
-    </section>
+      </Panel>
+    </Section>
   );
 }
 
@@ -536,7 +537,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
             </button>
           </div>
         ) : (
-          <button type="button" className="btn sm dng" onClick={() => setConfirm(true)}>
+          <button type="button" className="btn sm dng" title={REMOVE_HINT} onClick={() => setConfirm(true)}>
             Remove from list
           </button>
         )}

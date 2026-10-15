@@ -33,6 +33,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- Admin > Reporters: **Ignore rules** is its own section after the reporters section, with a heading, a help line and its own panel like the other Admin pages. The notes under the table are gone: what **Silent** and **Not since restart** mean is now the tooltip on a state and on its strip button, how an unnamed reporter is named is the tooltip on "no name set", and what **Remove from list** does is the tooltip on that button. (#181)
 - Admin > People no longer shows an "administrator" pill beside a person in the Administrators group. Their name is drawn in orange instead, from a new `--admin-text` color in every theme and mode (checked at 4.5:1 by `scripts/theme-contrast.ts`), with the tooltip "Administrator: can open Admin with their own token" and a screen-reader label so color is not the only signal. A revoked administrator keeps the muted look, and the "built in" tag in Admin > Groups is unchanged. UI only. (#182)
 - The fleet page's connection pill now reads "N reporters live" (or "1 reporter live") and no longer shows "synced Xs ago", so its text stops changing every tick. The connected, reconnecting and lost states are unchanged. UI only. (#178)
 - The fleet page's second tile and the orchestrator page's running-agents chart now read **Subagents running** instead of "Agents running", so the name no longer sounds like it counts the orchestrators. The tile's caption is now "forks included", because the count covers forks too. The number is unchanged. (#169)

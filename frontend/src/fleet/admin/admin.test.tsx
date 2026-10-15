@@ -514,9 +514,14 @@ describe("Reporters tab (#142)", () => {
     expect(rows[1]).toHaveTextContent("3 live");
     expect(rows[2]).toHaveTextContent("no machine id, matched by address 10.4.0.52");
     expect(rows[2]).toHaveTextContent("0.9.2 outdated");
-    expect(screen.getByText(/does not mean the reporter is turned off/)).toBeInTheDocument();
-    expect(screen.getByText(/is what every reporter reads after this server restarts/)).toBeInTheDocument();
+    // Issue #181: the notes are tooltips, not running text under the table.
+    expect(screen.queryByText(/does not mean the reporter is turned off/)).toBeNull();
+    expect(screen.queryByText(/is what every reporter reads after this server restarts/)).toBeNull();
     const strip = screen.getByRole("group", { name: "Filter by state" });
+    expect(within(strip).getByRole("button", { name: /Silent/ })).toHaveAttribute("title", expect.stringContaining("does not mean the reporter is turned off"));
+    expect(within(strip).getByRole("button", { name: /Not since restart/ })).toHaveAttribute("title", expect.stringContaining("is what every reporter reads after this server restarts"));
+    const silentChip = within(rows[2]!).getByText("Silent");
+    expect(silentChip).toHaveAttribute("title", expect.stringContaining("does not mean the reporter is turned off"));
     expect(within(strip).getByRole("button", { name: /Silent/ })).toHaveTextContent("1");
   });
 
@@ -669,9 +674,22 @@ describe("Reporters tab (#142)", () => {
     await waitFor(() => expect(state.reporters.map((r) => r.state)).toEqual(["reporting"]));
   });
 
-  it("says what Remove does and does not do (issue #167)", async () => {
+  it("says what Remove from list does and does not do in a tooltip, not under the table (issues #167, #181)", async () => {
     await openReporters();
-    expect(screen.getByText(/takes the row away and nothing else/)).toBeInTheDocument();
+    expect(screen.queryByText(/takes the row away and nothing else/)).toBeNull();
+    const rows = within(screen.getByRole("table")).getAllByRole("row");
+    fireEvent.click(within(rows[1]!).getByRole("button", { name: /Open details/ }));
+    expect(await screen.findByRole("button", { name: "Remove from list" })).toHaveAttribute("title", expect.stringContaining("takes the row away and nothing else"));
+  });
+
+  it("shows Ignore rules as its own section after the reporters section (issue #181)", async () => {
+    await openReporters();
+    const heard = screen.getByRole("region", { name: "Heard from" });
+    const rules = screen.getByRole("region", { name: "Ignore rules" });
+    expect(heard.contains(rules)).toBe(false);
+    expect(heard.compareDocumentPosition(rules) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(rules).getByText(/A reporter that matches a rule is refused/)).toBeInTheDocument();
+    expect(within(rules).getByRole("button", { name: "Ignore matching reporters" })).toBeInTheDocument();
   });
 
   it("ignores a reporter from its detail, after saying that its reports are turned away (issue #167)", async () => {

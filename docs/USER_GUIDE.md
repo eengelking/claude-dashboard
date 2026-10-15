@@ -336,22 +336,22 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   them by state and filters the list: **Reporting** (heard from in the last 2 minutes), **Idle** (up to an
   hour ago), **Silent** (longer) and **Not since restart** (last heard before the server started). **Silent**
   means only that nothing has arrived: Podium cannot tell a reporter that is turned off from one that cannot
-  reach it. The list updates by itself every few seconds. Each row shows the machine, the person, the token it uses, the reporter
+  reach it (hover or focus the state for this). The list updates by itself every few seconds. Each row shows the machine, the person, the token it uses, the reporter
   version (with a warning when it is older or newer than this Podium supports), the last report and the number
   of sessions. Select a row for its details: version and compatibility, machine id, source address, the token's
   key id (never the token), its recent sessions and any reports the server turned away. A reporter with no user
   name (the `userName` option) sends no machine id, so the row shows its newest project, or its address, with
   "no name set" beside it, and it is matched by its sessions: a container that comes back on a new address
   stays one row. Hover or focus a state, or "no name set", for what it means for that row. After the server
-  restarts, most rows read **Not since restart** until they report again. A reporter that reports with the admin secret instead of a token made for
+  restarts, most rows read **Not since restart** until they report again; hover or focus it to read why. A reporter that reports with the admin secret instead of a token made for
   one person is always flagged: an amber **Admin secret** badge in the Token column, a band above the list that
   counts them (**Show only these** filters to them), and a warning at the top of its details with the steps to
-  fix it: make a person in People, then enter their token and name in the reporter's options. **Remove from list** takes a reporter off the list;
+  fix it: make a person in People, then enter their token and name in the reporter's options. **Remove from list** (in a reporter's details, with a tooltip that says the same) takes a reporter off the list;
   it comes back if it reports again, and its sessions are not touched.
   To clear out many at once, tick the boxes (the box in the header ticks the page, and **Select all N that
   match** reaches past it), then **Remove N…**; with a state chosen, **Remove all <state>** beside the search
   does the same. To keep a reporter off the list for good, choose **Ignore…** in its details: its reports are
-  then turned away, so its sessions stop appearing on the fleet. The **Ignore rules** list under the table shows
+  then turned away, so its sessions stop appearing on the fleet. The **Ignore rules** section after the table shows
   every rule (a key, an address or a version, with `*` for "anything", as in `10.88.*` or `*-sim`), and
   **Remove rule** undoes one. A source address and a machine name are personal data, so only Admin shows them.
 - **Settings.** **Feature flags**, at the top, turn a feature off for everyone on this server. The only one
