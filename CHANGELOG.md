@@ -26,6 +26,10 @@ be ahead, because a mod fix is bumped in its own PR.
 - Claude Code's status line now starts with the reporter's version, `podium v0.11.1 ● 3 live`, in every state (connecting, offline, token refused, and the update hints). When the server supports a newer major.minor than the mod, it ends in `· update available`, and `/podium` says which versions are involved. Mod 0.11.1; no protocol or server change. (#125)
 - The facts bar on the orchestrator page now shows the reporter's version in a **Reporter** cell just before Copy resume command, for example `0.11.0`. A session with no mod says "Settings hooks", and a reporter outside the range the server supports shows `0.3.0 · update` or `0.99.0 · upgrade server` in amber, with the same tooltip as the card's chip. No protocol or mod change. (#124)
 
+### Changed
+
+- The cards on the fleet page's wall now stretch to fill the row, in at most four columns. A card is never narrower than 360 px: the wall holds as many as fit (four from a 1476 px wall, three from 1104, two from 732, otherwise one), never more columns than there are cards, so three cards on a wide wall are thirds. A lone card is half the wall, or the full width when the wall is under 732 px. Later rows keep the same column width, left-aligned, so five cards on a four-column wall are 4 + 1. Every band in the People and Group views uses the same columns, worked out from the total shown, so a band of nine and a band of two line up. The columns follow the wall's own width, so they change as the window or a pane is resized, and a card now resizes when a pane opens or closes. It applies to the wall on the fleet page only. UI only. (#145)
+
 ### Fixed
 
 - `podiumctl config set DETACHED_HIDE_AFTER_MS=...` was refused as an unknown key, and a value set another way never reached the container, although the server reads it and the README lists it. It is now in the list of settings `podiumctl` passes through. A new test reads every setting the server code reads and fails if `podiumctl config set` would not take it, so the two cannot drift apart again; no other setting was missing. (#157)

@@ -171,6 +171,8 @@ secret and needs no change on the wire.
 
 ## 17. Fleet cards keep a fixed width
 
+**Superseded by 27 (#145).**
+
 **Choice.** The wall grid is `repeat(auto-fill, min(360px, 100%))`, left-aligned. A card is 360 px wide
 (narrower only when the area is) and extra room adds columns.
 **Why.** With `minmax(300px, 1fr)` a new column made every card narrower, so collapsing a pane, which widens
@@ -342,3 +344,19 @@ reporters, sweeps, Admin changes, refused tokens, conflicts) print in text only 
 chose so that turning nothing on changes nothing. They are still at their own level in `json` and in what is
 shipped, so someone reading plain text at the default level sees less than an agent reading VictoriaLogs. Field names are checked against a deny list and strings are scrubbed, but a new field still
 needs its author to think about what it carries.
+
+## 27. The wall's cards stretch, in at most four columns
+
+**Choice.** The fleet wall counts columns instead of letting the browser fill them (`wallLayout.ts`, `useWallColumns`,
+#145). A card is never narrower than 360 px. The wall uses as many 360 px columns, 12 px apart, as its own measured
+width holds, at most four and never more than there are cards, and the cards stretch to fill the row. A lone card is
+half the wall when two columns fit. Later rows keep the same column width, so a short last row is left-aligned. Bands
+in the People and Group views share one set of columns, from the total number of cards shown. A `ResizeObserver` on
+the wall keeps the count current. This replaces 17, and applies to the fleet wall only.
+**Why.** The maintainer asked for a wall that fills the screen with a steady, predictable shape: one wide card, then
+two, three or four across, never more. The 360 px minimum keeps today's card size as the floor, and measuring the
+wall itself, not the window, accounts for the panes, which can be dragged to any width. Taking the columns from the
+total, not each band's cards, keeps cards in different bands the same width, so the page does not look ragged.
+**Cost.** A card is no longer a steady size: opening or closing a pane, or dragging one, changes the columns and can
+resize every card, which is what 17 avoided (#65). The count needs JavaScript and a measurement, so before the first
+measure the wall falls back to the old fixed 360 px cards.

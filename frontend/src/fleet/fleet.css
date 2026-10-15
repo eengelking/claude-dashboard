@@ -223,8 +223,11 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .search { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 5px 9px; font: inherit; font-size: 12px; width: 190px; max-width: 100%; }
 
 /* cards */
-/* fixed card width (#65): extra room adds columns, it never resizes cards; a short last row stays left-aligned */
+/* wall columns (#145): useWallColumns sets --wall-cols (360 px cards that fit, at most four, never more than the cards);
+   the cards stretch to fill the row, and a short last row keeps the column width, left-aligned. Until the wall has been
+   measured, the old fixed 360 px cards apply. */
 .podium .wall { display: grid; grid-template-columns: repeat(auto-fill, min(360px, 100%)); justify-content: start; gap: 12px; }
+.podium .wall-area.has-cols .wall { grid-template-columns: repeat(var(--wall-cols), minmax(0, 1fr)); }
 .podium .card { display: flex; flex-direction: column; justify-content: flex-start; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
 .podium button.card:hover { border-color: var(--axis); background: var(--raised); }
 .podium .card .h { display: flex; align-items: center; gap: 8px; }

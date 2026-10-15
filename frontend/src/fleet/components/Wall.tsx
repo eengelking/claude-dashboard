@@ -6,7 +6,8 @@ import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
 import { Band, PeopleBar } from "./People";
 import type { GroupBy, Unit } from "../people";
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
+import { useWallColumns } from "../useWallColumns";
 import { Sparkline } from "./Sparkline";
 import { NoticeStack, type NoticeItem } from "./NoticeStack";
 
@@ -145,6 +146,8 @@ export function Wall(props: {
   people?: WallPeople;
 }) {
   const pv = props.people;
+  // One set of columns for the whole wall, from the total shown, so every band lines up (#145).
+  const wall = useWallColumns(props.sessions.length);
   const card = (s: SessionView, showName: boolean) => (
     <SessionCard
       key={s.id}
@@ -182,13 +185,16 @@ export function Wall(props: {
       <KpiStrip kpis={props.kpis} split={props.split} />
       {pv && <PeopleBar {...pv.bar} />}
       <Toolbar filter={props.filter} onFilter={props.onFilter} sort={props.sort} onSort={props.onSort} shown={props.sessions.length} cleared={props.cleared} />
-      {props.sessions.length ? (
-        banded ? (
-          <Bands sessions={props.sessions} people={pv} card={card} />
-        ) : (
-          <div className="wall">{props.sessions.map((s) => card(s, !!pv))}</div>
-        )
-      ) : props.totalLive > (props.detached.show ? 0 : props.detached.count) ? (
+      <div ref={wall.ref} className={wall.cols ? "wall-area has-cols" : "wall-area"} style={wall.cols ? ({ "--wall-cols": wall.cols } as CSSProperties) : undefined}>
+        {props.sessions.length ? (
+          banded ? (
+            <Bands sessions={props.sessions} people={pv} card={card} />
+          ) : (
+            <div className="wall">{props.sessions.map((s) => card(s, !!pv))}</div>
+          )
+        ) : null}
+      </div>
+      {props.sessions.length ? null : props.totalLive > (props.detached.show ? 0 : props.detached.count) ? (
         <div className="none">No orchestrators match. Clear the filter to see all {props.totalLive}.</div>
       ) : props.detached.count ? null : (
         <div className="none">

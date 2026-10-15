@@ -446,3 +446,29 @@ describe("more on sessions nobody is attached to (#45)", () => {
     expect(container.querySelector(".fold")).toBeNull();
   });
 });
+
+describe("wall columns (#145)", () => {
+  const wallArea = (container: HTMLElement) => container.querySelector(".wall-area") as HTMLElement;
+  const measured = (width: number) =>
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("wall-area") ? width : 0;
+    });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("fits as many 360 px columns as the wall's own width allows, never more than the cards", () => {
+    measured(1215);
+    const four = stateFrom({ sessions: [1, 2, 3, 4].map((n) => makeSession({ id: `s${n}`, name: `n${n}` })) });
+    const { container, unmount } = render(<FleetView state={four} />);
+    expect(wallArea(container).style.getPropertyValue("--wall-cols")).toBe("3");
+    unmount();
+    const two = stateFrom({ sessions: [1, 2].map((n) => makeSession({ id: `s${n}`, name: `n${n}` })) });
+    const second = render(<FleetView state={two} />);
+    expect(wallArea(second.container).style.getPropertyValue("--wall-cols")).toBe("2");
+  });
+
+  it("gives a lone card half the wall", () => {
+    measured(1600);
+    const { container } = render(<FleetView state={stateFrom({ sessions: [makeSession()] })} />);
+    expect(wallArea(container).style.getPropertyValue("--wall-cols")).toBe("2");
+  });
+});
