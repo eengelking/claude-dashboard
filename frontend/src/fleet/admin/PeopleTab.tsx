@@ -158,7 +158,7 @@ export function PeopleTab(props: {
                         <tr key={p.id} className={revoked ? "revoked" : ""}>
                           <td>
                             <span className="who">{p.name}</span>
-                            {adminIds.has(p.groupId ?? -1) && !revoked && <span className="tag">administrator</span>}
+                            {adminIds.has(p.groupId ?? -1) && !revoked && <span className="atag">administrator</span>}
                           </td>
                           <td>
                             <label className="vh" htmlFor={`admin-grp-${p.id}`}>

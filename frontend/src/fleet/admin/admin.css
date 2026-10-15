@@ -207,5 +207,5 @@
 .adminv .daysbox { width: 88px; text-align: right; }
 
 /* Administrators group (#172): the built-in tag and the secret's fixed member chip */
-.adminv .tag { display: inline-flex; align-items: center; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 11.5px; color: var(--ink2); font-weight: 400; white-space: nowrap; }
+.adminv .atag { display: inline-flex; align-items: center; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 11.5px; color: var(--ink2); font-weight: 400; white-space: nowrap; }
 .adminv .chip.dashed { border-style: dashed; color: var(--ink2); }

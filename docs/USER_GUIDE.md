@@ -326,7 +326,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
   stale and drop as usual. The search finds a person by name, group or machine.
 - **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is
-  a label for arranging the console (Group by Group, see "People" above) and grants nothing. Deleting a group
+  a label for arranging the console (Group by Group, see "People" above). Only Administrators grants anything. Deleting a group
   moves its people to "No group". **Administrators** is built in and cannot be renamed or deleted. The admin secret is always
   in it. Put a person in it and they can open Admin with their own token; move them out, or revoke their token, and their open
   Admin session locks. A change shows on the wall with each session's next report, within a few

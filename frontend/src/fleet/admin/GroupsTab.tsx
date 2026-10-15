@@ -53,7 +53,7 @@ export function GroupsTab(props: {
   const rows = list.data?.rows ?? [];
   return (
     <>
-      <Section id="admin-create-group-h" title="Create group" help="A person belongs to one group at most. Groups only change how the console is arranged; they grant nothing.">
+      <Section id="admin-create-group-h" title="Create group" help="A person belongs to one group at most. Groups arrange the console, and the built-in Administrators group also lets its people open Admin with their own token.">
         <Panel>
           <form className="tool alone" onSubmit={create} autoComplete="off">
             <div className="f grow">
@@ -98,7 +98,7 @@ export function GroupsTab(props: {
                       <tr key={g.id}>
                         <td>
                           <span className="who">{g.name}</span>
-                          {g.builtIn && <span className="tag">built in</span>}
+                          {g.builtIn && <span className="atag">built in</span>}
                         </td>
                         <td>
                           {g.members.length || g.builtIn ? (
