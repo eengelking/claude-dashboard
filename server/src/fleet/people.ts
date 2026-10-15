@@ -139,6 +139,8 @@ export class PeopleStore {
     const name = cleanName(rawName, NAME_MAX, 'A name');
     // 'Admin' is the owner the server gives a report made with the admin secret; a person of that name would share it.
     if (name.toLowerCase() === ADMIN_OWNER.toLowerCase()) throw new PeopleError('invalid', `${ADMIN_OWNER} is reserved for the admin secret`);
+    // The Admin log's Who column shows this actor for the secret; a person of that name would be indistinguishable from it.
+    if (name.toLowerCase() === ADMIN_SECRET_ACTOR.toLowerCase()) throw new PeopleError('invalid', `${ADMIN_SECRET_ACTOR} is reserved for the admin secret`);
     if (this.findByName(name)) throw new PeopleError('duplicate', 'That name is already taken');
     if (groupId !== null && !this.stmt('SELECT 1 AS x FROM groups WHERE id = ?').get(groupId)) {
       throw new PeopleError('not_found', 'That group does not exist');

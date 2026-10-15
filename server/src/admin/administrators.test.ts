@@ -116,3 +116,21 @@ describe('unlocking Admin with a person token', () => {
     expect((await agent.get('/api/admin/groups').set(H)).status).toBe(401);
   });
 });
+
+describe('who is recorded', () => {
+  it('still names an administrator whose own change ends their session', async () => {
+    const { app, people, admins } = setup();
+    const { person, token } = people.createPerson('Priya', admins!.id);
+    const agent = request.agent(app);
+    await unlockWith(app, agent, token);
+    expect((await agent.put(`/api/admin/people/${person.id}/group`).set(H).send({ groupId: null })).status).toBe(200);
+    expect(people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'group_assigned')?.actor).toBe('Priya');
+    expect((await agent.get('/api/admin/groups').set(H)).status).toBe(401);
+  });
+
+  it('keeps the name "Admin secret" for the secret, so no person can take it', () => {
+    const { people } = setup();
+    expect(() => people.createPerson('Admin secret')).toThrow(/reserved/);
+    expect(() => people.createPerson('admin SECRET')).toThrow(/reserved/);
+  });
+});
