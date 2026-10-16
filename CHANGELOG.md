@@ -18,6 +18,8 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- The docs now say that a machine holds one saved Podium login per Claude config, why (Claude Code gives a reporter one shared set of settings and no per-session login, and tells every running session when they change), and that `PODIUM_USER` and `PODIUM_TOKEN` are the way to hold two logins at once. A later Claude Code release may remove the limit. Documentation only; the reporter is unchanged. (#230)
+
 - The top bar's pill names the page it is on: "Orchestrator" on an orchestrator's page (it said "Fleet" there), "Fleet" on the wall, "History" and "Admin" as before. The text now comes from the page, so a new page cannot inherit the wrong name. UI only. (#225)
 - A context bar turns red at 80% and above (#213, `mockup/podium-context-bar.html`). From 75% to 79% it stays amber; the red is the theme's own red, the one the level 2 blowout badge uses, in every theme and in light and dark. The red bar has an outline and a solid cap at the end of its fill so it still differs from amber in grayscale, and its accessible name now ends "nearly full". It applies everywhere the bar shows: the card, the orchestrator page, the agent tree and rows, and both detail panels.
 - The History page shows a day a page at a time. `GET /api/fleet/history` takes `page` and `pageSize` (25, 50 or 100; default 50) and answers `{ day, sessions, total, page, pageSize }`; the page has Admin's pager under the table (Previous, Next, rows per page). "N sessions ended" is still the day's total. The day, page, rows per page and opened session are kept in the address, so the browser's Back button returns to the same page from an opened session. A request with a bad `page` or `pageSize` is a 400. (#195)

@@ -45,9 +45,15 @@ your own token and enter it as `token`, with your name as `userName` (see "Admin
 server for several people, see "Several people on one Podium" in the README: it covers the bind address,
 the firewall and what everyone who can reach the server can see.
 
+**One saved login per machine.** The sign-in you do with `/plugin configure` holds one name and one token for the
+whole Claude config on that machine, so every terminal there shares it. Signing in again, as someone else, in one
+terminal changes it for the sessions you start afterwards, and cannot give two terminals different logins. This is a
+limit of Claude Code, not of Podium: it gives a reporter one set of settings per config and no place to keep a login
+for a single session, and it tells every running session when they change. A later Claude Code release may add one,
+and Podium will use it when it does (#230).
+
 To report as two Podium identities from one machine (say Admin in one terminal and yourself in another), the
-reporter's settings are not enough: they are one set for the whole Claude config, so they apply to every terminal.
-Start each terminal with its own name and token instead:
+reporter's settings are not enough, for the reason above. Start each terminal with its own name and token instead:
 
 ```bash
 PODIUM_USER=Ed PODIUM_TOKEN=<Ed's token> claude
