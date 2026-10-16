@@ -77,6 +77,7 @@ export function nameDetail(r: Pick<ReporterRow, "name" | "named" | "key">): stri
   return `No name is set on this reporter, so it is shown by its newest project, or its address. Set the userName option in podium-reporter to name it.${addr ? ` Until then it is matched by session, or by source address ${addr}.` : ""}`;
 }
 
+const IGNORE_HINT = "Ignore… asks what to ignore first: this reporter only, everything from its address, or every reporter on its version. Nothing happens until you confirm.";
 const REMOVE_HINT = "Remove from list takes the row away and nothing else: the sessions stay, and the reporter comes back the next time it reports. To keep one off the list, ignore it. That turns its reports away.";
 
 const ADMIN_HINT =
@@ -524,26 +525,28 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
           {d.name} <StateBadge r={d} serverTime={d.serverTime} serverStartedAt={d.serverStartedAt} />
           {d.adminSecret && <Token r={d} />}
         </h2>
-        {!ignoring && !confirm && (
-          <button type="button" className="btn sm" onClick={() => setIgnoring(true)}>
-            Ignore…
-          </button>
-        )}
-        {confirm ? (
-          <div className="confirm">
-            Remove {d.name} from the list? It comes back if it reports again. Its sessions are not touched.
-            <button type="button" className="btn sm dng" onClick={() => void remove()}>
-              Remove reporter
+        <div className="dacts">
+          {!ignoring && !confirm && (
+            <button type="button" className="btn sm" title={IGNORE_HINT} onClick={() => setIgnoring(true)}>
+              Ignore…
             </button>
-            <button type="button" className="btn sm" onClick={() => setConfirm(false)}>
-              Keep it
+          )}
+          {confirm ? (
+            <div className="confirm">
+              Remove {d.name} from the list? It comes back if it reports again. Its sessions are not touched.
+              <button type="button" className="btn sm dng" onClick={() => void remove()}>
+                Remove reporter
+              </button>
+              <button type="button" className="btn sm" onClick={() => setConfirm(false)}>
+                Keep it
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="btn sm dng" title={REMOVE_HINT} onClick={() => setConfirm(true)}>
+              Remove from list
             </button>
-          </div>
-        ) : (
-          <button type="button" className="btn sm dng" title={REMOVE_HINT} onClick={() => setConfirm(true)}>
-            Remove from list
-          </button>
-        )}
+          )}
+        </div>
       </div>
       {ignoring && (
         <form

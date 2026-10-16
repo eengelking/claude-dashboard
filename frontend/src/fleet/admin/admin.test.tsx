@@ -779,6 +779,19 @@ describe("Reporters tab (#142)", () => {
     expect(screen.queryByText("studio-m2")).toBeNull();
   });
 
+  it("keeps Ignore… and Remove from list together in one actions group beside the name (issue #247)", async () => {
+    await openReporters();
+    fireEvent.click(screen.getByRole("button", { name: "Open details for studio-m2" }));
+    const ignore = await screen.findByRole("button", { name: "Ignore…" });
+    const remove = screen.getByRole("button", { name: "Remove from list" });
+    expect(ignore.parentElement).toBe(remove.parentElement);
+    expect(ignore.parentElement).toHaveClass("dacts");
+    expect(ignore.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(remove);
+    const keep = await screen.findByRole("button", { name: "Keep it" });
+    expect(keep.closest(".dacts")).not.toBeNull();
+  });
+
   it("lists the ignore rules, adds one by pattern, and removes one to undo it (issue #167)", async () => {
     const state = await openReporters();
     expect(await screen.findByText("No rules. Every reporter is accepted.")).toBeInTheDocument();

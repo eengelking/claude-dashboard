@@ -416,7 +416,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   changed login does not reach a running session, see [Reporters and machines](GOTCHAS.md#reporters-and-machines).
   To clear out many at once, tick the boxes (the box in the header ticks the page, and **Select all N that
   match** reaches past it), then **Remove N…**; with a state chosen, **Remove all <state>** beside the search
-  does the same. To keep a reporter off the list for good, choose **Ignore…** in its details: its reports are
+  does the same. To keep a reporter off the list for good, choose **Ignore…** in its details (it sits beside **Remove from list**, and the dots mean it asks what to ignore before doing anything): its reports are
   then turned away, so its sessions stop appearing on the fleet. The **Ignore rules** section after the table shows
   every rule (a key, an address or a version, with `*` for "anything", as in `10.88.*` or `*-sim`), and
   **Remove rule** undoes one. A source address and a machine name are personal data, so only Admin shows them.
