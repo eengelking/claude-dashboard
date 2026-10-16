@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
 
 const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
 
-// code span | bold | italic (* or _) | link
-const INLINE = /`([^`\n]+)`|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^\s*][^*\n]*?)\*|(?<![A-Za-z0-9])_([^\s_][^_\n]*?)_(?![A-Za-z0-9])|\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+// code span | bold | italic (* or _) | link (its URL may hold one level of balanced parentheses, #274)
+const INLINE = /`([^`\n]+)`|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^\s*][^*\n]*?)\*|(?<![A-Za-z0-9])_([^\s_][^_\n]*?)_(?![A-Za-z0-9])|\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)/g;
 
 function inline(src: string, keyBase: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -44,6 +44,7 @@ export function Markdown({ source }: { source: string }) {
   let list: { ordered: boolean; items: string[] } | null = null;
   let quote: string[] = [];
   let fence: string[] | null = null;
+  let fenceLen = 0;
   let k = 0;
 
   const flushPara = () => {
@@ -80,13 +81,17 @@ export function Markdown({ source }: { source: string }) {
 
   for (const line of source.replace(/\r\n?/g, "\n").split("\n")) {
     if (fence !== null) {
-      if (/^\s*```/.test(line)) flushFence();
+      // A fence closes only on backticks alone on the line, at least as many as opened it (#274).
+      const close = /^\s*(`{3,})\s*$/.exec(line);
+      if (close && close[1]!.length >= fenceLen) flushFence();
       else fence.push(line);
       continue;
     }
-    if (/^\s*```/.test(line)) {
+    const open = /^\s*(`{3,})/.exec(line);
+    if (open) {
       flushText();
       fence = [];
+      fenceLen = open[1]!.length;
       continue;
     }
     let m: RegExpExecArray | null;
