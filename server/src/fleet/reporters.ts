@@ -165,6 +165,21 @@ export class ReporterStore {
   }
 
   /**
+   * The key one account on a machine is filed under (#221). Two accounts on a machine report the same machine id, so
+   * the first one keeps the machine id as its key (rows and ignore rules made before this stay valid) and each
+   * other account gets `<machine id>#<owner>`. A reporter with no machine id is keyed by `keyOf` alone.
+   */
+  private accountKey(s: Pick<ReporterSeen, 'kind' | 'machineId' | 'source' | 'owner'>): string {
+    const own = ReporterStore.keyOf(s);
+    if (!s.machineId) return own;
+    const apart = `${s.machineId}#${s.owner ?? ''}`;
+    const has = (key: string) => this.stmt('SELECT owner FROM reporters WHERE key = ?').get(key) as { owner: string | null } | undefined;
+    if (has(apart)) return apart;
+    const bare = has(own);
+    return !bare || bare.owner === s.owner ? own : apart;
+  }
+
+  /**
    * The key an earlier report of the same session was filed under, for a reporter that sends no machine id. A session
    * belongs to one reporter, so a report from a new source address that carries a known session is the same reporter
    * on a new address (a container that restarted), not a new one (issue #166). The oldest row wins.
@@ -180,17 +195,21 @@ export class ReporterStore {
   }
 
   /** Every key a report from this sender can be known by: its own, and the row that already holds its session (#166). */
-  keysFor(s: Pick<ReporterSeen, 'kind' | 'machineId' | 'source' | 'sessionId'>): string[] {
+  keysFor(s: Pick<ReporterSeen, 'kind' | 'machineId' | 'source' | 'sessionId'> & { owner?: string | null }): string[] {
     const own = ReporterStore.keyOf(s);
     const known = this.knownKey(s as ReporterSeen);
-    return known && known !== own ? [own, known] : [own];
+    const account = this.accountKey({ ...s, owner: s.owner ?? null });
+    // The machine id comes first, so a rule on it covers every account on the machine (#221).
+    // The per-account form is always included, so a rule on `<machine id>#<owner>` still turns that account away when its row is keyed on the bare machine id.
+    const apart = s.machineId ? [`${s.machineId}#${s.owner ?? ''}`] : [];
+    return [...new Set([own, account, ...apart, ...(known ? [known] : [])])];
   }
 
   /** Notes one accepted report: creates the reporter or updates it, and links the session. */
   record(s: ReporterSeen, now: number): void {
     const own = ReporterStore.keyOf(s);
     const known = this.knownKey(s);
-    const key = known ?? own;
+    const key = known ?? this.accountKey(s);
     // A row made for this address before a known session turned up here is the same reporter: fold it in.
     if (known && known !== own) this.merge(own, known);
     this.stmt(
@@ -413,11 +432,13 @@ export class ReporterStore {
     if (p.length < 1 || p.length > MAX_PATTERN) throw new Error(`pattern must be 1 to ${MAX_PATTERN} characters`);
     this.stmt('INSERT OR IGNORE INTO reporter_ignores (kind, pattern, created_at) VALUES (?, ?, ?)').run(kind, p, now);
     const rule = ReporterStore.ruleOf(this.stmt('SELECT id, kind, pattern, created_at FROM reporter_ignores WHERE kind = ? AND pattern = ?').get(kind, p) as never);
-    const all = this.stmt('SELECT key, source_address, reporter_version FROM reporters').all() as unknown as { key: string; source_address: string | null; reporter_version: string }[];
+    const all = this.stmt('SELECT key, machine_id, source_address, reporter_version FROM reporters').all() as unknown as { key: string; machine_id: string | null; source_address: string | null; reporter_version: string }[];
     this.removeMany(
       all
         .filter((r) => {
-          const v = kind === 'key' ? r.key : kind === 'address' ? r.source_address : r.reporter_version;
+          // A rule on a machine id covers every account on that machine, so a key rule also tries the row's machine id (#221).
+          if (kind === 'key') return ReporterStore.matches(p, r.key) || (r.machine_id !== null && ReporterStore.matches(p, r.machine_id));
+          const v = kind === 'address' ? r.source_address : r.reporter_version;
           return v !== null && ReporterStore.matches(p, v);
         })
         .map((r) => r.key),

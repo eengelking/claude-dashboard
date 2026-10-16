@@ -46,6 +46,26 @@ describe('recording reporters', () => {
     expect(JSON.stringify(d)).not.toContain(token);
   });
 
+  it('lists both accounts that report from one machine id, and an ignore rule on the machine id turns both away (#221)', async () => {
+    const { app, people, reporters } = setup();
+    const ana = people.createPerson('Ana');
+    const ben = people.createPerson('Ben');
+    const machine = { name: 'shared-mac', id: 'abababababab' };
+    const send = (who: { token: string }, name: string, id: string) =>
+      request(app).post('/api/fleet/report').set('X-Podium-Token', who.token).send(report({ userName: name, machine }, id));
+    expect((await send(ana, 'Ana', 'a-1')).status).toBe(200);
+    expect((await send(ben, 'Ben', 'b-1')).status).toBe(200);
+    expect((await send(ana, 'Ana', 'a-2')).status).toBe(200);
+    const rows = reporters.list({ sort: 'who' }, Date.now()).rows;
+    expect(rows.map((r) => [r.who, r.credential, r.sessions])).toEqual([
+      ['Ana', `pdm_${ana.person.keyId}`, 2],
+      ['Ben', `pdm_${ben.person.keyId}`, 1],
+    ]);
+    reporters.addIgnore('key', machine.id, Date.now());
+    expect((await send(ana, 'Ana', 'a-3')).status).toBe(403);
+    expect((await send(ben, 'Ben', 'b-2')).status).toBe(403);
+  });
+
   it('matches a reporter that sends no machine id by its address, and labels the admin secret', async () => {
     const { app, reporters } = setup();
     await request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report());

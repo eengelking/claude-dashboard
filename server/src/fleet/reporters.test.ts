@@ -46,6 +46,33 @@ describe('reporters', () => {
     expect(store.list({}, START + 4 * MIN).rows[0]!.sessions).toBe(1);
   });
 
+  it('keeps one row per account when two accounts report from one machine id (issue #221)', () => {
+    const ana = { owner: 'Ana', credential: 'pdm_aaaaaaaaaaaa' };
+    const ben = { owner: 'Ben', credential: 'pdm_bbbbbbbbbbbb' };
+    store.record(seen({ ...ana, sessionId: 'a1' }), START + MIN);
+    store.record(seen({ ...ben, sessionId: 'b1' }), START + 2 * MIN);
+    store.record(seen({ ...ana, sessionId: 'a2' }), START + 3 * MIN);
+    store.record(seen({ ...ben, sessionId: 'b2' }), START + 4 * MIN);
+    const rows = store.list({ sort: 'who' }, START + 4 * MIN).rows;
+    expect(rows.map((r) => [r.who, r.credential, r.sessions])).toEqual([
+      ['Ana', 'pdm_aaaaaaaaaaaa', 2],
+      ['Ben', 'pdm_bbbbbbbbbbbb', 2],
+    ]);
+    // The first account keeps the machine id as its key, so rows and ignore rules made before this fix still match.
+    expect(rows[0]!.key).toBe('9f3a1c7d2e40');
+    expect(rows[1]!.key).not.toBe(rows[0]!.key);
+  });
+
+  it('files a report under the account row after the first account is removed, not under a second copy (issue #221)', () => {
+    store.record(seen({ owner: 'Ana', sessionId: 'a1' }), START + MIN);
+    store.record(seen({ owner: 'Ben', sessionId: 'b1' }), START + MIN);
+    store.remove('9f3a1c7d2e40');
+    store.record(seen({ owner: 'Ben', sessionId: 'b2' }), START + 2 * MIN);
+    store.record(seen({ owner: 'Ana', sessionId: 'a2' }), START + 3 * MIN);
+    const rows = store.list({ sort: 'who' }, START + 3 * MIN).rows;
+    expect(rows.map((r) => r.who)).toEqual(['Ana', 'Ben']);
+  });
+
   it('matches a reporter that sends no machine id by its source address, apart from hooks-only sessions', () => {
     store.record(seen({ machineId: null, machineName: null, owner: null, credential: 'admin secret' }), START + MIN);
     store.record(seen({ kind: 'hooks', machineId: null, machineName: null, version: 'hooks', engineVersion: null, sessionId: 'h1' }), START + MIN);
@@ -282,6 +309,29 @@ describe('ignore rules (issue #167)', () => {
     expect(store.keysFor(s)).toEqual(['addr:10.88.0.134', 'addr:10.88.0.133']);
     store.addIgnore('key', 'addr:10.88.0.133', START + 2 * MIN);
     expect(store.ignoredBy({ key: 'addr:10.88.0.134', otherKeys: ['addr:10.88.0.133'], source: '10.88.0.134', version: '1' })).toBeDefined();
+  });
+
+  it('lets a key rule on a machine id cover every account on it, and a rule on one account cover only that account (#221)', () => {
+    store.record(seen({ owner: 'Ana', sessionId: 'a1' }), START + MIN);
+    store.record(seen({ owner: 'Ben', sessionId: 'b1' }), START + MIN);
+    const ben = { kind: 'mod' as const, machineId: '9f3a1c7d2e40', source: null, owner: 'Ben', sessionId: 'b1' };
+    const target = (keys: string[]) => ({ key: keys[0]!, otherKeys: keys.slice(1), source: null, version: '1' });
+    const benRow = store.list({}, START + MIN).rows.find((r) => r.who === 'Ben')!;
+    store.addIgnore('key', benRow.key, START + 2 * MIN);
+    expect(store.list({}, START + 2 * MIN).rows.map((r) => r.who)).toEqual(['Ana']);
+    expect(store.ignoredBy(target(store.keysFor(ben)))).toBeDefined();
+    expect(store.ignoredBy(target(store.keysFor({ ...ben, owner: 'Ana' })))).toBeUndefined();
+    store.addIgnore('key', '9f3a1c7d2e40', START + 3 * MIN);
+    expect(store.list({}, START + 3 * MIN).total).toBe(0);
+    expect(store.ignoredBy(target(store.keysFor({ ...ben, owner: 'Ana' })))).toBeDefined();
+    expect(store.ignoredBy(target(store.keysFor(ben)))).toBeDefined();
+  });
+
+  it('matches a rule on <machine id>#<owner> even when that account\'s row is keyed on the bare machine id (#221)', () => {
+    store.record(seen({ owner: 'Ben', sessionId: 'b1' }), START + MIN);
+    store.addIgnore('key', '9f3a1c7d2e40#Ben', START + 2 * MIN);
+    const keys = store.keysFor({ kind: 'mod', machineId: '9f3a1c7d2e40', source: null, owner: 'Ben', sessionId: 'b2' });
+    expect(store.ignoredBy({ key: keys[0]!, otherKeys: keys.slice(1), source: null, version: '1' })).toBeDefined();
   });
 
   it('refuses a rule made only of *, which would turn every reporter away', () => {

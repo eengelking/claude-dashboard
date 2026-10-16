@@ -71,7 +71,7 @@ function noteReporter(opts: FleetRouterOptions, logger: Logger, seen: ReporterSe
 }
 
 /** The key a sender is known by, and any other row that already holds its session, for the ignore check. */
-function keyTarget(opts: FleetRouterOptions, s: { kind: 'mod' | 'hooks'; machineId: string | null; source: string | null; sessionId: string }): { key: string; otherKeys: string[] } {
+function keyTarget(opts: FleetRouterOptions, s: { kind: 'mod' | 'hooks'; machineId: string | null; source: string | null; sessionId: string; owner?: string | null }): { key: string; otherKeys: string[] } {
   const own = ReporterStore.keyOf(s);
   try {
     const keys = opts.reporters?.keysFor(s) ?? [own];
@@ -170,7 +170,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     if (
       result.report.reporter.hostSurface !== SIMULATOR_SURFACE &&
       refuseIgnored(opts, logger, fleet, req, res, {
-        ...keyTarget(opts, { kind: asHooks ? 'hooks' : 'mod', machineId, source: machineOf(req), sessionId: result.report.session.id }),
+        ...keyTarget(opts, { kind: asHooks ? 'hooks' : 'mod', machineId, source: machineOf(req), sessionId: result.report.session.id, owner: ownerOf(id) }),
         source: machineOf(req),
         version: result.report.reporter.version,
       })

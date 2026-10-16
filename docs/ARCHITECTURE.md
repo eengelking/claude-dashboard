@@ -69,7 +69,7 @@ uses `.sec`, `.main`, `.code` and `.back` under `.podium`, with higher specifici
 **Which reporters are known** (`server/src/fleet/reporters.ts`, `frontend/src/fleet/admin/ReportersTab.tsx`, issue #142).
 `ReporterStore` owns migration 11 (`reporters` and `reporter_sessions`) and is built once in `index.ts`, then handed to both
 routers. `routes.ts` calls `record()` after a report or hook is stored, with the machine id (or the source address when the
-report has none) as the key and the credential as a key id, never a token, and calls `rejected()` at each refusal, which
+report has none) as the key, plus `#<owner>` for a second account on the same machine (`accountKey`, #221) and the credential as a key id, never a token, and calls `rejected()` at each refusal, which
 keeps the last 200 in memory only. A report with no machine id is filed under the row that already holds its session id (`knownKey`), and a row made for
 the new address before that session turned up is merged into it, so a reporter that changes address (a container that
 restarts) stays one row; migration 12 merges the duplicates that already existed. An unnamed reporter is named by its newest
