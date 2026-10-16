@@ -20,7 +20,7 @@ describe("rail and wall", () => {
     const { rerender, container } = render(<FleetView state={st} />);
     expect(within(screen.getByRole("navigation", { name: "Orchestrators" })).getByText("api-refactor")).toBeInTheDocument();
     expect(container.querySelectorAll(".wall .card")).toHaveLength(1);
-    const next = fleetReducer(st, { type: "session", view: makeSession({ id: "s2", name: "new-one" }), at: Date.now() });
+    const next = fleetReducer(st, { type: "session", view: makeSession({ id: "s2", name: "new-one" }) });
     rerender(<FleetView state={next} />);
     expect(container.querySelectorAll(".wall .card")).toHaveLength(2);
     const card = [...container.querySelectorAll(".wall .card")].find((c) => c.textContent?.includes("new-one"))!;
@@ -423,6 +423,14 @@ describe("fleet cost with an unpriced session (#66)", () => {
     const st = stateFrom({ sessions: [makeSession()], kpis: makeKpis({ unpricedSessions: 2 }) });
     render(<FleetView state={st} />);
     expect(screen.getByText("not counting 2 unpriced sessions")).toBeInTheDocument();
+  });
+
+  it("keeps the cost sparkline next to the note, because the priced spend is still there (#276)", () => {
+    const st = stateFrom({ sessions: [makeSession()], kpis: makeKpis({ unpricedSessions: 1, costPerMinute: [0, 1, 2, 1] }) });
+    const { container } = render(<FleetView state={st} />);
+    const tile = [...container.querySelectorAll(".kpi")].find((t) => t.textContent?.includes("Est. cost today"))!;
+    expect(tile.textContent).toContain("not counting 1 unpriced session");
+    expect(tile.querySelector("svg.sp")).not.toBeNull();
   });
 
   it("adds no note when every session is priced", () => {

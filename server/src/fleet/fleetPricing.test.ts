@@ -122,4 +122,72 @@ describe('Fleet prices model usage (#117)', () => {
     fleet.prices.set('sonnet-5-5', { std: S });
     expect(seen.join('')).toContain('event: snapshot');
   });
+
+  // Issue #270: the cost-per-minute sparkline is drawn from the same priced figures as the card.
+  describe('cost per minute (#270)', () => {
+    const minuteSum = (f: Fleet) => f.kpis().costPerMinute.reduce((a, b) => a + b, 0);
+    function twoReports(opts: { usage: boolean }) {
+      let now = NOW - 30_000;
+      const fleet = new Fleet(new FleetDb(openDb(':memory:')), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' }, () => now);
+      const send = (input: number, ledger: number) => {
+        const r: Report = fixtureReport();
+        r.sentAt = now;
+        r.session.startedAt = NOW - 60_000;
+        r.session.model = 'claude-sonnet-5-5';
+        if (opts.usage) r.session.usageByModel = use('claude-sonnet-5-5', input);
+        else delete r.session.usageByModel;
+        r.session.costUsd = ledger;
+        r.agents = [];
+        fleet.ingest(r);
+      };
+      send(M, 10); // the ledger runs 10 -> 15, a step of 5, whatever the prices say
+      now += 10_000;
+      send(2 * M, 15);
+      now = NOW;
+      return fleet;
+    }
+
+    it('follows the priced figures, not the ledger, and moves with an Admin price', () => {
+      const fleet = twoReports({ usage: true });
+      const step = fleet.liveViews()[0]!.costUsd! - fleet.prices.pricing().costOf(use('claude-sonnet-5-5', M))!;
+      expect(step).toBeGreaterThan(0);
+      expect(minuteSum(fleet)).toBeCloseTo(step, 9);
+      expect(fleet.prices.set('sonnet-5-5', { std: S })).toBeNull();
+      expect(minuteSum(fleet)).toBeCloseTo(3, 9); // 1M more input at the Admin's 3 USD
+    });
+
+    it('stores a sample\'s usage only when it changes or a minute starts, and the series still adds up', () => {
+      const db = new FleetDb(openDb(':memory:'));
+      let now = NOW - 130_000; // a few seconds into a minute
+      now -= now % 60_000;
+      now += 5_000;
+      const fleet = new Fleet(db, { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' }, () => now);
+      const send = (input: number) => {
+        const r: Report = fixtureReport();
+        r.sentAt = now;
+        r.session.startedAt = NOW - 300_000;
+        r.session.model = 'claude-sonnet-5-5';
+        r.session.usageByModel = use('claude-sonnet-5-5', input);
+        r.agents = [];
+        fleet.ingest(r);
+      };
+      send(M); // minute 0: stored
+      for (let i = 0; i < 4; i++) { now += 1_000; send(M); } // unchanged: marked, not stored
+      now += 1_000; send(2 * M); // changed: stored
+      now += 1_000; send(2 * M); // unchanged: marked
+      now += 60_000; send(2 * M); // a new minute starts: stored again
+      const rows = db.db.prepare('SELECT usage_json FROM samples ORDER BY t').all() as { usage_json: string | null }[];
+      expect(rows).toHaveLength(8);
+      expect(rows.filter((r) => r.usage_json !== '=')).toHaveLength(3);
+      now = NOW;
+      expect(minuteSum(fleet)).toBeCloseTo(fleet.prices.pricing().costOf(use('claude-sonnet-5-5', M))!, 9);
+      fleet.prices.set('sonnet-5-5', { std: S });
+      expect(minuteSum(fleet)).toBeCloseTo(3, 9);
+    });
+
+    it('keeps the ledger samples for a reporter that sends no usage', () => {
+      const fleet = twoReports({ usage: false });
+      expect(minuteSum(fleet)).toBeCloseTo(5, 9);
+    });
+  });
 });

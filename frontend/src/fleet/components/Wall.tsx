@@ -48,9 +48,8 @@ export function KpiStrip({ kpis, split }: { kpis: Kpis | null; split: Split }) {
           <div className="kpi-cap" title={NO_PRICE_TITLE}>
             not counting {k.unpricedSessions} unpriced session{k.unpricedSessions > 1 ? "s" : ""}
           </div>
-        ) : (
-          <Sparkline values={k?.costPerMinute ?? []} w={100} h={26} />
-        )}
+        ) : null}
+        <Sparkline values={k?.costPerMinute ?? []} w={100} h={26} />
       </div>
       <div className="kpi">
         <div className="k">Tokens, last minute</div>

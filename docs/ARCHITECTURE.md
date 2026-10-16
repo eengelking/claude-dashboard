@@ -264,7 +264,8 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
     shows it: those show context held now (`agentTokens` and `sessionTokens` in `logic.ts`), which is what
     Claude Code shows, because a running total re-counts the cached context on every request (#96).
 12. **`costPerMinute`** (the KPI sparkline) is 60 one-minute buckets of fleet cost added, from the
-    samples' cumulative `cost_usd`. **`tokensPerSec`** is 60 one-second points of Σ `tokens_delta`.
+    samples' cumulative cost, repriced from each sample's `usage_json` (kept in full only when it changed or at a minute's first sample, `=` otherwise) with the Admin's prices (#270; the
+    ledger's `cost_usd` for a sample from a reporter that sends no usage). **`tokensPerSec`** is 60 one-second points of Σ `tokens_delta`.
 13. **`clearedToday`** is a count: sessions that ended or were dropped since local midnight and are no
     longer in the live set.
 14. **`session` throttle.** One message per session per 500 ms, trailing edge: the first change in a

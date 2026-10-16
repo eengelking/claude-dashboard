@@ -1,6 +1,7 @@
 // The fleet service: owns the live set, turns ingests and timer sweeps into SSE messages, and
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
+import { SAME_USAGE } from './db.js';
 import type { CostOf, FleetDb, RetentionPolicy, SessionRow } from './db.js';
 import { activityView, computeKpis, family, isUnused, repriced, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
 import { REPORTER_SUPPORT, serverVersion } from './compat.js';
@@ -134,7 +135,10 @@ export class Fleet {
     );
     this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
     // A price change moves every cost on the wall, so open browsers get a fresh snapshot.
-    this.prices = new ModelPriceStore(db.db, () => this.hub.broadcast('snapshot', this.state()));
+    this.prices = new ModelPriceStore(db.db, () => {
+      this.costMinuteCache = null; // the sparkline follows the prices too (#270)
+      this.hub.broadcast('snapshot', this.state());
+    });
     // On start every stored session that has not ended is treated as stale until it reports again;
     // a done session still inside its linger window stays until the window closes.
     for (const row of db.liveCandidates(this.startedAt - cfg.lingerMs)) {
@@ -323,7 +327,7 @@ export class Fleet {
     const pricing = this.prices.pricing();
     const cost: CostOf = (r) => repriced(pricing, r.usage_json, r.cost_usd);
     if (!this.costMinuteCache || now - this.costMinuteCache.at > 5000) {
-      this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60) };
+      this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60, cost) };
     }
     const spend = this.db.spendTotals(startOfDay(now), cost);
     return computeKpis(
@@ -514,7 +518,9 @@ export class Fleet {
         // second, so its charts do not fall to zero between heartbeats.
         const last = this.db.latestSample(id);
         if (last && last.t < nowSec) {
-          this.db.insertSampleIfAbsent({ ...last, t: nowSec, tokens_delta: 0 });
+          // The copy repeats the usage as "same as before", except at the start of a minute, which needs it in full (#270).
+          const usage = last.usage_json == null ? null : Math.floor(last.t / 60) === Math.floor(nowSec / 60) ? SAME_USAGE : row.usage_json;
+          this.db.insertSampleIfAbsent({ ...last, t: nowSec, tokens_delta: 0, usage_json: usage });
         }
       }
       if (entry.status !== null && entry.status !== status) {
