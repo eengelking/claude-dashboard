@@ -18,22 +18,21 @@ export interface EnvIdentity {
   token?: string;
 }
 
-const hasAny = (i: Identity) => i.userName.trim() !== '' || i.token !== '';
+/**
+ * Whether an identity is worth holding for the rest of the session: it has a token. A name alone is not
+ * signed in, so a token added later still applies; a session with no token has nothing to protect.
+ */
+export const worthHolding = (i: Identity): boolean => i.token !== '';
 
 /**
  * The identity to report as: the one the session already holds, else the terminal's environment (taken
  * whole when either variable is set, never mixed with the shared options), else the shared options.
- * An identity with neither a name nor a token is nothing to protect, so it is not held.
+ * An identity without a token is not held (see worthHolding).
  */
 export function pickIdentity(from: { held: Identity | undefined; env: EnvIdentity; options: Identity }): Identity {
-  if (from.held && hasAny(from.held)) return from.held;
+  if (from.held && worthHolding(from.held)) return from.held;
   const user = (from.env.user ?? '').trim();
-  const token = from.env.token ?? '';
+  const token = (from.env.token ?? '').trim();
   if (user || token) return { userName: user, token };
   return { userName: from.options.userName, token: from.options.token };
-}
-
-/** Whether an identity is worth holding for the rest of the session. */
-export function worthHolding(i: Identity): boolean {
-  return hasAny(i);
 }

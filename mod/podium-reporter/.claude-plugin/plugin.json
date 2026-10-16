@@ -47,7 +47,7 @@
     "showStatus": {
       "type": "boolean",
       "title": "Status line",
-      "description": "Show 'podium ● N live' or 'podium ○ offline' under the prompt.",
+      "description": "Show 'podium \u25cf N live' or 'podium \u25cb offline' under the prompt.",
       "default": true
     },
     "explainFailures": {

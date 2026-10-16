@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'claude-code/testing'
-import { pickIdentity } from './identity.ts'
+import { pickIdentity, worthHolding } from './identity.ts'
 
 const admin = { userName: '', token: 'admin-secret' }
 const ed = { userName: 'Ed', token: 'ed-token' }
@@ -22,7 +22,13 @@ describe('which Podium identity a session reports as (#226)', () => {
     expect(pickIdentity({ held: undefined, env: { user: 'Ed' }, options: { userName: 'Dana', token: 'dana-token' } })).toEqual({ userName: 'Ed', token: '' })
   })
 
-  test('an identity with neither name nor token is not held, so a later sign-in can still apply', () => {
-    expect(pickIdentity({ held: { userName: '', token: '' }, env: {}, options: ed })).toEqual(ed)
+  test('an identity without a token is not held, so a token added later still applies', () => {
+    expect(pickIdentity({ held: { userName: 'Ed', token: '' }, env: {}, options: ed })).toEqual(ed)
+    expect(worthHolding({ userName: 'Ed', token: '' })).toBe(false)
+    expect(worthHolding(ed)).toBe(true)
+  })
+
+  test('a stray newline or space around the terminal token is dropped', () => {
+    expect(pickIdentity({ held: undefined, env: { user: ' Ed ', token: 'ed-token\n' }, options: admin })).toEqual(ed)
   })
 })

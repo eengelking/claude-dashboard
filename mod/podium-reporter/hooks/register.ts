@@ -996,13 +996,21 @@ function messagesLine($: Engine, r: Runtime): void {
 /**
  * The identity this session reports as (#226): the one it already holds (a reload re-runs register with the
  * options as they are now, which may be someone else's), else this terminal's PODIUM_USER and PODIUM_TOKEN,
- * else the shared options. Held for the rest of the session once it has a name or a token.
+ * else the shared options. Held for the rest of the session once it has a token.
  */
 async function takeIdentity($: Engine): Promise<Identity> {
-  const held = await attempt(async () => (await $.state.get(IDENTITY)).value ?? undefined, undefined);
+  let held: Identity | undefined;
+  let readable = true;
+  try {
+    held = (await $.state.get(IDENTITY)).value ?? undefined;
+  } catch (err) {
+    readable = false;
+    record($, 'identity', err);
+  }
   const env = { user: await attempt(() => $.env.get('PODIUM_USER'), undefined), token: await attempt(() => $.env.get('PODIUM_TOKEN'), undefined) };
   const picked = pickIdentity({ held, env, options: { userName: opts.userName, token: opts.token } });
-  if (worthHolding(picked) && (!held || held.userName !== picked.userName || held.token !== picked.token)) {
+  // When the held identity could not be read, do not overwrite what may be there.
+  if (readable && worthHolding(picked) && (!held || held.userName !== picked.userName || held.token !== picked.token)) {
     await attempt(() => $.state.set(IDENTITY, picked), undefined);
   }
   return picked;
@@ -1138,7 +1146,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
 
 export const register: Register = (on, rawOptions) => {
   opts = readOptions(rawOptions as Record<string, unknown>);
-  who = { userName: opts.userName, token: opts.token };
+  who = { userName: '', token: '' };
   rt = null;
   generation++;
   errors = [];
