@@ -41,40 +41,40 @@ describe("isUrgentChange", () => {
 
   it("is false when only numbers move", () => {
     const held = base();
-    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "running", costUsd: 9 }), at: 1 });
+    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "running", costUsd: 9 }) });
     expect(isUrgentChange(held, next)).toBe(false);
   });
 
   it("is true when a session starts waiting for you", () => {
     const held = base();
-    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "waiting", waitReason: "input" }), at: 1 });
+    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "waiting", waitReason: "input" }) });
     expect(isUrgentChange(held, next)).toBe(true);
   });
 
   it("is true when a session goes stale or a new one arrives already waiting", () => {
     const held = base();
-    const stale = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "stale" }), at: 1 });
+    const stale = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "stale" }) });
     expect(isUrgentChange(held, stale)).toBe(true);
-    const fresh = fleetReducer(held, { type: "session", view: makeSession({ id: "b", status: "waiting", waitReason: "permission" }), at: 1 });
+    const fresh = fleetReducer(held, { type: "session", view: makeSession({ id: "b", status: "waiting", waitReason: "permission" }) });
     expect(isUrgentChange(held, fresh)).toBe(true);
   });
 
   it("is false for a session that was already waiting", () => {
     const held = stateFrom({ sessions: [makeSession({ id: "a", status: "waiting", waitReason: "input" })] });
-    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "waiting", waitReason: "input", costUsd: 3 }), at: 1 });
+    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", status: "waiting", waitReason: "input", costUsd: 3 }) });
     expect(isUrgentChange(held, next)).toBe(false);
   });
 
   it("is true when an agent fails", () => {
     const held = stateFrom({ sessions: [makeSession({ id: "a", agents: [makeAgent({ id: "g1" })] })] });
     const failed = makeAgent({ id: "g1", status: "failed", failure: { class: "error", at: 1 } as never });
-    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", agents: [failed] }), at: 1 });
+    const next = fleetReducer(held, { type: "session", view: makeSession({ id: "a", agents: [failed] }) });
     expect(isUrgentChange(held, next)).toBe(true);
   });
 
   it("is true for the viewer's own clicks: a wall setting, a feature flag or a removed session", () => {
     const held = base();
-    const wall = fleetReducer(held, { type: "wall", wall: { ...held.wall, showBackgroundSessions: !held.wall.showBackgroundSessions }, at: 1 });
+    const wall = fleetReducer(held, { type: "wall", wall: { ...held.wall, showBackgroundSessions: !held.wall.showBackgroundSessions } });
     expect(isUrgentChange(held, wall)).toBe(true);
     expect(isUrgentChange(held, { ...held, features: { ...held.features, "activity-feed": false } })).toBe(true);
     const removed = fleetReducer(held, { type: "removed", sessionId: "a", reason: "dropped" as never, at: 1 });

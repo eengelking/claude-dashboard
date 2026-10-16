@@ -14,6 +14,11 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Changed
+
+- **The fleet store no longer keeps `lastMessageAt` (#278).** Nothing read it since #184 removed the "synced" counter. The field, its test assertion and the argument that fed it are gone; no behavior changes.
+- **The plan panel's empty state uses the shared sentence (#278).** It read "No plan reported. Agents were launched ad hoc, so only the agent tree is available."; it now reads "No plan reported. Agents were launched ad hoc.", as the card and the focus header do and as SPEC 7.x says. The user guide is updated.
+
 ## [1.0.1] - 2026-10-16
 
 ### Changed
