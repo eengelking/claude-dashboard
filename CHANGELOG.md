@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Changed
+
+- **The people controls share the wall's one control row (#245, #246).** With two or more people reporting, Group by and Order by join the status filter, Sort by and the text filter in an outlined People group, so the wall spends one row on controls, or two when the window is narrow, never three. Group by's None is now **All**, and a new **Me** appears while someone is signed in as a person: a flat wall of just their orchestrators. Who "me" is now comes from the browser's sign-in (the one Respond uses), so **You are**, **Only me**, the wall's "Showing X / Show everyone" line and the `podium.me` setting are gone; the left list's person headers and **All orchestrators** still narrow and widen the wall. Where the caption "N shown · M cleared today" does not fit, it is an info icon with the same words as its tooltip. **Upgrade note:** signing in needs the Admin's respond and activity-feed flags to be on; with them off nobody is signed in, so there is no Me and no "you" marking. See SPEC (People view) and `mockup/podium-wall-controls.html`.
+
 ## [0.14.3] - 2026-10-16
 
 ### Added

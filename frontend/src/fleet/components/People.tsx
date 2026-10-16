@@ -1,9 +1,9 @@
-// The people view's pieces (issue #34): monograms, the Group by bar, a band per person or group, and the
+// The people view's pieces (issue #34): monograms, the Group by and Order by controls, a band per person or group, and the
 // owner line on a card. A person is a monogram and a name, never a color: color already means model and
 // status here. The look follows mockup/podium-people.html.
 import type { ReactNode } from "react";
 import { fmtUsd } from "../format";
-import { GROUP_BYS, initials, sharePct, UNIT_ORDERS, type GroupBy, type Unit, type UnitKind, type UnitOrder } from "../people";
+import { GROUP_BYS, initials, isFlat, sharePct, UNIT_ORDERS, type GroupBy, type Unit, type UnitKind, type UnitOrder } from "../people";
 
 const GROUPISH: readonly UnitKind[] = ["group", "nogroup"];
 
@@ -22,9 +22,9 @@ export function YouTag({ kind }: { kind: UnitKind }) {
   return <span className="you">{GROUPISH.includes(kind) ? "your group" : "you"}</span>;
 }
 
-function Seg<T extends string>(props: { label: string; options: Record<T, string>; value: T; onChange: (v: T) => void }) {
+function Seg<T extends string>(props: { label: string; options: Partial<Record<T, string>>; value: T; onChange: (v: T) => void; hint?: string }) {
   return (
-    <span className="tg">
+    <span className="tg" title={props.hint}>
       <span aria-hidden="true">{props.label}</span>
       <span className="seg" role="group" aria-label={props.label}>
         {(Object.keys(props.options) as T[]).map((k) => (
@@ -37,54 +37,21 @@ function Seg<T extends string>(props: { label: string; options: Record<T, string
   );
 }
 
-/** The row above the wall's toolbar: Group by, Order by, who the viewer is, Only me, and the active people filter. */
-export function PeopleBar(props: {
-  groupBy: GroupBy;
-  onGroupBy: (g: GroupBy) => void;
-  order: UnitOrder;
-  onOrder: (o: UnitOrder) => void;
-  me: string | null;
-  names: string[];
-  onMe: (name: string | null) => void;
-  onlyMe: boolean;
-  onOnlyMe: () => void;
-  /** "Showing Ed E." while the wall is narrowed to a person or group; null otherwise. */
-  filterLabel: string | null;
-  onClearFilter: () => void;
-}) {
+/**
+ * The people controls inside the wall's one control row (#245, mockup/podium-wall-controls.html): Group by, then Order by.
+ * Order by orders the bands; Sort by, beside the filter, orders the cards inside a band. Me is offered only while a person
+ * is signed in, and Order by is hidden for the flat walls (All and Me).
+ */
+export function PeopleCluster(props: { groupBy: GroupBy; onGroupBy: (g: GroupBy) => void; order: UnitOrder; onOrder: (o: UnitOrder) => void; canMe: boolean }) {
+  const groupBys: Partial<Record<GroupBy, string>> = { ...GROUP_BYS };
+  if (!props.canMe) delete groupBys.me;
   return (
-    <div className="tools people-tools">
-      <Seg label="Group by" options={GROUP_BYS} value={props.groupBy} onChange={props.onGroupBy} />
-      {props.groupBy !== "none" && <Seg label="Order by" options={UNIT_ORDERS} value={props.order} onChange={props.onOrder} />}
-      <span className="tg">
-        <label htmlFor="podium-me">You are</label>
-        <select className="sel" id="podium-me" value={props.me ?? ""} onChange={(e) => props.onMe(e.target.value || null)}>
-          <option value="">Not set</option>
-          {props.names.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+    <div className="people" role="group" aria-label="People view">
+      <span className="plab" aria-hidden="true">
+        People
       </span>
-      <button
-        type="button"
-        className="chipbtn"
-        aria-pressed={props.onlyMe}
-        onClick={props.onOnlyMe}
-        disabled={!props.me}
-        title={props.me ? `Show only ${props.me}'s orchestrators` : "Pick who you are first"}
-      >
-        Only me
-      </button>
-      {props.filterLabel && (
-        <span className="tg" role="status">
-          <span>Showing {props.filterLabel}</span>
-          <button type="button" className="chipbtn on" onClick={props.onClearFilter}>
-            Show everyone
-          </button>
-        </span>
-      )}
+      <Seg label="Group by" options={groupBys} value={props.groupBy} onChange={props.onGroupBy} />
+      {!isFlat(props.groupBy) && <Seg label="Order by" options={UNIT_ORDERS} value={props.order} onChange={props.onOrder} hint="Orders the bands" />}
     </div>
   );
 }

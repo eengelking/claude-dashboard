@@ -7,8 +7,12 @@ import { idleOnBackground } from "./waiting";
 /** The owner of a session reported with the admin secret (the server's ADMIN_OWNER). */
 export const ADMIN = "Admin";
 
-export type GroupBy = "people" | "group" | "none";
-export const GROUP_BYS: Record<GroupBy, string> = { people: "People", group: "Group", none: "None" };
+export type GroupBy = "people" | "group" | "none" | "me";
+/** `none` is the whole fleet in one wall (shown as "All"); `me` is the signed-in person's own orchestrators in one wall (#245). */
+export const GROUP_BYS: Record<GroupBy, string> = { people: "People", group: "Group", none: "All", me: "Me" };
+
+/** The choices that draw one flat wall, not bands. */
+export const isFlat = (by: GroupBy): boolean => by === "none" || by === "me";
 
 export type UnitOrder = "attention" | "spend" | "name";
 export const UNIT_ORDERS: Record<UnitOrder, string> = { attention: "Needs attention", spend: "Spend", name: "Name" };
@@ -102,7 +106,7 @@ const counted = (sessions: SessionView[]) => ({
  * Empty groups never appear: a band exists only for sessions that are live now. `none` has no bands.
  */
 export function buildUnits(sessions: readonly SessionView[], by: GroupBy, spend: readonly OwnerSpend[], me: string | null): Unit[] {
-  if (by === "none") return [];
+  if (isFlat(by)) return [];
   const myGroup = me ? sessions.find((s) => same(s.owner, me))?.ownerGroup ?? spend.find((r) => same(r.owner, me))?.group ?? null : null;
   const buckets = new Map<string, SessionView[]>();
   for (const s of sessions) {
@@ -177,15 +181,7 @@ export function filterByPeople(sessions: readonly SessionView[], f: PeopleFilter
   return sessions.filter((s) => (!f.person || personKey(s.owner) === f.person) && (!f.group || groupKey(s) === f.group));
 }
 
-/** The names people report under, for the "You are" picker: every live person, plus the stored choice. */
-export function peopleNames(sessions: readonly SessionView[], me: string | null): string[] {
-  const names = new Map<string, string>();
-  for (const s of sessions) if (isPerson(s.owner)) names.set(s.owner.toLowerCase(), s.owner);
-  if (me && !names.has(me.toLowerCase())) names.set(me.toLowerCase(), me);
-  return [...names.values()].sort((a, b) => a.localeCompare(b));
-}
-
-/** The viewer's band key, for "Only me". */
+/** The viewer's band key, for the Me wall. */
 export function meKey(sessions: readonly SessionView[], me: string | null): string | null {
   if (!me) return null;
   const s = sessions.find((x) => same(x.owner, me));

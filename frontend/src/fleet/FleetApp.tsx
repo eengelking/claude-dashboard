@@ -28,12 +28,13 @@ import { usePageVisible } from "./usePageVisible";
 import { useHeartbeat } from "./useHeartbeat";
 import { usePanes } from "./usePanes";
 import { usePeoplePrefs } from "./usePeoplePrefs";
-import { buildUnits, filterByPeople, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, peopleNames, type PeopleFilter, type Unit } from "./people";
+import { ADMIN, buildUnits, filterByPeople, isFlat, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, type GroupBy, type PeopleFilter, type Unit } from "./people";
 import type { WallPeople } from "./components/Wall";
 import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
 import { reportersLive, type FleetState } from "./store";
 import { RespondProvider, useRespond } from "./useRespond";
+import type { RespondApi } from "./respondApi";
 import { RespondModal } from "./components/Respond";
 import type { SessionView } from "./types";
 
@@ -96,10 +97,22 @@ interface FleetViewProps {
   /** Seconds between redraws; the clock moves on the same interval. */
   updateEvery?: number;
   onUpdateEvery?: (seconds: number) => void;
+  /** For tests: the respond API, so the sign-in the wall reads "me" from can be faked. */
+  respondApi?: RespondApi;
 }
 
 // Memoized so the held state, which keeps its identity between updates, stops a parent render from redrawing it.
-export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpdateEvery }: FleetViewProps) {
+// The respond provider sits above the view so the wall itself can read who is signed in (#245).
+export const FleetView = memo(function FleetView(props: FleetViewProps) {
+  const respondFlags = props.state.features.respond === true && props.state.features["activity-feed"] !== false;
+  return (
+    <RespondProvider flagsOn={respondFlags} api={props.respondApi}>
+      <FleetViewBody state={props.state} updateEvery={props.updateEvery} onUpdateEvery={props.onUpdateEvery} />
+    </RespondProvider>
+  );
+});
+
+function FleetViewBody({ state, updateEvery = 2, onUpdateEvery }: FleetViewProps) {
   const now = useNow(updateEvery * 1000);
   const theme = useTheme();
   const [sel, setSel] = useState<string | null>(null);
@@ -131,7 +144,14 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
   const people = usePeoplePrefs();
   const [pf, setPf] = useState<PeopleFilter>(NO_FILTER);
   const active = peopleActive(live);
-  const peopleShown = active ? filterByPeople(sets.shown, pf) : sets.shown;
+  // Who "me" is comes from the browser's sign-in (#245): a signed-in person, never Admin. Signed out there is no "me".
+  const signedIn = useRespond()?.me;
+  const me = signedIn?.signedIn && signedIn.name && signedIn.name.toLowerCase() !== ADMIN.toLowerCase() ? signedIn.name : null;
+  // A remembered Me means nothing without a sign-in, so the wall is grouped by People until someone signs in.
+  const groupBy: GroupBy = people.prefs.groupBy === "me" && !me ? "people" : people.prefs.groupBy;
+  const myKey = active ? meKey(sorted, me) : null;
+  const peopleFilter: PeopleFilter = groupBy === "me" && myKey ? { person: myKey, group: null } : pf;
+  const peopleShown = active ? filterByPeople(sets.shown, peopleFilter) : sets.shown;
   const shown = filterSessions(peopleShown, filter);
   const split: Split = {
     running: live.filter((s) => s.status === "running").length,
@@ -149,32 +169,24 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
 
   const { prefs } = people;
   const spendByOwner = state.kpis?.costTodayByOwner ?? [];
-  const units: Unit[] = active ? orderUnits(buildUnits(sorted, prefs.groupBy, spendByOwner, people.me), prefs.order) : [];
-  const myKey = active ? meKey(sorted, people.me) : null;
+  const units: Unit[] = active ? orderUnits(buildUnits(sorted, groupBy, spendByOwner, me), prefs.order) : [];
   const pickUnit = (u: Unit) => {
     const asGroup = u.kind === "group" || u.kind === "nogroup";
     setPf((cur) => (asGroup ? { person: null, group: cur.group === u.key ? null : u.key } : { person: cur.person === u.key ? null : u.key, group: null }));
   };
-  const pfLabel = !active ? null : [pf.person, pf.group].filter((k): k is string => !!k).map((k) => (k === "unassigned" ? "Unassigned" : k === "admin" ? "Admin" : k === "nogroup" ? "No group" : k.slice(2))).join(", ") || null;
   const wallPeople: WallPeople | undefined = active
     ? {
         bar: {
-          groupBy: prefs.groupBy,
+          groupBy,
           onGroupBy: (g) => {
             people.setPrefs({ groupBy: g });
             setPf(NO_FILTER);
           },
           order: prefs.order,
           onOrder: (o) => people.setPrefs({ order: o }),
-          me: people.me,
-          names: peopleNames(live, people.me),
-          onMe: people.setMe,
-          onlyMe: !!myKey && pf.person === myKey,
-          onOnlyMe: () => setPf((cur) => (myKey && cur.person !== myKey ? { person: myKey, group: null } : NO_FILTER)),
-          filterLabel: pfLabel,
-          onClearFilter: () => setPf(NO_FILTER),
+          canMe: !!me,
         },
-        groupBy: prefs.groupBy,
+        groupBy,
         units,
         machines: machineLabels(sorted),
         total: state.kpis?.costToday ?? 0,
@@ -183,7 +195,7 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
       }
     : undefined;
   const railPeople: RailPeople | undefined = active
-    ? { groupBy: prefs.groupBy, units, picked: pf.person ?? pf.group, onPick: pickUnit, visible: new Set(filterByPeople(sorted, pf).map((s) => s.id)) }
+    ? { groupBy, units, picked: pf.person ?? pf.group, onPick: pickUnit, visible: new Set(filterByPeople(sorted, peopleFilter).map((s) => s.id)) }
     : undefined;
 
   // A selected session that leaves the live set clears the selection, with a message.
@@ -320,9 +332,7 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
     else if (e.key === "Escape" && panes.wall) stopWall();
   });
 
-  const respondFlags = state.features.respond === true && state.features["activity-feed"] !== false;
   return (
-    <RespondProvider flagsOn={respondFlags}>
     <div ref={root} className={`podium${panes.wall ? " wall-on" : ""}${idle ? " idle" : ""}${visible ? "" : " paused"}`}>
       {panes.collapsed.top && (
         <div className="wall-ctl" data-wall-control>
@@ -462,8 +472,7 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
       </div>
       <RespondHost sessions={state.sessions} now={now} adminFeedOn={state.features["activity-feed"] !== false} />
     </div>
-    </RespondProvider>
   );
-});
+}
 
 export default FleetApp;

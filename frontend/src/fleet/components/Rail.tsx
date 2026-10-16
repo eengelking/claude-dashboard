@@ -5,7 +5,7 @@ import { backgroundStatus } from "../waiting";
 import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
 import { Monogram, YouTag } from "./People";
-import { ADMIN, type GroupBy, type Unit } from "../people";
+import { ADMIN, isFlat, type GroupBy, type Unit } from "../people";
 
 /** The people view in the left list: the same grouping as the wall, and a band header that narrows the wall to it. */
 export interface RailPeople {
@@ -111,7 +111,7 @@ export function Rail(props: {
           <span>{splitText(props.split)}</span>
         </div>
       </button>
-      {pv && pv.groupBy !== "none" ? (
+      {pv && !isFlat(pv.groupBy) ? (
         <RailBands sessions={props.sessions} people={pv} item={item} />
       ) : (
         props.sessions.filter((s) => !pv || pv.visible.has(s.id)).map((s) => item(s, !!pv))

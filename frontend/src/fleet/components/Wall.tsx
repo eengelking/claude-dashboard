@@ -4,8 +4,8 @@ import type { Kpis, LifecycleConfig, SessionView } from "../types";
 import { NO_PRICE_TITLE } from "./Chips";
 import { splitText, type Split } from "./Rail";
 import { SessionCard } from "./SessionCard";
-import { Band, PeopleBar } from "./People";
-import type { GroupBy, Unit } from "../people";
+import { Band, PeopleCluster } from "./People";
+import { isFlat, type GroupBy, type Unit } from "../people";
 import type { ComponentProps, CSSProperties } from "react";
 import { useWallColumns } from "../useWallColumns";
 import { Sparkline } from "./Sparkline";
@@ -68,46 +68,65 @@ export function Toolbar(props: {
   onSort: (k: SortKey) => void;
   shown: number;
   cleared: number;
+  /** The people controls, drawn in this same row while the people view is on (#245). */
+  people?: ComponentProps<typeof PeopleCluster>;
 }) {
-  const { filter } = props;
+  const { filter, people } = props;
+  const caption = `${props.shown} shown · ${props.cleared} cleared today`;
   return (
-    <div className="tools">
-      <div className="seg" role="group" aria-label="Filter by status">
-        {(Object.keys(STATUS_FILTERS) as StatusFilter[]).map((k) => (
-          <button type="button" key={k} aria-pressed={filter.status === k} onClick={() => props.onFilter({ ...filter, status: k })}>
-            {STATUS_FILTERS[k]}
+    // The wrapper is the container the row's width steps are measured against (fleet.css, "toolbar").
+    <div className="toolbar">
+      <div className={people ? "tools has-people" : "tools"}>
+        <div className="fgrp">
+          <div className="seg" role="group" aria-label="Filter by status">
+            {(Object.keys(STATUS_FILTERS) as StatusFilter[]).map((k) => (
+              <button type="button" key={k} aria-pressed={filter.status === k} onClick={() => props.onFilter({ ...filter, status: k })}>
+                {STATUS_FILTERS[k]}
+              </button>
+            ))}
+          </div>
+          <label className="sortlab" htmlFor="podium-sort" title="Orders the cards inside each band">
+            Sort by
+          </label>
+          <select className="sel" id="podium-sort" value={props.sort} onChange={(e) => props.onSort(e.target.value as SortKey)}>
+            {(Object.keys(SORTS) as SortKey[]).map((k) => (
+              <option key={k} value={k}>
+                {SORTS[k]}
+              </option>
+            ))}
+          </select>
+          <input
+            className="search"
+            type="search"
+            placeholder="Filter by name, project or branch"
+            aria-label="Filter orchestrators"
+            value={filter.q}
+            onChange={(e) => props.onFilter({ ...filter, q: e.target.value })}
+          />
+        </div>
+        {people && <PeopleCluster {...people} />}
+        {!people && <span className="spacer" />}
+        <span className="kpi-cap counts">{caption}</span>
+        {people && (
+          // Where the words do not fit beside the controls, the caption is this button's tooltip (fleet.css).
+          <button type="button" className="info" aria-label={caption.replace(" · ", ", ")}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M8 7.2v4M8 4.8v.2" />
+            </svg>
+            <span className="tip" aria-hidden="true">
+              {caption}
+            </span>
           </button>
-        ))}
+        )}
       </div>
-      <label className="sortlab" htmlFor="podium-sort">
-        Sort by
-      </label>
-      <select className="sel" id="podium-sort" value={props.sort} onChange={(e) => props.onSort(e.target.value as SortKey)}>
-        {(Object.keys(SORTS) as SortKey[]).map((k) => (
-          <option key={k} value={k}>
-            {SORTS[k]}
-          </option>
-        ))}
-      </select>
-      <input
-        className="search"
-        type="search"
-        placeholder="Filter by name, project or branch"
-        aria-label="Filter orchestrators"
-        value={filter.q}
-        onChange={(e) => props.onFilter({ ...filter, q: e.target.value })}
-      />
-      <span className="spacer" />
-      <span className="kpi-cap">
-        {props.shown} shown · {props.cleared} cleared today
-      </span>
     </div>
   );
 }
 
 /** What the wall needs for the people view; absent while no session reports a person (the plain wall). */
 export interface WallPeople {
-  bar: ComponentProps<typeof PeopleBar>;
+  bar: ComponentProps<typeof PeopleCluster>;
   groupBy: GroupBy;
   /** Bands in order, built from every live session. */
   units: Unit[];
@@ -159,7 +178,7 @@ export function Wall(props: {
       owner={pv ? { machine: pv.machines.get(s.id) ?? null, showName } : undefined}
     />
   );
-  const banded = pv && pv.groupBy !== "none";
+  const banded = pv && !isFlat(pv.groupBy);
   const notices: NoticeItem[] = [];
   if (props.detached.count > 0 && (props.noticeOn?.("background-sessions") ?? true)) {
     notices.push({
@@ -181,14 +200,13 @@ export function Wall(props: {
   return (
     <>
       <KpiStrip kpis={props.kpis} split={props.split} />
-      {pv && <PeopleBar {...pv.bar} />}
-      <Toolbar filter={props.filter} onFilter={props.onFilter} sort={props.sort} onSort={props.onSort} shown={props.sessions.length} cleared={props.cleared} />
+      <Toolbar filter={props.filter} onFilter={props.onFilter} sort={props.sort} onSort={props.onSort} shown={props.sessions.length} cleared={props.cleared} people={pv?.bar} />
       <div ref={wall.ref} className={wall.cols ? "wall-area has-cols" : "wall-area"} style={wall.cols ? ({ "--wall-cols": wall.cols } as CSSProperties) : undefined}>
         {props.sessions.length ? (
           banded ? (
             <Bands sessions={props.sessions} people={pv} card={card} />
           ) : (
-            <div className="wall">{props.sessions.map((s) => card(s, !!pv))}</div>
+            <div className="wall">{props.sessions.map((s) => card(s, !!pv && pv.groupBy !== "me"))}</div>
           )
         ) : null}
       </div>

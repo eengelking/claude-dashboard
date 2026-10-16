@@ -5,7 +5,8 @@ import { render, screen, within, fireEvent, cleanup } from "@testing-library/rea
 import { FleetView } from "./FleetApp";
 import { makeKpis, makeSession } from "./fixtures";
 import { stateFrom } from "./testState";
-import type { OwnerSpend, SessionView } from "./types";
+import type { RespondApi } from "./respondApi";
+import type { OwnerSpend, RespondMe, SessionView } from "./types";
 
 beforeEach(() => window.localStorage.clear());
 afterEach(cleanup);
@@ -26,7 +27,16 @@ const spend: OwnerSpend[] = [
   { owner: "Admin", group: null, costUsd: 1 },
   { owner: null, group: null, costUsd: 1 },
 ];
-const view = (sessions = fleet) => render(<FleetView state={stateFrom({ sessions, kpis: makeKpis({ costToday: 20, costTodayByOwner: spend }) })} />);
+const signedOut: RespondMe = { enabled: true, signedIn: false, name: null, admin: false };
+const signedInAs = (name: string, admin = false): RespondMe => ({ enabled: true, signedIn: true, name, admin });
+// Who is signed in comes from the browser's respond sign-in (#245); a fake API stands in for the server.
+const view = (sessions = fleet, me: RespondMe = signedOut) =>
+  render(
+    <FleetView
+      state={stateFrom({ sessions, kpis: makeKpis({ costToday: 20, costTodayByOwner: spend }), features: { "activity-feed": true, respond: true } })}
+      respondApi={{ me: async () => me } as unknown as RespondApi}
+    />,
+  );
 const bands = (c: HTMLElement) => [...c.querySelectorAll(".bands > section")].map((b) => b.getAttribute("aria-label"));
 const band = (name: string) => screen.getByRole("region", { name });
 const rail = () => screen.getByRole("navigation", { name: "Orchestrators" });
@@ -35,7 +45,7 @@ describe("people view", () => {
   it("stays the plain wall while no session reports a person, even with Admin and unowned sessions", () => {
     const { container } = view([S("ad1", "Admin"), S("un1", null)]);
     expect(screen.queryByRole("group", { name: "Group by" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Only me" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "People view" })).toBeNull();
     expect(screen.queryByText("Spend today, by person")).toBeNull();
     expect(container.querySelector(".bands")).toBeNull();
     expect(container.querySelectorAll(".wall .card")).toHaveLength(2);
@@ -97,9 +107,9 @@ describe("people view", () => {
     expect(screen.queryByText("Spend today, by group")).toBeNull();
   });
 
-  it("group by None is the flat wall with each card's owner", () => {
+  it("group by All is the flat wall with each card's owner", () => {
     const { container } = view();
-    fireEvent.click(within(screen.getByRole("group", { name: "Group by" })).getByRole("button", { name: "None" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Group by" })).getByRole("button", { name: "All" }));
     expect(container.querySelector(".bands")).toBeNull();
     expect(screen.queryByRole("group", { name: "Order by" })).toBeNull();
     expect(container.querySelectorAll(".wall .card .owner .nm")).toHaveLength(6);
@@ -114,28 +124,73 @@ describe("people view", () => {
     expect(bands(container)).toEqual(["Priya N.", "Ed E.", "Dana K.", "Admin", "Unassigned"]);
   });
 
-  it("clicking a person in the left list narrows the wall and the list to them, and Show everyone undoes it", () => {
+  it("clicking a person in the left list narrows the wall and the list to them, and All orchestrators undoes it", () => {
     const { container } = view();
     fireEvent.click(within(rail()).getByRole("button", { name: /Priya N\./, pressed: false }));
     expect(bands(container)).toEqual(["Priya N."]);
     expect(within(rail()).queryByText("ed1-proj")).toBeNull();
-    expect(screen.getByText("Showing Priya N.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show everyone" }));
+    expect(screen.queryByText(/Showing Priya/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show everyone" })).toBeNull();
+    fireEvent.click(within(rail()).getByRole("button", { name: /All orchestrators/ }));
     expect(bands(container)).toHaveLength(5);
   });
 
-  it("knows who the viewer is from this browser: Only me, the you tag, and first place in Needs attention", () => {
+  // #245: the people controls share the toolbar's one row, and who "me" is comes from the sign-in.
+  it("puts Group by, Order by, Sort by and the status filter in one control row", () => {
     const { container } = view();
-    expect(screen.getByRole("button", { name: "Only me" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("You are"), { target: { value: "Dana K." } });
-    expect(window.localStorage.getItem("podium.me")).toBe(JSON.stringify("Dana K."));
+    const row = container.querySelector(".tools.has-people")!;
+    expect(row).not.toBeNull();
+    for (const el of [screen.getByRole("group", { name: "Filter by status" }), screen.getByLabelText("Sort by"), screen.getByRole("group", { name: "Group by" }), screen.getByRole("group", { name: "Order by" })]) {
+      expect(row.contains(el)).toBe(true);
+    }
+    expect(container.querySelectorAll(".tools")).toHaveLength(1);
+    expect(screen.queryByLabelText("You are")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Only me" })).toBeNull();
+  });
+
+  it("says what the caption says in an info button, for when the words do not fit", () => {
+    view();
+    expect(screen.getByRole("button", { name: /^6 shown, \d+ cleared today$/ })).toBeInTheDocument();
+  });
+
+  it("signed out: no Me choice, no you tag, and the stored name is no longer read", async () => {
+    window.localStorage.setItem("podium.me", JSON.stringify("Dana K."));
+    const { container } = view();
+    const by = within(screen.getByRole("group", { name: "Group by" }));
+    expect(by.queryByRole("button", { name: "Me" })).toBeNull();
+    expect(by.getAllByRole("button").map((b) => b.textContent)).toEqual(["People", "Group", "All"]);
+    expect(bands(container)[0]).toBe("Priya N.");
+    expect(screen.queryByText("you")).toBeNull();
+  });
+
+  it("signed in as a person: Me appears, that person's band leads, and Me is a flat wall of their own orchestrators", async () => {
+    const { container } = view(fleet, signedInAs("Dana K."));
+    const by = within(screen.getByRole("group", { name: "Group by" }));
+    const me = await by.findByRole("button", { name: "Me" });
     expect(bands(container)[0]).toBe("Dana K.");
     expect(within(band("Dana K.")).getByText("you")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Only me" }));
-    expect(bands(container)).toEqual(["Dana K."]);
-    cleanup();
-    view();
-    expect(screen.getByLabelText("You are")).toHaveValue("Dana K.");
+    fireEvent.click(me);
+    expect(me).toHaveAttribute("aria-pressed", "true");
+    expect(container.querySelector(".bands")).toBeNull();
+    expect(container.querySelectorAll(".wall .card")).toHaveLength(1);
+    expect(screen.queryByRole("group", { name: "Order by" })).toBeNull();
+    expect(container.querySelector(".wall .card .owner .nm")).toBeNull();
+    // The choice is remembered like the others.
+    expect(JSON.parse(window.localStorage.getItem("podium.people")!).groupBy).toBe("me");
+  });
+
+  it("a remembered Me falls back to People when nobody is signed in", () => {
+    window.localStorage.setItem("podium.people", JSON.stringify({ groupBy: "me", order: "attention", collapsed: [] }));
+    const { container } = view();
+    expect(bands(container)).toHaveLength(5);
+    expect(within(screen.getByRole("group", { name: "Group by" })).getByRole("button", { name: "People" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("signed in as Admin: no Me, because Admin is not a person", async () => {
+    view(fleet, signedInAs("Admin", true));
+    await screen.findByRole("group", { name: "Group by" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(within(screen.getByRole("group", { name: "Group by" })).queryByRole("button", { name: "Me" })).toBeNull();
   });
 
   it("has no spend block in the right panel: spend by person lives in Admin > Spend (#239)", () => {

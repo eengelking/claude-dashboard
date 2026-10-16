@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { makeSession } from "./fixtures";
 import {
   buildUnits,
+  GROUP_BYS,
+  isFlat,
   filterByPeople,
   initials,
   machineLabels,
@@ -9,12 +11,11 @@ import {
   NO_FILTER,
   orderUnits,
   peopleActive,
-  peopleNames,
   sharePct,
   spendRows,
   type Unit,
 } from "./people";
-import { parseMe, parsePrefs, DEFAULT_PREFS } from "./usePeoplePrefs";
+import { parsePrefs, DEFAULT_PREFS } from "./usePeoplePrefs";
 import type { OwnerSpend, SessionView } from "./types";
 
 const m = (name: string, id: string) => ({ name, id });
@@ -82,6 +83,9 @@ describe("people view logic", () => {
 
   it("has no bands for None", () => {
     expect(buildUnits(sessions, "none", spend, null)).toEqual([]);
+    expect(buildUnits(sessions, "me", spend, "Ed E.")).toEqual([]);
+    expect(GROUP_BYS.none).toBe("All");
+    expect([isFlat("none"), isFlat("me"), isFlat("people"), isFlat("group")]).toEqual([true, true, false, false]);
   });
 
   it("orders by attention with the viewer first, by spend, or by name, and keeps Admin and Unassigned last", () => {
@@ -102,12 +106,10 @@ describe("people view logic", () => {
     expect(ids(filterByPeople(sessions, { person: null, group: "nogroup" }))).toEqual(["ma1", "ad1", "un1"]);
   });
 
-  it("knows the viewer's band key, and lists the names to pick from", () => {
+  it("knows the viewer's band key", () => {
     expect(meKey(sessions, "ed e.")).toBe("p:Ed E.");
     expect(meKey(sessions, "Someone")).toBe("p:Someone");
     expect(meKey(sessions, null)).toBeNull();
-    expect(peopleNames(sessions, null)).toEqual(["Dana K.", "Ed E.", "Marcus T.", "Priya N."]);
-    expect(peopleNames(sessions, "Zed")).toContain("Zed");
   });
 
   it("labels machines by host name, adding the id where one person has two machines of one name", () => {
@@ -162,8 +164,7 @@ describe("people view logic", () => {
     expect(parsePrefs({ groupBy: "teams", order: "random", spendView: "pie", collapsed: "x" })).toEqual(DEFAULT_PREFS);
     // Inherited Object properties are not valid choices.
     expect(parsePrefs({ groupBy: "constructor", order: "toString" })).toEqual(DEFAULT_PREFS);
-    expect(parseMe("  Ed E.  ")).toBe("Ed E.");
-    expect(parseMe("")).toBeNull();
-    expect(parseMe(5)).toBeNull();
+    // Me is a Group by choice (#245); it is stored like the others and only offered while someone is signed in.
+    expect(parsePrefs({ groupBy: "me" }).groupBy).toBe("me");
   });
 });

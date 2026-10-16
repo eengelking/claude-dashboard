@@ -222,6 +222,49 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
 .podium .search { background: var(--raised); border: 1px solid var(--border); color: var(--ink); border-radius: 6px; padding: 5px 9px; font: inherit; font-size: 12px; width: 190px; max-width: 100%; }
 
+/* The wall's one control row (#245, mockup/podium-wall-controls.html). The wrapper is the container its width steps are
+   measured against. Without the people view the row is the plain toolbar above; with it the People cluster joins the row.
+   Steps as the row narrows: the caption becomes an info icon, the cluster takes its own line, its label goes, the
+   buttons tighten, the Sort by menu and text filter give a little. Nothing is hidden or moved into a menu. Widths are measured in the
+   running app (the Sort by menu is wider than the mockup's). */
+.podium .toolbar { container-type: inline-size; container-name: tb; }
+.podium .fgrp { display: contents; }
+.podium .has-people { flex-wrap: nowrap; gap: 10px 14px; }
+.podium .has-people .fgrp { display: flex; align-items: center; gap: 10px 12px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; order: 1; }
+.podium .has-people .seg { flex: none; flex-wrap: nowrap; }
+.podium .has-people .search { flex: 1 1 110px; min-width: 110px; max-width: 260px; width: auto; }
+.podium .has-people .tg, .podium .has-people .sortlab, .podium .has-people .sel { flex: none; white-space: nowrap; }
+.podium .people { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; flex: none; order: 2; border: 1px solid var(--axis); border-radius: 10px; padding: 4px 10px; }
+.podium .people .plab { color: var(--ink); font-size: 12px; font-weight: 600; padding-right: 10px; border-right: 1px solid var(--axis); align-self: stretch; display: inline-flex; align-items: center; }
+.podium .has-people .counts { margin-left: auto; order: 3; white-space: nowrap; flex: none; }
+.podium .info { display: none; position: relative; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border); color: var(--muted); align-items: center; justify-content: center; flex: none; order: 3; margin-left: auto; }
+.podium .info svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.podium .info:hover, .podium .info:focus-visible { color: var(--ink); background: var(--sel); }
+.podium .info .tip { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; white-space: nowrap; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.28); pointer-events: none; }
+.podium .info:hover .tip, .podium .info:focus-visible .tip { display: block; }
+@container tb (max-width: 1469px) {
+  .podium .has-people .counts { display: none; }
+  .podium .has-people .info { display: inline-flex; }
+}
+@container tb (max-width: 1299px) {
+  .podium .has-people { flex-wrap: wrap; }
+  .podium .has-people .fgrp { flex: 1 1 0; }
+  .podium .has-people .info { order: 2; }
+  .podium .has-people .people { order: 3; flex: 1 1 100%; }
+}
+@container tb (max-width: 651px) {
+  .podium .people .seg button { padding: 4px 6px; }
+  .podium .has-people .fgrp .seg button { padding: 4px 8px; }
+  .podium .has-people .sel { width: 100px; }
+}
+@container tb (max-width: 634px) {
+  .podium .people .plab { display: none; }
+  .podium .people { padding: 6px 10px; }
+}
+@container tb (max-width: 599px) {
+  .podium .has-people .search { flex-basis: 80px; min-width: 80px; }
+}
+
 /* cards */
 /* wall columns (#145): useWallColumns sets --wall-cols (360 px cards that fit, at most four, never more than the cards);
    the cards stretch to fill the row, and a short last row keeps the column width, left-aligned. Until the wall has been
@@ -790,7 +833,6 @@ body.modal-open #root { filter: blur(5px); }
 .podium .mono-g.special, .podium .gtile.special { border-style: dashed; color: var(--muted); }
 .podium .you { font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; white-space: nowrap; }
 .podium .tg { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
-.podium .people-tools { gap: 8px 16px; }
 .podium .chipbtn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); }
 .podium .chipbtn:hover:not(:disabled) { background: var(--hover); }
 .podium .chipbtn[aria-pressed="true"], .podium .chipbtn.on { background: var(--sel); border-color: var(--axis); color: var(--ink); }

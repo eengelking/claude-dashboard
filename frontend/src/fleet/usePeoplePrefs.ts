@@ -1,12 +1,10 @@
-// The viewer's people-view choices, remembered in this browser (issue #34). "Me" lives here because only
-// the browser can say who is looking: the server serves the same console to everyone.
+// The viewer's people-view choices, remembered in this browser (issue #34). Who "me" is comes from the browser's
+// sign-in (useRespond), not from here: #245 retired the "You are" picker and its stored name.
 import { useCallback, useState } from "react";
 import { readJson, writeJson } from "./storage";
 import { GROUP_BYS, UNIT_ORDERS, type GroupBy, type UnitOrder } from "./people";
 
 export const PREFS_KEY = "podium.people";
-export const ME_KEY = "podium.me";
-const ME_MAX = 80;
 
 export interface PeoplePrefs {
   groupBy: GroupBy;
@@ -28,19 +26,12 @@ export function parsePrefs(v: unknown): PeoplePrefs {
   };
 }
 
-export function parseMe(v: unknown): string | null {
-  return typeof v === "string" && v.trim() ? v.trim().slice(0, ME_MAX) : null;
-}
-
 export function usePeoplePrefs(): {
   prefs: PeoplePrefs;
   setPrefs: (p: Partial<PeoplePrefs>) => void;
   toggleBand: (key: string) => void;
-  me: string | null;
-  setMe: (name: string | null) => void;
 } {
   const [prefs, setState] = useState<PeoplePrefs>(() => parsePrefs(readJson<unknown>(PREFS_KEY, null)));
-  const [me, setMeState] = useState<string | null>(() => parseMe(readJson<unknown>(ME_KEY, null)));
   const setPrefs = useCallback((p: Partial<PeoplePrefs>) => {
     setState((cur) => {
       const next = { ...cur, ...p };
@@ -55,10 +46,5 @@ export function usePeoplePrefs(): {
       return next;
     });
   }, []);
-  const setMe = useCallback((name: string | null) => {
-    const v = parseMe(name);
-    setMeState(v);
-    writeJson(ME_KEY, v ?? undefined);
-  }, []);
-  return { prefs, setPrefs, toggleBand, me, setMe };
+  return { prefs, setPrefs, toggleBand };
 }

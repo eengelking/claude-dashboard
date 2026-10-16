@@ -130,15 +130,23 @@ When several people report to one Podium with their own tokens (see "Admin" belo
 their sessions. Nothing changes until a session reports with a person's token: sessions sent with the admin
 secret, or to a server with no token, keep the plain wall.
 
-A row above the filters then holds:
+The row with the filters then gains a **People** group:
 
-- **Group by**: People (a band per person), Group (a band per group from Admin) or None (the plain wall, with
-  the owner on each card).
+- **Group by**: People (a band per person), Group (a band per group from Admin) or All (the plain wall, with
+  the owner on each card). When you are signed in as a person there is also **Me**: the plain wall with just
+  your own orchestrators.
 - **Order by**: Needs attention (your own band first, then whoever has the most sessions waiting or stale),
-  Spend, or Name.
-- **You are**: pick your own name. Podium cannot tell who is looking, so this browser remembers it. It marks
-  your band "you" (your group's band "your group"), puts it first under Needs attention, and makes
-  **Only me** show just your sessions.
+  Spend, or Name. It orders the bands, and is hidden for All and Me. **Sort by**, beside the filters, orders
+  the cards inside each band.
+
+Podium knows who you are from your sign-in (the **Sign in** button in the top bar, the same one you use to
+respond). Signed in as a person, your band is marked "you" (your group's band "your group") and comes first
+under Needs attention, and **Me** is offered. Signed out, or signed in as Admin, there is no "you" and no Me.
+Signing in needs the Admin to have turned on responding.
+
+When the window is narrow the row makes room in order: the "N shown · M cleared today" caption becomes an info
+icon (hover it to read the words), then the People group moves to a line of its own under the filters. Nothing is
+hidden.
 
 A person's band header shows their initials and name, their group, the machines their sessions run on, how
 many are live, how many are waiting or stale, and their share of today's estimated spend. Click the header
@@ -150,7 +158,7 @@ name, the card adds the start of the machine's id. Sessions reported with the ad
 **No group**, and a group with no live sessions has no band.
 
 The left list groups the same way. Click a person or group there to show only theirs on the wall; click it
-again, **Show everyone**, or **All orchestrators** to see everyone again. Spend by person or group is in Admin, under **Spend** (see Admin below).
+again, or click **All orchestrators**, to see everyone again. Spend by person or group is in Admin, under **Spend** (see Admin below).
 
 A person is shown as initials and a name, never a color: color already means the model and the status.
 
