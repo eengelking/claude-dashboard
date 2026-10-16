@@ -1,6 +1,6 @@
 {
   "name": "podium-reporter",
-  "version": "0.14.2",
+  "version": "0.14.3",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
   "types": "./types/index.d.ts",
   "author": {
@@ -16,14 +16,14 @@
     "token": {
       "type": "string",
       "title": "Podium token",
-      "description": "Sent as X-Podium-Token. Use the token the server owner made for you in Podium Admin (it only works with your user name), or the server's admin secret on a single-user setup. Leave empty when the server has no token.",
+      "description": "Sent as X-Podium-Token. Use the token the server owner made for you in Podium Admin (it only works with your user name), or the server's admin secret on a single-user setup. Leave empty when the server has no token. A PODIUM_TOKEN environment variable set in the terminal overrides this at a session's first start (with PODIUM_USER).",
       "default": "",
       "sensitive": true
     },
     "userName": {
       "type": "string",
       "title": "Your name in Podium",
-      "description": "The name the server owner gave you when they made your token. The server accepts your reports only when the token and this name match. Leave empty on a single-user setup.",
+      "description": "The name the server owner gave you when they made your token. The server accepts your reports only when the token and this name match. Leave empty on a single-user setup. A PODIUM_USER environment variable set in the terminal overrides this at a session's first start (with PODIUM_TOKEN).",
       "default": ""
     },
     "flushIntervalMs": {
@@ -47,7 +47,7 @@
     "showStatus": {
       "type": "boolean",
       "title": "Status line",
-      "description": "Show 'podium \u25cf N live' or 'podium \u25cb offline' under the prompt.",
+      "description": "Show the reporter's state under the prompt: 'podium v<version> \u25cf N live', or '\u25cb offline', '\u25cb connecting' or '\u25cb token refused' after the version. A '\u00b7 update mod', '\u00b7 upgrade server' or '\u00b7 update available' hint follows when the versions do not match.",
       "default": true
     },
     "explainFailures": {
