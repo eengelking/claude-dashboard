@@ -38,7 +38,7 @@ Commands:
   start               Start the server; builds first if there is nothing to run yet
   stop                Stop the server (the database is kept)
   restart             Stop, then start (use this after changing the config)
-  status              Show mode, state, health, URL and whether it starts on boot (exit 3 if stopped)
+  status              Show mode, state, health, URL and whether it starts on boot, or its boot unit is stale (exit 3 if stopped)
   logs                Print the server log (-f to follow, --tail N for the last N lines)
   health              Exit 0 when the server answers, 1 when it does not
   url                 Print the dashboard URL
@@ -436,7 +436,7 @@ async function cmdStatus(cfg) {
   lines.push(`health:   ${running ? (ok ? 'answering' : 'not answering') : '-'}`);
   lines.push(`url:      ${dashUrl(cfg)}`);
   lines.push(`token:    ${cfg.token === undefined ? 'not generated yet (created on first start)' : cfg.token === '' ? 'none (auth off)' : 'set (podiumctl token)'}`);
-  lines.push(`on boot:  ${bootEnabled() ? 'enabled' : 'disabled'}`);
+  lines.push(`on boot:  ${bootState()}`);
   lines.push(`config:   ${configPath()}`);
   say(lines.join('\n'));
   return running ? 0 : 3;
@@ -503,6 +503,19 @@ function servicePaths() {
     : { kind: 'systemd', file: path.join(os.homedir(), '.config', 'systemd', 'user', 'podium.service') };
 }
 const bootEnabled = () => fs.existsSync(servicePaths().file);
+
+/** True when a boot unit's text does not name `script` (a unit written before the file was renamed still names the old .mjs file). */
+export function bootUnitStale(text, script) {
+  const names = (s) => new RegExp(`(?<![\\w.-])${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.-])`).test(text);
+  // launchd plists XML-escape paths, so a path with & or < is written escaped
+  return !(names(script) || names(script.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')));
+}
+
+function bootState() {
+  if (!bootEnabled()) return 'disabled';
+  const script = fs.realpathSync(fileURLToPath(import.meta.url));
+  return bootUnitStale(fs.readFileSync(servicePaths().file, 'utf8'), script) ? 'enabled, but stale (points at an old path; run `podiumctl enable` to rewrite it)' : 'enabled';
+}
 
 function cmdEnable(cfg) {
   const { kind, file } = servicePaths();

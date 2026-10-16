@@ -180,7 +180,7 @@ scripts/podium-sim.ts                simulator (has --help)
 scripts/podium-smoke.sh              end-to-end smoke check (has --help)
 scripts/podium-respond-demo.mjs      seeds a throwaway server with waiting sessions to answer (#206; has --help)
 scripts/podiumctl.test.ts            tests for podiumctl (4.4)
-bin/podiumctl.mjs                    command-line manager for the server (4.4; has --help)
+bin/podiumctl                        command-line manager for the server (4.4; has --help)
 Containerfile, .containerignore      the server and UI as a Podman image (4.4)
 ```
 
@@ -208,7 +208,7 @@ Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") rec
   and both builds, and a runtime stage with the server's production dependencies, the two `dist` trees, a
   non-root user and a `/data` volume for the SQLite file. Nothing else is needed; there is no second
   service.
-- **`podiumctl`** (`bin/podiumctl.mjs`, no dependencies, a `bin` entry in the root `package.json`) manages
+- **`podiumctl`** (`bin/podiumctl`, no dependencies, a `bin` entry in the root `package.json`) manages
   the server in one of two modes, `container` (the default when Podman is installed) or `standalone` (a
   Node process on the host). It has `build`, `start`, `stop`, `restart`, `status`, `logs`, `health`, `url`,
   `token`, `config`, `enable`, `disable`, `shell`, `rm` and `run`, and a `--help`. `status` exits 3 when the
@@ -225,7 +225,7 @@ Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") rec
   command line.
 - **Start on boot.** `enable` and `disable` write and remove a launchd agent (macOS) or a systemd user unit
   (Linux). In container mode the unit runs `podiumctl start`; in standalone mode it runs `podiumctl run`
-  (foreground, restarted only after a non-zero exit, so `stop` is not undone).
+  (foreground, restarted only after a non-zero exit, so `stop` is not undone). `status` reports a unit that does not name the current script path as stale; running `enable` again rewrites it.
 - **The mod is not containerized.** It runs inside each Claude Code process and posts to `serverUrl`.
   It is installed from `eengelking-marketplace`: `eengelking/skills` lists `podium-reporter` in its
   `.claude-plugin/marketplace.json` with a `git-subdir` source pointing at `mod/podium-reporter` in this

@@ -67,10 +67,10 @@ nobody is looking.
 
 ## Run it as a service (podiumctl)
 
-`bin/podiumctl.mjs` starts, stops and watches the server without a dev setup. It runs Podium either in
+`bin/podiumctl` starts, stops and watches the server without a dev setup. It runs Podium either in
 a **Podman container** (the default when Podman is installed) or as a **standalone** Node process on the
 host, and has no dependencies of its own. Install it on your PATH from the repo with `npm link`, or run
-`node bin/podiumctl.mjs` / `npm run podiumctl --`.
+`bin/podiumctl <command>` (no `node` in front) or `npm run podiumctl --`.
 
 ```sh
 git clone https://github.com/eengelking/podium.git && cd podium && npm link

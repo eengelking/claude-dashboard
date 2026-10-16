@@ -724,7 +724,7 @@ that failed for the reason described; one part is deliberately left as is.
 
 ## Running as a service
 
-`bin/podiumctl.mjs` (plain ESM, no dependencies, `bin` entry in the root `package.json`) manages the
+`bin/podiumctl` (plain ESM, no dependencies, `bin` entry in the root `package.json`) manages the
 server in one of two modes, chosen with `--mode` and saved in `~/.podium/config.env`:
 
 - **container**: `Containerfile` is a two-stage Node 24 build (build stage runs `npm ci` and both builds;

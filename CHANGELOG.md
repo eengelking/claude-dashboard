@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Changed
+
+- `bin/podiumctl.mjs` is now `bin/podiumctl`, so it runs as `bin/podiumctl status` with no `node` in front (#227). `package.json`'s `bin` entry and `npm run podiumctl` follow. A boot unit made by `podiumctl enable` before this change still points at the old file and stops working: `podiumctl status` now says `on boot: enabled, but stale` for it, and running `podiumctl enable` again rewrites it.
+
 ### Fixed
 
 - Two Podium identities can report from one machine at once, and signing in as another person no longer turns a running session into a refused one (#226). The reporter's name and token are one setting per Claude config, and Claude Code reloads every running session's reporter when it changes, so a session that had been reporting as Admin began sending the other person's token and was refused. A session now takes its name and token once, at its start, and keeps them; a reload with new settings does not change them. A terminal can also name itself with the `PODIUM_USER` and `PODIUM_TOKEN` environment variables, which are used ahead of the settings. To change who a running session reports as, start a new session. Reporter 0.14.2.

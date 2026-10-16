@@ -88,7 +88,7 @@ a single image is enough. It runs as a non-root user (2026-10-11, PR #3).
 
 ## 9. `podiumctl` has two modes and no dependencies
 
-**Choice.** `bin/podiumctl.mjs` is a plain ES module with no dependencies. It manages the server either in
+**Choice.** `bin/podiumctl` is a plain ES module with no dependencies. It manages the server either in
 a Podman container or as a standalone Node process, and saves the mode.
 **Why.** Some people will not have Podman, and developers want a plain process. A script with no
 dependencies installs with `npm link` and nothing else, and `npm link` is how an npm binary is normally

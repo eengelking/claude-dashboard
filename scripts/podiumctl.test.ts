@@ -5,10 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  containerRunArgs, launchdPlist, maskConfig, OWN_KEYS, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
-} from "../bin/podiumctl.mjs";
+  bootUnitStale, containerRunArgs, launchdPlist, maskConfig, OWN_KEYS, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
+// @ts-expect-error bin/podiumctl has no extension, so tsc cannot find it; vitest loads it as ESM
+} from "../bin/podiumctl";
 
-const BIN = path.join(__dirname, "..", "bin", "podiumctl.mjs");
+const BIN = path.join(__dirname, "..", "bin", "podiumctl");
 function ctl(home: string, ...args: string[]) {
   return spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8", env: { ...process.env, PODIUMCTL_HOME: home } });
 }
@@ -175,7 +176,7 @@ describe("podiumctl command construction", () => {
   });
 
   it("renders a launchd plist and systemd units", () => {
-    const args = ["/usr/bin/node", "/x/podiumctl.mjs", "run", "--mode", "standalone"];
+    const args = ["/usr/bin/node", "/x/podiumctl", "run", "--mode", "standalone"];
     const plist = launchdPlist({ label: "dev.podium.server", args, keepAliveOnFailure: true, logPath: "/l", env: { PATH: "/a&b" } });
     expect(plist).toContain("<string>run</string>");
     expect(plist).toContain("SuccessfulExit");
@@ -285,6 +286,13 @@ describe("podiumctl start (standalone) with the port taken", () => {
       await new Promise((r) => other.close(r));
       fs.rmSync(home, { recursive: true });
     }
+  });
+});
+
+describe("podiumctl boot unit staleness (#227)", () => {
+  it("is stale when the unit does not point at the running script", () => {
+    expect(bootUnitStale("<string>/r/bin/podiumctl.old</string>", "/r/bin/podiumctl")).toBe(true);
+    expect(bootUnitStale("ExecStart=/usr/bin/node /r/bin/podiumctl run", "/r/bin/podiumctl")).toBe(false);
   });
 });
 
