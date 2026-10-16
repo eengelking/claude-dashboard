@@ -45,11 +45,14 @@ app.disable("x-powered-by");
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");
 // The page's one inline script (it sets the theme before first paint) is allowed by hash; no other inline script runs (#249).
 let pageScripts: string[] = [];
-try {
-  pageScripts = inlineScriptHashes(fs.readFileSync(path.join(frontendDist, "index.html"), "utf8"));
-} catch (err) {
-  // No built UI (the server alone, or the dev server serving the UI); there is no page to allow scripts for.
-  logger.warn("server.csp", `podium: no inline script allowed by the content security policy: ${(err as Error).message}`, { reason: (err as Error).message });
+const pagePath = path.join(frontendDist, "index.html");
+// With no built UI (the server alone, or the dev server serving the UI) there is no page to allow scripts for.
+if (fs.existsSync(pagePath)) {
+  try {
+    pageScripts = inlineScriptHashes(fs.readFileSync(pagePath, "utf8"));
+  } catch (err) {
+    logger.warn("server.csp", `podium: no inline script allowed by the content security policy: ${(err as Error).message}`, { reason: (err as Error).message });
+  }
 }
 app.use(securityHeaders({ scriptHashes: pageScripts }));
 app.use(requestLog(logger));
