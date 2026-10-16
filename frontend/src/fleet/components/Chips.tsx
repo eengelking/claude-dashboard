@@ -1,8 +1,8 @@
 // Small shared pieces: model chip, effort meter, status chip, blowout badge, git line.
 import type { CSSProperties, ReactElement } from "react";
 import { fmtUsd } from "../format";
-import { EFFORTS, familyName } from "../logic";
-import type { BackgroundWait, GitInfo, ModelFamily, SessionView } from "../types";
+import { EFFORTS, familyName, ORCHESTRATOR_ROW, waitingOnByRow } from "../logic";
+import type { AgentView, BackgroundWait, GitInfo, ModelFamily, SessionView } from "../types";
 import { backgroundStatus, backgroundTitle, idleOnBackground } from "../waiting";
 import { IconBranch, IconCheck, IconClock, IconDown, IconMod, IconTree, IconUp, IconWarn, IconX } from "./Icons";
 
@@ -79,8 +79,19 @@ export function cardKind(s: Pick<SessionView, "status" | "waitReason" | "backgro
   return "done";
 }
 
-/** The orchestrator page also shows delegating (SPEC 8.1, #98); the cards never do. */
+/** The card's kinds plus delegating (SPEC 8.1, #98, #287): display-only, shown wherever a session's state is shown. */
 export type StateKind = CardKind | "deleg";
+
+/** The running direct children of a running orchestrator: what it is delegating to. One function for the card, the rail, the wall and the orchestrator page. */
+export function delegatesOf(s: Pick<SessionView, "status" | "agents">): AgentView[] {
+  return waitingOnByRow(s).get(ORCHESTRATOR_ROW) ?? [];
+}
+
+/** The state a session shows everywhere: its card kind, or delegating while it is running and has a running child. */
+export function stateKind(s: Pick<SessionView, "status" | "waitReason" | "background" | "agents">, delegates: readonly AgentView[] = delegatesOf(s)): StateKind {
+  const kind = cardKind(s);
+  return kind === "running" && delegates.length ? "deleg" : kind;
+}
 
 const STATE_SHAPE: Record<StateKind, ReactElement> = {
   deleg: (
@@ -116,7 +127,7 @@ const STATE_SHAPE: Record<StateKind, ReactElement> = {
   ),
 };
 
-/** One shape per state: a play mark, a "!" ring, a dashed clock ring, a clock, a check, and on the page a ring with a dot for delegating. */
+/** One shape per state: a play mark, a "!" ring, a dashed clock ring, a clock, a check, and a ring with a dot for delegating. */
 export function StateIcon({ kind }: { kind: StateKind }) {
   return (
     <svg className={`si si-${kind}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -129,9 +140,10 @@ export function StateIcon({ kind }: { kind: StateKind }) {
  * `delegating` (the tooltip text, from `delegateText`) swaps a running row for the display-only
  * "delegating" state: the row is idle while agents it launched run. It is not a session status.
  */
-/** The dot class for a session: the pulsing blue ring while it is idle on background work, else its status (#119). */
-export function sessionDot(s: Pick<SessionView, "status" | "waitReason" | "background">): string {
-  return idleOnBackground(s) ? "dot ring bgwait" : `dot ${s.status}`;
+/** The dot class for a session: the pulsing blue ring while it is idle on background work (#119), the still blue ring while it delegates (#287), else its status. */
+export function sessionDot(s: Pick<SessionView, "status" | "waitReason" | "background" | "agents">): string {
+  if (idleOnBackground(s)) return "dot ring bgwait";
+  return stateKind(s) === "deleg" ? "dot ring" : `dot ${s.status}`;
 }
 
 /** The background wait to hand to StatusChip, or undefined when the session waits on the person or is not waiting. */

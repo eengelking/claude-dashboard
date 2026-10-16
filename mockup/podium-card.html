@@ -255,6 +255,16 @@ td:first-child { color: var(--pg-ink); min-width: 0; }
 </section>
 
 <section>
+  <h2>Rail item while delegating (#287)</h2>
+  <p class="sub">The left rail item takes the same state as the card. A running session shows the green dot; a delegating one shows the blue ring dot (never amber) and its screen-reader text reads "delegating".</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    <div class="th-dark" style="padding:10px 12px;background:var(--surface);color:var(--ink);border-radius:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--good);margin-right:8px"></span>podium <small>running</small></div>
+    <div class="th-dark" style="padding:10px 12px;background:var(--surface);color:var(--ink);border-radius:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--deleg);box-sizing:border-box;margin-right:8px"></span>podium <small>delegating</small></div>
+    <div class="th-light" style="padding:10px 12px;background:var(--surface);color:var(--ink);border-radius:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--deleg);box-sizing:border-box;margin-right:8px"></span>podium <small>delegating</small></div>
+  </div>
+</section>
+
+<section>
   <h2>Density check: four across</h2>
   <p class="sub">The widest the wall goes (#145): four columns at the 360 px minimum. Padding is unchanged at 12 px. The strip scrolls sideways here only because the page is narrower than the wall.</p>
   <div class="dens-scroll"><div class="dens th-dark" id="dens"></div></div>

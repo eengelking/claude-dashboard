@@ -245,8 +245,10 @@ and that agent's task.
 
 A row that is running but has agents of its own running, such as the orchestrator waiting on a subagent, reads
 "delegating" in blue with a hollow dot, and hovering it lists the agents it is waiting on. It is not asking
-anything of you: amber and "waiting on you" are the ones that need a reply. The fleet wall and the status
-filters still count the session as running. Podium cannot tell an agent launched in the background from one
+anything of you: amber and "waiting on you" are the ones that need a reply. The session's card on the wall
+and its item in the left rail say the same: the card's bottom band reads "Delegating to 2 agents." (hover it for
+their names) and the rail item shows the blue hollow dot. When the last of those agents finishes they go back to
+"Running". The status filters, the sort order and the counts still treat the session as running. Podium cannot tell an agent launched in the background from one
 the row is really blocked on, so a row with a background agent running also reads "delegating".
 
 Click an agent to open its detail in the right panel. **Launched by** names the agent that launched it (click it

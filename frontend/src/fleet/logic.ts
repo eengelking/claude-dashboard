@@ -247,7 +247,7 @@ export const COST_HINT_HEADER = "An agent's row is its own estimated cost. The o
  * whose parent is missing counts for the orchestrator, as `buildTree` places it at the top level. While the
  * session itself is not `running` (waiting on the user, stale, done) nothing is returned, its own status wins.
  */
-export function waitingOnByRow(s: SessionView): Map<string, AgentView[]> {
+export function waitingOnByRow(s: Pick<SessionView, "status" | "agents">): Map<string, AgentView[]> {
   const out = new Map<string, AgentView[]>();
   if (s.status !== "running") return out;
   const byId = new Map(s.agents.map((a) => [a.id, a]));

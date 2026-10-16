@@ -6,7 +6,8 @@ import { BlowoutCallout } from "./BlowoutCallout";
 import { FactsBar } from "./FactsBar";
 import { FocusHeader } from "./FocusHeader";
 import { PlanPanel, type PlanTab } from "./PlanPanel";
-import { pageKind, StatusBand } from "./StatusBand";
+import { stateKind } from "./Chips";
+import { StatusBand } from "./StatusBand";
 
 /**
  * The orchestrator page (#165): one bordered surface of fixed layers, then the work. Header, the blowout detail when it is
@@ -34,7 +35,7 @@ export function FocusView(props: {
   // Computed once per render and shared, so the header's shape, the band and the tree cannot disagree.
   const waiting = waitingOnByRow(s);
   const delegates = waiting.get(ORCHESTRATOR_ROW) ?? [];
-  const kind = pageKind(s, delegates);
+  const kind = stateKind(s, delegates);
   return (
     <div className="op">
       <div className={`osum${s.blowouts.level === 2 ? " risk" : ""}`}>

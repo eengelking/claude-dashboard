@@ -1,6 +1,6 @@
 import { planProgress, sessionCounts } from "../logic";
 import type { SessionView } from "../types";
-import { backgroundOf, BlowBadge, ModelChip, PlanBar, sessionDot } from "./Chips";
+import { backgroundOf, BlowBadge, ModelChip, PlanBar, sessionDot, stateKind } from "./Chips";
 import { backgroundStatus } from "../waiting";
 import { COPYRIGHT, LICENSE_URL, NOTICES_URL } from "../types";
 import { PaneTab } from "./PaneTab";
@@ -56,7 +56,7 @@ export function Rail(props: {
           <div className="l1">
             <i className={sessionDot(s)} aria-hidden="true" />
             <span className="nm">{s.name}</span>
-            <span className="vh">{backgroundOf(s) ? backgroundStatus(s.background!) : s.status}</span>
+            <span className="vh">{backgroundOf(s) ? backgroundStatus(s.background!) : stateKind(s) === "deleg" ? "delegating" : s.status}</span>
             {showOwner && (
               <span title={owner}>
                 <Monogram name={owner} kind={s.owner === null ? "unassigned" : s.owner === ADMIN ? "admin" : "person"} size="sm" />

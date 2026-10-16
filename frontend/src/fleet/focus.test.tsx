@@ -595,15 +595,14 @@ describe("delegating (#98)", () => {
     expect(container.querySelector(".osum .band")!.textContent).toBe("Running");
   });
 
-  it("leaves the session's own waiting status alone, and the fleet card keeps saying running", () => {
+  it("leaves the session's own waiting status alone, and the fleet card says delegating like the page (#287)", () => {
     const waiting = openFocus({ status: "waiting", waitReason: "permission", agents: nested });
     expect(chip(waiting.container, ".trow.root").textContent).toBe("waiting on you");
     cleanup();
     const st = stateFrom({ sessions: [makeSession({ agents: nested })] });
     const { container } = render(<FleetView state={st} />);
     const card = container.querySelector(".wall .card")!;
-    expect(card.querySelector(".band")!.textContent).toBe("Running");
-    expect(card.textContent).not.toContain("delegating");
+    expect(card.querySelector(".band")!.textContent).toMatch(/^Delegating to \d+ agents?\.$/);
   });
 });
 

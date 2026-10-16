@@ -329,7 +329,7 @@ body.podium-resizing .podium .cols { transition: none; }
 .podium .band.done { --c: var(--muted); --c-text: var(--muted); }
 .podium .band.deleg { --c: var(--deleg); --c-text: var(--deleg-text); }
 .podium .card.sc .sd .si-waiting { color: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
-.podium .card.sc .sd .si-bg { color: var(--deleg-text); }
+.podium .card.sc .sd .si-bg, .podium .card.sc .sd .si-deleg { color: var(--deleg-text); }
 .podium .card.sc .sd .si-stale { color: color-mix(in srgb, var(--serious) 60%, var(--ink)); }
 /* The legend (#92) is a footer under the middle column: the content in .main scrolls, the legend does not. Its background is halfway between the card surface and the page, so it does not blend into the cards. */
 .podium .mid { min-width: 0; min-height: 0; display: flex; flex-direction: column; }

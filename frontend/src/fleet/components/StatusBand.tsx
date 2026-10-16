@@ -3,17 +3,11 @@ import { fmtCountdown, fmtDur } from "../format";
 import { delegateText, dropAtOf } from "../logic";
 import type { AgentView, LifecycleConfig, SessionView } from "../types";
 import { backgroundDetail, backgroundTitle } from "../waiting";
-import { cardKind, StateIcon, type StateKind } from "./Chips";
+import { StateIcon, type StateKind } from "./Chips";
 import { bandLine, waitSummary } from "./SessionCard";
 import { RespondButton } from "./Respond";
 import { respondGate } from "../respond";
 import { useRespond } from "../useRespond";
-
-/** The card's states plus delegating, which SPEC 8.1 (#98) shows on this page and not on the cards. */
-export function pageKind(s: SessionView, delegates: readonly AgentView[]): StateKind {
-  const kind = cardKind(s);
-  return kind === "running" && delegates.length ? "deleg" : kind;
-}
 
 /**
  * The last row of the summary surface: the same states, shapes, sentences and tints as the card's band, plus one detail
@@ -43,7 +37,7 @@ export function StatusBand({
   let detail: string | null = null;
   let title: string | undefined;
   if (kind === "deleg") {
-    lead = <span className="bl">{`Delegating to ${delegates.length} agent${delegates.length === 1 ? "" : "s"}.`}</span>;
+    lead = bandLine(s, kind, sinceSeen, now, config, delegates);
     detail = delegates.map((a) => a.description).join(", ");
     title = delegateText(delegates);
   } else if (kind === "stale") {
@@ -54,7 +48,7 @@ export function StatusBand({
     );
     detail = "The session may have crashed or been closed without a clean exit.";
   } else {
-    // kind is a CardKind here: the band's sentence is the card's own.
+    // The band's sentence is the card's own.
     lead = bandLine(s, kind, sinceSeen, now, config);
     if (kind === "waiting") {
       const w = waitSummary(s);

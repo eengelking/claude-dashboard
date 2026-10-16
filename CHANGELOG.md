@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Fixed
+
+- **A fleet card, a rail item and the wall now say "delegating" when the orchestrator page does.** A session whose orchestrator is running while an agent it launched runs used to read "Running" on its card and show the green dot in the left rail, while its page said "Delegating to 1 agent." The card's band now reads "Delegating to N agents." in the blue style (hover for the agents), the rail item shows the blue hollow dot and reads "delegating" to screen readers, and all three take the state from the same function as the page, so they cannot disagree. They return to Running when the last agent finishes. It is still display-only: the session counts as running in the status filter, the sort and the counts. UI only. (#287)
+
 ## [1.0.1] - 2026-10-16
 
 ### Changed

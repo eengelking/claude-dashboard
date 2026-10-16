@@ -2,9 +2,9 @@ import { fmtCountdown, fmtDur, fmtPct, fmtTok } from "../format";
 import { useRespond } from "../useRespond";
 import { respondGate } from "../respond";
 import { RespondButton } from "./Respond";
-import { COST_HINT_SESSION, currentStep, dropAtOf, inferredStep, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
-import type { LifecycleConfig, SessionView } from "../types";
-import { BlowBadge, cardKind, type CardKind, ContextBar, Cost, cssVar, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon } from "./Chips";
+import { COST_HINT_SESSION, currentStep, delegateText, dropAtOf, inferredStep, planProgress, sessionCounts, sessionElapsedSec, sessionTokens, TOKENS_HINT, treeOrder } from "../logic";
+import type { AgentView, LifecycleConfig, SessionView } from "../types";
+import { BlowBadge, ContextBar, Cost, cssVar, delegatesOf, EffortMeter, FAMILY_COLOR, GitLine, ModelChip, PlanBar, StateIcon, stateKind, type StateKind } from "./Chips";
 import { backgroundLead, backgroundTitle, toolOfNote, waitLead } from "../waiting";
 import { Sparkline } from "./Sparkline";
 import { OwnerLine } from "./People";
@@ -45,8 +45,14 @@ export interface CardOwner {
   showName: boolean;
 }
 
+/** "Delegating to 2 agents." The one sentence the card, the wall and the orchestrator page's band share (SPEC 8.1). */
+export function delegatingLead(delegates: readonly AgentView[]): string {
+  return `Delegating to ${delegates.length} agent${delegates.length === 1 ? "" : "s"}.`;
+}
+
 /** What the status band says. One sentence, the same ones the orchestrator page and the activity feed use. */
-export function bandLine(s: SessionView, kind: CardKind, sinceSeen: number, now: number, config: LifecycleConfig) {
+export function bandLine(s: SessionView, kind: StateKind, sinceSeen: number, now: number, config: LifecycleConfig, delegates: readonly AgentView[] = []) {
+  if (kind === "deleg") return <span className="bl" title={delegateText(delegates)}>{delegatingLead(delegates)}</span>;
   if (kind === "bg" && s.background) return <span className="bl" title={backgroundTitle(s.background)}>{backgroundLead(s.background)}</span>;
   if (kind === "waiting") return <span className="bl">{waitSummary(s).lead}</span>;
   if (kind === "stale") {
@@ -73,7 +79,8 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
   const risk = s.blowouts.level === 2;
   const vNote = versionNote(s);
   const detached = s.attached === false;
-  const kind = cardKind(s);
+  const delegates = delegatesOf(s);
+  const kind = stateKind(s, delegates);
   // The states that want the person (or say the session is lost) get the heavier tint; a calm state a lighter one. The top line is the same thin line on every band.
   const hot = kind === "waiting" || kind === "stale";
   const hooks = s.reporter === "hooks";
@@ -183,7 +190,7 @@ export function SessionCard(props: { s: SessionView; now: number; config: Lifecy
       </div>
       <div className={`band ${kind}${hot ? " hot" : ""}`}>
         <span className="bi"><StateIcon kind={kind} /></span>
-        {bandLine(s, kind, sinceSeen, now, config)}
+        {bandLine(s, kind, sinceSeen, now, config, delegates)}
       </div>
     </button>
     {gate.show !== "none" && (
