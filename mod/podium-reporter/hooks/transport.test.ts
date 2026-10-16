@@ -197,6 +197,32 @@ describe('transport', () => {
     expect(t.queue).toEqual([])
   })
 
+  test('a 409 says the session belongs to someone else instead of "connecting", logs once, and a later success clears it (#209)', async () => {
+    const conflict: HttpResult = { status: 409, ok: false, text: '{"ok":false,"error":"that session belongs to someone else","path":"$.session.id"}' }
+    const f = fake([conflict, conflict, ok()])
+    const logs: string[] = []
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: 'pdm_x', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
+    expect(t.ownerNotice()).toBeNull()
+    expect(await t.send(build, 100)).toBe('rejected')
+    expect(t.statusText()).toBe('podium v0.11.0 ○ refused: session belongs to someone else')
+    expect(t.ownerNotice()).toContain('Start a new session')
+    expect(await t.send(build, 1100)).toBe('rejected')
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toContain('belongs to someone else')
+    expect(logs.join('')).not.toContain('pdm_x')
+    expect(await t.send(build, 4100)).toBe('ok')
+    expect(t.statusText()).toBe('podium v0.11.0 ● 1 live')
+    expect(t.ownerNotice()).toBeNull()
+  })
+
+  test('a 400 is not shown as a refusal by someone else (#209)', async () => {
+    const f = fake([{ status: 400, ok: false, text: '{"ok":false}' }])
+    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    expect(await t.send(build, 100)).toBe('rejected')
+    expect(t.ownerNotice()).toBeNull()
+    expect(t.statusText()).toBe('podium v0.11.0 ○ connecting')
+  })
+
   test('a network error keeps the events and backs off 1, 2, 5, 10, 10 s', async () => {
     const f = fake([new Error('ECONNREFUSED'), new Error('x'), new Error('x'), new Error('x'), { status: 503, ok: false, text: '' }])
     const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })

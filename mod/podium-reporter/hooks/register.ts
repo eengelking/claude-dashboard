@@ -69,7 +69,7 @@ import {
   toolDenied,
 } from './respond.ts';
 
-export const VERSION = '0.14.0';
+export const VERSION = '0.14.1';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -308,7 +308,7 @@ function toastOnce($: Engine, r: Runtime, ok: boolean): void {
 }
 
 function toastRefusalOnce($: Engine, r: Runtime): void {
-  const notice = r.transport.refusalNotice();
+  const notice = r.transport.refusalNotice() ?? r.transport.ownerNotice();
   if (!notice || notice === r.toastedRefusal) return;
   r.toastedRefusal = notice;
   try {
@@ -353,6 +353,8 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
   } else if (outcome === 'refused') {
     r.state = { ...r.state, dirty: true };
     toastRefusalOnce($, r);
+  } else if (outcome === 'rejected') {
+    toastRefusalOnce($, r); // a 409 (this session belongs to someone else) is told once; any other rejection has no notice (#209)
   } else if (outcome === 'ok') {
     if (opts.fullPrompts) r.state = markTextSent(r.state, sentTexts);
     // The reply names the loops someone is watching; with the option off nothing is ever watched (#118).
@@ -1100,7 +1102,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
     `Podium fleet console: ${opts.serverUrl.replace(/\/+$/, '')}/#/`,
     `Connection: ${t.online === null ? 'not tried yet' : t.online ? 'online' : 'offline, retrying'}${t.liveSessions !== null ? ` (${t.liveSessions} live sessions)` : ''}`,
     `Versions: reporter ${VERSION}${t.serverVersion ? `, server ${t.serverVersion}` : ''}`,
-    t.versionNotice() ?? t.updateNotice() ?? '',
+    t.ownerNotice() ?? t.versionNotice() ?? t.updateNotice() ?? '',
     `Reports sent: ${t.sent}, failed: ${t.failed}, rejected: ${t.rejected}; events queued: ${t.queue.length}${t.dropped ? `, dropped: ${t.dropped}` : ''}`,
     `Last error: ${t.lastError ?? errors[errors.length - 1]?.message ?? 'none'}`,
     `Session: ${r.state.id}${r.storedName ? ` (named "${r.storedName}")` : ''}`,

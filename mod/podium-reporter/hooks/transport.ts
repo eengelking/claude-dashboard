@@ -78,6 +78,9 @@ export class Transport {
   private loggedRefusal = false;
   /** True while the server's last answer was a 401. */
   refused = false;
+  /** True while the server's last answer was a 409: this session already belongs to another owner (#209). */
+  ownerRefused = false;
+  private loggedOwner = false;
   private rejectStreak = 0;
 
   constructor(
@@ -162,6 +165,8 @@ export class Transport {
         this.sent++;
         this.refused = false;
         this.loggedRefusal = false;
+        this.ownerRefused = false;
+        this.loggedOwner = false;
         return 'ok';
       }
       // 409: the session id already belongs to another owner (server-side); it is as permanent as a 400, so it is not an outage.
@@ -174,6 +179,18 @@ export class Transport {
         this.nextAttemptAt = now + Transport.backoff(this.rejectStreak);
         this.lastSentAt = now;
         this.lastError = `server rejected a report (${res.status})`;
+        // The server read the credential and answered about the report, so an earlier 401 no longer stands.
+        this.refused = false;
+        this.loggedRefusal = false;
+        if (res.status === 409) {
+          this.ownerRefused = true;
+          if (!this.loggedOwner) {
+            this.loggedOwner = true;
+            this.log(`podium-reporter: ${this.ownerNotice()}`);
+          }
+          return 'rejected';
+        }
+        this.ownerRefused = false;
         if (!this.loggedReject) {
           this.loggedReject = true;
           this.log(`podium-reporter: server rejected a report (${res.status}): ${res.text.slice(0, 200)}`);
@@ -184,6 +201,7 @@ export class Transport {
         // The token is wrong, revoked, or does not belong to the configured name. Keep the events, wait a long
         // while (nothing changes until the settings do), and say so once. The token is never put in a message.
         this.refused = true;
+        this.ownerRefused = false;
         this.online = false;
         this.nextAttemptAt = now + REFUSED_RETRY_MS;
         this.lastSentAt = now;
@@ -229,6 +247,7 @@ export class Transport {
   statusText(): string {
     const name = `podium v${this.cfg.version}`;
     if (this.refused) return `${name} ○ token refused`;
+    if (this.ownerRefused) return `${name} ○ refused: session belongs to someone else`;
     if (this.online === false) return `${name} ○ offline`;
     if (this.online === null) return `${name} ○ connecting`;
     const live = `${name} ● ${this.liveSessions ?? 1} live`;
@@ -241,6 +260,11 @@ export class Transport {
   /** What to tell the user when the server refused the token or name; null when it did not. */
   refusalNotice(): string | null {
     return this.refused ? 'The server refused this reporter. Check that the Podium token belongs to the user name in the podium-reporter settings (claude plugin configure podium-reporter), or ask the server owner for a new token.' : null;
+  }
+
+  /** What to tell the user when the server says this session already belongs to another owner (#209); null when it did not. */
+  ownerNotice(): string | null {
+    return this.ownerRefused ? 'The server refused this report: this session belongs to someone else. Start a new session to report as yourself.' : null;
   }
 
   /** What to tell the user when the server says this reporter and it do not match; null when they do (or it cannot tell). */
