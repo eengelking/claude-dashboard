@@ -826,7 +826,7 @@ CREATE TABLE blowouts (
 CREATE TABLE samples (                                                     -- one row per second per live session
   session_id TEXT NOT NULL, t INTEGER NOT NULL,                            -- t = whole seconds
   tokens_total INTEGER NOT NULL, tokens_delta INTEGER NOT NULL, peak_context REAL NOT NULL,
-  running_agents INTEGER NOT NULL, cost_usd REAL, usage_json TEXT,        -- usage_json: the session's usageByModel at that second (migration 16, #270); NULL from an older reporter
+  running_agents INTEGER NOT NULL, cost_usd REAL, usage_json TEXT,        -- usage_json: the session's usageByModel at that second (migration 16, #270), stored in full only when it changed or at a minute's first sample, else '='; NULL from an older reporter
   PRIMARY KEY (session_id, t)
 );
 ```

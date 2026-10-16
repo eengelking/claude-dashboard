@@ -1,6 +1,7 @@
 // The fleet service: owns the live set, turns ingests and timer sweeps into SSE messages, and
 // answers the read endpoints. Storage is FleetDb; rules are in ingest.ts and derive.ts. The clock is
 // injected so the lifecycle tests can move time without waiting.
+import { SAME_USAGE } from './db.js';
 import type { CostOf, FleetDb, RetentionPolicy, SessionRow } from './db.js';
 import { activityView, computeKpis, family, isUnused, repriced, sessionStatus, sessionView, shortenHome, staleAfterFor, startOfDay, type DeriveConfig } from './derive.js';
 import { REPORTER_SUPPORT, serverVersion } from './compat.js';
@@ -517,7 +518,9 @@ export class Fleet {
         // second, so its charts do not fall to zero between heartbeats.
         const last = this.db.latestSample(id);
         if (last && last.t < nowSec) {
-          this.db.insertSampleIfAbsent({ ...last, t: nowSec, tokens_delta: 0 });
+          // The copy repeats the usage as "same as before", except at the start of a minute, which needs it in full (#270).
+          const usage = last.usage_json == null ? null : Math.floor(last.t / 60) === Math.floor(nowSec / 60) ? SAME_USAGE : row.usage_json;
+          this.db.insertSampleIfAbsent({ ...last, t: nowSec, tokens_delta: 0, usage_json: usage });
         }
       }
       if (entry.status !== null && entry.status !== status) {

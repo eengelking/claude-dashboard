@@ -1,6 +1,7 @@
 // Report -> rows, events, blowouts and samples (SPEC 7.3 steps 1-4). One transaction per report.
 import type { AgentReport, Report, TokenCounts } from './protocol.js';
-import type { AgentRow, EventRow, FleetDb, SessionRow } from './db.js';
+import { SAME_USAGE } from './db.js';
+import type { AgentRow, EventRow, FleetDb, SampleRow, SessionRow } from './db.js';
 import { family } from './derive.js';
 
 /** An older reporter prices a non-Claude model as Sonnet; Podium has no price for it, so drop the figure. */
@@ -205,9 +206,20 @@ export function ingestReport(f: FleetDb, report: Report, serverTime: number, own
       peak_context: Math.max(0, Math.min(1, peakPct / 100)),
       running_agents: ended ? 0 : running.length,
       cost_usd: row.cost_usd,
-      usage_json: row.usage_json,
+      usage_json: sampleUsage(row.usage_json, prev?.usage_json, before, second),
     });
 
     return { sessionId: sid, newEvents, ended, revived, created: !prev, wasDone: prev?.status === 'done', clockSkewMs: report.sentAt - serverTime };
   });
+}
+
+/**
+ * What a sample stores of the session's usage (issue #270). A sample keeps it only when it changed since the last
+ * report or when it is the first sample of its minute, so a chart priced from samples finds a value at the start of every
+ * minute; the rest store `=`, "as the sample before". NULL stays NULL (no usage sent).
+ */
+function sampleUsage(usage: string | null, previous: string | null | undefined, before: SampleRow | undefined, second: number): string | null {
+  if (usage === null) return null;
+  const sameMinute = before !== undefined && Math.floor(before.t / 60) === Math.floor(second / 60);
+  return sameMinute && previous === usage ? SAME_USAGE : usage;
 }

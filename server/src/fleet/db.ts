@@ -320,6 +320,9 @@ export interface SampleRow {
   usage_json?: string | null;
 }
 
+/** A sample's `usage_json` when the usage is the same as the sample before's (issue #270). */
+export const SAME_USAGE = '=';
+
 /** What a cost query reads of a session row. */
 export interface CostRow {
   cost_usd: number | null;
@@ -639,7 +642,8 @@ export class FleetDb {
        VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd, :usage_json)
        ON CONFLICT(session_id, t) DO UPDATE SET tokens_total = excluded.tokens_total,
          tokens_delta = excluded.tokens_delta, peak_context = excluded.peak_context,
-         running_agents = excluded.running_agents, cost_usd = excluded.cost_usd, usage_json = excluded.usage_json`,
+         running_agents = excluded.running_agents, cost_usd = excluded.cost_usd,
+         usage_json = CASE WHEN excluded.usage_json = '=' THEN samples.usage_json ELSE excluded.usage_json END`,
     ).run({ ...row, usage_json: row.usage_json ?? null } as unknown as Params);
   }
 
@@ -674,23 +678,26 @@ export class FleetDb {
     let session = '';
     let prev = 0;
     let hadUsage = false;
+    let carried: string | null = null; // the last usage a sample of this session stored in full
     let lastUsage: string | null = null;
     let lastStored: number | null = null;
     let lastCost: number | null = null;
     for (const r of rows) {
-      // Samples repeat their usage while a session is quiet, so price each distinct value once.
-      if (r.usage_json === null || r.usage_json !== lastUsage || r.cost_usd !== lastStored || lastCost === null) {
-        lastCost = cost(r);
-        lastUsage = r.usage_json;
+      if (r.session_id !== session) carried = null;
+      const usage: string | null = r.usage_json === SAME_USAGE ? carried : r.usage_json;
+      carried = usage;
+      // Cost depends only on the usage and the stored figure, which hardly change from one sample to the next.
+      if (lastCost === null || usage === null || usage !== lastUsage || r.cost_usd !== lastStored) {
+        lastCost = cost({ cost_usd: r.cost_usd, usage_json: usage });
+        lastUsage = usage;
         lastStored = r.cost_usd;
       }
       const c = lastCost ?? 0;
-      const usage = r.usage_json !== null;
       // The first sample in the window, or one where the source of the figure changes (an older sample priced from
       // the ledger next to a newer one priced from usage), has nothing comparable before it.
-      const d = r.session_id !== session || usage !== hadUsage ? 0 : Math.max(0, c - prev);
+      const d = r.session_id !== session || (usage !== null) !== hadUsage ? 0 : Math.max(0, c - prev);
       session = r.session_id;
-      hadUsage = usage;
+      hadUsage = usage !== null;
       prev = c;
       const m = Math.floor(r.t / 60);
       by.set(m, (by.get(m) ?? 0) + d);
