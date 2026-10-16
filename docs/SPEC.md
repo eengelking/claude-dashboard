@@ -501,7 +501,7 @@ The mod sends a **full snapshot** every time (idempotent upsert) plus the **even
 
 ### 6.2 The Report
 
-All times are epoch milliseconds. All token counts are integers. Unknown fields are ignored by the server. Missing optional fields are `null`, never omitted, so the shape is stable. `docs/fixtures/report.sample.json` is one full valid example and is the shared fixture for both test suites.
+All times are epoch milliseconds. All token counts are integers. Unknown fields are ignored by the server. Missing optional fields are `null`, never omitted, so the shape is stable. `docs/fixtures/report.sample.json` is one full valid example, with every optional field below filled in and a reporter version inside the range the server supports (6.8), and is the shared fixture for both test suites. When a field is added to the Report, add it to the fixture in the same change; `fixtureReport()` in `server/src/fleet/testing.ts` hands tests the fixture without the fields that start behavior of their own (asks, background work, an owner and machine, a live activity feed).
 
 ```ts
 interface Report {

@@ -155,7 +155,7 @@ describe('reads', () => {
     const { app } = setup();
     await request(app).post('/api/fleet/report').send(fixtureReport());
     const res = await request(app).get('/api/fleet/health');
-    expect(res.body).toMatchObject({ ok: true, dbPath: ':memory:', liveSessions: 1, reporterVersionsSeen: ['0.1.0'] });
+    expect(res.body).toMatchObject({ ok: true, dbPath: ':memory:', liveSessions: 1, reporterVersionsSeen: ['0.14.2'] });
     expect(res.body.serverVersion).toMatch(/^\d+\.\d+\.\d+$/);
     expect(res.body.reporterSupport).toEqual({ min: expect.any(String), max: expect.any(String) });
   });

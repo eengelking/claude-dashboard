@@ -1,7 +1,7 @@
 {
   "v": 1,
   "sentAt": 1791648000000,
-  "reporter": { "name": "podium-reporter", "version": "0.1.0", "engineVersion": "2.1.296", "hostSurface": "terminal" },
+  "reporter": { "name": "podium-reporter", "version": "0.14.2", "engineVersion": "2.1.296", "hostSurface": "terminal" },
   "session": {
     "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11",
     "name": "invoice-v2",
@@ -10,6 +10,7 @@
     "waitNote": null,
     "endReason": null,
     "resumeId": null,
+    "clearedFrom": null,
     "startedAt": 1791645260000,
     "cwd": "/Users/dev/billing-service/.claude/worktrees/invoice-v2",
     "projectRoot": "/Users/dev/billing-service",
@@ -39,6 +40,35 @@
       "steps": { "done": 23, "total": null }
     },
     "attached": true,
+    "activityFeed": true,
+    "activity": [
+      { "at": 1791647850000, "kind": "tool", "text": "Agent Port invoice endpoints" },
+      { "at": 1791647880000, "kind": "text", "text": "The staging backfill failed on a database connection; I am checking the endpoint port first." }
+    ],
+    "background": {
+      "tasks": [{ "type": "monitor", "description": "Watch the staging deploy", "status": "running" }],
+      "wakeAt": 1791648600000
+    },
+    "respond": { "level": "everything", "accepts": ["question", "plan-approve", "plan-feedback", "permission", "message", "command"], "limits": [] },
+    "asks": [
+      {
+        "id": "toolu_01ask",
+        "kind": "question",
+        "agentId": null,
+        "openedAt": 1791647950000,
+        "questions": [
+          {
+            "question": "Run the staging backfill against the replica or the primary?",
+            "header": "Backfill target",
+            "multiSelect": false,
+            "options": [
+              { "label": "Replica", "description": "Read-only, safe to retry.", "preview": null },
+              { "label": "Primary", "description": "Writes the new schema.", "preview": null }
+            ]
+          }
+        ]
+      }
+    ],
     "files": {
       "files": [
         { "path": "src/invoice/export.ts", "status": "modified", "added": 24, "removed": 6, "from": null },
@@ -71,7 +101,9 @@
       "costUsdEst": 2.11, "skills": ["code-review"], "lastTool": "Edit", "toolCalls": 18, "toolCounts": {"Edit": 9, "Read": 7, "Bash": 2}, "blowouts": 0,
       "usageByModel": [{"model": "claude-opus-5-5", "tier": "std", "tokens": {"input": 21000, "output": 9000, "cacheRead": 900000, "cacheWrite": 120000, "cacheWrite1h": 0}}],
       "steps": { "done": 9, "total": null },
-      "promptExcerpt": "Port the invoice endpoints to the v2 schema.", "answerExcerpt": null, "failure": null
+      "promptExcerpt": "Port the invoice endpoints to the v2 schema.", "answerExcerpt": null,
+      "activity": [{ "at": 1791647860000, "kind": "tool", "text": "Edit src/invoice/export.ts" }],
+      "failure": null
     },
     {
       "id": "a3", "parentId": null, "kind": "subagent", "type": "general-purpose", "name": null,
@@ -101,6 +133,8 @@
       "promptExcerpt": "Rewrite the PDF renderer to read v2 invoices.", "answerExcerpt": null, "failure": null
     }
   ],
+  "userName": "Dana",
+  "machine": { "name": "dana-mbp", "id": "3f9a1c7e5b20" },
   "events": [
     { "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11:a2:spawn:1791647400000:1", "t": 1791647400000, "kind": "spawn", "agentId": "a2", "text": "forked fork (inherits Opus xhigh): Port invoice endpoints", "data": null },
     { "id": "5f0c2a8e-1b7d-4c3e-9a51-2d6f8e0b4c11:a3:fail:1791647700000:2", "t": 1791647700000, "kind": "fail", "agentId": "a3", "text": "failed: Backfill dry run (Tool error)", "data": { "class": "Tool error" } },

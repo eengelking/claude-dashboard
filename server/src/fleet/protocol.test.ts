@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { validateReport, validateAsk, acceptsFor, LIMITS, RESPOND_LIMITS } from './protocol.js';
-import { loadFixture, REPO_ROOT as repo } from './testing.js';
+import { bareFixture, loadFixture, REPO_ROOT as repo } from './testing.js';
+import { checkReporter } from './compat.js';
 
 const here = path.join(repo, 'server', 'src', 'fleet');
 
@@ -37,6 +38,15 @@ describe('protocol', () => {
     expect(f.agents.some((a) => a.kind === 'fork' && a.status === 'running')).toBe(true);
     expect(f.agents.some((a) => a.status === 'failed' && a.failure)).toBe(true);
     expect(f.agents.some((a) => a.blowouts === 2)).toBe(true);
+  });
+
+  it('fixture is a current-format report: supported reporter version and every optional field', () => {
+    const f = loadFixture() as { reporter: { version: string }; session: Record<string, unknown>; agents: Record<string, unknown>[]; userName?: string; machine?: unknown };
+    expect(checkReporter(f.reporter.version)).toBe('ok');
+    for (const k of ['activityFeed', 'activity', 'background', 'respond', 'asks', 'clearedFrom', 'usageByModel']) expect(f.session).toHaveProperty(k);
+    expect(f.agents.some((a) => Array.isArray(a.activity))).toBe(true);
+    expect(f.userName).toBeTruthy();
+    expect(f.machine).toBeTruthy();
   });
 
   it('rejects a missing v', () => {
@@ -381,7 +391,7 @@ describe('protocol', () => {
     };
 
     it('leaves both out for an older or unnamed reporter', () => {
-      const r = ok(validateReport(loadFixture()));
+      const r = ok(validateReport(bareFixture()));
       expect(r.userName).toBeUndefined();
       expect(r.machine).toBeUndefined();
     });
@@ -476,7 +486,9 @@ describe('protocol', () => {
       expect(r.report.agents[0]!.activity).toEqual([{ ...entry, kind: 'text', text: 'Next, the tests.' }]);
     });
     it('leaves both out for a reporter that sends neither', () => {
-      const r = validateReport(loadFixture());
+      const f = bareFixture() as { session: Record<string, unknown> };
+      delete f.session.activityFeed;
+      const r = validateReport(f);
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect('activityFeed' in r.report.session).toBe(false);
@@ -533,7 +545,7 @@ describe('protocol', () => {
     };
 
     it('leaves respond, asks and clearedFrom out for a reporter older than 0.14.0', () => {
-      const r = validateReport(loadFixture());
+      const r = validateReport(bareFixture());
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(r.report.session.respond).toBeUndefined();
