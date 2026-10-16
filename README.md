@@ -312,7 +312,7 @@ scripts/agent-tokens-sample.sh --help  # log a running agent's Tokens over time
 | [`docs/SPEC.md`](docs/SPEC.md) | The build spec: intended behavior and requirements |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How it was built, where it departs from the spec and why, what was verified, known issues |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why the significant choices were made |
-| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | Sharp edges that are easy to hit |
+| [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | Sharp edges that are easy to hit, including [why one machine shows several rows on the Reporters page](docs/GOTCHAS.md#reporters-and-machines) |
 | [`docs/DEMO.md`](docs/DEMO.md) | A script and a paste-in prompt for showing Podium to other people |
 | [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) | Credits and licenses for the color theme palettes |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |

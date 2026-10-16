@@ -18,6 +18,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 - Admin > People names a person's token the way Reporters does, as `pdm_` and its twelve-character key id, such as `pdm_35fa525ce1b4`, instead of `pdm_…` and the last four characters of the secret (#218). The key id only finds a person and is not a secret; no part of the secret is shown or sent to the page any more. The token itself, and what is stored, are unchanged.
 - `bin/podiumctl.mjs` is now `bin/podiumctl`, so it runs as `bin/podiumctl status` with no `node` in front (#227). `package.json`'s `bin` entry and `npm run podiumctl` follow. A boot unit made by `podiumctl enable` before this change still points at the old file and stops working: `podiumctl status` now says `on boot: enabled, but stale` for it, and running `podiumctl enable` again rewrites it.
+- `docs/GOTCHAS.md` has a new "Reporters and machines" section (#237): why the Reporters page can show several rows for one machine (two machine ids, one row per account, a reporter with no name, rows left by container restarts), and why a running Claude Code session cannot be handed to another Podium user and shows "refused: session belongs to someone else". The README and the User Guide's Reporters entry link to it.
 
 ### Fixed
 

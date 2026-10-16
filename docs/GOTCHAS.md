@@ -52,6 +52,76 @@ A marketplace entry that points at a subfolder of another repo with the `owner/r
 Code clone over SSH. The `podium-reporter` entry uses the full `https://github.com/eengelking/podium.git`
 URL for that reason. If you add your own entry for a public repo, do the same.
 
+## Reporters and machines
+
+The Reporters page in Admin lists reporters, not sessions and not machines. The rules that decide what counts as
+one reporter are in `docs/SPEC.md` section 7.7 ("Which reporters the server knows"). Nothing here is a bug in
+the server; each entry says what you see, why, and what to do.
+
+**Check it yourself.** On Admin > Reporters, the row shows the machine, the person and the token (as `pdm_` and
+a key id); select a row for its machine id, source address and refused reports. A session's card shows its
+owner. In the server log, `reporter.connected` says which owner and machine was heard and `report.conflict` says
+a report was refused because its session belongs to someone else (see "Logs" in `docs/USER_GUIDE.md`).
+
+### The page shows more reporters than I have machines
+
+Each running Claude Code session is its own card, and a machine can run several. The page counts reporters, so
+three sessions on one Mac can look like extra reporters when they show as separate rows (the next entries say
+why they do). Count the cards on the wall for sessions and the machine ids on the page for machines.
+
+### One machine shows as two rows with different machine ids
+
+The mod makes a random machine id the first time it runs and keeps it in its own store, which is one file per
+plugin load under `~/.claude/plugins/store/`. A copy of the mod loaded inline and the marketplace install each
+keep their own id, so one machine reports as two. A session keeps its id for its whole life, so the older row
+stays live while that session does. Load the mod one way on a given machine. The id is made in
+`mod/podium-reporter/hooks/machine.ts`. Making it per machine, not per plugin load, is not done.
+
+### One machine shows an extra row ending in `#` and a name
+
+Since #221 a machine gets one row for each account that reports from it, keyed `<machine id>#<owner>` for every
+account after the first. Since #226 a session keeps the name and token it started with, so a machine can carry
+two people at once (two terminals, or one before and one after a change of settings) and shows two rows. This is by
+design. Whether a machine should collapse to one row across accounts would reverse part of #221 and is not decided.
+
+### A reporter with no name has a row of its own, and another once it has one
+
+The mod sends a machine id only when the `userName` option is set. A reporter without a name is keyed by its
+source address (`addr:...`), and when the same machine later reports with a name it becomes a second row. Set
+`userName` and the person's token on every reporter (see "A name set with the shared secret, or with no token,
+shows no person" above). Remove the old `addr:` row from Admin when you no longer need it.
+
+### Rows that read "Not since restart" and never go away
+
+A reporter with no name is matched by its sessions, so a container that comes back on a new address stays one row
+when a session it already reported turns up from the new address. A reporter that has not reported such a session
+gets a row of its own, and a container's address changes on every restart, so each restart can leave an
+`addr:` row behind. Nothing removes them but you: tick them on Admin > Reporters and choose **Remove N…** (or
+**Remove all Not since restart**), or turn on **Forget old reporters** under Settings. A reporter that reports
+again comes back.
+
+### I changed my reporter settings and a running session did not change who it reports as
+
+A running Claude Code session cannot be handed to another Podium user. A session takes its name and token once,
+when it starts, and keeps them. Saving new values in `/plugin configure`, `/reload-plugins` and `/clear` do not
+change them (#226), and a session that tries is refused. To report as someone else, quit Claude Code and start
+a new session, or start the terminal with `PODIUM_USER` and `PODIUM_TOKEN` set. A session with no token has
+nothing held yet, so adding one later does apply. The settings hold one login for each Claude config directory, so
+two logins on one machine need the environment variables (#230, blocked on what Claude Code offers a mod).
+
+The server log shows no refusal for a person whose reporter simply sent nothing, so from the server's side that
+person looks as if they do not exist. If a reporter shows as signed in on the person's side and nothing appears
+in Podium, restart Claude Code first.
+
+### The status line says "refused: session belongs to someone else"
+
+Full text: `podium-reporter: podium v0.14.2 refused: session belongs to someone else` (your version will differ). The
+session is stored as owned by one person (Admin, say) and the mod is now sending as another. The server refuses
+with a 409 (#209) and logs a `report.conflict` warning for the same session id every 5 to 10 seconds. The server
+is right to refuse. The fix is the same as above: quit Claude Code and start a new session. The message clears at
+the next accepted report. Whether the mod should keep a session's identity through a settings change, a reload and
+a clear is not decided.
+
 ## Running the server
 
 ### `podiumctl start` fails with "port N ... is already in use"

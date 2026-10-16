@@ -414,7 +414,8 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   one person is always flagged: an amber **Admin secret** badge in the Token column, a band above the list that
   counts them (**Show only these** filters to them), and a warning at the top of its details with the steps to
   fix it: make a person in People, then enter their token and name in the reporter's options. **Remove from list** (in a reporter's details, with a tooltip that says the same) takes a reporter off the list;
-  it comes back if it reports again, and its sessions are not touched.
+  it comes back if it reports again, and its sessions are not touched. If one machine shows several rows, or a
+  changed login does not reach a running session, see [Reporters and machines](GOTCHAS.md#reporters-and-machines).
   To clear out many at once, tick the boxes (the box in the header ticks the page, and **Select all N that
   match** reaches past it), then **Remove N…**; with a state chosen, **Remove all <state>** beside the search
   does the same. To keep a reporter off the list for good, choose **Ignore…** in its details: its reports are
