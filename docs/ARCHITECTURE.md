@@ -141,7 +141,7 @@ provides who is signed in (asked only while the Admin's flags are on) and which 
 `respond.ts` holds the rules for the button and the frames. The modal lets its fields keep their own keys
 (`Modal.tsx`), and `useActivityFeed` follows a Podium entry's note as it changes.
 
-**The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`, `components/SpendPanel.tsx`,
+**The people view** (`frontend/src/fleet/people.ts`, `components/People.tsx`,
 `usePeoplePrefs.ts`, issue #34). The server adds three things and stores nothing new about people:
 `sessions.machine_json` (migration 7) from `Report.machine`, which a named reporter (mod 0.9.0) sends next to
 `userName`; `SessionView.ownerGroup`, joined from the people and groups tables by the owner's exact name when the
@@ -150,7 +150,7 @@ their counts, ordering, the people filter, machine labels and the spend rows are
 fed from the live sessions and the KPIs the UI already has, so people exist only while one of their sessions is
 live. The view switches on when any live session's owner is a person (not `Admin`, not null). Who is looking is
 a choice made in the browser and kept in `localStorage` (`podium.me`), with the other choices in
-`podium.people`; the server has no idea who reads it. Machine labels add the start of the machine id only when
+`podium.people`; the server has no idea who reads it. Spend by person or group is not on the wall: since #239 it is Admin > Spend (`admin/SpendTab.tsx`, mockup `mockup/podium-admin-spend.html`), which opens its own `useFleet` while it is showing, builds its rows with `spendRows` from `people.ts` and pages them in the browser with Admin's `Pager`; its choices are in `podium.adminSpend`. Machine labels add the start of the machine id only when
 one owner has two machines with the same host name. In the mod, `machine.ts` cuts `hostname` output to the short
 name and makes the random id kept under `machineId` in `$.store`; `register.ts` reads both once per load and only
 when `userName` is set.

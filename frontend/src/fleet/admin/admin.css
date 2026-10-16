@@ -203,3 +203,31 @@
 /* Administrators group (#172): the built-in tag and the secret's fixed member chip */
 .adminv .atag { display: inline-flex; align-items: center; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 11.5px; color: var(--ink2); font-weight: 400; white-space: nowrap; }
 .adminv .chip.dashed { border-style: dashed; color: var(--ink2); }
+
+/* Spend (#239, mockup/podium-admin-spend.html): the fleet panel's bars, widened for a page; the total and live sessions sit at the right of the toolbar. */
+.adminv .tool .f .lab { font-size: 12px; color: var(--ink2); font-weight: 500; }
+.adminv .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; min-height: 32px; }
+.adminv .seg button { padding: 0 12px; font-size: 12.5px; font-weight: 500; color: var(--ink2); border-right: 1px solid var(--border); }
+.adminv .seg button:last-child { border-right: 0; }
+.adminv .seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
+.adminv .sum { display: flex; gap: 8px 28px; margin-left: auto; text-align: right; align-items: flex-end; }
+.adminv .sum > div { display: grid; gap: 2px; }
+.adminv .sum .big { font-size: 20px; line-height: 1.2; letter-spacing: -0.02em; }
+.adminv .sum .cap { color: var(--muted); font-size: 12px; }
+.adminv .hb { list-style: none; margin: 0; padding: 6px 16px 10px; display: grid; gap: 2px; }
+.adminv .hb li { display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr) 84px 48px; gap: 14px; align-items: center; padding: 5px 6px; border-radius: 4px; }
+.adminv .hb li:hover { background: var(--hover); }
+.adminv .hb .lbl { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--ink); }
+.adminv .hb .lbl > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adminv .hb .gp { color: var(--muted); font-size: 12px; }
+.adminv .hb .trk { height: 14px; display: flex; align-items: center; }
+.adminv .hb .trk i { display: block; height: 10px; background: var(--ink2); border-radius: 0 4px 4px 0; }
+.adminv .hb li:hover .trk i { background: var(--ink); }
+.adminv .hb .val { text-align: right; font-size: 12.5px; color: var(--ink); }
+.adminv .hb .shr { text-align: right; font-size: 12px; color: var(--muted); }
+.adminv .ptab tfoot th, .adminv .ptab tfoot td { border-top: 1px solid var(--border); border-bottom: 0; color: var(--ink); font-weight: 600; }
+@media (max-width: 760px) {
+  .adminv .sum { margin-left: 0; text-align: left; width: 100%; }
+  .adminv .hb li { grid-template-columns: minmax(0, 1fr) 72px; grid-template-areas: "l v" "t t"; gap: 4px 10px; }
+  .adminv .hb .lbl { grid-area: l; } .adminv .hb .trk { grid-area: t; } .adminv .hb .val { grid-area: v; } .adminv .hb .shr { display: none; }
+}

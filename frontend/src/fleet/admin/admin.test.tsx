@@ -386,6 +386,7 @@ describe("side menu", () => {
       "Settings",
       "Model prices",
       "Reporting and security",
+      expect.stringMatching(/^Spend/),
       expect.stringMatching(/^Admin log/),
       "Lock Admin",
     ]);

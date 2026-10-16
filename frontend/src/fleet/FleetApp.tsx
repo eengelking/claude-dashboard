@@ -28,8 +28,7 @@ import { usePageVisible } from "./usePageVisible";
 import { useHeartbeat } from "./useHeartbeat";
 import { usePanes } from "./usePanes";
 import { usePeoplePrefs } from "./usePeoplePrefs";
-import { buildUnits, filterByPeople, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, peopleNames, spendRows, type PeopleFilter, type Unit } from "./people";
-import { SpendPanel } from "./components/SpendPanel";
+import { buildUnits, filterByPeople, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, peopleNames, type PeopleFilter, type Unit } from "./people";
 import type { WallPeople } from "./components/Wall";
 import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
@@ -186,16 +185,6 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
   const railPeople: RailPeople | undefined = active
     ? { groupBy: prefs.groupBy, units, picked: pf.person ?? pf.group, onPick: pickUnit, visible: new Set(filterByPeople(sorted, pf).map((s) => s.id)) }
     : undefined;
-  const spendPanel =
-    active && !selected ? (
-      <SpendPanel
-        rows={spendRows(spendByOwner, live, prefs.groupBy === "group" ? "group" : "people")}
-        total={state.kpis?.costToday ?? 0}
-        groupBy={prefs.groupBy === "group" ? "group" : "people"}
-        view={prefs.spendView}
-        onView={(v) => people.setPrefs({ spendView: v })}
-      />
-    ) : undefined;
 
   // A selected session that leaves the live set clears the selection, with a message.
   useEffect(() => {
@@ -466,7 +455,6 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
             activityFeedOn={state.features["activity-feed"] !== false}
             collapsed={panes.collapsed.right}
             onToggle={() => toggle("right")}
-            spend={spendPanel}
           />
           {!panes.collapsed.left && <ResizeHandle panel="rail" r={resize} container={container} label="Resize orchestrator list" />}
           {!panes.collapsed.right && <ResizeHandle panel="side" r={resize} container={container} label="Resize activity panel" />}

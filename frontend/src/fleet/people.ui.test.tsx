@@ -94,7 +94,7 @@ describe("people view", () => {
     const ng = band("No group");
     expect([...ng.querySelectorAll(".card .owner .nm")].map((e) => e.textContent).sort()).toEqual(["Admin", "Dana K.", "Unassigned"]);
     expect(within(band("Frontend")).getByText("Ed E.", { selector: ".h" })).toBeInTheDocument();
-    expect(screen.getByText("Spend today, by group")).toBeInTheDocument();
+    expect(screen.queryByText("Spend today, by group")).toBeNull();
   });
 
   it("group by None is the flat wall with each card's owner", () => {
@@ -138,21 +138,11 @@ describe("people view", () => {
     expect(screen.getByLabelText("You are")).toHaveValue("Dana K.");
   });
 
-  it("shows today's spend by person as a chart and as a table with a total", () => {
+  it("has no spend block in the right panel: spend by person lives in Admin > Spend (#239)", () => {
     view();
-    const panel = screen.getByRole("region", { name: "Spend today, by person" });
-    const bars = within(panel).getAllByRole("listitem");
-    expect(bars.map((b) => b.getAttribute("aria-label"))).toEqual([
-      "Priya N.: $8.00, 40% of $20.00",
-      "Ed E.: $6.00, 30% of $20.00",
-      "Dana K.: $4.00, 20% of $20.00",
-      "Admin: $1.00, 5% of $20.00",
-      "Unassigned: $1.00, 5% of $20.00",
-    ]);
-    fireEvent.click(within(panel).getByRole("button", { name: "Table" }));
-    const rows = within(panel).getAllByRole("row").map((r) => [...r.querySelectorAll("th,td")].map((c) => c.textContent));
-    expect(rows[1]).toEqual(["Priya N.", "1", "$8.00", "40%"]);
-    expect(rows[rows.length - 1]).toEqual(["Total", "6", "$20.00", "100%"]);
+    expect(screen.queryByRole("region", { name: /Spend today/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Table" })).toBeNull();
+    expect(within(screen.getByRole("complementary", { name: "Activity and agent detail" })).queryByText(/Spend today/)).toBeNull();
   });
 
   it("draws a hostile name as text", () => {

@@ -135,6 +135,8 @@ describe("people view logic", () => {
       ["Unassigned", 0.25, 1],
     ]);
     expect(people.reduce((n, r) => n + r.spend, 0)).toBeCloseTo(31.75);
+    expect(people.find((r) => r.name === "Priya N.")?.group).toBe("Backend");
+    expect(spendRows(spend, sessions, "group").every((r) => r.group === null)).toBe(true);
     const groups = spendRows(spend, sessions, "group");
     expect(groups.map((r) => [r.name, r.spend, r.sessions])).toEqual([
       ["No group", 12.75, 3],
@@ -156,7 +158,7 @@ describe("people view logic", () => {
 
   it("reads stored choices defensively", () => {
     expect(parsePrefs(null)).toEqual(DEFAULT_PREFS);
-    expect(parsePrefs({ groupBy: "group", order: "spend", spendView: "table", collapsed: ["people:admin", 4] })).toEqual({ groupBy: "group", order: "spend", spendView: "table", collapsed: ["people:admin"] });
+    expect(parsePrefs({ groupBy: "group", order: "spend", spendView: "table", collapsed: ["people:admin", 4] })).toEqual({ groupBy: "group", order: "spend", collapsed: ["people:admin"] });
     expect(parsePrefs({ groupBy: "teams", order: "random", spendView: "pie", collapsed: "x" })).toEqual(DEFAULT_PREFS);
     // Inherited Object properties are not valid choices.
     expect(parsePrefs({ groupBy: "constructor", order: "toString" })).toEqual(DEFAULT_PREFS);

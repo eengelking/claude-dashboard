@@ -149,10 +149,7 @@ name, the card adds the start of the machine's id. Sessions reported with the ad
 **No group**, and a group with no live sessions has no band.
 
 The left list groups the same way. Click a person or group there to show only theirs on the wall; click it
-again, **Show everyone**, or **All orchestrators** to see everyone again. On the right, **Spend today, by
-person** (or by group) shows today's estimated spend as bars, largest first, with a **Table** view that adds a
-total equal to the "Est. cost today" tile. It counts what was spent since midnight on the server, so someone whose sessions
-have all ended still has a row there, but no band on the wall.
+again, **Show everyone**, or **All orchestrators** to see everyone again. Spend by person or group is in Admin, under **Spend** (see Admin below).
 
 A person is shown as initials and a name, never a color: color already means the model and the status.
 
@@ -384,7 +381,7 @@ Admin is for the person who runs the server. The **Admin** button in the top bar
 without activity (an Administrator who is still signed in to the console is let straight back in), and five wrong names or tokens lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has seven pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).
+Admin has eight pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and Spend and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged, 50 rows at a time (25 and 100 are also offered; Spend starts at 25 and offers 50 and 100).
 
 - **People.** Under **Create user**, type a name and choose Create user. Podium shows the token once, above the page (it stays there when you switch pages), with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
@@ -443,6 +440,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
   Code reports which writes were 1-hour ones.
 - **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
+- **Spend.** What each person, or each group, has spent since midnight today on the server, live or ended sessions, as bars or as a table. Choose **People** or **Groups** and **Chart** or **Table**; the total spent and the number of live sessions are at the top right, and the list is largest first, 25 rows at a time. The total and the table's Total row always count everyone, not just the page you are on, and the total equals the "Est. cost today" tile. These are estimates from tokens, not a bill. Someone whose sessions have all ended still has a row, but no band on the wall.
 - **Admin log.** Who made each change (a person, or the admin secret), unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
   address each came from. It never holds a token or the secret.

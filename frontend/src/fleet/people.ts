@@ -196,6 +196,8 @@ export interface SpendRow {
   key: string;
   kind: UnitKind;
   name: string;
+  /** A person's group, for the Spend page's table; null for a group row, and for a person with none. */
+  group: string | null;
   spend: number;
   /** Live orchestrators in that person or group now. */
   sessions: number;
@@ -215,7 +217,7 @@ export function spendRows(spend: readonly OwnerSpend[], sessions: readonly Sessi
     if (!r) {
       const kind: UnitKind = perGroup ? (key === "nogroup" ? "nogroup" : "group") : key === "admin" ? "admin" : key === "unassigned" ? "unassigned" : "person";
       const name = perGroup ? (key === "nogroup" ? "No group" : group!) : key === "unassigned" ? "Unassigned" : owner!;
-      r = { key, kind, name, spend: 0, sessions: 0 };
+      r = { key, kind, name, group: perGroup ? null : group, spend: 0, sessions: 0 };
       rows.set(key, r);
     }
     return r;

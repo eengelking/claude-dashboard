@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin spend page mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;650;700&display=swap">
+<style>
+/* Layout: quiet page chrome around one framed copy of Podium's Admin: top bar, side menu, page. Tokens and rules are copied from fleet.css and admin.css. */
+:root{--pg-bg:#f1f0ec;--pg-ink:#1c1c1a;--pg-ink2:#55544f;--pg-line:rgba(11,11,11,.14);--pg-card:#fcfcfb;--pg-acc:#2a78d6;
+  --font-ui:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;--font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--pg-bg:#121211;--pg-ink:#ecebe6;--pg-ink2:#a9a8a0;--pg-line:rgba(255,255,255,.14);--pg-card:#1a1a19;--pg-acc:#5aa9f5;color-scheme:dark}}
+:root[data-theme="dark"]{--pg-bg:#121211;--pg-ink:#ecebe6;--pg-ink2:#a9a8a0;--pg-line:rgba(255,255,255,.14);--pg-card:#1a1a19;--pg-acc:#5aa9f5;color-scheme:dark}
+body{background:var(--pg-bg);color:var(--pg-ink);font:14px/1.5 var(--font-ui);margin:0;padding-block:24px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:20px}
+.wrap>header h1{font-size:22px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.lede{margin:4px 0 0;color:var(--pg-ink2);max-width:66ch}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 12px;border:1px solid var(--pg-line);border-radius:8px;background:var(--pg-card)}
+.controls .grp{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--pg-ink2)}
+.cseg{display:inline-flex;border:1px solid var(--pg-line);border-radius:6px;overflow:hidden}
+.cseg button{font:inherit;font-size:12.5px;padding:4px 10px;background:none;border:0;border-right:1px solid var(--pg-line);color:var(--pg-ink2);cursor:pointer}
+.cseg button:last-child{border-right:0}
+.cseg button[aria-pressed="true"]{background:var(--pg-ink);color:var(--pg-bg)}
+.cseg button:focus-visible{outline:2px solid var(--pg-acc);outline-offset:-2px}
+.stage{overflow-x:auto}
+.frame{border:1px solid var(--pg-line);border-radius:8px;overflow:hidden;margin:0 auto;height:640px;width:100%;max-width:100%}
+.frame.nw{width:400px}
+.notes{display:grid;gap:6px;padding:12px 14px;border:1px solid var(--pg-line);border-radius:8px;background:var(--pg-card);font-size:13px}
+.notes h2{margin:0 0 2px;font-size:13px}
+.notes ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.notes li{max-width:80ch}
+.notes code{font-family:var(--font-mono);font-size:12px}
+
+/* ---- Podium ---- */
+.podium{--bg:#0d0d0d;--surface:#1a1a19;--raised:#222220;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--hover:rgba(255,255,255,.045);--sel:rgba(255,255,255,.08);--sonnet:#3987e5;--good:#0ca30c;--good-text:#3dbb3d;--crit-text:#ee6a6a;--warn:#fab219;
+  height:100%;background:var(--bg);color:var(--ink);font:13px/1.4 var(--font-ui);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+.podium[data-t="light"]{--bg:#f9f9f7;--surface:#fcfcfb;--raised:#f1f0ec;--ink:#0b0b0b;--ink2:#52514e;--muted:#6b6a64;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--hover:rgba(11,11,11,.04);--sel:rgba(11,11,11,.07);--sonnet:#2a78d6;--good-text:#006300;--crit-text:#b52a2a}
+.podium button,.podium select{font:inherit;color:inherit}
+.podium button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+.podium button:focus-visible,.podium select:focus-visible,.podium [tabindex]:focus-visible{outline:2px solid var(--sonnet);outline-offset:1px;border-radius:4px}
+.podium .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.podium .top{display:flex;align-items:center;gap:14px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.podium .logo{font-weight:700;font-size:15px;letter-spacing:-.01em}
+.podium .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--ink2)}
+.podium .spacer{flex:1}
+.podium .btn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--raised);font-size:12px;font-weight:500;text-decoration:none;color:var(--ink)}
+.podium .banner{padding:5px 16px;font-size:12px;color:var(--ink2);background:var(--raised);border-bottom:1px solid var(--border)}
+.podium .banner b{color:var(--ink);font-weight:600}
+.podium .adminv{flex:1 1 auto;min-height:0;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr)}
+.adminv h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.02em}
+.adminv h2{margin:0;font-size:15px;font-weight:650;letter-spacing:-.01em}
+.adminv .lead{color:var(--ink2);margin:4px 0 0;max-width:62ch}
+.adminv .hint{color:var(--muted);font-size:12px;margin:2px 0 0;max-width:66ch}
+.adminv .shell{display:grid;grid-template-columns:252px minmax(0,1fr);height:100%;min-height:0}
+.adminv .nav{border-right:1px solid var(--border);background:var(--surface);min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.adminv .navin{flex:1;display:flex;flex-direction:column;gap:16px;padding:16px 12px}
+.adminv .ngroup{display:grid;gap:2px}
+.adminv .ngroup .gh{padding:0 8px 4px;font-size:12px;font-weight:600;color:var(--muted)}
+.adminv .navbtn{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:7px 8px;border-left:2px solid transparent;border-radius:6px;color:var(--ink2);font-size:13px}
+.adminv .navbtn:hover{background:var(--hover);color:var(--ink)}
+.adminv .navbtn[aria-current="page"]{background:var(--sel);color:var(--ink);font-weight:600;border-left-color:var(--ink);border-radius:0 6px 6px 0}
+.adminv .navbtn .n{font:11px var(--font-mono);color:var(--muted);font-weight:400}
+.adminv .navbtn.new .n{color:var(--good-text)}
+.adminv .navfoot{margin-top:auto;display:grid;gap:8px}
+.adminv .apage{padding:24px 32px 0;min-width:0;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.adminv .apage-in{display:grid;gap:24px;align-content:start;flex:1;padding-bottom:32px}
+.adminv .asec{display:grid;gap:12px;min-width:0}
+.adminv .asec-h{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.adminv .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;min-width:0;overflow:hidden}
+.adminv .tool{display:flex;gap:12px 16px;align-items:flex-end;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border)}
+.adminv .f{display:grid;gap:4px;min-width:0}
+.adminv .f label{font-size:12px;color:var(--ink2);font-weight:500}
+.adminv .field{background:var(--raised);border:1px solid var(--border);color:var(--ink);border-radius:6px;min-height:32px;padding:0 10px;font:inherit}
+.adminv .field.sm{min-height:26px;padding:0 6px;font-size:12px}
+.adminv .seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;min-height:32px}
+.adminv .seg button{padding:0 12px;font-size:12.5px;font-weight:500;color:var(--ink2);border-right:1px solid var(--border)}
+.adminv .seg button:last-child{border-right:0}
+.adminv .seg button[aria-pressed="true"]{background:var(--sel);color:var(--ink)}
+.adminv .btn{min-height:30px;padding:0 12px;font-size:12.5px;justify-content:center;white-space:nowrap}
+.adminv .btn.sm{min-height:26px;padding:0 8px;font-size:12px}
+.adminv .btn:disabled{opacity:.4;cursor:default}
+.adminv .row2{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.adminv .apager{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:8px 16px;border-top:1px solid var(--border);color:var(--ink2);font-size:12px}
+.adminv .apager .hint{margin:0}
+.adminv .ptab{width:100%;border-collapse:collapse;font-size:13px}
+.adminv .ptab th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:8px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+.adminv .ptab td{padding:10px 16px;border-bottom:1px solid var(--grid)}
+.adminv .ptab tr:last-child td{border-bottom:0}
+.adminv .ptab th.n,.adminv .ptab td.n{text-align:right}
+.adminv .ptab tfoot th,.adminv .ptab tfoot td{border-top:1px solid var(--border);border-bottom:0;color:var(--ink);font-weight:600;font-size:13px}
+.adminv .tw2{overflow-x:auto}
+.adminv .who{font-weight:600;white-space:nowrap}
+.adminv .sum{display:flex;gap:8px 28px;margin-left:auto;text-align:right;align-items:flex-end}
+.adminv .sum .big{font:500 20px/1.2 var(--font-mono);letter-spacing:-.02em}
+.adminv .sum .cap{color:var(--muted);font-size:12px}
+.adminv .sum div{display:grid;gap:2px}
+.nw .adminv .sum{margin-left:0;text-align:left;width:100%;justify-content:flex-start}
+/* the bars: the fleet panel's neutral ink, widened for a page */
+.adminv .hb{list-style:none;margin:0;padding:6px 16px 10px;display:grid;gap:2px}
+.adminv .hb li{display:grid;grid-template-columns:minmax(120px,220px) minmax(0,1fr) 84px 48px;gap:14px;align-items:center;padding:5px 6px;border-radius:4px}
+.adminv .hb li:hover{background:var(--hover)}
+.adminv .lbl{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px;color:var(--ink)}
+.adminv .lbl>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adminv .lbl .gp{color:var(--muted);font-size:12px;margin-left:2px}
+.adminv .trk{height:14px;display:flex;align-items:center}
+.adminv .trk i{display:block;height:10px;background:var(--ink2);border-radius:0 4px 4px 0}
+.adminv .hb li:hover .trk i{background:var(--ink)}
+.adminv .val{text-align:right;font-size:12.5px;color:var(--ink)}
+.adminv .shr{text-align:right;font-size:12px;color:var(--muted)}
+.podium .mono-g,.podium .gtile{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--axis);background:var(--raised);color:var(--ink2);font-size:10px;font-weight:600;line-height:1;flex:none}
+.podium .gtile{border-radius:6px}
+.podium .vh{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* narrow: the admin.css 760px rules, applied by the frame's width in this mockup */
+.nw .adminv .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+.nw .adminv .nav{border-right:0;border-bottom:1px solid var(--border);flex-direction:row;overflow-x:auto;overflow-y:hidden}
+.nw .adminv .navin{flex-direction:row;gap:8px;padding:8px 12px}
+.nw .adminv .ngroup{display:flex;gap:2px}
+.nw .adminv .ngroup .gh,.nw .adminv .navfoot .hint{display:none}
+.nw .adminv .navbtn{width:auto;white-space:nowrap;border-left:0;border-bottom:2px solid transparent;border-radius:6px 6px 0 0}
+.nw .adminv .navbtn[aria-current="page"]{border-left-color:transparent;border-bottom-color:var(--ink);border-radius:6px 6px 0 0}
+.nw .adminv .navfoot{margin-top:0;display:flex;margin-left:auto}
+.nw .adminv .apage{padding:16px 16px 0}
+.nw .adminv .apage-in{gap:16px}
+.nw .adminv .hb li{grid-template-columns:minmax(0,1fr) 72px;grid-template-areas:"l v" "t t";gap:4px 10px}
+.nw .adminv .hb .lbl{grid-area:l}.nw .adminv .hb .trk{grid-area:t}.nw .adminv .hb .val{grid-area:v}.nw .adminv .hb .shr{display:none}
+.nw .top .btn{display:none}
+.nw .banner{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Spend as its own Admin page</h1>
+    <p class="lede">Mockup for #239, second direction: the panel leaves the fleet page's right-hand Activity panel entirely. Spend gets its own entry in Admin's side menu, under Activity, and its own page. The frame is Admin at its real layout, with Podium's colors. Everything is live: 3 or 64 people, person or group, chart or table, rows per page, theme and width.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Mockup controls">
+    <div class="grp">People <span class="cseg" id="c-n"><button type="button" data-v="3" aria-pressed="false">3</button><button type="button" data-v="64" aria-pressed="true">64</button></span></div>
+    <div class="grp">Width <span class="cseg" id="c-w"><button type="button" data-v="wide" aria-pressed="true">Wide</button><button type="button" data-v="narrow" aria-pressed="false">Narrow</button></span></div>
+    <div class="grp">Theme <span class="cseg" id="c-t"><button type="button" data-v="dark" aria-pressed="true">Dark</button><button type="button" data-v="light" aria-pressed="false">Light</button></span></div>
+  </div>
+
+  <div class="stage"><div class="frame" id="frame"><div class="podium" id="app"></div></div></div>
+
+  <section class="notes" aria-label="Decisions">
+    <h2>What this assumes</h2>
+    <ul>
+      <li><b>Menu:</b> a "Spend" button in the Activity group, above Admin log, with the number of people (or groups) on it, like People and Groups have. Narrow screens turn the menu into the top tab strip, as every Admin page does.</li>
+      <li><b>Page:</b> the standard Admin pattern: header and lead, then one section with a toolbar (Group by, Show as), a panel, and the existing Admin pager (Showing 1 to 25 of 64, Rows per page, Previous, Page 1 of 3, Next).</li>
+      <li><b>Caveat:</b> "Estimated from tokens, not a bill." is now in the page's lead, so nothing hides in a tooltip. The "Each bar is one person…" line is gone.</li>
+      <li><b>Total:</b> the amount spent and the live sessions sit in the upper right of the panel, on the toolbar row, so the bars start right under it. They drop under the controls on narrow screens. They count everyone and do not change with the page or the page size, and the table's Total row matches it.</li>
+      <li><b>Paging:</b> 25, 50 or 100 rows per page, Admin's own sizes. Rows are largest first on every page, so page 2 continues where page 1 stops.</li>
+      <li><b>Fleet page:</b> the "Spend today, by person" panel is removed from the right-hand Activity panel, and from any other page that shows it. This page is the only home for it, so the fleet page's Activity list moves up to the top of the right panel.</li>
+      <li><b>Who sees it:</b> only Administrators, because Admin is Administrators-only (#215). People who are not Administrators no longer see per-person spend anywhere.</li>
+    </ul>
+    <h2>Questions for you</h2>
+    <ul>
+      <li>Today only, as the panel is now, or also a date range (7 days, 30 days)? A range needs the server to keep per-person spend by day, which it does not do today. I drew today only.</li>
+      <li>The fleet page's people bands still show each person's share of today's spend. Those stay, since they are on the wall and not in the panel. Is that what you want?</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  var FIRST = ["Priya","Marcus","Jun","Ana","Tomas","Lena","Dev","Mira"];
+  var LAST = ["Nair","Okafor","Park","Souza","Kowal","Fischer","Patel","Cole"];
+  var GROUPS = ["Platform","Data","Mobile","Growth","Infra","Design"];
+  var ALL = [];
+  for (var i = 0; i < 64; i++) ALL.push({ name: FIRST[i % 8] + " " + LAST[Math.floor(i / 8)], group: i % 11 === 10 ? "" : GROUPS[(i * 5) % 6], spend: Math.round(61 * Math.pow(0.93, i) * 100) / 100 + 0.12, live: (i * 7) % 4 === 0 ? 2 : (i % 3 === 0 ? 1 : 0) });
+  var S = { n: 64, w: "wide", t: "dark", g: "person", v: "chart", size: 25, page: 1 };
+
+  function usd(x) { return "$" + x.toFixed(2); }
+  function ini(n) { var p = n.split(" "); return (p[0][0] + (p[1] ? p[1][0] : "")).toUpperCase(); }
+  function rows() {
+    if (S.g === "person") return ALL.slice(0, S.n).map(function (p) { return { name: p.name, group: p.group, spend: p.spend, live: p.live }; });
+    var m = {}; ALL.slice(0, S.n).forEach(function (p) { var g = p.group || "No group"; (m[g] = m[g] || { name: g, group: "", spend: 0, live: 0, members: 0 }); m[g].spend += p.spend; m[g].live += p.live; m[g].members++; });
+    return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.spend - a.spend; });
+  }
+  function mono(r) { return '<span class="' + (S.g === "group" ? "gtile" : "mono-g") + '" aria-hidden="true">' + ini(r.name) + "</span>"; }
+  function seg(label, key, opts) {
+    return '<span class="seg" role="group" aria-label="' + label + '">' + opts.map(function (o) { return '<button type="button" data-k="' + key + '" data-v="' + o[0] + '" aria-pressed="' + (S[key] === o[0]) + '">' + o[1] + "</button>"; }).join("") + "</span>";
+  }
+
+  function render(focus) {
+    var rs = rows(), total = rs.reduce(function (a, r) { return a + r.spend; }, 0), live = rs.reduce(function (a, r) { return a + r.live; }, 0);
+    var byG = S.g === "group", unit = byG ? "groups" : "people";
+    var pages = Math.max(1, Math.ceil(rs.length / S.size)); if (S.page > pages) S.page = pages;
+    var from = (S.page - 1) * S.size, slice = rs.slice(from, from + S.size), max = rs[0] ? rs[0].spend : 1;
+    var body;
+    if (S.v === "chart") {
+      body = '<ul class="hb" aria-label="Spend today, by ' + (byG ? "group" : "person") + '">' + slice.map(function (r) {
+        return '<li aria-label="' + r.name + ': ' + usd(r.spend) + ', ' + Math.round(r.spend / total * 100) + '% of ' + usd(total) + '"><span class="lbl">' + mono(r) + "<span>" + r.name + (!byG && r.group ? '<span class="gp"> ' + r.group + "</span>" : "") + '</span></span><span class="trk"><i style="width:' + Math.max(1.5, r.spend / max * 100) + '%"></i></span><span class="val mono">' + usd(r.spend) + '</span><span class="shr mono">' + (r.spend / total * 100).toFixed(r.spend / total < .1 ? 1 : 0) + "%</span></li>";
+      }).join("") + "</ul>";
+    } else {
+      body = '<div class="tw2"><table class="ptab"><thead><tr><th scope="col">' + (byG ? "Group" : "Person") + "</th>" + (byG ? '<th class="n" scope="col">People</th>' : '<th scope="col">Group</th>') + '<th class="n" scope="col">Live</th><th class="n" scope="col">Spend</th><th class="n" scope="col">Share</th></tr></thead><tbody>' +
+        slice.map(function (r) { return '<tr><td class="who">' + r.name + "</td>" + (byG ? '<td class="n mono">' + r.members + "</td>" : "<td>" + (r.group || '<span style="color:var(--muted)">No group</span>') + "</td>") + '<td class="n mono">' + r.live + '</td><td class="n mono">' + usd(r.spend) + '</td><td class="n mono">' + (r.spend / total * 100).toFixed(1) + "%</td></tr>"; }).join("") +
+        '</tbody><tfoot><tr><th scope="row">Total</th><td></td><td class="n mono">' + live + '</td><td class="n mono">' + usd(total) + '</td><td class="n mono">100%</td></tr></tfoot></table></div>';
+    }
+    var sizes = [25, 50, 100].map(function (n) { return '<option value="' + n + '"' + (n === S.size ? " selected" : "") + ">" + n + "</option>"; }).join("");
+    var pager = '<div class="apager"><span class="hint" role="status">Showing ' + (rs.length ? from + 1 : 0) + " to " + Math.min(rs.length, from + S.size) + " of " + rs.length + '</span><span class="row2"><label class="hint" for="sz">Rows per page</label><select class="field sm" id="sz">' + sizes + '</select><button type="button" class="btn sm" id="prev"' + (S.page <= 1 ? " disabled" : "") + '>Previous</button><span class="hint">Page ' + S.page + " of " + pages + '</span><button type="button" class="btn sm" id="next"' + (S.page >= pages ? " disabled" : "") + ">Next</button></span></div>";
+
+    var nav = function (id, name, n, on) { return '<button type="button" class="navbtn' + (id === "spend" ? " new" : "") + '"' + (on ? ' aria-current="page"' : "") + ">" + name + (n !== null ? '<span class="n">' + n + "</span>" : "") + "</button>"; };
+    document.getElementById("app").setAttribute("data-t", S.t);
+    document.getElementById("app").innerHTML =
+      '<header class="top"><span class="logo">Podium</span><span class="pill">Admin</span><span class="spacer"></span><a class="btn" href="#" onclick="return false">Back to fleet</a></header>' +
+      '<div class="banner"><b>Admin.</b> Tokens, groups, reporters and settings for this server.</div>' +
+      '<main class="adminv" aria-label="Admin"><div class="shell"><nav class="nav" aria-label="Admin sections"><div class="navin">' +
+      '<div class="ngroup" role="group" aria-label="People and access"><span class="gh" aria-hidden="true">People and access</span>' + nav("people", "People", 64, false) + nav("groups", "Groups", 6, false) + nav("reporters", "Reporters", 9, false) + "</div>" +
+      '<div class="ngroup" role="group" aria-label="Server"><span class="gh" aria-hidden="true">Server</span>' + nav("settings", "Settings", null, false) + nav("prices", "Model prices", null, false) + nav("reporting", "Reporting and security", null, false) + "</div>" +
+      '<div class="ngroup" role="group" aria-label="Activity"><span class="gh" aria-hidden="true">Activity</span>' + nav("spend", "Spend", rs.length, true) + nav("log", "Admin log", 212, false) + "</div>" +
+      '<div class="navfoot"><button type="button" class="btn">Lock Admin</button><span class="hint">Locks after 10 minutes without activity.</span></div></div></nav>' +
+      '<div class="apage"><div class="apage-in"><div><h1>Spend</h1><p class="lead">What each person or group has spent since midnight today, live or ended sessions. Estimated from tokens, not a bill.</p></div>' +
+      '<section class="asec" aria-labelledby="sp-h"><div class="asec-h"><div><h2 id="sp-h">Spend today, by ' + (byG ? "group" : "person") + '</h2></div></div><div class="panel">' +
+      '<div class="tool"><div class="f"><span class="vh" id="gl">Group by</span><label aria-hidden="true">Group by</label>' + seg("Group by", "g", [["person", "People"], ["group", "Groups"]]) + '</div><div class="f"><label aria-hidden="true">Show as</label>' + seg("Show as", "v", [["chart", "Chart"], ["table", "Table"]]) + '</div><div class="sum"><div><span class="big">' + usd(total) + '</span><span class="cap">spent today, all ' + rs.length + " " + unit + '</span></div><div><span class="big">' + live + '</span><span class="cap">live sessions</span></div></div></div>' +
+      body + pager + "</div></section></div></div></div></main>";
+    ["c-n", "c-w", "c-t"].forEach(function (id) { var k = { "c-n": "n", "c-w": "w", "c-t": "t" }[id]; document.querySelectorAll("#" + id + " button").forEach(function (b) { b.setAttribute("aria-pressed", String(String(S[k]) === b.getAttribute("data-v"))); }); });
+    document.getElementById("frame").className = "frame" + (S.w === "narrow" ? " nw" : "");
+    if (focus) { var f = document.querySelector(focus); if (f) f.focus(); }
+  }
+  [["c-n", "n", Number], ["c-w", "w", String], ["c-t", "t", String]].forEach(function (c) {
+    document.getElementById(c[0]).onclick = function (e) { var v = e.target.getAttribute("data-v"); if (v) { S[c[1]] = c[2](v); S.page = 1; render(); } };
+  });
+  var app = document.getElementById("app");
+  app.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    var k = b.getAttribute("data-k");
+    if (k) { S[k] = b.getAttribute("data-v"); S.page = 1; render("[data-k='" + k + "'][data-v='" + S[k] + "']"); }
+    else if (b.id === "prev" && S.page > 1) { S.page--; render(S.page > 1 ? "#prev" : "#next"); }
+    else if (b.id === "next") { S.page++; render("#next"); }
+  });
+  app.addEventListener("change", function (e) { if (e.target.id === "sz") { S.size = +e.target.value; S.page = 1; render("#sz"); } });
+  render();
+})();
+</script>
+</body>
+</html>

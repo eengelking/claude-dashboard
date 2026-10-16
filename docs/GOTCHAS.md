@@ -176,7 +176,7 @@ Admin. The name and machine still travel in those reports and are stored, so the
 ### A group change shows a few seconds late
 
 Admin's groups are read when a session's view is built, so moving someone to another group shows on the wall
-with their next report (the heartbeat is five seconds), not at once. The spend chart updates on the next tick.
+with their next report (the heartbeat is five seconds), not at once. The Spend page in Admin updates on the next tick.
 
 ### The Linux start-on-boot unit has not run on Linux
 

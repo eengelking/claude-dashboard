@@ -11,12 +11,11 @@ const ME_MAX = 80;
 export interface PeoplePrefs {
   groupBy: GroupBy;
   order: UnitOrder;
-  spendView: "chart" | "table";
   /** Band keys collapsed to their header, per Group by (`people:p:Ed E.`). */
   collapsed: string[];
 }
 
-export const DEFAULT_PREFS: PeoplePrefs = { groupBy: "people", order: "attention", spendView: "chart", collapsed: [] };
+export const DEFAULT_PREFS: PeoplePrefs = { groupBy: "people", order: "attention", collapsed: [] };
 
 /** Stored prefs, with anything unreadable or unknown replaced by its default. */
 export function parsePrefs(v: unknown): PeoplePrefs {
@@ -25,7 +24,6 @@ export function parsePrefs(v: unknown): PeoplePrefs {
   return {
     groupBy: pick(o.groupBy, GROUP_BYS, DEFAULT_PREFS.groupBy),
     order: pick(o.order, UNIT_ORDERS, DEFAULT_PREFS.order),
-    spendView: o.spendView === "table" ? "table" : "chart",
     collapsed: Array.isArray(o.collapsed) ? o.collapsed.filter((k): k is string => typeof k === "string").slice(0, 200) : [],
   };
 }

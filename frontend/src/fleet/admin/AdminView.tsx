@@ -23,9 +23,10 @@ import { PeopleTab, type Created } from "./PeopleTab";
 import { ReportersTab, type ReporterPaging } from "./ReportersTab";
 import { ReportingTab } from "./ReportingTab";
 import { SettingsTab } from "./SettingsTab";
+import { SpendTab } from "./SpendTab";
 
 type Status = "checking" | "locked" | "open" | "disabled";
-type TabId = "people" | "groups" | "reporters" | "reporting" | "settings" | "prices" | "log";
+type TabId = "people" | "groups" | "reporters" | "reporting" | "settings" | "prices" | "spend" | "log";
 const PAGES: Record<TabId, { name: string; lead: string }> = {
   people: { name: "People", lead: "Each person gets a token that only works with their own name. A report is accepted when the two match." },
   groups: { name: "Groups", lead: "Arrange people into groups. The fleet wall shows a band per group." },
@@ -33,13 +34,14 @@ const PAGES: Record<TabId, { name: string; lead: string }> = {
   reporting: { name: "Reporting and security", lead: "Control how reporters prove who they are, and what protects the tokens." },
   settings: { name: "Settings", lead: "Server-wide choices. A change applies to everyone on this server." },
   prices: { name: "Model prices", lead: "What Podium charges each model per million tokens, in dollars. It uses these to work out what a session cost." },
+  spend: { name: "Spend", lead: "What each person or group has spent since midnight today, live or ended sessions. Estimated from tokens, not a bill." },
   log: { name: "Admin log", lead: "What happened in Admin, newest first." },
 };
 /** The side menu: pages in groups, in the order they are listed. */
 const NAV: { name: string; ids: TabId[] }[] = [
   { name: "People and access", ids: ["people", "groups", "reporters"] },
   { name: "Server", ids: ["settings", "prices", "reporting"] },
-  { name: "Activity", ids: ["log"] },
+  { name: "Activity", ids: ["spend", "log"] },
 ];
 
 /** Owns the fleet stream so its 2 s ticks re-render only this pill, not the whole Admin view. */
@@ -121,6 +123,7 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
   const onCountPeople = useMemo(() => setCount("people"), []);
   const onCountGroups = useMemo(() => setCount("groups"), []);
   const onCountReporters = useMemo(() => setCount("reporters"), []);
+  const onCountSpend = useMemo(() => setCount("spend"), []);
   const onCountLog = useMemo(() => setCount("log"), []);
   const onPeoplePaging = useCallback((p: { page?: number; pageSize?: number; q?: string }) => setPaging((s) => ({ ...s, people: { ...s.people, ...p } })), []);
   const onGroupPaging = useCallback((p: { page?: number; pageSize?: number }) => setPaging((s) => ({ ...s, groups: { ...s.groups, ...p } })), []);
@@ -213,6 +216,7 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
                   {tab === "reporting" && <ReportingTab api={api} onLocked={onLocked} />}
                   {tab === "settings" && <SettingsTab api={api} onLocked={onLocked} />}
                   {tab === "prices" && <ModelPricesTab api={api} onLocked={onLocked} />}
+                  {tab === "spend" && <SpendTab fleetOptions={fleetOptions} onCount={onCountSpend} />}
                   {tab === "log" && <LogTab api={api} {...paging.log} onPaging={onLogPaging} onCount={onCountLog} onLocked={onLocked} />}
                 </div>
                 <AdminFoot version={version} className="afoot-narrow" />

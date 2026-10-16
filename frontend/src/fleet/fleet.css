@@ -833,27 +833,6 @@ body.modal-open #root { filter: blur(5px); }
 .podium .rgh .cnt { color: var(--muted); font-size: 12px; }
 .podium .rgroup .ritem { padding-left: 24px; }
 
-/* spend by person or group, in the right panel */
-.podium .spendp { padding: 12px 14px 14px; border-bottom: 1px solid var(--border); }
-.podium .spendp .sh { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-.podium .spendp .hb { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.podium .spendp .hb li { display: grid; grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) 62px; gap: 10px; align-items: center; border-radius: 4px; }
-.podium .spendp .hb li.on { background: var(--hover); }
-.podium .spendp .lbl { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; color: var(--ink2); }
-.podium .spendp .lbl > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.podium .spendp .trk { height: 14px; display: flex; align-items: center; }
-.podium .spendp .trk i { display: block; height: 10px; background: var(--ink2); border-radius: 0 4px 4px 0; }
-.podium .spendp .hb li.on .trk i { background: var(--ink); }
-.podium .spendp .val { text-align: right; font-size: 12px; color: var(--ink); }
-.podium .spendp .readout { margin-top: 8px; font-size: 11.5px; color: var(--ink2); min-height: 1.4em; }
-.podium .spendp .note { color: var(--muted); font-size: 11.5px; margin-top: 8px; }
-.podium .spendp .tw { overflow-x: auto; }
-.podium .spendp table.tv { width: 100%; border-collapse: collapse; font-size: 12px; }
-.podium .spendp .tv th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11.5px; padding: 4px 0; border-bottom: 1px solid var(--border); }
-.podium .spendp .tv td, .podium .spendp .tv tfoot th { padding: 5px 0; border-bottom: 1px solid var(--grid); }
-.podium .spendp .tv tfoot th, .podium .spendp .tv tfoot td { color: var(--ink); font-weight: 600; border-bottom: 0; }
-.podium .spendp .tv .n { text-align: right; padding-left: 8px; }
-
 /* Responding to a waiting session from Podium (#206, mockup/podium-respond.html). Respond at the right end of the amber
    band; the Activity modal's answer panel and message box; signing in. Every color is a theme token. */
 .podium { --warn-text: color-mix(in srgb, var(--warn) 60%, var(--ink)); }
