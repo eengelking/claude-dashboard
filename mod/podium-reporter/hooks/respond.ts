@@ -201,10 +201,15 @@ export function planRejection(text: string | undefined): 'feedback' | 'closed' {
 }
 
 /** Whether a tool call ended refused by a permission decision (the terminal's No, or a hook's deny), not run. */
-export function toolDenied(res: { deny?: string; isError?: boolean; text?: string; result?: unknown } | null | undefined): boolean {
+export function toolDenied(res: { deny?: string; isError?: boolean; text?: string; result?: unknown } | null | undefined, sent?: string): boolean {
   if (!res) return false;
   if (res.deny !== undefined) return true;
-  return res.isError === true && /doesn't want to proceed with this tool use|Denied by PermissionRequest hook|Permission to use .* (?:has been|was) denied/i.test(res.text ?? '');
+  if (res.isError !== true) return false;
+  const text = res.text ?? '';
+  // A PermissionRequest deny ends the call as an error whose text is the deny's own message, with no stock wording
+  // (seen live on 2.1.301), so the message this mod sent is how its own Deny is recognized.
+  if (sent && text.includes(sent)) return true;
+  return /doesn't want to proceed with this tool use|Denied by PermissionRequest hook|Permission to use .* (?:has been|was) denied/i.test(text);
 }
 
 /** A short summary of a question answered in the terminal, for Podium's "Answered in the terminal" (≤ 2,000 characters). */

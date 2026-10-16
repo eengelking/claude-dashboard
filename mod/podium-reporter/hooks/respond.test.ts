@@ -494,7 +494,22 @@ describe('respond: a tool permission', () => {
     w.deliver(by('deny', ask.id, { text: 'Run the build first.' }))
     expect(await pr).toEqual({ decision: { behavior: 'deny', message: 'Run the build first.' } })
     expect(w.logs.some((l) => l.startsWith('Denied from Podium by Ed at '))).toBe(true)
-    w.toolRun.resolve!({ deny: 'Run the build first.' })
+    // What Claude Code resolves the call to after a PermissionRequest deny, as seen live on 2.1.301: an error whose text
+    // is the deny's own message ("Error: Run the build first." in the transcript), no stock wording.
+    w.toolRun.resolve!({ isError: true, text: 'Run the build first.', result: 'Run the build first.' })
+    await call
+    await w.clock.advance(1000)
+    expect(results(w)).toEqual([[`dlv_deny_${ask.id}`, 'took']])
+    expect(closes(w)).toEqual([])
+  })
+
+  test('a Deny from Podium with no reason is recognized too, by the message it sent', { options: ON }, async ($, on) => {
+    const w = world(on)
+    await started($, w)
+    const { call, pr, ask } = await prompt($, w)
+    w.deliver(by('deny', ask.id, {}))
+    expect(await pr).toEqual({ decision: { behavior: 'deny', message: 'Denied from Podium.' } })
+    w.toolRun.resolve!({ isError: true, text: 'Denied from Podium.', result: 'Denied from Podium.' })
     await call
     await w.clock.advance(1000)
     expect(results(w)).toEqual([[`dlv_deny_${ask.id}`, 'took']])

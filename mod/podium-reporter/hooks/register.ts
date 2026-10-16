@@ -920,8 +920,9 @@ async function permissionAsk($: Engine, r: Runtime, e: { tool_name: string; tool
 function settleToolAsk(id: string, res: ToolResult | undefined): void {
   const a = asks.get(id);
   if (!a || a.ask.kind !== 'permission') return;
-  const denied = toolDenied(res);
   const d = a.answered;
+  const sent = d && d.kind !== 'allow-once' ? (toolDecision(d.kind === 'reply' ? { ...d, kind: 'deny' } : d).decision as { message?: string }).message : undefined;
+  const denied = toolDenied(res, sent);
   finish(a);
   if (d && (d.kind === 'allow-once') === !denied) queueResult(a.sessionId, d.id, 'took');
   else {
