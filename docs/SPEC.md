@@ -231,7 +231,7 @@ Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") rec
   `.claude-plugin/marketplace.json` with a `git-subdir` source pointing at `mod/podium-reporter` in this
   repo (a full `https://` URL; the `owner/repo` shorthand clones over SSH). Users run
   `/plugin install podium-reporter@eengelking-marketplace`. This repo carries no marketplace file. The
-  mod's `plugin.json` `version` is the one place a version is set. The `token` option is `sensitive`, so it
+  mod's version is set in `plugin.json` and in `VERSION` in `hooks/register.ts`, kept equal by `scripts/versions.test.ts`. The `token` option is `sensitive`, so it
   is set with `/plugin configure`, not the `/config` menu. `claude --plugin-dir` stays the way to work on
   the mod.
 
@@ -698,7 +698,7 @@ interface ActivityEvent {
 ### 6.5 Models, windows, prices (`models.ts`, pure)
 
 - `family(modelIdOrAlias)`: lowercase substring match: `opus` → `opus`, `sonnet` → `sonnet`, `haiku` → `haiku`, `fable` → `fable`, else `other`. Only a Claude model matches: a bare alias (`opus`, `sonnet[1m]`) or an id containing `claude`. A local model such as `my-sonnet-finetune:latest` is `other` even though its name holds a family word. The UI colors by family (section 8.3); `other` is shown with the raw model name and labeled as not a Claude model. The UI labels a Claude model with its family and version (#116): `modelVersion` in `frontend/src/fleet/logic.ts` reads the version from the id, `claude-sonnet-5-5` → `Sonnet 5.5`, `claude-opus-4-8` → `Opus 4.8`, `claude-sonnet-5` → `Sonnet 5`, and also the older `claude-3-5-sonnet-…` order. Version parts are one or two digits, so a date stamp is ignored. An alias with no version (`sonnet`, `opus[1m]`, `opusplan`) shows the family alone; the version is never guessed. The full id stays in the tooltip and the color stays tied to the family. The reporter's own event text (`shortName`) is unchanged.
-- `windowOf(model)`: `null` for a model in the `other` family (the percentage is then shown as unknown, never computed against 1M). **Assumption:** 200,000 for `haiku`, 1,000,000 for the others; for the main loop prefer `$.session.usage().context.window`. Verify with the `claude-api` skill and record the sources in `docs/ARCHITECTURE.md`.
+- `windowOf(model)`: `null` for a model in the `other` family (the percentage is then shown as unknown, never computed against 1M). **Assumption:** 200,000 for Haiku 4.5 and older (`haiku-4`, `haiku-3`, `claude-3`), 1,000,000 for the others, Haiku 5.5 included; for the main loop prefer `$.session.usage().context.window`. Verify with the `claude-api` skill and record the sources in `docs/ARCHITECTURE.md`.
 - `priceOf(family)`: USD per million tokens, split input / output / cache read / cache write. **Placeholder values must be replaced with current published prices** (use the `claude-api` skill). Keep all of it in this one file with a visible comment and a `PRICES_AS_OF` date constant. Cost estimate = Σ tokens × price / 1e6. A model in the `other` family has no built-in price: `priceOf` and `costOf` return `null`, the report carries `null` for the agent's `costUsdEst` and for the session's `costUsd` (the engine's ledger figure is not trusted for a model Podium has no price for, because what it is priced from is not known; see Known issues in `docs/ARCHITECTURE.md`), the UI shows "n/a" with the reason, and the fleet's "est. cost today" leaves those sessions out and says how many (`kpis.unpricedSessions`).
 
 - **Admin prices and where they are applied (#117).** The reporter's table is only a fallback for a server that predates this. Since reporter 0.12.0 each report carries `usageByModel`: the tokens of a loop per model and per prompt-size tier (`std`, or `long` for a request whose prompt, input plus cache reads plus cache writes, is over 100,000 tokens), for the whole session and for each agent, with cache writes split into the 5-minute and the 1-hour kind when Claude Code gives the split (`cache_creation.ephemeral_1h_input_tokens`; otherwise all cache writes count at the 5-minute rate). The server prices these in one place, `server/src/fleet/pricing.ts`: the built-in table (Anthropic's pricing sheet of 2026-10-13, one row per model id, five prices each: input, output, cache read, 5-minute cache write, 1-hour cache write, in USD per million tokens; Haiku 5.5 has a second set for prompts over 100,000 tokens) with the Admin's changes laid over it (Admin > Model prices, stored in `settings.model_prices`). A model id resolves to the Admin's exact row for that id, else a built-in row (an alias such as `opus` is the family's current model), else nothing. The stored cost is repriced when it is read, so a price change moves the cards, the orchestrator and agent costs, the facts bar, "Est. cost today", the spend panel and History at once, and a restart keeps it. The orchestrator's own cost stays the session total minus its agents, so the figures add up. A row from a reporter that sends no `usageByModel` (or an empty list) keeps the cost it was stored with. A model nobody priced adds nothing to the total, so the rest of a mixed session still follows the Admin's prices; a session whose models are all unpriced keeps its stored cost. This makes the session figure an estimate from the Admin's prices rather than the engine ledger's own number; the ledger's `costUsd` is still stored and is what a reporter older than 0.12.0 shows. The sparkline of cost per minute is still drawn from the ledger's samples and does not follow Admin prices. The day starts at local midnight in the server's timezone; podiumctl gives the container the host's `TZ` (or the `TZ` set with `podiumctl config set`), because the container would otherwise run in UTC and roll the day over at the wrong hour (#139).
@@ -954,7 +954,7 @@ A session that has done nothing yet is not part of the wall. That means its stat
 | `wall` | `{ notices, showBackgroundSessions }` | when an Admin setting or a closed notice changes the wall's notices (8.1) |
 | `tick` | `{ serverTime, kpis }` | every 2 s (also serves as keepalive; the client treats 6 s of silence as disconnected) |
 
-The registry removes a client on `close`/`error`, and a write that throws never crashes the process. Supports 20 simultaneous clients. Send `retry: 2000`.
+The registry removes a client on `close`/`error`, and a write that throws never crashes the process. Supports 100 simultaneous clients. Send `retry: 2000`.
 
 ### 7.7 Hardening
 
@@ -1288,6 +1288,8 @@ Phases run in order. Each ends with committed, passing, runnable work. Inside a 
 ---
 
 ## 10. Rules for the implementing agent
+
+*These rules were written for the original build. Where they differ from `.claude/CLAUDE.md` (for example the branch name and the push and PR rules below), that file governs now.*
 
 ### 10.1 Repository rules (from this repo's `.claude/CLAUDE.md`)
 
