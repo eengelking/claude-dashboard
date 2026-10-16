@@ -643,7 +643,7 @@ Not verified: real touch input; screen reader output (roles and names are assert
 
 ### Phase 3: the reporter mod
 
-Built: `mod/podium-reporter/` with `plugin.json` (seven options at 0.5.0), `hooks/hooks.json`, `register.ts`
+Built: `mod/podium-reporter/` with `plugin.json` (eleven options as of 0.14.2), `hooks/hooks.json`, `register.ts`
 (wiring), `state.ts`, `plan.ts`, `failures.ts`, `models.ts`, `report.ts`, `transport.ts`, `git.ts`,
 `protocol.ts`, their tests, a `tsconfig.json` from the types header, and
 `scripts/podium-mod-typecheck.sh`.
