@@ -205,6 +205,7 @@ export function ingestReport(f: FleetDb, report: Report, serverTime: number, own
       peak_context: Math.max(0, Math.min(1, peakPct / 100)),
       running_agents: ended ? 0 : running.length,
       cost_usd: row.cost_usd,
+      usage_json: row.usage_json,
     });
 
     return { sessionId: sid, newEvents, ended, revived, created: !prev, wasDone: prev?.status === 'done', clockSkewMs: report.sentAt - serverTime };

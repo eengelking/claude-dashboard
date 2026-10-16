@@ -287,8 +287,8 @@ a price change needs no migration of stored rows. A request's tier depends on it
 decided per request in the reporter, not from totals.
 **Cost.** The session figure is now an estimate from the Admin's prices, not Claude Code's ledger, for any reporter
 that sends usage (0.12.0 and later); a person who sets a contracted rate in Claude Code's `modelPricing` must set it
-here too. Reports grow by a few rows per model. The cost-per-minute sparkline still comes from the ledger's samples
-and does not follow the Admin's prices. Cache writes count at the 5-minute rate unless Claude Code reports the
+here too. Reports grow by a few rows per model, and each sample row stores the session's usage so the cost-per-minute
+sparkline can follow the Admin's prices too (#270). Cache writes count at the 5-minute rate unless Claude Code reports the
 1-hour part; the `turn.step` usage fields in SPEC 5 carry no such split, so until it does the 1-hour price has no effect.
 
 ## 24. An agent's activity is sent only while someone watches it, and never kept

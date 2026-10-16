@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Fixed
+
+- **The cost-per-minute sparkline follows the Admin's model prices (#270).** It was drawn from Claude Code's ledger samples, so after a price change it disagreed with the cards, the facts bar and "Est. cost today". Each sample now keeps the session's per-model usage (migration 16), and the series is priced from it like the other figures, so a price change moves the sparkline at once. Samples from a reporter older than 0.12.0, or from before this release, keep the ledger's figures, and the step where the two kinds meet counts as zero. Existing samples have no usage, so the sparkline's last hour mixes both for an hour after the upgrade.
+
 ## [1.0.1] - 2026-10-16
 
 ### Changed

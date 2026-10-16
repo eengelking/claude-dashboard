@@ -122,4 +122,43 @@ describe('Fleet prices model usage (#117)', () => {
     fleet.prices.set('sonnet-5-5', { std: S });
     expect(seen.join('')).toContain('event: snapshot');
   });
+
+  // Issue #270: the cost-per-minute sparkline is drawn from the same priced figures as the card.
+  describe('cost per minute (#270)', () => {
+    const minuteSum = (f: Fleet) => f.kpis().costPerMinute.reduce((a, b) => a + b, 0);
+    function twoReports(opts: { usage: boolean }) {
+      let now = NOW - 30_000;
+      const fleet = new Fleet(new FleetDb(openDb(':memory:')), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' }, () => now);
+      const send = (input: number, ledger: number) => {
+        const r: Report = fixtureReport();
+        r.sentAt = now;
+        r.session.startedAt = NOW - 60_000;
+        r.session.model = 'claude-sonnet-5-5';
+        if (opts.usage) r.session.usageByModel = use('claude-sonnet-5-5', input);
+        else delete r.session.usageByModel;
+        r.session.costUsd = ledger;
+        r.agents = [];
+        fleet.ingest(r);
+      };
+      send(M, 10); // the ledger runs 10 -> 15, a step of 5, whatever the prices say
+      now += 10_000;
+      send(2 * M, 15);
+      now = NOW;
+      return fleet;
+    }
+
+    it('follows the priced figures, not the ledger, and moves with an Admin price', () => {
+      const fleet = twoReports({ usage: true });
+      const step = fleet.liveViews()[0]!.costUsd! - fleet.prices.pricing().costOf(use('claude-sonnet-5-5', M))!;
+      expect(step).toBeGreaterThan(0);
+      expect(minuteSum(fleet)).toBeCloseTo(step, 9);
+      expect(fleet.prices.set('sonnet-5-5', { std: S })).toBeNull();
+      expect(minuteSum(fleet)).toBeCloseTo(3, 9); // 1M more input at the Admin's 3 USD
+    });
+
+    it('keeps the ledger samples for a reporter that sends no usage', () => {
+      const fleet = twoReports({ usage: false });
+      expect(minuteSum(fleet)).toBeCloseTo(5, 9);
+    });
+  });
 });

@@ -199,6 +199,12 @@ ALTER TABLE admin_log ADD COLUMN actor TEXT;`,
     sql: `ALTER TABLE sessions ADD COLUMN cleared_from TEXT;
 CREATE INDEX IF NOT EXISTS sessions_cleared_from ON sessions(cleared_from);`,
   },
+  {
+    version: 16,
+    // The session's per-model usage at each sample (issue #270), so the cost-per-minute chart can be priced with the
+    // Admin's prices like every other figure. NULL for samples from before it existed and from older reporters.
+    sql: 'ALTER TABLE samples ADD COLUMN usage_json TEXT;',
+  },
 ];
 
 export interface SessionRow {
@@ -310,6 +316,8 @@ export interface SampleRow {
   peak_context: number;
   running_agents: number;
   cost_usd: number | null;
+  /** The session's `usage_json` when the sample was taken; absent or NULL when the reporter sent none. */
+  usage_json?: string | null;
 }
 
 /** What a cost query reads of a session row. */
@@ -627,20 +635,20 @@ export class FleetDb {
   /** Writes the sample for second `t`, replacing one already there (at most one per second). */
   upsertSample(row: SampleRow): void {
     this.stmt(
-      `INSERT INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd)
-       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd)
+      `INSERT INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd, usage_json)
+       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd, :usage_json)
        ON CONFLICT(session_id, t) DO UPDATE SET tokens_total = excluded.tokens_total,
          tokens_delta = excluded.tokens_delta, peak_context = excluded.peak_context,
-         running_agents = excluded.running_agents, cost_usd = excluded.cost_usd`,
-    ).run(row as unknown as Params);
+         running_agents = excluded.running_agents, cost_usd = excluded.cost_usd, usage_json = excluded.usage_json`,
+    ).run({ ...row, usage_json: row.usage_json ?? null } as unknown as Params);
   }
 
   /** Writes a sample only if that second has none yet. */
   insertSampleIfAbsent(row: SampleRow): void {
     this.stmt(
-      `INSERT OR IGNORE INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd)
-       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd)`,
-    ).run(row as unknown as Params);
+      `INSERT OR IGNORE INTO samples (session_id, t, tokens_total, tokens_delta, peak_context, running_agents, cost_usd, usage_json)
+       VALUES (:session_id, :t, :tokens_total, :tokens_delta, :peak_context, :running_agents, :cost_usd, :usage_json)`,
+    ).run({ ...row, usage_json: row.usage_json ?? null } as unknown as Params);
   }
 
   samplesSince(sessionId: string, fromT: number): SampleRow[] {
@@ -658,14 +666,36 @@ export class FleetDb {
   }
 
   /** Positive cost increase per minute across all sessions, for seconds >= fromT (minute = floor(t/60)). */
-  fleetCostPerMinute(fromT: number): { m: number; v: number }[] {
-    return this.stmt(
-      `SELECT m, SUM(d) AS v FROM (
-         SELECT t / 60 AS m,
-           MAX(0, COALESCE(cost_usd, 0) - COALESCE(LAG(cost_usd) OVER (PARTITION BY session_id ORDER BY t), cost_usd, 0)) AS d
-         FROM samples WHERE t >= ?
-       ) GROUP BY m ORDER BY m`,
-    ).all(fromT) as unknown as { m: number; v: number }[];
+  fleetCostPerMinute(fromT: number, cost: CostOf = storedCost): { m: number; v: number }[] {
+    const rows = this.stmt('SELECT session_id, t, cost_usd, usage_json FROM samples WHERE t >= ? ORDER BY session_id, t').all(
+      fromT,
+    ) as unknown as { session_id: string; t: number; cost_usd: number | null; usage_json: string | null }[];
+    const by = new Map<number, number>();
+    let session = '';
+    let prev = 0;
+    let hadUsage = false;
+    let lastUsage: string | null = null;
+    let lastStored: number | null = null;
+    let lastCost: number | null = null;
+    for (const r of rows) {
+      // Samples repeat their usage while a session is quiet, so price each distinct value once.
+      if (r.usage_json === null || r.usage_json !== lastUsage || r.cost_usd !== lastStored || lastCost === null) {
+        lastCost = cost(r);
+        lastUsage = r.usage_json;
+        lastStored = r.cost_usd;
+      }
+      const c = lastCost ?? 0;
+      const usage = r.usage_json !== null;
+      // The first sample in the window, or one where the source of the figure changes (an older sample priced from
+      // the ledger next to a newer one priced from usage), has nothing comparable before it.
+      const d = r.session_id !== session || usage !== hadUsage ? 0 : Math.max(0, c - prev);
+      session = r.session_id;
+      hadUsage = usage;
+      prev = c;
+      const m = Math.floor(r.t / 60);
+      by.set(m, (by.get(m) ?? 0) + d);
+    }
+    return [...by].sort((a, b) => a[0] - b[0]).map(([m, v]) => ({ m, v }));
   }
 
   // ---- retention ------------------------------------------------------------------------------

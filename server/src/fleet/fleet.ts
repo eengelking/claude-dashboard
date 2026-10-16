@@ -134,7 +134,10 @@ export class Fleet {
     );
     this.wall = new WallSettings(db.db, () => this.hub.broadcast('wall', this.wall.view()));
     // A price change moves every cost on the wall, so open browsers get a fresh snapshot.
-    this.prices = new ModelPriceStore(db.db, () => this.hub.broadcast('snapshot', this.state()));
+    this.prices = new ModelPriceStore(db.db, () => {
+      this.costMinuteCache = null; // the sparkline follows the prices too (#270)
+      this.hub.broadcast('snapshot', this.state());
+    });
     // On start every stored session that has not ended is treated as stale until it reports again;
     // a done session still inside its linger window stays until the window closes.
     for (const row of db.liveCandidates(this.startedAt - cfg.lingerMs)) {
@@ -323,7 +326,7 @@ export class Fleet {
     const pricing = this.prices.pricing();
     const cost: CostOf = (r) => repriced(pricing, r.usage_json, r.cost_usd);
     if (!this.costMinuteCache || now - this.costMinuteCache.at > 5000) {
-      this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60) };
+      this.costMinuteCache = { at: now, rows: this.db.fleetCostPerMinute((Math.floor(nowSec / 60) - 59) * 60, cost) };
     }
     const spend = this.db.spendTotals(startOfDay(now), cost);
     return computeKpis(

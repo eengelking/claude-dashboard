@@ -826,7 +826,8 @@ CREATE TABLE blowouts (
 CREATE TABLE samples (                                                     -- one row per second per live session
   session_id TEXT NOT NULL, t INTEGER NOT NULL,                            -- t = whole seconds
   tokens_total INTEGER NOT NULL, tokens_delta INTEGER NOT NULL, peak_context REAL NOT NULL,
-  running_agents INTEGER NOT NULL, cost_usd REAL, PRIMARY KEY (session_id, t)
+  running_agents INTEGER NOT NULL, cost_usd REAL, usage_json TEXT,        -- usage_json: the session's usageByModel at that second (migration 16, #270); NULL from an older reporter
+  PRIMARY KEY (session_id, t)
 );
 ```
 
@@ -883,7 +884,7 @@ On a valid report, in one transaction:
 
 **Blowout level** (the signal, computed in `derive.ts` and tested): `total = session.blowouts + Σ agent.blowouts`. `level = 0` if total is 0; `2` if the orchestrator has ≥ 2 blowouts or any single agent has ≥ 2 or total ≥ 3; else `1`. Level 2 is the red "likely losing context" state. Level 1 is the amber "context exceeded" state.
 
-**KPIs:** live orchestrators; counts running/waiting/stale (a waiting session idle on background work, #119, is not in `waiting`); subagents running and agents total; plan steps done/total across live sessions; est. cost today (Σ of what each session, live or ended, spent since local midnight on the server, #139: a session that started today counts whole; one that started earlier counts the share of its cost that came after the ledger's last sample before midnight, and one with no such sample counts nothing), and the same sum split by owner with each owner's group (`costTodayByOwner`, largest first, an owner of `null` for sessions with none); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points.
+**KPIs:** live orchestrators; counts running/waiting/stale (a waiting session idle on background work, #119, is not in `waiting`); subagents running and agents total; plan steps done/total across live sessions; est. cost today (Σ of what each session, live or ended, spent since local midnight on the server, #139: a session that started today counts whole; one that started earlier counts the share of its cost that came after the ledger's last sample before midnight, and one with no such sample counts nothing), and the same sum split by owner with each owner's group (`costTodayByOwner`, largest first, an owner of `null` for sessions with none); tokens in the last 60 s (Σ `tokens_delta`); total blowouts with the count of sessions at level 2; sparkline series for cost-per-minute and tokens-per-second, 60 points. The cost-per-minute series is priced like every other cost figure (#270): each sample's `usage_json` is repriced with the Admin's prices, so a price change moves the sparkline with the cards; samples from a reporter that sends no usage keep the ledger's `cost_usd`, and where the two kinds meet in one window that step counts as zero.
 
 ### 7.4 View types (server → UI; defined once in `protocol.ts`, imported by the UI)
 
