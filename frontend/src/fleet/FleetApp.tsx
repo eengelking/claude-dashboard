@@ -28,7 +28,7 @@ import { usePageVisible } from "./usePageVisible";
 import { useHeartbeat } from "./useHeartbeat";
 import { usePanes } from "./usePanes";
 import { usePeoplePrefs } from "./usePeoplePrefs";
-import { ADMIN, buildUnits, filterByPeople, isFlat, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, type GroupBy, type PeopleFilter, type Unit } from "./people";
+import { ADMIN, buildUnits, filterByPeople, machineLabels, meKey, NO_FILTER, orderUnits, peopleActive, type GroupBy, type PeopleFilter, type Unit } from "./people";
 import type { WallPeople } from "./components/Wall";
 import type { RailPeople } from "./components/Rail";
 import { APP_NAME, type ActivityView } from "./types";
