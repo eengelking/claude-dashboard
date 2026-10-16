@@ -1,6 +1,6 @@
 {
   "name": "podium",
-  "version": "0.1.0",
+  "version": "0.14.3",
   "description": "A live fleet console for Claude Code: every session, agent, plan, cost and context window in one browser tab.",
   "license": "MIT",
   "author": "Ed Engelking",

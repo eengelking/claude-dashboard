@@ -98,17 +98,19 @@ Order of operations for any tracked change. The policy is the invariant that hol
 - **Verify first:** `npm test` and `npm run build` (CI runs both). If the mod changed, also `npm run test:mod` and `npm run typecheck:mod`, which need Claude Code installed and cannot run in CI.
 - **Publish:** nothing. There is no package registry and no container registry; users build the image with `podiumctl build`. Skip the skill's publish step.
 - **Tag and GitHub Release:** `vMAJOR.MINOR.PATCH`, annotated, from `main` after the release PR has merged. The release notes are the CHANGELOG section verbatim. Propose the tag and wait for approval; never push one unprompted.
-- **Doc-only PRs get no release.** A mod-only fix between releases bumps only the mod's version (CI's `mod-version-check` enforces that) and does not need a release of its own. Pre-1.0, a minor release may include breaking changes.
+- **One version for the whole product.** Podium and `podium-reporter` share one `MAJOR.MINOR.PATCH`, the way Kubernetes versions its parts together. Every file in the table below carries the same number at all times; `scripts/versions.test.ts` fails if any of them differ. Bump the patch for a fix and the minor for new behavior. Releases 0.2.0 to 0.14.3 were cut retroactively at the commit where the reporter's version changed.
+- **What makes a release.** A PR that changes the mod (anything under `mod/podium-reporter/` but its tests) must bump the version, because installed copies only update when `plugin.json`'s number changes (CI's `mod-version-check` enforces it). Since the mod and the app share a number, that PR is a release PR: it bumps every file in the table, renames `[Unreleased]` in the CHANGELOG, and gets a tag after it merges. A server- or UI-only change does not bump anything; it waits under `[Unreleased]` until the next release. Doc-only PRs get no release. Pre-1.0, a minor release may include breaking changes.
 
 Everything below changes in the release PR itself, in the same commit, never as a follow-up after the tag:
 
 | File | What changes |
 |---|---|
 | `CHANGELOG.md` | Rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD` and add a fresh empty `[Unreleased]` above it. Update the two links at the bottom (`[Unreleased]` compares `vX.Y.Z...HEAD`; `[X.Y.Z]` points at the release) |
-| `package.json`, `server/package.json`, `frontend/package.json` | `version`, all three the same number |
+| `package.json`, `server/package.json`, `frontend/package.json` | `version`, all three the new release number |
 | `package-lock.json` | Run `npm install --package-lock-only` so its entries follow the manifests |
-| `mod/podium-reporter/.claude-plugin/plugin.json` | `version`, set to the same release number |
-| `mod/podium-reporter/hooks/register.ts` | `VERSION`, equal to `plugin.json` (`scripts/versions.test.ts` fails if they differ) |
+| `mod/podium-reporter/.claude-plugin/plugin.json` | `version`, the same release number |
+| `mod/podium-reporter/hooks/register.ts` | `VERSION`, equal to `plugin.json` |
+| `server/src/fleet/compat.ts` | On a new **minor** only: move `max` in `REPORTER_SUPPORT` to the release's `MAJOR.MINOR.0`, or the server tells every up-to-date mod it is newer than the server supports (SPEC 6.8) |
 
 Then grep the repo for the old version string and look at every hit before assuming the table is complete. Known hits that are sample data and do not change: `docs/fixtures/report.sample.json`, the fixtures in `server/src/fleet/*.test.ts`, `mod/podium-reporter/hooks/scripted.ts`, the simulator's `0.1.0-sim`, and the manifest example in `docs/SPEC.md`.
 

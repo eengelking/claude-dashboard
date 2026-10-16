@@ -84,8 +84,10 @@ If your PR changes the mod (anything under `mod/podium-reporter/` other than its
 `mod/podium-reporter/.claude-plugin/plugin.json` and `VERSION` in `mod/podium-reporter/hooks/register.ts`
 in the same PR (a test checks that they match). Installed copies only update when that
 number changes, so a mod fix that lands without a bump reaches nobody. CI (the "Mod version bump check" workflow in `.github/workflows/mod-version-check.yml`) fails a PR
-that forgets. Bump the patch number for a fix and the minor number for new behavior. A release sets the mod
-and the `package.json` versions to the same number, and the maintainer handles that when cutting one.
+that forgets. Bump the patch number for a fix and the minor number for new behavior. Podium and the mod share one
+version, so that PR also sets the same number in the three `package.json` files (and runs
+`npm install --package-lock-only`) and renames `[Unreleased]` in `CHANGELOG.md`; a test checks that they all match.
+The maintainer tags the release after it merges. `CLAUDE.md`, "Releases", has the full list of files.
 
 If the bump is a new minor version, also move `max` in `REPORTER_SUPPORT` (`server/src/fleet/compat.ts`) to
 that version. Otherwise the server tells every up-to-date mod it is newer than the server supports. Raise

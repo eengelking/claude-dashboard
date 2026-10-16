@@ -30,4 +30,20 @@ describe("package versions", () => {
     const v = ["package.json", "server/package.json", "frontend/package.json"].map((p) => JSON.parse(read(p)).version);
     expect(new Set(v).size).toBe(1);
   });
+
+  // Podium and the mod are versioned as one product (CLAUDE.md, "Releases"): a release, or any PR that
+  // changes the mod, sets every one of them to the same number.
+  it("the mod and the packages share one version", () => {
+    const mod = JSON.parse(read("mod/podium-reporter/.claude-plugin/plugin.json")).version as string;
+    expect(JSON.parse(read("package.json")).version).toBe(mod);
+  });
+
+  it("package-lock.json follows the manifests", () => {
+    const lock = JSON.parse(read("package-lock.json"));
+    const root = JSON.parse(read("package.json")).version as string;
+    expect(lock.version).toBe(root);
+    expect(lock.packages[""].version).toBe(root);
+    expect(lock.packages.server.version).toBe(root);
+    expect(lock.packages.frontend.version).toBe(root);
+  });
 });
