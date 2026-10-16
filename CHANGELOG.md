@@ -14,7 +14,13 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-16
+
+This is the first stable release. From here on every PR to `main` is its own release (see #241 below).
+
 ### Changed
+
+- **From 1.0.0 on, every PR to `main` is a release (#241).** `CLAUDE.md` now says that a breaking change is a major release, a feature a minor release, and a fix, a mod-only fix or a documentation-only change a patch release; that every release PR updates every file in its table and the CHANGELOG; and that a fresh Haiku subagent checks the release before the PR is opened and reports a verdict without editing anything. Before 1.0.0 the old rules held. `CONTRIBUTING.md` points at it. The tag is still proposed after the merge and waits for the maintainer.
 
 - **The people controls share the wall's one control row (#245, #246).** With two or more people reporting, Group by and Order by join the status filter, Sort by and the text filter in an outlined People group, so the wall spends one row on controls, or two when the window is narrow, never three. Group by's None is now **All**, and a new **Me** appears while someone is signed in as a person: a flat wall of just their orchestrators. Who "me" is now comes from the browser's sign-in (the one Respond uses), so **You are**, **Only me**, the wall's "Showing X / Show everyone" line and the `podium.me` setting are gone; the left list's person headers and **All orchestrators** still narrow and widen the wall. Where the caption "N shown · M cleared today" does not fit, it is an info icon with the same words as its tooltip. **Upgrade note:** signing in needs the Admin's respond and activity-feed flags to be on; with them off nobody is signed in, so there is no Me and no "you" marking. See SPEC (People view) and `mockup/podium-wall-controls.html`.
 
@@ -403,7 +409,8 @@ and a plugin you can install from a marketplace.
 - The project was renamed from `claude-dashboard` to `podium`
   (`eengelking/podium`). (PR #5)
 
-[Unreleased]: https://github.com/eengelking/podium/compare/v0.14.3...HEAD
+[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/eengelking/podium/compare/v0.14.3...v1.0.0
 [0.14.3]: https://github.com/eengelking/podium/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/eengelking/podium/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/eengelking/podium/compare/v0.14.0...v0.14.1

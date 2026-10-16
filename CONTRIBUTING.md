@@ -87,7 +87,7 @@ number changes, so a mod fix that lands without a bump reaches nobody. CI (the "
 that forgets. Bump the patch number for a fix and the minor number for new behavior. Podium and the mod share one
 version, so that PR also sets the same number in the three `package.json` files (and runs
 `npm install --package-lock-only`) and renames `[Unreleased]` in `CHANGELOG.md`; a test checks that they all match.
-The maintainer tags the release after it merges. `CLAUDE.md`, "Releases", has the full list of files.
+The maintainer tags the release after it merges. `CLAUDE.md`, "Releases", has the full list of files. From 1.0.0 on every PR to `main` is a release, documentation-only ones included (those are patch releases), so every PR bumps these files and renames `[Unreleased]`; `CLAUDE.md` says how the bump is chosen.
 
 If the bump is a new minor version, also move `max` in `REPORTER_SUPPORT` (`server/src/fleet/compat.ts`) to
 that version. Otherwise the server tells every up-to-date mod it is newer than the server supports. Raise
