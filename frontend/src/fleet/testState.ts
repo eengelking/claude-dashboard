@@ -4,5 +4,5 @@ import type { StateBody } from "./types";
 import { makeState } from "./fixtures";
 
 export function stateFrom(over: Partial<StateBody> = {}): FleetState {
-  return fleetReducer(initialState, { type: "snapshot", body: makeState(over), at: Date.now() });
+  return fleetReducer(initialState, { type: "snapshot", body: makeState(over) });
 }

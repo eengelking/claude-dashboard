@@ -14,8 +14,6 @@ export interface FleetState {
   /** Why the first load failed, until a message arrives. */
   error: string | null;
   serverTime: number;
-  /** Local time of the last message from the server. */
-  lastMessageAt: number;
   config: LifecycleConfig;
   sessions: Record<string, SessionView>;
   /** Sessions that left the live set and are playing their leave animation, with when it started. */
@@ -35,12 +33,12 @@ export interface FleetState {
 }
 
 export type FleetAction =
-  | { type: "snapshot"; body: StateBody; at: number }
-  | { type: "session"; view: SessionView; at: number }
-  | { type: "activity"; event: ActivityView; at: number }
+  | { type: "snapshot"; body: StateBody }
+  | { type: "session"; view: SessionView }
+  | { type: "activity"; event: ActivityView }
   | { type: "removed"; sessionId: string; reason: RemovedReason; at: number }
-  | { type: "wall"; wall: WallSettingsView; at: number }
-  | { type: "tick"; serverTime: number; kpis: Kpis; at: number }
+  | { type: "wall"; wall: WallSettingsView }
+  | { type: "tick"; serverTime: number; kpis: Kpis }
   | { type: "disconnected"; at: number }
   | { type: "error"; message: string }
   | { type: "purge"; sessionId: string };
@@ -49,7 +47,6 @@ export const initialState: FleetState = {
   phase: "loading",
   error: null,
   serverTime: 0,
-  lastMessageAt: 0,
   config: { staleAfterMs: 15_000, dropAfterMs: 60_000, lingerMs: 8_000, detachedHideAfterMs: 60_000 },
   sessions: {},
   leaving: {},
@@ -74,8 +71,8 @@ function capEvents(list: ActivityView[]): ActivityView[] {
   return out;
 }
 
-function live(state: FleetState, at: number): Pick<FleetState, "phase" | "error" | "lastMessageAt"> {
-  return { phase: "live", error: null, lastMessageAt: Math.max(state.lastMessageAt, at) };
+function live(): Pick<FleetState, "phase" | "error"> {
+  return { phase: "live", error: null };
 }
 
 export function fleetReducer(state: FleetState, action: FleetAction): FleetState {
@@ -90,7 +87,7 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
       for (const e of action.body.events) if (!sessions[e.sessionId] && !gone[e.sessionId]) gone[e.sessionId] = "done";
       return {
         ...state,
-        ...live(state, action.at),
+        ...live(),
         serverTime: action.body.serverTime,
         config: action.body.config ?? state.config,
         sessions,
@@ -109,21 +106,21 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
       const { [action.view.id]: _gone, ...gone } = state.gone;
       return {
         ...state,
-        ...live(state, action.at),
+        ...live(),
         sessions: { ...state.sessions, [action.view.id]: action.view },
         leaving,
         gone,
       };
     }
     case "activity": {
-      if (state.events.some((e) => e.id === action.event.id)) return { ...state, ...live(state, action.at) };
-      return { ...state, ...live(state, action.at), events: capEvents([action.event, ...state.events]) };
+      if (state.events.some((e) => e.id === action.event.id)) return { ...state, ...live() };
+      return { ...state, ...live(), events: capEvents([action.event, ...state.events]) };
     }
     case "removed": {
       const known = !!state.sessions[action.sessionId];
       return {
         ...state,
-        ...live(state, action.at),
+        ...live(),
         leaving: known ? { ...state.leaving, [action.sessionId]: action.at } : state.leaving,
         gone: { ...state.gone, [action.sessionId]: action.reason },
         clearedToday: state.clearedToday + (action.reason === "deleted" ? 0 : 1),
@@ -136,9 +133,9 @@ export function fleetReducer(state: FleetState, action: FleetAction): FleetState
       return { ...state, sessions, leaving };
     }
     case "wall":
-      return { ...state, ...live(state, action.at), wall: action.wall };
+      return { ...state, ...live(), wall: action.wall };
     case "tick":
-      return { ...state, ...live(state, action.at), serverTime: action.serverTime, kpis: action.kpis };
+      return { ...state, ...live(), serverTime: action.serverTime, kpis: action.kpis };
     case "disconnected":
       return state.phase === "disconnected" ? state : { ...state, phase: "disconnected" };
     case "error":

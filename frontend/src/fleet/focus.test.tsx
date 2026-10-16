@@ -49,7 +49,7 @@ describe("orchestrator page", () => {
 
   it("keeps the selection through session updates and clears it with a message when the session leaves", () => {
     const { st, rerender } = openFocus();
-    const updated = fleetReducer(st, { type: "session", view: makeSession({ agents, name: "api-refactor", costUsd: 99 }), at: Date.now() });
+    const updated = fleetReducer(st, { type: "session", view: makeSession({ agents, name: "api-refactor", costUsd: 99 }) });
     rerender(<FleetView state={updated} />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("api-refactor");
     expect(screen.getByText("$99.00", { selector: ".fact .v" })).toBeInTheDocument();
@@ -337,7 +337,7 @@ describe("PlanPanel and context bars", () => {
     expect(container.textContent).toContain("blocked by an unfinished step");
     cleanup();
     render(<PlanPanel s={makeSession({ plan: null })} />);
-    expect(screen.getByText(/No plan reported. Agents were launched ad hoc/)).toBeInTheDocument();
+    expect(screen.getByText(/No plan reported. Agents were launched ad hoc\.$/)).toBeInTheDocument();
   });
   it("turns amber at 75% and striped red at two blowouts", () => {
     const amber = render(<ContextBar percent={75} blowouts={0} />).container.firstElementChild!;
