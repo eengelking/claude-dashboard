@@ -25,7 +25,7 @@ describe("ConnectionPill", () => {
   it("is the same markup the fleet top bar renders", () => {
     const a = render(<ConnectionPill phase="live" reporters={2} />).container.innerHTML;
     cleanup();
-    const b = render(<TopBar phase="live" reporters={2} />).container.querySelector("[role=status]")?.outerHTML;
+    const b = render(<TopBar page="Fleet" phase="live" reporters={2} />).container.querySelector("[role=status]")?.outerHTML;
     expect(b).toBe(a);
   });
 });

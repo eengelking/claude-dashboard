@@ -342,6 +342,7 @@ export const FleetView = memo(function FleetView({ state, updateEvery = 2, onUpd
       )}
       <div className="app">
         <TopBar
+          page={selected ? "Orchestrator" : "Fleet"}
           phase={state.phase}
           reporters={reporters}
           outdated={outdated}

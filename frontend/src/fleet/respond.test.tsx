@@ -173,7 +173,7 @@ describe("signing in", () => {
     const api = fakeApi({}, { enabled: true, signedIn: false, name: null, admin: false });
     const r = render(
       <RespondProvider api={api} flagsOn>
-        <TopBar phase="live" reporters={1} />
+        <TopBar page="Fleet" phase="live" reporters={1} />
       </RespondProvider>,
     );
     await flush();
@@ -188,7 +188,7 @@ describe("signing in", () => {
     const api = fakeApi({ me: vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, signedIn: false, name: null }) });
     const r = render(
       <RespondProvider api={api} flagsOn>
-        <TopBar phase="live" reporters={1} />
+        <TopBar page="Fleet" phase="live" reporters={1} />
       </RespondProvider>,
     );
     await flush();

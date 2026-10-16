@@ -5,7 +5,7 @@ import { TopBar } from "./TopBar";
 afterEach(cleanup);
 
 function renderBar(reporters = 2) {
-  return render(<TopBar phase="live" reporters={reporters} />);
+  return render(<TopBar page="Fleet" phase="live" reporters={reporters} />);
 }
 
 describe("TopBar", () => {

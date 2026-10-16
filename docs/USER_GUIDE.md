@@ -70,7 +70,7 @@ Give a session a name that shows on its card with `/podium name <text>`.
 ## Reading the dashboard
 
 The Podium logo at the top left is a link home: from History or Admin it takes you back to the fleet page.
-The top bar shows a "Fleet" pill that names the page, then the connection (`N reporters live`,
+The top bar shows a pill that names the page ("Fleet" on the wall, "Orchestrator" on a session's page, "History", "Admin"), then the connection (`N reporters live`,
 or a red "disconnected, retrying"). Admin's top bar shows the same connection indicator beside its "Admin" pill. The row under it has the theme picker. The left rail lists your sessions. The right panel shows activity.
 Drag the handles between the columns to resize them.
 
