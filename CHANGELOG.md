@@ -14,15 +14,13 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
-## [1.0.2] - 2026-10-16
-
 ### Fixed
 
 - **The prompt and answer modal renders a fence inside a fence and a link with parentheses in its URL (#274).** A fenced block now closes only on a line of backticks at least as long as the one that opened it, so a shorter fence quoted inside a longer one stays text and the block renders as one. A link URL holding one level of balanced parentheses, such as `https://en.wikipedia.org/wiki/A_(b)`, now links the whole address instead of stopping at the first `)`. Only `http(s)` and `mailto` links open, as before.
 
 ### Changed
 
-- **A documentation-only or chore PR is no longer a release.** `CLAUDE.md` and `CONTRIBUTING.md` now say that from 1.0.0 on only a PR that changes code or behavior carries a release. A PR that changes only documentation, comments, CI or chores bumps no version, adds its entry under `[Unreleased]` and gets no tag. The bump is chosen by what the PR changes, not by its issue's label, and the maintainer may bundle several small changes into one release PR. This replaces the 1.0.0 rule that made documentation-only PRs patch releases.
+- **A documentation-only or chore PR is no longer a release.** `CLAUDE.md` and `CONTRIBUTING.md` now say that from 1.0.0 on only a PR that changes code or behavior carries a release. A PR that changes only documentation, comments, CI or chores bumps no version, adds its entry under `[Unreleased]` and gets no tag. The bump is chosen by what the PR changes, not by its issue's label, and the maintainer may bundle several issues into one release: each PR adds its entry under `[Unreleased]`, and a final release PR cuts the version once they have all merged. This replaces the 1.0.0 rule that made documentation-only PRs patch releases.
 
 ## [1.0.1] - 2026-10-16
 
@@ -425,8 +423,7 @@ and a plugin you can install from a marketplace.
 - The project was renamed from `claude-dashboard` to `podium`
   (`eengelking/podium`). (PR #5)
 
-[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.2...HEAD
-[1.0.2]: https://github.com/eengelking/podium/compare/v1.0.1...v1.0.2
+[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.1...HEAD
 [1.0.1]: https://github.com/eengelking/podium/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/eengelking/podium/compare/v0.14.3...v1.0.0
 [0.14.3]: https://github.com/eengelking/podium/compare/v0.14.2...v0.14.3
