@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render, screen, within, fireEvent, cleanup } from "@testing-library/react";
 import { FleetView } from "./FleetApp";
 import { makeKpis, makeSession } from "./fixtures";
@@ -55,6 +57,22 @@ describe("people view", () => {
     expect(within(ed).getAllByRole("button").filter((b) => b.classList.contains("card"))).toHaveLength(2);
     expect([...ed.querySelectorAll(".card .mach")].map((e) => e.textContent)).toEqual(["on eds-mbp", "on build-01"]);
     expect(ed.querySelector(".card .owner .nm")).toBeNull();
+  });
+
+  // #207: a person's band shared the class `band` with the card's status band, so it picked up that rule's flex row, padding and tint.
+  it("a person's or group's band has its own class, apart from the card's status band", () => {
+    const { container } = view();
+    const sections = [...container.querySelectorAll(".bands > section")];
+    expect(sections.length).toBeGreaterThan(0);
+    for (const s of sections) {
+      expect(s).toHaveClass("pband");
+      expect(s).not.toHaveClass("band");
+    }
+    fireEvent.click(within(screen.getByRole("group", { name: "Group by" })).getByRole("button", { name: "Group" }));
+    for (const s of container.querySelectorAll(".bands > section")) expect(s).toHaveClass("pband");
+    const css = readFileSync(resolve(process.cwd(), "src/fleet/fleet.css"), "utf8");
+    expect(css).toMatch(/^\.podium \.pband \{/m);
+    expect(css).not.toMatch(/^\.podium \.band \{ min-width: 0; \}/m);
   });
 
   it("collapses a band to its header and remembers it", () => {

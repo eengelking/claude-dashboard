@@ -794,7 +794,7 @@ body.modal-open #root { filter: blur(5px); }
 
 /* bands on the wall */
 .podium .bands { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
-.podium .band { min-width: 0; }
+.podium .pband { min-width: 0; }
 .podium .bh { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; width: 100%; padding: 8px 4px 8px 2px; border-bottom: 1px solid var(--axis); text-align: left; }
 .podium .bh:hover { background: var(--hover); }
 .podium .bh .chev { width: 14px; height: 14px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }

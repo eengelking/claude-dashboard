@@ -102,7 +102,7 @@ export function Band(props: { unit: Unit; total: number; machines: string[]; ope
     : u.members.join(", ");
   const attn = [u.waiting ? `${u.waiting} waiting` : "", u.stale ? `${u.stale} stale` : ""].filter(Boolean).join(", ");
   return (
-    <section className={`band${props.open ? "" : " shut"}`} aria-label={u.name}>
+    <section className={`pband${props.open ? "" : " shut"}`} aria-label={u.name}>
       <button type="button" className="bh" aria-expanded={props.open} aria-controls={bodyId} onClick={props.onToggle}>
         <svg className="chev" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M4 6l4 4 4-4" />
