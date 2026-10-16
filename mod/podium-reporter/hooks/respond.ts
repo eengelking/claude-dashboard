@@ -190,9 +190,17 @@ export function toolDecision(d: Delivery): { decision: { behavior: 'allow' } | {
   return { decision: { behavior: 'deny', message } };
 }
 
-/** "No, keep planning" (or a message in place of an answer) for ExitPlanMode's tool.call. */
+/**
+ * "No, keep planning" (or a message in place of an answer) for ExitPlanMode's tool.call. Framed as the terminal frames
+ * "Tell Claude what to change", naming Podium: the bare text read to Claude as an injected instruction (2.1.301).
+ */
 export function planFeedback(d: Delivery): { deny: string } {
-  return { deny: (d.text ?? '').trim() || 'No, keep planning.' };
+  const text = (d.text ?? '').trim();
+  return {
+    deny: text
+      ? `The user doesn't want to proceed with this plan yet. They sent this from Podium: ${text}`
+      : `The user doesn't want to proceed with this plan yet. They chose "No, keep planning" from Podium.`,
+  };
 }
 
 /** How a rejected ExitPlanMode ended in the terminal: feedback from "Tell Claude what to change", or Esc (verified on 2.1.301). */

@@ -432,7 +432,9 @@ describe('respond: a plan', () => {
     const call = $.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never)
     await settle(w)
     w.deliver(by('plan-feedback', puts(w)[0]!.id, { text: 'Also cover search.' }))
-    expect(await call).toEqual({ deny: 'Also cover search.' })
+    // Framed as the terminal frames "Tell Claude what to change", naming Podium: the bare text alone read to Claude as
+    // an injected instruction, and it put the same plan up again (seen live on 2.1.301, 2026-10-15).
+    expect(await call).toEqual({ deny: "The user doesn't want to proceed with this plan yet. They sent this from Podium: Also cover search." })
     expect(w.logs.some((l) => l.startsWith('Sent back from Podium by Ed at '))).toBe(true)
   })
 
