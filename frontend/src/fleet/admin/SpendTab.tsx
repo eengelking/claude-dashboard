@@ -57,7 +57,8 @@ export function SpendTab(props: { fleetOptions?: UseFleetOptions; onCount: (n: n
     const next = { ...prefs, ...p };
     setPrefsState(next);
     writeJson(SPEND_KEY, next);
-    setPage(1);
+    // Chart or Table shows the same rows, so it keeps the page; a new grouping or page size starts over.
+    if (!("view" in p)) setPage(1);
   };
   const byGroup = prefs.groupBy === "group";
   const live = useMemo(() => Object.values(fleet.sessions).filter((s) => !fleet.leaving[s.id]), [fleet.sessions, fleet.leaving]);

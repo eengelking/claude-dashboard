@@ -107,6 +107,16 @@ describe("Admin > Spend", () => {
     expect(rows[rows.length - 1]).toEqual(expect.arrayContaining(["Total", fmtUsd(total), "100%", String(live)]));
   });
 
+  it("keeps the page when Chart becomes Table, and starts over when the grouping changes", async () => {
+    const { panel } = await openSpend(64);
+    fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Table" }));
+    expect(within(panel).getByRole("status")).toHaveTextContent("Showing 26 to 50 of 64");
+    fireEvent.click(within(panel).getByRole("button", { name: "Groups" }));
+    const byGroup = screen.getByRole("region", { name: "Spend today, by group" });
+    expect(within(byGroup).getByRole("status")).toHaveTextContent("Showing 1 to 3 of 3");
+  });
+
   it("groups by group: one row per group, paged and totalled the same way", async () => {
     stubAdmin();
     const f = fleetOf(64);
