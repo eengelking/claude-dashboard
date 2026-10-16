@@ -9,7 +9,7 @@ import { ADMIN_OWNER, nameKey, sourceAddress, type PeopleStore, type PersonRow }
 import { ReporterStore, type IgnoreRule, type IgnoreTarget, type ReporterSeen } from './reporters.js';
 import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
-import { Lockout } from './lockout.js';
+import { GuessThrottle, Lockout } from './lockout.js';
 import { mountRespondRoutes, replyFor } from './respondRoutes.js';
 import type { RespondBridge } from './respondBridge.js';
 
@@ -26,6 +26,8 @@ export interface FleetRouterOptions {
   log?: (line: string) => void;
   /** Wrong-try counter shared with Admin's unlock, for the sign-in to respond (#206). A fresh one when absent. */
   lockout?: Lockout;
+  /** Throttle for wrong secrets sent as X-Podium-Token, separate from `lockout` (#255). A fresh one when absent. */
+  guesses?: GuessThrottle;
   /** Filled in so Admin can open for a browser already signed in to respond as an Administrator (#215). */
   respondBridge?: RespondBridge;
 }
@@ -120,8 +122,31 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
   const router = Router();
   const json = express.json({ limit: BODY_LIMIT, type: ['application/json', 'application/*+json'] });
 
+  const guesses = opts.guesses ?? new GuessThrottle(fleet.now);
+  /** A person's token is 192 random bits, so it cannot be guessed and is never throttled; anything else could be a guess at the admin secret. */
+  const mayBeGuess = (given: unknown): given is string => typeof given === 'string' && given !== '' && !(opts.people && parsePersonToken(given));
+
   const requireToken = (req: Request, res: Response, next: NextFunction) => {
-    const id = identify(opts, req.get('x-podium-token'));
+    const given = req.get('x-podium-token');
+    const source = machineOf(req) ?? 'unknown';
+    // A throttled address gets no answer for anything that could be a guess, even the right secret, or the throttle would confirm one.
+    const lockedFor = opts.token && mayBeGuess(given) ? guesses.lockedFor(source) : 0;
+    if (lockedFor > 0) {
+      const route = routeName(req);
+      logger.warn('auth.failed', `podium: throttled ${req.method} ${route} from ${source}: too many wrong secrets`, {
+        route,
+        method: req.method,
+        status: 429,
+        reason: 'too many wrong secrets',
+        source,
+      });
+      opts.reporters?.rejected(machineOf(req), 'too many wrong secrets', fleet.now());
+      res.set('Retry-After', String(Math.ceil(lockedFor / 1000)));
+      res.status(429).json({ ok: false, error: 'too many wrong tries', retryAfterSec: Math.ceil(lockedFor / 1000) });
+      return;
+    }
+    const id = identify(opts, given);
+    if ('refused' in id && opts.token && mayBeGuess(given) && id.refused === 'wrong token') guesses.fail(source, given);
     if (!('refused' in id)) {
       res.locals.identity = id;
       return next();

@@ -192,3 +192,64 @@ describe('the people view fields (issue #34)', () => {
     expect(fleet.view('p1')?.machine).toEqual({ name: 'priya-mbp', id: 'aaaa1111' });
   });
 });
+
+describe('guessing the admin secret through X-Podium-Token (#255)', () => {
+  const guess = (app: express.Express, n: number) =>
+    request(app).post('/api/fleet/report').set('X-Podium-Token', `guess-${n}`).send(report(null));
+
+  it('ends many different wrong secrets from one address in 429s with Retry-After, and a person token still works', async () => {
+    const { app, people, logs } = setup();
+    const { token } = people.createPerson('Dana');
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await guess(app, i);
+      statuses.push(res.status);
+      if (res.status === 429) expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
+      const ok = await request(app).post('/api/fleet/report').set('X-Podium-Token', token).send(report('Dana'));
+      expect(ok.status).toBe(200);
+    }
+    expect(statuses.slice(0, 5)).toEqual([401, 401, 401, 401, 401]);
+    expect(statuses.slice(5).every((s) => s === 429)).toBe(true);
+    expect(logs.join('\n')).not.toContain('guess-3');
+  });
+
+  it('refuses even the right secret from a throttled address, so a guess cannot be confirmed', async () => {
+    const { app } = setup();
+    for (let i = 0; i < 6; i++) await guess(app, i);
+    const res = await request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report(null));
+    expect(res.status).toBe(429);
+  });
+
+  it('does not count one stale credential sent again and again, so a misconfigured reporter locks nobody out', async () => {
+    const { app } = setup();
+    for (let i = 0; i < 20; i++) expect((await guess(app, 0)).status).toBe(401);
+    const res = await request(app).post('/api/fleet/report').set('X-Podium-Token', 'admin-secret').send(report(null));
+    expect(res.status).toBe(200);
+  });
+
+  it('does not count a revoked or unknown person token', async () => {
+    const { app, people } = setup();
+    const dana = people.createPerson('Dana');
+    const eli = people.createPerson('Eli');
+    people.revoke(dana.person.id);
+    for (let i = 0; i < 10; i++) {
+      expect((await request(app).post('/api/fleet/report').set('X-Podium-Token', dana.token).send(report('Dana'))).status).toBe(401);
+    }
+    expect((await request(app).post('/api/fleet/report').set('X-Podium-Token', eli.token).send(report('Eli'))).status).toBe(200);
+  });
+});
+
+describe('GuessThrottle (#255)', () => {
+  it('unlocks after lockMs and starts counting again from zero', async () => {
+    const { GuessThrottle } = await import('./lockout.js');
+    let t = 0;
+    const g = new GuessThrottle(() => t, 3, 1000);
+    expect([g.fail('a', '1'), g.fail('a', '1'), g.fail('a', '2')]).toEqual([false, false, false]);
+    expect(g.fail('a', '3')).toBe(true);
+    expect(g.lockedFor('a')).toBe(1000);
+    expect(g.lockedFor('b')).toBe(0);
+    t = 1001;
+    expect(g.lockedFor('a')).toBe(0);
+    expect(g.fail('a', '4')).toBe(false);
+  });
+});

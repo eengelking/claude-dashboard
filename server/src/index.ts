@@ -32,6 +32,10 @@ const TOKEN = process.env.PODIUM_TOKEN || null;
 // Logging (#140): levels, a text or JSON format, and optional shipping to a central platform such as VictoriaLogs.
 const logging = createServerLogging(process.env, { secrets: TOKEN ? [TOKEN] : [] });
 const { logger } = logging;
+// A short hand-set secret can be guessed (#255); `podiumctl` makes a 192-bit one. Never print the secret.
+if (TOKEN && TOKEN.length < 24) {
+  logger.warn("server.weak_token", `podium: PODIUM_TOKEN is only ${TOKEN.length} characters; use at least 24 (podiumctl makes a long one for you)`, { length: TOKEN.length });
+}
 
 const fleetDb = new FleetDb(openDb(DB_PATH));
 const fleetConfig = configFromEnv(process.env, { home: os.homedir(), dbPath: DB_PATH });
