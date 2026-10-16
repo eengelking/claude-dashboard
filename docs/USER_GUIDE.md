@@ -43,7 +43,8 @@ Then give it the token. Print it with `podiumctl token`, and enter it with
 `/plugin configure podium-reporter@eengelking-marketplace`. If someone else runs the server, ask them for
 your own token and enter it as `token`, with your name as `userName` (see "Admin" below). To run one
 server for several people, see "Several people on one Podium" in the README: it covers the bind address,
-the firewall and what everyone who can reach the server can see.
+the firewall, the names the server accepts (`PODIUM_ALLOWED_HOSTS`, for reaching it by a name rather than an
+address) and what everyone who can reach the server can see.
 
 **One saved login per machine.** The sign-in you do with `/plugin configure` holds one name and one token for the
 whole Claude config on that machine, so every terminal there shares it. Signing in again, as someone else, in one

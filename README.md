@@ -112,10 +112,19 @@ can reach it. To let other people report to it:
 1. Restart it on an address the others can reach: `podiumctl restart --bind 0.0.0.0` (all interfaces), or
    the one interface they use. The container then publishes the port on that address too. Allow the port
    (4317 by default) in the firewall for the people who need it and no one else.
+   The server refuses a request whose `Host` is a name it does not expect (see "A page on another site" below).
+   With `0.0.0.0` an address typed in the bar (`http://192.168.1.5:4317`) works as is. To reach it by a name,
+   list the name: `podiumctl config set PODIUM_ALLOWED_HOSTS=box.lan` and `podiumctl restart`.
 2. Make each person a token in Admin. They set `serverUrl` to `http://<your host>:4317`, `token` to their
    token and `userName` to the name you gave them (see "Report a real session").
 3. Once a session reports with a person's token, the console groups the wall by person (see "People" in
    [docs/USER_GUIDE.md](docs/USER_GUIDE.md)).
+
+**A page on another site.** A web page can point its own name at `127.0.0.1` after it has loaded (DNS rebinding)
+and then read the console's open routes as if they were its own. So the server answers `403` to any request whose
+`Host` is not `127.0.0.1`, `localhost`, `[::1]`, the `--bind` address or a name in `PODIUM_ALLOWED_HOSTS`
+(comma-separated; the port is not compared). A server bound to `0.0.0.0` or `::` also takes any IP address, which
+a page cannot rebind. The refusal is logged as `http.host_refused` with the host and nothing else.
 
 Know what that costs. Reading the console needs no token, so anyone who can reach the port sees every
 session: names, machines, paths, branches, plan steps, commands from failed calls and the excerpts listed

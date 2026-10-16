@@ -23,6 +23,7 @@ import { REPORTER_SUPPORT } from "./fleet/compat.js";
 import { createServerLogging } from "./logging/setup.js";
 import { requestLog } from "./logging/requestLog.js";
 import { inlineScriptHashes, securityHeaders } from "./securityHeaders.js";
+import { hostCheck, parseAllowedHosts } from "./hostCheck.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const HOST = process.env.HOST || "127.0.0.1";
@@ -58,6 +59,8 @@ if (fs.existsSync(pagePath)) {
     logger.warn("server.csp", `podium: no inline script allowed by the content security policy: ${(err as Error).message}`, { reason: (err as Error).message });
   }
 }
+// First, ahead of every route: a name that is not ours is a page on another site rebound to this address (#256).
+app.use(hostCheck({ bind: HOST, allowed: parseAllowedHosts(process.env.PODIUM_ALLOWED_HOSTS), logger }));
 app.use(securityHeaders({ scriptHashes: pageScripts }));
 app.use(requestLog(logger));
 // Five wrong credentials from one address lock it out of Admin's unlock and the sign-in to respond together (#206).

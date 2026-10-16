@@ -200,6 +200,19 @@ describe("podiumctl command construction", () => {
   });
 });
 
+describe("podiumctl allowed hosts (#256)", () => {
+  it("passes PODIUM_ALLOWED_HOSTS through to the server, in both modes", () => {
+    expect(PASSTHROUGH).toContain("PODIUM_ALLOWED_HOSTS");
+    const cfg = resolveConfig({ PODIUM_ALLOWED_HOSTS: "box.lan,fleet.example" });
+    expect(serverEnv(cfg, true)).toMatchObject({ PODIUM_ALLOWED_HOSTS: "box.lan,fleet.example" });
+    expect(serverEnv(cfg, false)).toMatchObject({ PODIUM_ALLOWED_HOSTS: "box.lan,fleet.example" });
+  });
+
+  it("documents the setting in the help text", () => {
+    expect(fs.readFileSync(path.join(__dirname, "..", "bin", "podiumctl"), "utf8")).toContain("PODIUM_ALLOWED_HOSTS  ");
+  });
+});
+
 describe("podiumctl logging settings (#140)", () => {
   const LOG_KEYS = ["PODIUM_LOG_LEVEL", "PODIUM_LOG_FORMAT", "PODIUM_LOG_SHIP_URL", "PODIUM_LOG_SHIP_HEADERS", "PODIUM_LOG_SHIP_BUFFER"];
   const file = {

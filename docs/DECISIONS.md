@@ -439,7 +439,7 @@ settings screen.
 
 **Accepted.**
 - *Guessing the admin secret with `X-Podium-Token`.* Accepted when found, fixed in #255: wrong secrets on the report routes are now throttled with a counter of their own. The shared lockout could not simply count them, since a misconfigured reporter would lock out every reporter and the person's own browser on a shared address (all local reporters arrive from `127.0.0.1`). The throttle counts distinct wrong values, never person tokens, and while it holds it refuses even the right admin secret from that address; see 32.
-- *DNS rebinding.* The reads are open by design (7.1), and the server does not check the `Host` header, so a page on another site that rebinds its name to `127.0.0.1` can read the fleet, including agents' full prompts. It cannot reach Admin or respond, which need a cookie that rebinding does not carry. A `Host` allowlist would break the `--bind` use from other machines, so it is not added without the maintainer deciding it.
+- *DNS rebinding.* Accepted when found, fixed in #256 (see 33): the server now refuses a `Host` it does not expect. The reads are still open by design (7.1).
 - *Open reads and three open writes.* `GET` routes, Remove on a lost card, closing a wall notice and the background-sessions switch take no token (7.1). They change only how the wall looks.
 - *Development dependencies.* `npm audit` still lists `vitest`, `vite`'s `esbuild` and `tinypool`. None ships in the image, and the fix is a major version bump of the test tooling.
 - *A server's own page loads Google Fonts,* which tells Google that someone opened Podium. The policy names that one origin.
@@ -455,3 +455,13 @@ settings screen.
 **Alternatives.** Counting every wrong token in the shared lockout (the stale-reporter lockout above). A throttle that lets the right secret through while locked, which would let a guesser learn the right one from the one response that differs, so it limits nothing. Delaying wrong answers instead of refusing, which holds connections open.
 
 **Cost.** An attacker who shares an address with an admin-secret reporter can lock that reporter out for 15 minutes (its reports are retried about once a minute and recover when the lock ends). Reporters with a person's token are untouched, which is another reason to give each person one rather than reporting with the admin secret. Behind a container's port mapping or a proxy, clients may all show one source address and then share one throttle (the Admin lockout already has the same limit; Podium sets no `trust proxy`). The counter is in memory, so a restart clears it.
+
+## 33. Refusing a Host the server does not expect (#256)
+
+**Context.** The reads take no token (7.1), and the server did not look at `Host`. A page on another site can rebind its own name to `127.0.0.1` and then read the fleet, including every agent's prompt and answer, as its own origin. It cannot reach Admin or respond, which need a cookie that rebinding never carries (31).
+
+**Decision.** A check ahead of every route answers `403` to a `Host` that is not a loopback name or address, the bound address, or a name in `PODIUM_ALLOWED_HOSTS` (7.7). `localhost` always works, with nothing to list.
+
+**A server bound to `0.0.0.0` (or `::`) allows any IP-literal `Host` by default.** What a rebinding page controls is a DNS name; the browser sends that name in `Host`. An address typed in the bar is not resolved, so no other site can make a browser send one for this server, and allowing it costs nothing. Refusing addresses on a wildcard bind would break the supported `--bind 0.0.0.0` use for no gain, and would make the owner list every address the machine has. A name is never allowed unless listed, on any bind. On a specific bind (`--bind 192.168.1.5`) only that address is allowed, besides loopback. In container mode the server cannot see the host's bind address (it listens on `0.0.0.0` inside), so it takes any address there; the container's published port is still limited to the bind address by Podman.
+
+**Cost.** Reaching a server by a name (`box.lan`, a reverse proxy's name) needs `PODIUM_ALLOWED_HOSTS` and a restart, and a reverse proxy that rewrites `Host` has to send a name that is listed. A request with no `Host` (HTTP/1.0) is refused.

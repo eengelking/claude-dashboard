@@ -20,7 +20,7 @@ const INNER_PORT = 4317;
 export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS', 'DETACHED_HIDE_AFTER_MS',
   'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS',
-  'TZ',
+  'TZ', 'PODIUM_ALLOWED_HOSTS',
   'PODIUM_LOG_LEVEL', 'PODIUM_LOG_FORMAT', 'PODIUM_LOG_SHIP_URL', 'PODIUM_LOG_SHIP_HEADERS', 'PODIUM_LOG_SHIP_BUFFER',
 ];
 /** Keys podiumctl itself owns. Standalone-only: PODIUM_DB. */
@@ -69,6 +69,13 @@ Auth: the first \`start\` generates the admin secret and saves it as PODIUM_TOKE
 dashboard (\`podiumctl url\`), go to Admin and sign in with the name Admin and the secret to make a token for each person. On your own machine a reporter can
 send the secret itself as X-Podium-Token. Find it any time with \`podiumctl token\`. To run without auth (and
 without Admin): \`podiumctl config set PODIUM_TOKEN=\` (empty on purpose).
+
+Host names (a page on another site can rebind its name to this machine, so the server refuses a request whose
+Host is not one it expects; 127.0.0.1, localhost and [::1] always work, and so does the --bind address):
+  PODIUM_ALLOWED_HOSTS  Names (or addresses) other machines type to reach this server, comma-separated, e.g.
+                        podiumctl config set PODIUM_ALLOWED_HOSTS=box.lan,fleet.example, then podiumctl restart.
+                        With --bind 0.0.0.0 (or ::) any IP address typed in the bar works without being listed;
+                        a name always has to be listed. The port is not compared
 
 Logging (server output; \`podiumctl logs\` shows it):
   PODIUM_LOG_LEVEL         debug, info (default), warn or error. debug adds one line per HTTP request
