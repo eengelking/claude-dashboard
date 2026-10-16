@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium context bar at 80%</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
+<!-- Mockup for issue #213. A context bar is amber from 75% to 79% and red from 80%. Token values are copied from frontend/src/fleet/fleet.css (Podium dark and light). Red is --crit, the token the blowout level 2 badge uses. -->
+<style>
+:root {
+  --pg-bg: #eef0f2; --pg-panel: #ffffff; --pg-ink: #16181b; --pg-ink2: #4a4f57; --pg-muted: #6a707a; --pg-line: #d9dde2;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pg-bg: #101113; --pg-panel: #17191c; --pg-ink: #ecedef; --pg-ink2: #b6bac1; --pg-muted: #8d929b; --pg-line: #2a2d32; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --pg-bg: #101113; --pg-panel: #17191c; --pg-ink: #ecedef; --pg-ink2: #b6bac1; --pg-muted: #8d929b; --pg-line: #2a2d32; color-scheme: dark; }
+body { margin: 0; background: var(--pg-bg); color: var(--pg-ink); font: 15px/1.55 var(--font-ui); padding: 32px max(16px, env(safe-area-inset-left, 0px)) 72px; }
+.page { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+h1 { font-size: 28px; line-height: 1.15; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 18px; margin: 0 0 4px; }
+p { margin: 0; max-width: 68ch; color: var(--pg-ink2); }
+code { font-family: var(--font-mono); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+.th-dark {
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+  --sonnet: #3987e5; --warn: #fab219; --crit: #d03b3b; --crit-text: #ee6a6a;
+}
+.th-light {
+  --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64; --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+  --sonnet: #2a78d6; --warn: #fab219; --crit: #d03b3b; --crit-text: #b52a2a;
+}
+.wall { background: var(--bg); color: var(--ink); border: 1px solid var(--pg-line); border-radius: 10px; padding: 14px; font: 13px/1.4 var(--font-ui); }
+.wall .tag { font: 11.5px var(--font-mono); color: var(--muted); margin-bottom: 10px; }
+.gray { filter: grayscale(1); }
+.row { display: grid; grid-template-columns: 1fr 44px; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--grid); }
+.row:first-of-type { border-top: 0; }
+.row .lbl { grid-column: 1 / -1; color: var(--ink2); font-size: 12px; }
+.row .pct { font: 500 12px var(--font-mono); text-align: right; color: var(--ink); }
+
+/* The bar, as in fleet.css, plus the new crit state */
+.bar { height: 5px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+.bar > i { display: block; height: 100%; border-radius: 3px; background: var(--ink2); }
+.bar.ctx > i { background: var(--sonnet); }
+.bar.hot > i { background: var(--warn); }
+.bar.crit > i { background: var(--crit); box-shadow: inset 0 0 0 1px var(--crit-text), inset -3px 0 0 var(--crit-text); }
+.bar.bx2 > i { background: repeating-linear-gradient(135deg, var(--crit) 0 4px, color-mix(in srgb, var(--crit) 55%, var(--surface)) 4px 8px); }
+</style>
+</head>
+<body>
+<div class="page">
+  <section>
+    <h1>The context bar goes red at 80%</h1>
+    <p>From 75% to 79% the bar stays amber, as it is today. At 80% and above it is red, the same red as the blowout level 2 badge, and never both colors at once. Red also carries a bright outline and a solid cap at the fill's end, so it reads in grayscale. The percentage stays next to the bar, and a screen reader hears "nearly full" after the number.</p>
+  </section>
+
+  <section>
+    <h2>Dark and light, then grayscale</h2>
+    <p>Each wall shows 74%, 75%, 79%, 80% and 100%. The grayscale walls are the same specimens with color removed.</p>
+    <div class="grid" style="margin-top:14px">
+      <div class="wall th-dark"><div class="tag">Podium dark</div>
+        <div class="row"><span class="lbl">74% · under the warning</span><div class="bar ctx"><i style="width:74%"></i></div><span class="pct">74%</span></div>
+        <div class="row"><span class="lbl">75% · amber</span><div class="bar ctx hot"><i style="width:75%"></i></div><span class="pct">75%</span></div>
+        <div class="row"><span class="lbl">79% · amber</span><div class="bar ctx hot"><i style="width:79%"></i></div><span class="pct">79%</span></div>
+        <div class="row"><span class="lbl">80% · red</span><div class="bar ctx crit"><i style="width:80%"></i></div><span class="pct">80%</span></div>
+        <div class="row"><span class="lbl">100% · red</span><div class="bar ctx crit"><i style="width:100%"></i></div><span class="pct">100%</span></div>
+        <div class="row"><span class="lbl">Two blowouts keep their red stripes</span><div class="bar ctx crit bx2"><i style="width:90%"></i></div><span class="pct">90%</span></div>
+      </div>
+      <div class="wall th-light"><div class="tag">Podium light</div>
+        <div class="row"><span class="lbl">74% · under the warning</span><div class="bar ctx"><i style="width:74%"></i></div><span class="pct">74%</span></div>
+        <div class="row"><span class="lbl">75% · amber</span><div class="bar ctx hot"><i style="width:75%"></i></div><span class="pct">75%</span></div>
+        <div class="row"><span class="lbl">79% · amber</span><div class="bar ctx hot"><i style="width:79%"></i></div><span class="pct">79%</span></div>
+        <div class="row"><span class="lbl">80% · red</span><div class="bar ctx crit"><i style="width:80%"></i></div><span class="pct">80%</span></div>
+        <div class="row"><span class="lbl">100% · red</span><div class="bar ctx crit"><i style="width:100%"></i></div><span class="pct">100%</span></div>
+        <div class="row"><span class="lbl">Two blowouts keep their red stripes</span><div class="bar ctx crit bx2"><i style="width:90%"></i></div><span class="pct">90%</span></div>
+      </div>
+      <div class="wall th-dark gray"><div class="tag">Dark, grayscale</div>
+        <div class="row"><span class="lbl">74%</span><div class="bar ctx"><i style="width:74%"></i></div><span class="pct">74%</span></div>
+        <div class="row"><span class="lbl">79% · amber</span><div class="bar ctx hot"><i style="width:79%"></i></div><span class="pct">79%</span></div>
+        <div class="row"><span class="lbl">80% · red, outlined, capped</span><div class="bar ctx crit"><i style="width:80%"></i></div><span class="pct">80%</span></div>
+        <div class="row"><span class="lbl">Two blowouts: stripes</span><div class="bar ctx crit bx2"><i style="width:90%"></i></div><span class="pct">90%</span></div>
+      </div>
+      <div class="wall th-light gray"><div class="tag">Light, grayscale</div>
+        <div class="row"><span class="lbl">74%</span><div class="bar ctx"><i style="width:74%"></i></div><span class="pct">74%</span></div>
+        <div class="row"><span class="lbl">79% · amber</span><div class="bar ctx hot"><i style="width:79%"></i></div><span class="pct">79%</span></div>
+        <div class="row"><span class="lbl">80% · red, outlined, capped</span><div class="bar ctx crit"><i style="width:80%"></i></div><span class="pct">80%</span></div>
+        <div class="row"><span class="lbl">Two blowouts: stripes</span><div class="bar ctx crit bx2"><i style="width:90%"></i></div><span class="pct">90%</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rules</h2>
+    <p>Amber below 80% keeps its meaning (the window is filling). Red at 80% and above wins over the one-blowout amber fill. Two blowouts keep the red stripes. On the card, where the bar is 3px tall, the outline is dropped and only the cap stays. Applies wherever <code>ContextBar</code> shows: the card, the orchestrator page, the agent tree and rows, and both detail panels, in every theme.</p>
+  </section>
+</div>
+</body>
+</html>

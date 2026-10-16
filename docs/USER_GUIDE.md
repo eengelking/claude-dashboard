@@ -206,7 +206,7 @@ lines were added and removed (a binary file shows the word "binary"), 20 to a pa
 while Files is open. The list comes from `git diff` against the commit the session began on, so two sessions
 in the same checkout see the same changes; use a worktree to keep them apart. It needs podium-reporter 0.6.0
 or later, and says so when the reporter is older. On the right is the agent tree: every
-subagent and fork with its task, type, model, effort, context bar, tokens, cost, time and status. Click a
+subagent and fork with its task, type, model, effort, context bar (amber from 75% full, red from 80%), tokens, cost, time and status. Click a
 column header to sort: each agent's own agents stay under it, sorted among themselves. Click the header again
 to reverse, and **Launch order** to go back. The **Resume** cell (Copy command) copies the command that resumes the session. The coloured band at the bottom of the summary says what the session is doing, and Blowouts opens the detail when a context window has overflowed.
 

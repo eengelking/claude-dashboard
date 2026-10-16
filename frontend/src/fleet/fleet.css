@@ -533,6 +533,10 @@ body.modal-open #root { filter: blur(5px); }
 .podium .blow.l2 { border-color: var(--crit); background: color-mix(in srgb, var(--crit) 20%, transparent); color: var(--crit-text); }
 .podium .blow svg { width: 12px; height: 12px; }
 .podium .bar.bx > i { background: var(--warn); }
+/* 80% or more (#213): red, with an outline and a solid cap so it still differs from amber in grayscale. After bx so red wins over the one-blowout amber; bx2's stripes come last. */
+.podium .bar.crit > i { background: var(--crit); box-shadow: inset 0 0 0 1px var(--crit-text), inset -3px 0 0 var(--crit-text); }
+/* The card's bar is 3px tall; an outline would leave 1px of red, so it keeps only the cap. */
+.podium .card.sc .z3 .bar.crit > i { box-shadow: inset -3px 0 0 var(--crit-text); }
 .podium .bar.bx2 > i { background: repeating-linear-gradient(135deg, var(--crit) 0 4px, color-mix(in srgb, var(--crit) 55%, var(--surface)) 4px 8px); }
 /* A session nobody is attached to: dashed and quiet until it is set aside (#45). */
 .podium .card.detached { background: transparent; border-style: dashed; }

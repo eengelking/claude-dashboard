@@ -229,12 +229,13 @@ export function GitLine({ git }: { git: GitInfo | null }) {
   );
 }
 
-/** A context bar: amber at 75% or more, amber fill after one blowout, red stripes after two. */
+/** A context bar: amber from 75% to 79%, red at 80% or more, amber fill after one blowout, red stripes after two. */
 export function ContextBar({ percent, blowouts, width }: { percent: number | null; blowouts: number; width?: number }) {
   const p = Math.max(0, Math.min(100, percent ?? 0));
-  const cls = `bar ctx${p >= 75 ? " hot" : ""}${blowouts >= 2 ? " bx2" : blowouts ? " bx" : ""}`;
+  const crit = Math.round(p) >= 80;
+  const cls = `bar ctx${crit ? " crit" : p >= 75 ? " hot" : ""}${blowouts >= 2 ? " bx2" : blowouts ? " bx" : ""}`;
   return (
-    <div className={cls} style={width ? { width } : undefined} role="img" aria-label={`Context ${percent === null ? "unknown" : `${Math.round(p)}%`}`} title={percent === null ? "Context window unknown" : undefined}>
+    <div className={cls} style={width ? { width } : undefined} role="img" aria-label={`Context ${percent === null ? "unknown" : `${Math.round(p)}%${crit ? ", nearly full" : ""}`}`} title={percent === null ? "Context window unknown" : undefined}>
       <i style={{ width: `${p}%` }} />
     </div>
   );

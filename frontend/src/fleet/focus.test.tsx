@@ -348,6 +348,28 @@ describe("PlanPanel and context bars", () => {
     cleanup();
     expect(render(<ContextBar percent={10} blowouts={2} />).container.firstElementChild!.className).toContain("bx2");
   });
+  it("is amber at 79% and red from 80%, never both (#213)", () => {
+    const at79 = render(<ContextBar percent={79} blowouts={0} />).container.firstElementChild!;
+    expect(at79.className).toContain("hot");
+    expect(at79.className).not.toContain("crit");
+    cleanup();
+    const at80 = render(<ContextBar percent={80} blowouts={0} />).container.firstElementChild!;
+    expect(at80.className).toContain("crit");
+    expect(at80.className).not.toContain("hot");
+    expect(at80.getAttribute("aria-label")).toBe("Context 80%, nearly full");
+    cleanup();
+    expect(render(<ContextBar percent={100} blowouts={0} />).container.firstElementChild!.className).toContain("crit");
+    cleanup();
+    const withBlowout = render(<ContextBar percent={85} blowouts={1} />).container.firstElementChild!;
+    expect(withBlowout.className).toContain("crit");
+    expect(withBlowout.className).not.toContain("hot");
+    cleanup();
+    const rounds = render(<ContextBar percent={79.6} blowouts={0} />).container.firstElementChild!;
+    expect(rounds.className).toContain("crit");
+    expect(rounds.getAttribute("aria-label")).toBe("Context 80%, nearly full");
+    cleanup();
+    expect(render(<ContextBar percent={79.4} blowouts={0} />).container.firstElementChild!.className).toContain("hot");
+  });
 });
 
 const fileOf = (i: number, over = {}) => ({ path: `src/dir/f${String(i).padStart(3, "0")}.ts`, status: "modified" as const, added: 2, removed: 1, from: null, ...over });
