@@ -174,7 +174,7 @@ export function QuestionForm(props: { detail: AskDetail; tab: number; drafts: Dr
         {inner}
       </div>
       <div className="af">
-        <span className="grow">{onReview ? (n === 1 ? "Submitting sends it, as Claude Code does." : `Submitting sends all ${countWord(n)} at once, as Claude Code does.`) : `Question ${tab + 1} of ${n}`}</span>
+        <span className="grow">{onReview ? (n === 1 ? "Submitting sends it, as Claude Code does." : n === 2 ? "Submitting sends both at once, as Claude Code does." : `Submitting sends all ${countWord(n)} at once, as Claude Code does.`) : `Question ${tab + 1} of ${n}`}</span>
         {tab > 0 && (
           <button className="btn" type="button" onClick={() => props.onTab(tab - 1)}>
             Back
@@ -278,7 +278,7 @@ export function PermissionForm(props: { detail: AskDetail; allow: boolean; reaso
             <label className="opt">
               <input type="radio" name={`${id}-perm`} checked={allow} onChange={() => props.onAllow(true)} />
               <span className="ol">Allow once</span>
-              <span className="od">Runs this command now. The next one asks again.</span>
+              <span className="od">{tool?.name === "Bash" || !tool ? "Runs this command now. The next one asks again." : `Lets ${tool.name} run this once. The next one asks again.`}</span>
             </label>
           )}
           <label className="opt">

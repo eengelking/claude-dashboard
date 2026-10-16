@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { familyName, ORCHESTRATOR_ROW as MAIN_LOOP, reporterBelow } from "../logic";
 import { RespondError } from "../respondApi";
-import { askLead, ASK_WORD, canAnswer, clockOf, deliverySummary, isMine, minSec, planBackOnly, respondGate, shownAsk } from "../respond";
+import { askLead, ASK_WORD, canAnswer, cantReason, clockOf, deliverySummary, isMine, minSec, planBackOnly, respondGate, shownAsk } from "../respond";
 import type { AskDetail, SessionView } from "../types";
 import { readEvery, useActivityFeed, writeEvery } from "../useActivityFeed";
 import { useRespond } from "../useRespond";
@@ -60,6 +60,15 @@ function caseOf(detail: AskDetail, stale: boolean): Case {
 }
 
 /** The panel's frame around its body: the wait's icon and lead, how long ago it was asked, and what else applies. */
+/** A refusal from the server, in the console's words rather than the route's error code. */
+function refusedLine(err: RespondError): string {
+  if (err.status === 422) return "This session doesn't take that from Podium now. Answer it in the terminal.";
+  if (err.status === 429) return "20 messages are already waiting for this session. Send more once it has caught up.";
+  if (err.status === 403) return "Podium won't take this from you: it isn't your session, or responding was turned off.";
+  if (err.status === 400) return `Podium couldn't send that: ${err.message}.`;
+  return "Podium couldn't send that. Try again.";
+}
+
 function Panel(props: { lead: string; ago: string; also: string; children: ReactNode }) {
   return (
     <section className="ask" aria-label={props.lead}>
@@ -154,7 +163,8 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
     } catch (err) {
       if (err instanceof RespondError) {
         if (err.status === 403 && err.message === "sign in to respond") void ctx.refresh();
-        else if (err.status !== 409 && err.status !== 410) setError(err.message);
+        // 409 and 410 have their own frames (answered by someone else, closed); the rest read as one plain line.
+        else if (err.status !== 409 && err.status !== 410) setError(refusedLine(err));
       } else setError("Could not reach the Podium server. Try again.");
       return false;
     } finally {
@@ -328,7 +338,7 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
 
   // ---- the message box ----
   let compose: ReactNode = null;
-  if (edge) compose = <OffNote edge={edge} reporterVersion={s.reporterVersion} />;
+  if (edge) compose = <OffNote edge={edge} reason={cantReason(s)} reporterVersion={s.reporterVersion} />;
   else if (signedIn && mine)
     compose = (
       <Compose

@@ -423,9 +423,10 @@ button.tb-btn:hover { background: var(--sel); }
   <p class="note">Each frame is the modal as it opens from Respond in that case, with the feed cut to its last few rows. The page behind it is blurred in the real thing. To click through one, use the controls at the top and press Respond on the card.</p>
   <nav class="casenav" id="caseNav" aria-label="Jump to a case"></nav>
   <div class="gallery" id="gallery"></div>
+  <p class="note">When the server refuses an answer for any other reason, the message box shows one line instead of the server's own words: "This session doesn't take that from Podium now. Answer it in the terminal." (a kind the session no longer takes), "20 messages are already waiting for this session. Send more once it has caught up.", "Podium won't take this from you: it isn't your session, or responding was turned off.", or "Podium couldn't send that. Try again."</p>
 
   <h2 class="s">4. What the terminal shows</h2>
-  <p class="note">podium-reporter writes one line above the prompt while the question is also open in Podium, and one line in the transcript when it was answered from there, naming who answered. Someone at the terminal is never surprised by an answer they didn't give.</p>
+  <p class="note">podium-reporter writes one line above the prompt while the question is also open in Podium, and one line in the transcript when it was answered from there, naming who answered. Someone at the terminal is never surprised by an answer they didn't give. A Deny sent with no reason reaches Claude as "Denied from Podium.", and No, keep planning with nothing typed as "No, keep planning."</p>
   <div class="terms">
     <div>
       <div class="term" id="termOpen"></div>
@@ -459,6 +460,7 @@ button.tb-btn:hover { background: var(--sel); }
           <li><b>questions-and-plans</b><span>The above, plus approving or rejecting a plan.</span></li>
           <li><b>everything</b><span>The above, plus allowing or denying a tool (allow once only), and <code>/clear</code>, <code>/compact</code>.</span></li>
         </ul>
+        In Claude Code's settings the option's description is this list on one line, each level followed by its text.
       </span>
       <span class="fc"><select aria-label="respond option" id="optSel"><option>off</option><option>questions</option><option>questions-and-plans</option><option selected>everything</option></select></span>
     </div>
@@ -747,10 +749,14 @@ function permissionParts(st, r) {
   // A command cut to fit can't be allowed from here, since the person can't see all of it: only Deny is offered.
   const deny = st.perm === "deny" || st.cut;
   const cmd = st.cut ? "for f in $(git ls-files 'src/**/*.ts'); do npx prettier --check \"$f\" &amp;&amp; ... [cut off at 20,000 characters]" : "git push -u origin issue/195-history-pages";
-  r.body = `<p class="qh">Bash wants to run a command</p><div class="cmd">${cmd}</div><p class="cmdd">${st.cut ? "Check formatting file by file" : "Push the branch to GitHub"}</p>
+  // A tool other than Bash: its name leads, and its input shows as it came, with no description line.
+  const other = st.tool && st.tool !== "Bash";
+  const head = other ? `<p class="qh">${esc(st.tool)} wants your permission</p><div class="cmd">${esc(JSON.stringify({ file_path: "/Users/dev/claude-dashboard/docs/USER_GUIDE.md", content: "# User guide\n..." }, null, 2))}</div>`
+    : `<p class="qh">Bash wants to run a command</p><div class="cmd">${cmd}</div><p class="cmdd">${st.cut ? "Check formatting file by file" : "Push the branch to GitHub"}</p>`;
+  r.body = `${head}
     ${st.cut ? `<p class="signnote">This command is too long to show in full here, so it can only be allowed in the terminal. You can still deny it from here.</p>` : ""}
     <fieldset class="opts" aria-label="Allow or deny">
-      ${st.cut ? "" : `<label class="opt"><input type="radio" name="${p}perm" value="allow" ${!deny ? "checked" : ""} id="${p}perm-allow"><span class="ol">Allow once</span><span class="od">Runs this command now. The next one asks again.</span></label>`}
+      ${st.cut ? "" : `<label class="opt"><input type="radio" name="${p}perm" value="allow" ${!deny ? "checked" : ""} id="${p}perm-allow"><span class="ol">Allow once</span><span class="od">${other ? `Lets ${esc(st.tool)} run this once. The next one asks again.` : "Runs this command now. The next one asks again."}</span></label>`}
       <label class="opt"><input type="radio" name="${p}perm" value="deny" ${deny ? "checked" : ""} id="${p}perm-deny"><span class="ol">Deny</span><span class="od">Claude is told no and keeps going.</span>${deny ? `<textarea id="${p}permFb" rows="2" placeholder="Tell Claude why, or what to do instead (optional)" aria-label="Tell Claude why">${esc(st.permFb)}</textarea>` : ""}</label>
     </fieldset>`;
   r.foot = `<span class="grow">"Always allow" changes the session's rules, so it is only in the terminal.</span><button class="btn ${deny ? "bad" : "pri"}" type="button" data-act="submit">${deny ? "Deny" : "Allow once"}</button>`;
@@ -763,6 +769,9 @@ const COMMANDS = [
 ];
 function composeHTML(st) {
   if (st.edge === "off") return `<div class="offnote"><b>Responding from Podium is turned off.</b><span>The Admin's Respond from Podium switch, this session's <code>respond</code> option, or the activity feed is off. Answer in the terminal or desktop app. Admin &gt; Settings &gt; Feature flags has the server's switch.</span></div>`;
+  if (st.edge === "old" && st.why === "managed") return `<div class="offnote"><b>This can't be answered from Podium.</b><span>Claude Code doesn't run podium-reporter's permission hooks on this computer, which happens where an organization manages Claude Code. Answer it in the terminal. Questions and messages still work from here.</span></div>`;
+  if (st.edge === "old" && st.why === "hooks") return `<div class="offnote"><b>This session can't be answered from Podium.</b><span>It reports through the settings hooks, which can't take an answer. Answer in the terminal or desktop app.</span></div>`;
+  if (st.edge === "old" && st.why === "print") return `<div class="offnote"><b>This session can't be answered from Podium.</b><span>It runs with <code>claude -p</code>, which can't take an answer from Podium.</span></div>`;
   if (st.edge === "old") return `<div class="offnote"><b>This session can't be answered from Podium.</b><span>It reports with podium-reporter 0.13.0. Responding needs a newer reporter with the <code>respond</code> option on: run <code>claude plugin update podium-reporter@eengelking-marketplace</code>, then <code>/reload-plugins</code> in that session. Sessions reported by the settings hooks or run with <code>claude -p</code> can't be answered at all.</span></div>`;
   if (st.edge === "owner" || !st.signed) return "";
   const pending = st.kind !== "idle" && st.edge === "ready" && !st.submitted;
@@ -811,7 +820,7 @@ const CASES = [
   { id: "q-preview", title: "An option with a preview", cap: "When the options come with a preview, it shows beside them for the one selected.", st: { kind: "question", tab: 1, answers: { "Page size": PS, "Day selector": "One paged list, newest first" } } },
   { id: "q-multi", title: "Pick any that apply", cap: "A multi-select question has checkboxes. Answered questions get a tick on their tab.", st: { kind: "question", tab: 2, answers: { "Page size": PS, "Day selector": DS, "Back state": ["The page number", "The rows-per-page choice"] } } },
   { id: "q-own", title: "Your own answer", cap: "Typing in the box selects Type something. The text goes to Claude as the answer to that question.", st: { kind: "question", answers: { "Page size": "__other" }, other: { "Page size": "50, and remember each person's choice" } } },
-  { id: "q-review", title: "Review before sending", cap: "Review lists every answer. A question left blank is marked, and Claude sees it as skipped.", st: { kind: "question", tab: 3, answers: { "Page size": PS, "Day selector": DS } } },
+  { id: "q-review", title: "Review before sending", cap: "Review lists every answer. A question left blank is marked, and Claude sees it as skipped. With one question the footer reads \"Submitting sends it, as Claude Code does.\"; with two, \"Submitting sends both at once, as Claude Code does.\"; with four, \"all four\".", st: { kind: "question", tab: 3, answers: { "Page size": PS, "Day selector": DS } } },
   { id: "q-chat", title: "Chat about this instead", cap: "Writing in the message box while a question is open replaces the answer, like Chat about this in the terminal. The warning says so before you send.", st: { kind: "question", draft: "Before you pick: how many sessions does History hold on a busy day?" } },
   { group: "Plan approval" },
   { id: "p-approve", title: "Approve the plan", cap: "The plan is shown whole, with three ways to approve it. The terminal's dialog has two of them; Yes, auto-accept edits is offered here too.", st: { kind: "plan" } },
@@ -819,13 +828,14 @@ const CASES = [
   { id: "p-backonly", title: "A plan that can only be sent back", cap: "Where Claude Code doesn't run podium-reporter's permission hooks, such as on a computer an organization manages, approving stays in the terminal. No, keep planning still works from here.", st: { kind: "plan", plan: "keep", backOnly: true } },
   { group: "A tool permission" },
   { id: "t-allow", title: "Allow once", cap: "The command and Claude's description of it. Only Allow once is offered here.", st: { kind: "permission" } },
+  { id: "t-other", title: "A tool other than Bash", cap: "The tool's name leads, and its input shows in the box.", st: { kind: "permission", tool: "Write" } },
   { id: "t-deny", title: "Deny, with a reason", cap: "The reason is optional and goes to Claude with the denial.", st: { kind: "permission", perm: "deny", permFb: "Not yet. Run npm run build first." } },
   { id: "t-cut", title: "A command too long to show", cap: "A command over 20,000 characters is cut to fit. Since you can't see all of it, Allow once isn't offered here; Deny still is.", st: { kind: "permission", cut: true } },
   { group: "Its turn ended" },
   { id: "i-message", title: "Send a new message", cap: "No answer panel, only the message box. The message starts Claude's next turn.", st: { kind: "idle", draft: "Start on issue #205." } },
   { id: "i-commands", title: "Commands", cap: "Typing / lists the commands Podium can send. Anything else runs only in the terminal.", st: { kind: "idle", draft: "/c" } },
   { id: "i-args", title: "A command with something after it", cap: "/clear and /compact go only on their own. With anything after one, nothing is sent and the box says so.", st: { kind: "idle", draft: "/compact focus on tests" } },
-  { id: "i-clear", title: "Confirm /clear", cap: "Clearing asks first, because it empties the session's context.", st: { kind: "idle", draft: "/clear", confirmClear: true } },
+  { id: "i-clear", title: "Confirm /clear", cap: "Clearing asks first, because it empties the session's context. In History, the earlier part then reads \"continued in 9c1e2f4a\" and the new one \"after /clear of 238da512\".", st: { kind: "idle", draft: "/clear", confirmClear: true } },
   { id: "i-after", title: "After you answer", cap: "Your answer becomes a feed entry marked as yours, and the panel goes away until the session asks again.", st: { kind: "idle", feed: "question", sent: [{ at: "12:23", text: `answered: ${PS}; ${DS}; The page number, The rows-per-page choice`, then: "Thanks. Writing the plan now.", thenAt: "12:24" }] } },
   { id: "i-running", title: "While it is still running", cap: "Expand on the Activity panel opens the modal without a wait. A message sent now is queued until the session is idle.", st: { kind: "idle", feed: "running", sent: [{ at: "31:50", text: "Also update the user guide.", note: "(queued until the session is idle)" }] } },
   { group: "When Podium can't send the answer" },
@@ -834,10 +844,13 @@ const CASES = [
   { id: "e-terminal", title: "Answered in the terminal", cap: "The terminal answered first. What was chosen there replaces the form.", st: { kind: "question", edge: "terminal" } },
   { id: "e-plan-terminal", title: "Plan approved in the terminal", cap: "Podium can't see which mode was picked in the terminal, so none is named. When the terminal sent feedback instead, the detail reads \"The answer there was No, keep planning.\"", st: { kind: "plan", edge: "terminal" } },
   { id: "e-tool-terminal", title: "Tool answered in the terminal", cap: "Podium learns what the terminal chose when the command ends, so a command the terminal allowed still looks open while it runs. The detail reads Allowed or Denied. A Deny sent from here meanwhile is never shown as taken.", st: { kind: "permission", edge: "terminal" } },
-  { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted. Their answer shows in the feed under their name.", st: { kind: "question", edge: "other", sent: [{ who: "Alex", at: "12:23", text: "answered: Fixed 50, no choice; One paged list, newest first; The page number" }] } },
+  { id: "e-other", title: "Answered by someone else", cap: "Another tab or another person answered first. Only the first answer is accepted. Their answer shows in the feed under their name, or \"Someone, from Podium:\" when the name isn't known.", st: { kind: "question", edge: "other", sent: [{ who: "Alex", at: "12:23", text: "answered: Fixed 50, no choice; One paged list, newest first; The page number" }] } },
   { id: "e-closed", title: "Closed in the session", cap: "Esc, an interrupted turn or the end of the session closed the question before you sent anything.", st: { kind: "question", edge: "closed" } },
   { id: "e-undelivered", title: "Session not checking in", cap: "Your answer is kept and sent when the reporter checks in again, unless the terminal answered by then.", st: { kind: "question", edge: "undelivered", answers: { "Page size": PS } } },
-  { id: "e-old", title: "Reporter can't answer", cap: "An older podium-reporter, the settings hooks, or a claude -p run. The card has no Respond button; Expand still opens the feed.", st: { kind: "question", edge: "old" } },
+  { id: "e-old", title: "Reporter can't answer", cap: "An older podium-reporter. The card has no Respond button; Expand still opens the feed. Only here is the person told to update; when the reporter has no version to show, the line reads \"It reports with an older podium-reporter.\"", st: { kind: "question", edge: "old" } },
+  { id: "e-old-hooks", title: "Reported by the settings hooks", cap: "The settings hooks can't take an answer, so there is nothing to update.", st: { kind: "question", edge: "old", why: "hooks" } },
+  { id: "e-old-print", title: "A claude -p run", cap: "A run with claude -p has no dialog to answer.", st: { kind: "question", edge: "old", why: "print" } },
+  { id: "e-managed", title: "A tool prompt where the permission hooks don't run", cap: "On a computer an organization manages, Claude Code doesn't run podium-reporter's permission hooks, so a tool's prompt usually never reaches Podium at all. If one does, this is what shows. Questions and messages still work from Podium.", st: { kind: "permission", edge: "old", why: "managed" } },
   { id: "e-off", title: "Turned off", cap: "Any switch in section 5 is off. The card has no Respond button, and the modal is the feed it is today.", st: { kind: "question", edge: "off" } },
   { id: "e-owner", title: "Someone else's session", cap: "Only the session's owner or an Admin can respond. Everyone else can watch.", st: { kind: "question", edge: "owner" } }
 ];

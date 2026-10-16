@@ -29,6 +29,18 @@ export function neededKinds(kind: AskKind | null): RespondKind[] {
  * session's `respond` level, or its activity feed); `old` when the reporter can't (too old, settings hooks, a `claude -p`
  * run, or PermissionRequest hooks that don't run there).
  */
+/**
+ * Why a session can't take an answer (canAnswer said `old`): the settings hooks, a reporter older than 0.14.0, a
+ * `claude -p` run, or PermissionRequest hooks that don't run there (an organization manages Claude Code).
+ */
+export type CantReason = "hooks" | "old" | "print" | "managed";
+export function cantReason(s: Pick<SessionView, "reporter" | "respond">): CantReason {
+  if (s.reporter !== "mod") return "hooks";
+  if (!s.respond) return "old";
+  if (s.respond.limits.includes("not-interactive")) return "print";
+  return "managed";
+}
+
 export function canAnswer(s: Pick<SessionView, "reporter" | "respond">, kind: AskKind | null): "ok" | "off" | "old" {
   if (s.reporter !== "mod" || !s.respond) return "old";
   const need = neededKinds(kind);

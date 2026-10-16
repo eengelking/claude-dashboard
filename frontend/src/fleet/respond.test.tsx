@@ -201,7 +201,7 @@ describe("a question", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Review your answers")).toBeInTheDocument();
     expect(screen.getByText("The page number, The scroll position")).toBeInTheDocument();
-    expect(screen.getByText("Submitting sends all two at once, as Claude Code does.")).toBeInTheDocument();
+    expect(screen.getByText("Submitting sends both at once, as Claude Code does.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Submit answers" }));
     await flush();
     expect(api.answer).toHaveBeenCalledWith("sess-ed", "toolu_q", { kind: "question", answers: [{ options: [0] }, { options: [0, 1] }] });
@@ -272,6 +272,14 @@ describe("a plan and a tool", () => {
     fireEvent.click(screen.getByRole("button", { name: "Deny" }));
     await flush();
     expect(api.answer).toHaveBeenCalledWith("sess-ed", "toolu_t", { kind: "deny", text: "Not yet. Run npm run build first." });
+  });
+
+  it("names a tool other than Bash, and says Allow once lets it run once", async () => {
+    const write: Ask = { ...TOOL, tool: { name: "Write", input: { file_path: "/tmp/x.txt", content: "hi" }, cut: false } };
+    await modal(session({ waitReason: "permission" }, write), fakeApi({}, ME, detailOf(write)));
+    expect(screen.getByText("Write wants your permission")).toBeInTheDocument();
+    expect(screen.getByText("Lets Write run this once. The next one asks again.")).toBeInTheDocument();
+    expect(screen.queryByText("Runs this command now. The next one asks again.")).toBeNull();
   });
 
   it("offers only Deny, with a note, for a tool whose input was cut", async () => {
@@ -350,6 +358,33 @@ describe("when Podium can't send the answer", () => {
     await modal(session({ respond: null, reporterVersion: "0.13.0" }), fakeApi());
     expect(screen.getByText("This session can't be answered from Podium.")).toBeInTheDocument();
     expect(screen.getByText(/It reports with podium-reporter 0.13.0/)).toBeInTheDocument();
+  });
+
+  it("says why a reporter can't answer, and only asks for an update when it is old", async () => {
+    await modal(session({ respond: null, reporterVersion: null }), fakeApi());
+    expect(screen.getByText(/It reports with an older podium-reporter\./)).toBeInTheDocument();
+    cleanup();
+    await modal(session({ reporter: "hooks", respond: null }), fakeApi());
+    expect(screen.getByText("It reports through the settings hooks, which can't take an answer. Answer in the terminal or desktop app.")).toBeInTheDocument();
+    expect(screen.queryByText(/claude plugin update/)).toBeNull();
+    cleanup();
+    await modal(session({ respond: { level: "everything", accepts: [], limits: ["not-interactive"] } }), fakeApi());
+    expect(screen.getByText(/which can't take an answer from Podium\./)).toBeInTheDocument();
+    expect(screen.queryByText(/claude plugin update/)).toBeNull();
+    cleanup();
+    const managed = { level: "everything" as const, accepts: ["question" as const, "message" as const, "plan-feedback" as const, "command" as const], limits: ["no-permission-hooks" as const] };
+    await modal(session({ waitReason: "permission", respond: managed }, TOOL), fakeApi({}, ME, detailOf(TOOL)));
+    expect(screen.getByText("This can't be answered from Podium.")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code doesn't run podium-reporter's permission hooks on this computer, which happens where an organization manages Claude Code. Answer it in the terminal. Questions and messages still work from here.")).toBeInTheDocument();
+  });
+
+  it("says in plain words why the server refused an answer", async () => {
+    const api = fakeApi({ answer: vi.fn(async () => { throw new RespondError(422, { ok: false, error: "not accepted" }); }) }, ME, detailOf(TOOL));
+    await modal(session({ waitReason: "permission" }, TOOL), api);
+    fireEvent.click(screen.getByRole("button", { name: "Allow once" }));
+    await flush();
+    expect(screen.getByText("This session doesn't take that from Podium now. Answer it in the terminal.")).toBeInTheDocument();
+    expect(screen.queryByText("not accepted")).toBeNull();
   });
 
   it("Someone else's session", async () => {

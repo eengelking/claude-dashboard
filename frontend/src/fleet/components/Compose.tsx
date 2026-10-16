@@ -1,12 +1,12 @@
 import { useState, type KeyboardEvent } from "react";
-import { ASK_WORD, COMMANDS } from "../respond";
+import { ASK_WORD, COMMANDS, type CantReason } from "../respond";
 import type { AskKind } from "../types";
 
 // The message box at the bottom of the Activity modal (#206, mockup/podium-respond.html section 3, "Its turn ended"):
 // a new message, a message in place of an open ask's answer, or /clear (after a confirmation) and /compact.
 
-/** The note in place of the message box when responding is off, or when this session's reporter can't answer. */
-export function OffNote(props: { edge: "off" | "old"; reporterVersion: string | null }) {
+/** The note in place of the message box when responding is off, or when this session's reporter can't answer, and why. */
+export function OffNote(props: { edge: "off" | "old"; reason: CantReason; reporterVersion: string | null }) {
   if (props.edge === "off") {
     return (
       <div className="offnote">
@@ -17,13 +17,29 @@ export function OffNote(props: { edge: "off" | "old"; reporterVersion: string | 
       </div>
     );
   }
+  if (props.reason === "managed") {
+    return (
+      <div className="offnote">
+        <b>This can't be answered from Podium.</b>
+        <span>Claude Code doesn't run podium-reporter's permission hooks on this computer, which happens where an organization manages Claude Code. Answer it in the terminal. Questions and messages still work from here.</span>
+      </div>
+    );
+  }
   return (
     <div className="offnote">
       <b>This session can't be answered from Podium.</b>
-      <span>
-        It reports with podium-reporter {props.reporterVersion ?? "older than 0.14.0"}. Responding needs a newer reporter with the <code>respond</code> option on: run{" "}
-        <code>claude plugin update podium-reporter@eengelking-marketplace</code>, then <code>/reload-plugins</code> in that session. Sessions reported by the settings hooks or run with <code>claude -p</code> can't be answered at all.
-      </span>
+      {props.reason === "hooks" ? (
+        <span>It reports through the settings hooks, which can't take an answer. Answer in the terminal or desktop app.</span>
+      ) : props.reason === "print" ? (
+        <span>
+          It runs with <code>claude -p</code>, which can't take an answer from Podium.
+        </span>
+      ) : (
+        <span>
+          It reports with {props.reporterVersion ? `podium-reporter ${props.reporterVersion}` : "an older podium-reporter"}. Responding needs a newer reporter with the <code>respond</code> option on: run{" "}
+          <code>claude plugin update podium-reporter@eengelking-marketplace</code>, then <code>/reload-plugins</code> in that session. Sessions reported by the settings hooks or run with <code>claude -p</code> can't be answered at all.
+        </span>
+      )}
     </div>
   );
 }

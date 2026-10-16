@@ -70,7 +70,7 @@
     "respond": {
       "type": "string",
       "title": "Respond from Podium",
-      "description": "What this session accepts from Podium, sent by the session's owner or an Admin: off (nothing; the default), questions (answers to questions, and new messages while idle), questions-and-plans (the above, plus approving or rejecting a plan), everything (the above, plus allowing or denying a tool, allow once only, and /clear, /compact). Needs 'Send an agent's recent activity' on too, and the Podium server's Respond from Podium switch.",
+      "description": "What this session accepts from Podium, sent by its owner or an Admin. off: Nothing. The default. questions: Answers to questions, and new messages while idle. questions-and-plans: The above, plus approving or rejecting a plan. everything: The above, plus allowing or denying a tool (allow once only), and /clear, /compact. Needs 'Send an agent's recent activity' on too, and the Podium server's Respond from Podium switch.",
       "options": [
         "off",
         "questions",
