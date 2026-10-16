@@ -48,7 +48,7 @@ npm run typecheck:mod  # the mod against Claude Code's plugin API declarations (
 npm run podium:smoke   # end to end: server, simulator, SSE
 ```
 
-CI runs `npm test` and `npm run build` on every PR into `main`. It cannot run the two mod checks, because a stock runner
+CI runs `npm test` and `npm run build` on every PR into `development` or `main`. It cannot run the two mod checks, because a stock runner
 has no Claude Code, so run those yourself when you touch the mod.
 
 When you fix a bug in code, add a test that fails for the right reason first, then fix it.
@@ -80,14 +80,15 @@ Update the docs that describe your change in the same PR, and add a line under `
 
 ### The mod version bump
 
-If your PR changes the mod (anything under `mod/podium-reporter/` other than its tests), bump `version` in
-`mod/podium-reporter/.claude-plugin/plugin.json` and `VERSION` in `mod/podium-reporter/hooks/register.ts`
-in the same PR (a test checks that they match). Installed copies only update when that
-number changes, so a mod fix that lands without a bump reaches nobody. CI (the "Mod version bump check" workflow in `.github/workflows/mod-version-check.yml`) fails a PR
-that forgets. Bump the patch number for a fix and the minor number for new behavior. Podium and the mod share one
-version, so that PR also sets the same number in the three `package.json` files (and runs
-`npm install --package-lock-only`) and renames `[Unreleased]` in `CHANGELOG.md`; a test checks that they all match.
-The maintainer tags the release after it merges. `CLAUDE.md`, "Releases", has the full list of files. From 1.0.0 on every PR to `main` that changes code or behavior is a release, so it bumps these files and renames `[Unreleased]` (a documentation-only or chore PR bumps nothing and adds its entry under `[Unreleased]`); `CLAUDE.md` says how the bump is chosen.
+Do not bump the version in a feature or fix PR, including one that changes the mod (anything under
+`mod/podium-reporter/` other than its tests). Add a line under `[Unreleased]` in `CHANGELOG.md` and leave the
+version files alone. The maintainer decides when `development` is ready to release. A release-prep PR into
+`development` then sets one number in `plugin.json`, `VERSION` in `mod/podium-reporter/hooks/register.ts`, the three
+`package.json` files and the lockfile (`npm install --package-lock-only`), and renames `[Unreleased]`; a test checks
+that they all match. Installed copies of the mod only update when that number changes. A `development` to `main`
+PR carries the release, and CI (the "Mod version bump check" workflow in `.github/workflows/mod-version-check.yml`)
+fails it if the mod changed and the number did not. The maintainer tags the release after it merges. `CLAUDE.md`,
+"Releases", has the full list of files and how the bump level is chosen.
 
 If the bump is a new minor version, also move `max` in `REPORTER_SUPPORT` (`server/src/fleet/compat.ts`) to
 that version. Otherwise the server tells every up-to-date mod it is newer than the server supports. Raise
@@ -106,18 +107,22 @@ no formulaic constructions. Reread what you wrote once before opening the PR.
 
 ## Branching, PRs and merging
 
-Every change lands on a branch, never directly on `main`, however small. Branch off a current `main`:
+`development` is the default branch and holds unreleased work. `main` moves only on a release. Every change
+lands on a branch, never directly on `development` or `main`, however small. Branch off a current `development`:
 
 ```sh
-git checkout main && git pull
+git checkout development && git pull
 git checkout -b <your-branch-name>
 ```
 
-When the change is ready, open a PR against `main`. Say in the PR body that it is to be squash-merged.
-This repo keeps one commit per PR on `main`, however many commits your branch has. The PR template has a
-checklist.
+When the change is ready, open a PR against `development`. Say in the PR body that it is to be squash-merged.
+This repo keeps one commit per PR on `development`, however many commits your branch has. The PR template has a
+checklist. A release is a PR from `development` to `main`, merged with a regular merge commit and never squashed.
+A hotfix branches from `main`, goes to `main` by PR, and is cherry-picked back into `development` afterwards.
 
-Only the maintainer merges PRs into `main`, however small the change looks. Open the PR and wait for
+Install the pre-commit hook that refuses a commit on either branch: `git config core.hooksPath scripts/hooks`.
+
+Only the maintainer merges PRs into `development` or `main`, however small the change looks. Open the PR and wait for
 review.
 
 ## Filing issues
