@@ -30,6 +30,13 @@ function server(rows: HistoryRow[], sessionOver: Parameters<typeof makeSession>[
 }
 
 describe("history page", () => {
+  it("links the two parts of a conversation split by /clear (#206)", async () => {
+    server([{ ...row, clearedInto: "9c1e2f4a5b6c7d8e", clearedFrom: "238da512ffeeddcc" }]);
+    render(<HistoryView initialDay="2026-10-10" />);
+    expect(await screen.findByRole("button", { name: "continued in 9c1e2f4a" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "after /clear of 238da512" })).toBeInTheDocument();
+  });
+
   it("lists a day's ended sessions with summary columns", async () => {
     const calls = server([row]);
     render(<HistoryView initialDay="2026-10-10" />);

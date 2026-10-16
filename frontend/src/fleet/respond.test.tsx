@@ -7,6 +7,7 @@ import { canAnswer, respondGate } from "./respond";
 import { RespondProvider, useRespond } from "./useRespond";
 import { RespondButton, RespondModal } from "./components/Respond";
 import { TopBar } from "./components/TopBar";
+import { ActivityFeed } from "./components/ActivityFeed";
 import { RespondError, type RespondApi } from "./respondApi";
 import type { Ask, AskDetail, AskSummary, RespondMe, SessionView } from "./types";
 
@@ -182,6 +183,36 @@ describe("signing in", () => {
     fireEvent.click(within(top).getByRole("button", { name: "Sign in" }));
     expect(screen.getByRole("dialog", { name: "Sign in" })).toHaveTextContent("To answer and message your own sessions");
   });
+
+  it("shows Signed in as and Sign out once signed in, and Sign out signs out", async () => {
+    const api = fakeApi({ me: vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, signedIn: false, name: null }) });
+    const r = render(
+      <RespondProvider api={api} flagsOn>
+        <TopBar phase="live" reporters={1} />
+      </RespondProvider>,
+    );
+    await flush();
+    const top = r.container.querySelector("header")!;
+    expect(top).toHaveTextContent("Signed in as Ed");
+    fireEvent.click(within(top).getByRole("button", { name: "Sign out" }));
+    await flush();
+    expect(api.signOut).toHaveBeenCalled();
+    expect(within(top).getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("says the server signed you out before asking again", async () => {
+    const api = fakeApi(
+      { me: vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, signedIn: false, name: null }), answer: vi.fn(async () => { throw new RespondError(403, { ok: false, error: "sign in to respond" }); }) },
+      ME,
+      detailOf(TOOL),
+    );
+    await modal(session({ waitReason: "permission" }, TOOL), api);
+    fireEvent.click(screen.getByRole("button", { name: "Allow once" }));
+    await flush();
+    await flush();
+    expect(screen.getByText("You were signed out. A sign-in ends after 12 hours without use, when the server restarts, and when your token changes.")).toBeInTheDocument();
+    expect(screen.getByText("Sign in to respond")).toBeInTheDocument();
+  });
 });
 
 describe("a question", () => {
@@ -205,6 +236,13 @@ describe("a question", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit answers" }));
     await flush();
     expect(api.answer).toHaveBeenCalledWith("sess-ed", "toolu_q", { kind: "question", answers: [{ options: [0] }, { options: [0, 1] }] });
+  });
+
+  it("shows an option's preview beside the options", async () => {
+    const withPreview: Ask = { ...QUESTION, questions: [{ ...QUESTION.questions![0]!, options: [{ label: "Keep it, page within the day (Recommended)", description: "Restart at page 1.", preview: "History  [Today]\n Page 1 of 3" }, { label: "One paged list", description: "", preview: "History\n Page 1 of 9" }] }] };
+    await modal(session({}, withPreview), fakeApi({}, ME, detailOf(withPreview)));
+    expect(screen.getByText("Preview: Keep it, page within the day")).toBeInTheDocument();
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument();
   });
 
   it("marks a question left blank as skipped on Review, and takes a typed answer", async () => {
@@ -394,6 +432,26 @@ describe("when Podium can't send the answer", () => {
     expect(screen.getByText("This is Alex's session.").closest(".ab")).not.toBeNull();
     expect(screen.getByText("Only Alex, or an Admin, can respond to it from Podium. You can still watch its activity.")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Message to claude-dashboard" })).toBeNull();
+  });
+});
+
+describe("the orchestrator page", () => {
+  it("Expand on the orchestrator's Activity panel opens the Respond modal", async () => {
+    let openFor: string | null | undefined;
+    function Probe() {
+      openFor = useRespond()?.openFor;
+      return null;
+    }
+    render(
+      <RespondProvider api={fakeApi()} flagsOn>
+        <ActivityFeed s={session()} loop="@orchestrator" title="Activity" startedAt={T0} active now={T0} isMain adminOn />
+        <Probe />
+      </RespondProvider>,
+    );
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: /Expand/ }));
+    await flush();
+    expect(openFor).toBe("sess-ed");
   });
 });
 
