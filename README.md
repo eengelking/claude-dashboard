@@ -314,7 +314,7 @@ scripts/agent-tokens-sample.sh --help  # log a running agent's Tokens over time
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why the significant choices were made |
 | [`docs/GOTCHAS.md`](docs/GOTCHAS.md) | Sharp edges that are easy to hit |
 | [`docs/DEMO.md`](docs/DEMO.md) | A script and a paste-in prompt for showing Podium to other people |
-| [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | Credits and licenses for the color theme palettes |
+| [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) | Credits and licenses for the color theme palettes |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose and land a change |
 | [`.github/SECURITY.md`](.github/SECURITY.md) | How to report a vulnerability (privately) |

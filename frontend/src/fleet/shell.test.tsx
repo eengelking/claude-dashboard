@@ -264,7 +264,7 @@ describe("rail footer", () => {
     const { container } = render(<FleetView state={stateFrom()} />);
     const foot = container.querySelector(".rail .rail-foot") as HTMLElement;
     expect(foot).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("THIRD_PARTY_NOTICES.md"));
+    expect(screen.getByRole("link", { name: "Theme credits" })).toHaveAttribute("href", expect.stringContaining("docs/THIRD_PARTY_NOTICES.md"));
     expect(screen.getByRole("link", { name: "License" })).toHaveAttribute("href", expect.stringMatching(/\/LICENSE$/));
     expect(foot).toHaveTextContent("© 2026 Ed Engelking");
   });
