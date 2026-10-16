@@ -472,6 +472,8 @@ Declare in `plugin.json` (**Assumption:** confirm the exact `userConfig` field s
 
 Read via the `options` argument of `register`. A config change reloads the module.
 
+**Identity (#226).** The options are one set per Claude config directory, so two terminals on one machine share them, and a config change reloads every running session's module. A session's name and token are therefore taken once, at `session.start`, and held in `$.state` (`podium-reporter.identity`, declared in the mod's `types/index.d.ts`) for the rest of the session; a reload with different options does not change them. At that first start the mod uses, in order: the terminal's `PODIUM_USER` and `PODIUM_TOKEN` environment variables (taken together; when either is set the shared `userName` and `token` are not used), then the `userName` and `token` options. A session with neither a name nor a token holds nothing, so signing in later still applies. To change who a running session reports as, start a new session. A session that belongs to someone else is still refused (7.7).
+
 ### 5.10 Alternatives and extras the implementer may use
 
 - **Settings command hooks** (`.claude/settings.json` `hooks`: `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`, `PreCompact`, `PostCompact`, `Notification`, `PermissionRequest`, `TaskCreated`, `TaskCompleted`, `Stop`) can `curl` the server without a mod. Every payload has `session_id`, `transcript_path`, `cwd`, `hook_event_name`, and inside a subagent `agent_id`, `agent_type`, and often `effort.level`. They lack per-step usage and context, so they can only drive a reduced display. Phase 5 adds `POST /api/fleet/hook` to accept them, for sessions started without the mod. The mod is the primary path.

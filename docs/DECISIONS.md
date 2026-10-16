@@ -394,3 +394,21 @@ otherwise leaves the plan to the terminal. Where an organization manages Claude 
 run in a user-installed plugin, so tool permissions and plan approval can't be answered there. A pending answer is
 kept in memory only, so a server restart loses it. The mod's hooks for an open ask now wait on the network on
 purpose, which the reporter never did before.
+
+## 29. A session keeps the Podium identity it started with
+
+**Context.** The reporter's `userName` and `token` options are one set per Claude config directory, and Claude Code
+reloads every running session's module when an option changes. Signing in as a second Podium identity on the same
+machine therefore switched the first terminal's running sessions to the new token, and the server refused them (409,
+a session stored under Admin reported with a person's token). The refusal was right; the switch was the defect (#226).
+
+**Choice.** The mod takes its name and token once, at `session.start`, and holds them in `$.state`, which survives a
+reload. At that first start it prefers the terminal's `PODIUM_USER` and `PODIUM_TOKEN` over the shared options.
+
+**Alternatives.** Reading the options live (the old behavior). Holding the pair in `$.store`, which would write a token
+to disk. A project-scoped setting, which Claude Code does not offer for plugin options. Letting the server accept a
+session from a second owner, which would undo #209.
+
+**Cost.** A running session cannot pick up a corrected token or name. Fixing a wrong token means starting a new
+session, where before a reload was enough. Two identities on one machine need the environment variables, not the
+settings screen.

@@ -1,7 +1,8 @@
 {
   "name": "podium-reporter",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Reports this Claude Code session (model, effort, plan, agents, context, cost, git, failures) to a local Podium fleet console.",
+  "types": "./types/index.d.ts",
   "author": {
     "name": "Ed Engelking"
   },
@@ -46,7 +47,7 @@
     "showStatus": {
       "type": "boolean",
       "title": "Status line",
-      "description": "Show 'podium \u25cf N live' or 'podium \u25cb offline' under the prompt.",
+      "description": "Show 'podium ● N live' or 'podium ○ offline' under the prompt.",
       "default": true
     },
     "explainFailures": {

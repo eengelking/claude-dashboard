@@ -489,6 +489,24 @@ describe('podium-reporter end to end', () => {
     expect(w.posts[0]!.userName).toBe('Dana')
   })
 
+  test('PODIUM_USER and PODIUM_TOKEN name this terminal ahead of the shared options (#226)', { options: { userName: 'Admin', token: 'admin-secret' } }, async ($, on) => {
+    const w = world(on)
+    mock.env(on, { PODIUM_USER: 'Ed', PODIUM_TOKEN: 'ed-token' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.userName).toBe('Ed')
+    expect(w.headers[0]!['X-Podium-Token']).toBe('ed-token')
+  })
+
+  test('without PODIUM_USER the shared options apply, so a single terminal works as before (#226)', { options: { userName: 'Dana', token: 'dana-token' } }, async ($, on) => {
+    const w = world(on)
+    mock.env(on, {})
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.userName).toBe('Dana')
+    expect(w.headers[0]!['X-Podium-Token']).toBe('dana-token')
+  })
+
   test('no userName is sent when the option is empty', async ($, on) => {
     const w = world(on)
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })

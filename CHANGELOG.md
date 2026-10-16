@@ -12,6 +12,10 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two Podium identities can report from one machine at once, and signing in as another person no longer turns a running session into a refused one (#226). The reporter's name and token are one setting per Claude config, and Claude Code reloads every running session's reporter when it changes, so a session that had been reporting as Admin began sending the other person's token and was refused. A session now takes its name and token once, at its start, and keeps them; a reload with new settings does not change them. A terminal can also name itself with the `PODIUM_USER` and `PODIUM_TOKEN` environment variables, which are used ahead of the settings. To change who a running session reports as, start a new session. Reporter 0.14.2.
+
 ### Changed
 
 - A context bar turns red at 80% and above (#213, `mockup/podium-context-bar.html`). From 75% to 79% it stays amber; the red is the theme's own red, the one the level 2 blowout badge uses, in every theme and in light and dark. The red bar has an outline and a solid cap at the end of its fill so it still differs from amber in grayscale, and its accessible name now ends "nearly full". It applies everywhere the bar shows: the card, the orchestrator page, the agent tree and rows, and both detail panels.

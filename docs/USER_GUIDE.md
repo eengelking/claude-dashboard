@@ -45,6 +45,18 @@ your own token and enter it as `token`, with your name as `userName` (see "Admin
 server for several people, see "Several people on one Podium" in the README: it covers the bind address,
 the firewall and what everyone who can reach the server can see.
 
+To report as two Podium identities from one machine (say Admin in one terminal and yourself in another), the
+reporter's settings are not enough: they are one set for the whole Claude config, so they apply to every terminal.
+Start each terminal with its own name and token instead:
+
+```bash
+PODIUM_USER=Ed PODIUM_TOKEN=<Ed's token> claude
+```
+
+When either variable is set, the session uses them and ignores the `userName` and `token` options. A session keeps
+the identity it started with: changing the options later does not turn a running session into someone else. To
+change who a session reports as, start a new one.
+
 ### 3. Check that it works
 
 In a session, run `/podium`. You should see `Connection: online`. Then send the session a prompt. A session

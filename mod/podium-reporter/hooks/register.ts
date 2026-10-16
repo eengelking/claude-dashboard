@@ -49,6 +49,7 @@ import {
 import { nextCronAt } from './cron.ts';
 import { isDelivery, Transport, type FetchLike } from './transport.ts';
 import { activityCall, activityText, explainPrompt } from './failures.ts';
+import { pickIdentity, worthHolding, type Identity } from './identity.ts';
 import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
 import type { Ask, Delivery, DeliveryResult, MachineInfo, RespondInfo, RespondKind, RespondLevel } from './protocol.ts';
 import {
@@ -69,7 +70,7 @@ import {
   toolDenied,
 } from './respond.ts';
 
-export const VERSION = '0.14.1';
+export const VERSION = '0.14.2';
 const GIT_POLL_MS = 10_000;
 /** session.end has one ~1.5 s bound for every hook and core together; stay well inside it. */
 const END_FLUSH_MS = 1000;
@@ -146,6 +147,9 @@ export function readOptions(o: Record<string, unknown>): Options {
 // ---- module state (reset by register) -----------------------------------------------------------
 
 let opts: Options = readOptions({});
+/** The name and token this session reports as: taken once at session.start and held (#226), never read live from the options. */
+let who: Identity = { userName: '', token: '' };
+const IDENTITY = { plugin: 'podium-reporter', key: 'identity' } as const;
 let rt: Runtime | null = null;
 /** Bumped by each register (a reload, or a new test): a wait for an answer started under an older one stops. */
 let generation = 0;
@@ -271,7 +275,7 @@ function metaOf(r: Runtime, now: number) {
     now,
     storedName: r.storedName,
     optionName: opts.sessionName || null,
-    userName: opts.userName || null,
+    userName: who.userName || null,
     machine: r.machine,
     fullText: opts.fullPrompts,
     activity: opts.activityFeed,
@@ -538,7 +542,7 @@ function random(): number {
  * use). Read only when a userName is set: an unnamed reporter sends nothing that identifies the machine.
  */
 async function readMachine($: Engine): Promise<MachineInfo | null> {
-  if (!opts.userName.trim()) return null;
+  if (!who.userName.trim()) return null;
   try {
     let id = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
     if (!isMachineId(id)) {
@@ -577,7 +581,7 @@ function sessionPath(sessionId: string): string {
 /** One request to the server with the reporter's token; null when it could not be made (offline, or aborted by Esc). */
 async function podiumCall($: Engine, method: string, path: string, body?: unknown): Promise<{ status: number; text: string } | null> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (opts.token) headers['X-Podium-Token'] = opts.token;
+  if (who.token) headers['X-Podium-Token'] = who.token;
   try {
     const res = await $.http.fetch(serverBase() + path, body === undefined ? { method, headers } : { method, headers, body: JSON.stringify(body) });
     return { status: res.status, text: res.text };
@@ -989,11 +993,27 @@ function messagesLine($: Engine, r: Runtime): void {
   transcriptLine($, LINE_MESSAGES_ON);
 }
 
+/**
+ * The identity this session reports as (#226): the one it already holds (a reload re-runs register with the
+ * options as they are now, which may be someone else's), else this terminal's PODIUM_USER and PODIUM_TOKEN,
+ * else the shared options. Held for the rest of the session once it has a name or a token.
+ */
+async function takeIdentity($: Engine): Promise<Identity> {
+  const held = await attempt(async () => (await $.state.get(IDENTITY)).value ?? undefined, undefined);
+  const env = { user: await attempt(() => $.env.get('PODIUM_USER'), undefined), token: await attempt(() => $.env.get('PODIUM_TOKEN'), undefined) };
+  const picked = pickIdentity({ held, env, options: { userName: opts.userName, token: opts.token } });
+  if (worthHolding(picked) && (!held || held.userName !== picked.userName || held.token !== picked.token)) {
+    await attempt(() => $.state.set(IDENTITY, picked), undefined);
+  }
+  return picked;
+}
+
 /** session.start (also after a hot reload): build the state, register /podium and the plan tool, start timers. */
 async function start($: Engine, e: { cwd: string; surface: string | null }): Promise<void> {
   for (const t of rt?.timers ?? []) t.cancel();
   const now = nowMs();
   const id = await attempt(() => $.session.id(), `unknown-${now}`);
+  who = await takeIdentity($);
   const model = await attempt<string | null>(() => $.session.model(), null);
   const root = await attempt(() => $.session.root(), e.cwd);
   const repo = await attempt(() => $.session.repo(), null);
@@ -1008,7 +1028,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
   const fetch: FetchLike = (url, init) => $.http.fetch(url, init);
   const transport =
     rt?.transport ??
-    new Transport(fetch, { serverUrl: opts.serverUrl, token: opts.token, heartbeatMs: opts.heartbeatMs, version: VERSION }, (line) => remember('transport', line));
+    new Transport(fetch, { serverUrl: opts.serverUrl, token: who.token, heartbeatMs: opts.heartbeatMs, version: VERSION }, (line) => remember('transport', line));
   rt = {
     state,
     transport,
@@ -1118,6 +1138,7 @@ async function podiumCommand($: Engine, args: string): Promise<string> {
 
 export const register: Register = (on, rawOptions) => {
   opts = readOptions(rawOptions as Record<string, unknown>);
+  who = { userName: opts.userName, token: opts.token };
   rt = null;
   generation++;
   errors = [];
