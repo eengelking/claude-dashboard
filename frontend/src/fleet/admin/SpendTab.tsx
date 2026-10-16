@@ -95,7 +95,7 @@ export function SpendTab(props: { fleetOptions?: UseFleetOptions; onCount: (n: n
           </div>
         </div>
         {!rows.length ? (
-          <div className="empty">Nothing spent yet today.</div>
+          <div className="empty">{fleet.kpis ? "Nothing spent yet today." : "Waiting for the first update from the server."}</div>
         ) : prefs.view === "table" ? (
           <div className="tw2">
             <table className="ptab" aria-label={title}>
