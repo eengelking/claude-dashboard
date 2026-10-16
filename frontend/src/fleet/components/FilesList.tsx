@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChangedFile, FilesReport } from "../types";
+import { PageNav } from "./PageNav";
 
 /** Files shown per page; the reporter sends at most 200, so there are at most ten pages. */
 export const FILES_PER_PAGE = 20;
@@ -109,30 +110,7 @@ export function FilesList({ report, hint }: { report: FilesReport | null; hint: 
           <FileRow key={f.path} f={f} />
         ))}
       </ul>
-      <div className="pager">
-        <span>
-          Showing {from + 1}
-          {"\u2013"}
-          {from + shown.length} of {report.files.length}
-        </span>
-        {pages > 1 ? (
-          <nav className="pg" aria-label="Files pages">
-            <button type="button" aria-label="Previous page" disabled={at === 0} onClick={() => setPage(at - 1)}>
-              {"\u2039"}
-            </button>
-            {Array.from({ length: pages }, (_, i) => (
-              <button key={i} type="button" aria-current={i === at ? "page" : undefined} onClick={() => setPage(i)}>
-                {i + 1}
-              </button>
-            ))}
-            <button type="button" aria-label="Next page" disabled={at === pages - 1} onClick={() => setPage(at + 1)}>
-              {"\u203a"}
-            </button>
-          </nav>
-        ) : (
-          <span>{FILES_PER_PAGE} per page</span>
-        )}
-      </div>
+      <PageNav label="Files pages" at={at} pages={pages} from={from} shown={shown.length} total={report.files.length} perPage={FILES_PER_PAGE} onPage={setPage} />
       {(report.total > report.files.length || note) && (
         <div className="foot-note">
           {report.total > report.files.length && <div>Listing the first {report.files.length} of {report.total} files.</div>}

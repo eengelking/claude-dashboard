@@ -632,3 +632,81 @@ describe("inferred current step (#179)", () => {
     expect(steps[1]!.textContent).toContain("inferred");
   });
 });
+
+describe("Plan pager", () => {
+  const planOf = (n: number, active = 0) => ({
+    title: "Long plan",
+    source: "TaskCreate" as const,
+    steps: Array.from({ length: n }, (_, i) => ({
+      id: String(i + 1),
+      text: `Step ${i + 1}`,
+      state: (i < active ? "done" : i === active ? "active" : "pending") as "done" | "active" | "pending",
+      activeText: null,
+      ownerAgentId: null,
+      ownerLabel: null,
+    })),
+  });
+
+  it("shows no pager for 10 steps", () => {
+    const { container } = render(<PlanPanel s={makeSession({ plan: planOf(10) })} />);
+    expect(container.querySelectorAll(".step")).toHaveLength(10);
+    expect(screen.queryByRole("navigation", { name: "Plan pages" })).not.toBeInTheDocument();
+  });
+
+  it("pages 11 or more steps 10 at a time, with the range under the list", () => {
+    const { container } = render(<PlanPanel s={makeSession({ plan: planOf(23) })} />);
+    expect(container.querySelectorAll(".step")).toHaveLength(10);
+    expect(container.querySelector(".steps + .pager")!.textContent).toContain("Showing 1–10 of 23");
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(container.querySelector(".step")!.textContent).toContain("Step 11");
+    expect(container.textContent).toContain("Showing 11–20 of 23");
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(container.querySelectorAll(".step")).toHaveLength(3);
+    expect(container.textContent).toContain("Showing 21–23 of 23");
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+  });
+
+  it("keeps the count and bar on the whole plan, not the page", () => {
+    const { container } = render(<PlanPanel s={makeSession({ plan: planOf(23, 5) })} />);
+    expect(container.querySelector(".meta")!.textContent).toBe("5/23");
+  });
+
+  it("opens on the page holding the current step", () => {
+    const { container } = render(<PlanPanel s={makeSession({ plan: planOf(23, 14) })} />);
+    expect(container.querySelector(".step")!.textContent).toContain("Step 11");
+    expect(screen.getByRole("button", { name: "2" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("stays on its page when the plan changes, and drops back only when the page is gone", () => {
+    const { container, rerender } = render(<PlanPanel s={makeSession({ plan: planOf(23) })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    rerender(<PlanPanel s={makeSession({ plan: planOf(23, 3) })} />);
+    expect(container.querySelector(".step")!.textContent).toContain("Step 11");
+    rerender(<PlanPanel s={makeSession({ plan: planOf(25) })} />);
+    expect(container.querySelector(".step")!.textContent).toContain("Step 11");
+    rerender(<PlanPanel s={makeSession({ plan: planOf(8) })} />);
+    expect(container.querySelectorAll(".step")).toHaveLength(8);
+    expect(screen.queryByRole("navigation", { name: "Plan pages" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Plan pager across sessions", () => {
+  const steps = (n: number, active: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: String(i + 1), text: `Step ${i + 1}`, state: (i === active ? "active" : "pending") as "active" | "pending", activeText: null, ownerAgentId: null, ownerLabel: null }));
+  const plan = (n: number, active: number) => ({ title: "P", source: "TaskCreate" as const, steps: steps(n, active) });
+
+  it("opens on the current step's page when the plan arrives after mount", () => {
+    const { container, rerender } = render(<PlanPanel s={makeSession({ plan: null })} />);
+    rerender(<PlanPanel s={makeSession({ plan: plan(23, 14) })} />);
+    expect(container.querySelector(".step")!.textContent).toContain("Step 11");
+  });
+
+  it("resets the page when another session is shown", () => {
+    const { container, rerender } = render(<PlanPanel s={makeSession({ id: "a", plan: plan(23, 0) })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    rerender(<PlanPanel s={makeSession({ id: "b", plan: plan(23, 0) })} />);
+    expect(container.querySelector(".step")!.textContent).toContain("Step 1");
+    expect(container.querySelector(".step")!.textContent).not.toContain("Step 11");
+  });
+});

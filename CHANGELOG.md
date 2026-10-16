@@ -18,6 +18,7 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- The orchestrator page's plan shows 10 steps at a time. A plan of 11 steps or more has the Files tab's pager under the list ("Showing 1–10 of 23", Previous, page numbers, Next); a plan of 10 or fewer has none. The count and progress bar above the list still cover the whole plan. The panel opens on the page holding the current step, stays on the page you chose when the plan changes, and falls back only when that page no longer exists. The pager is now one shared component, `PageNav`, used by Plan and Files. UI only. (#214)
 - `THIRD_PARTY_NOTICES.md` moved into `docs/` with the other standing docs, and every reference follows it, including the Theme credits link in the left rail footer (#212).
 - The docs now say that a machine holds one saved Podium login per Claude config, why (Claude Code gives a reporter one shared set of settings and no per-session login, and tells every running session when they change), and that `PODIUM_USER` and `PODIUM_TOKEN` are the way to hold two logins at once. A later Claude Code release may remove the limit. Documentation only; the reporter is unchanged. (#230)
 

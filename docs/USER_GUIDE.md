@@ -219,7 +219,9 @@ Below that, on the left, is the plan, as a checklist with the agent that owns ea
 beside it. The plan is Claude's task list, read from its `TaskCreate` and `TaskUpdate` tools (or
 `TodoWrite`). If those tools are not available to the session, or Claude does not use them for the work,
 the panel reads "No plan reported. Agents were launched ad hoc." Plan mode does not change that: Podium
-does not read it. See [Gotchas](GOTCHAS.md#a-session-shows-no-plan) for how to turn the tools on. Files lists every file the session changed since it started, committed or not, each with how many
+does not read it. See [Gotchas](GOTCHAS.md#a-session-shows-no-plan) for how to turn the tools on. A plan with more than 10 steps
+shows 10 at a time, with page buttons under the list; the count and bar at the top still cover every step, and the panel
+opens on the page with the current step. Files lists every file the session changed since it started, committed or not, each with how many
 lines were added and removed (a binary file shows the word "binary"), 20 to a page. The column gets wider
 while Files is open. The list comes from `git diff` against the commit the session began on, so two sessions
 in the same checkout see the same changes; use a worktree to keep them apart. It needs podium-reporter 0.6.0

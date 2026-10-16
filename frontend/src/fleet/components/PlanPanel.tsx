@@ -3,9 +3,12 @@ import { inferredStep, planProgress } from "../logic";
 import type { PlanStep, SessionView } from "../types";
 import { PlanBar } from "./Chips";
 import { FilesList } from "./FilesList";
+import { PageNav } from "./PageNav";
 
 /** The first reporter version that sends the changed files (SPEC 6.2). */
 export const FILES_MIN_REPORTER = "0.6.0";
+/** Steps shown per page; a plan of this many or fewer has no pager. */
+export const STEPS_PER_PAGE = 10;
 export type PlanTab = "plan" | "files";
 const TABS: PlanTab[] = ["plan", "files"];
 
@@ -67,6 +70,24 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
   const { plan, files } = s;
   const p = planProgress(plan);
   const inferredId = inferredStep(plan)?.id;
+  // Opens on the page holding the current step; after that the page is the viewer's, and only clamped when it no longer exists.
+  // The page is settled once per session: a plan that arrives after mount, or another session shown in the same panel, gets its own opening page.
+  const steps = plan?.steps ?? [];
+  const openingPage = () => {
+    const cur = steps.findIndex((x) => x.state === "active" || x.id === inferredId);
+    return cur < 0 ? 0 : Math.floor(cur / STEPS_PER_PAGE);
+  };
+  const [view, setView] = useState<{ sid: string; page: number | null }>({ sid: s.id, page: steps.length > 0 ? openingPage() : null });
+  let page = view.page ?? 0;
+  if (view.sid !== s.id || (view.page === null && steps.length > 0)) {
+    page = openingPage();
+    setView({ sid: s.id, page: steps.length > 0 ? page : null });
+  }
+  const setPage = (n: number) => setView({ sid: s.id, page: n });
+  const pages = Math.max(1, Math.ceil(steps.length / STEPS_PER_PAGE));
+  const at = Math.min(page, pages - 1);
+  const from = at * STEPS_PER_PAGE;
+  const shown = steps.slice(from, from + STEPS_PER_PAGE);
   const pick = (t: PlanTab) => {
     setTab(t);
     onTab?.(t);
@@ -109,7 +130,7 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
               <PlanBar pct={p.pct} />
             </div>
             <ol className="steps">
-              {plan.steps.map((st) => (
+              {shown.map((st) => (
                 <li key={st.id} className={`step ${st.state}${st.id === inferredId ? " inferred" : ""}`}>
                   <StepMark shape={st.id === inferredId ? "inferred" : st.state} />
                   <div className="tx">
@@ -120,6 +141,7 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
                 </li>
               ))}
             </ol>
+            {pages > 1 && <PageNav label="Plan pages" at={at} pages={pages} from={from} shown={shown.length} total={steps.length} perPage={STEPS_PER_PAGE} onPage={setPage} />}
           </>
         ) : (
           <div className="empty">No plan reported. Agents were launched ad hoc, so only the agent tree is available.</div>
