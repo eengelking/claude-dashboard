@@ -149,6 +149,16 @@ describe("podiumctl command construction", () => {
     expect(env).toMatchObject({ HOST: "0.0.0.0", PORT: "4317", PODIUM_DB: "/data/podium.sqlite", STALE_AFTER_MS: "9000" });
   });
 
+  it("runs the container with no capabilities and no way to gain privileges (#249)", () => {
+    const args = containerRunArgs(cfg, Object.keys(serverEnv(cfg, true)));
+    const at = args.indexOf("--cap-drop");
+    expect(at).toBeGreaterThan(-1);
+    expect(args[at + 1]).toBe("ALL");
+    const sec = args.indexOf("--security-opt");
+    expect(sec).toBeGreaterThan(-1);
+    expect(args[sec + 1]).toBe("no-new-privileges");
+  });
+
   it("gives a containerised server the host's timezone so its day starts at the host's midnight (#139)", () => {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     expect(serverEnv(cfg, true).TZ).toBe(zone);

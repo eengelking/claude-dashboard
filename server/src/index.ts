@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
 loadEnv({ path: path.join(REPO_ROOT, ".env") });
 
+import fs from "node:fs";
 import express from "express";
 import { createRouter } from "./routes.js";
 import { FleetDb, openDb } from "./fleet/db.js";
@@ -21,6 +22,7 @@ import { forgetReporters, startSweeper } from "./fleet/sweeper.js";
 import { REPORTER_SUPPORT } from "./fleet/compat.js";
 import { createServerLogging } from "./logging/setup.js";
 import { requestLog } from "./logging/requestLog.js";
+import { inlineScriptHashes, securityHeaders } from "./securityHeaders.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const HOST = process.env.HOST || "127.0.0.1";
@@ -40,6 +42,15 @@ const stopSweeper = startSweeper(fleet, undefined, logger, () => forgetReporters
 
 const app = express();
 app.disable("x-powered-by");
+const frontendDist = path.join(REPO_ROOT, "frontend", "dist");
+// The page's one inline script (it sets the theme before first paint) is allowed by hash; no other inline script runs (#249).
+let pageScripts: string[] = [];
+try {
+  pageScripts = inlineScriptHashes(fs.readFileSync(path.join(frontendDist, "index.html"), "utf8"));
+} catch {
+  // No built UI (the server alone, or the dev server serving the UI); there is no page to allow scripts for.
+}
+app.use(securityHeaders({ scriptHashes: pageScripts }));
 app.use(requestLog(logger));
 // Five wrong credentials from one address lock it out of Admin's unlock and the sign-in to respond together (#206).
 const lockout = new Lockout();
@@ -49,7 +60,6 @@ app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters
 app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge }));
 app.use(createRouter());
 
-const frontendDist = path.join(REPO_ROOT, "frontend", "dist");
 app.use(express.static(frontendDist));
 app.get("*", (_req, res) => {
   res.sendFile(path.join(frontendDist, "index.html"));

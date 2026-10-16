@@ -425,3 +425,24 @@ settings screen.
 **Alternatives.** One shared cookie for both sessions, which would tie the 10-minute Admin lock to the 12-hour console sign-in. Minting the Admin cookie at respond sign-in, which would not cover the idle lock and would not work if the Admin session had been locked on purpose. Dropping the idle lock.
 
 **Cost.** The respond cookie now travels to every `/api` route, though only the respond and Admin routes read it. The Admin button is gone while responding is switched off (the `respond` flag is off by default), since nobody can sign in at the top bar then; `#/admin` still works. "Lock Admin" does not stop a reload from reopening Admin while the console sign-in stands.
+
+## 31. Security sweep (#249): what was found, what was fixed, what is accepted
+
+**Context.** A review of the server, UI, mod, `podiumctl`, the Containerfile and the dependencies, at the time Podium gained responding (#206) and Admin sign-in by name and token (#215).
+
+**Fixed.**
+- *High (advisory, not reachable).* `npm audit --omit=dev` reported `proxy-addr` (critical, IP spoofing through a trusted proxy subnet) and `qs` (moderate, denial of service in query parsing, reached through Express). Podium never sets `trust proxy`, so `proxy-addr` could not be steered, but `qs` parses every query string. `npm audit fix` moved them to patched versions; production dependencies now audit clean.
+- *Low.* No response carried a content security policy, `X-Frame-Options` or `nosniff`, so any future markup bug would have run with the page's full reach, and the console could be framed. Now set on every response (7.7).
+- *Low.* The container ran with Podman's default capability set. It now drops all of them and cannot gain privileges.
+
+**Checked and sound.** Every SQL statement is parameterized, and the two that build an `IN (?, ?)` list or an `ORDER BY` take only counts and whitelisted words. Tokens are 192 bits, stored as SHA-256 and compared in constant time; the lockout covers Admin and the sign-in to respond together. Every Admin route sits behind the unlocked-session check, and every change in Admin and respond needs a custom header and a same-host `Origin`, with `SameSite=Strict` cookies. A session is answerable only by its owner or an Admin, and the answer's text is never logged. The UI has no `dangerouslySetInnerHTML`, and a Markdown link opens only `http(s)` and `mailto`. `podiumctl` passes the token by environment, writes the config at mode 0600 and keeps the token out of the boot file. Log lines redact tokens.
+
+**Accepted.**
+- *Guessing the admin secret with `X-Podium-Token`.* The lockout covers only Admin's unlock and the sign-in to respond. Counting wrong report tokens as well would let one misconfigured reporter lock out every reporter and the person's own browser on a shared address (all local reporters arrive from `127.0.0.1`). `podiumctl` makes a 192-bit secret, so this matters only to someone who sets a short `PODIUM_TOKEN` by hand.
+- *DNS rebinding.* The reads are open by design (7.1), and the server does not check the `Host` header, so a page on another site that rebinds its name to `127.0.0.1` can read the fleet, including agents' full prompts. It cannot reach Admin or respond, which need a cookie that rebinding does not carry. A `Host` allowlist would break the `--bind` use from other machines, so it is left to the user's decision (#249 comment).
+- *Open reads and three open writes.* `GET` routes, Remove on a lost card, closing a wall notice and the background-sessions switch take no token (7.1). They change only how the wall looks.
+- *Development dependencies.* `npm audit` still lists `vitest`, `vite`'s `esbuild` and `tinypool`. None ships in the image, and the fix is a major version bump of the test tooling.
+- *A server's own page loads Google Fonts,* which tells Google that someone opened Podium. The policy names that one origin.
+
+**Cost.** The policy must be edited by hand when the page gains an origin or an inline script.
+

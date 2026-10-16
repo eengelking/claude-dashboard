@@ -147,6 +147,7 @@ export function containerRunArgs(cfg, envNames) {
     'run', '-d', '--name', CONTAINER, '--restart', 'unless-stopped',
     '-p', `${cfg.bind}:${cfg.port}:${INNER_PORT}`,
     '-v', `${VOLUME}:/data`,
+    '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     '--health-cmd', `node -e "fetch('http://127.0.0.1:${INNER_PORT}/api/fleet/state').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`,
     '--health-interval', '30s',
     ...envNames.flatMap((n) => ['-e', n]),
