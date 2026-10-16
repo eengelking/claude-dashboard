@@ -3,8 +3,10 @@ import type { AgentReport, Report, TokenCounts } from './protocol.js';
 import type { AgentRow, EventRow, FleetDb, SessionRow } from './db.js';
 import { family } from './derive.js';
 
-/** An older reporter prices a non-Claude model as Sonnet; Podium has no price for it, so drop the figure. */
-const priced = (model: string | null, usd: number | null): number | null => (model && family(model) === 'other' ? null : usd);
+// An older reporter prices a non-Claude model as Sonnet; Podium has no price for it, so drop the figure. A non-Claude model has no ledger price, and a loop that has not reported a model yet has no spend worth showing
+// as $0.00: both stay unknown (null) here. The Admin's prices apply on read, from the usage (issue #117).
+const priced = (model: string | null, usd: number | null): number | null =>
+  model ? (family(model) === 'other' ? null : usd) : usd || null;
 
 export interface IngestResult {
   sessionId: string;

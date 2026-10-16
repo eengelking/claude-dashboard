@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Fixed
+
+- **A cost that is not known reads as a dash, and priced spend stays visible next to unpriced spend (#276).** Checked against the code after #117: a loop that has not reported a model yet and has spent nothing showed `$0.00` (hook-only agents always did); it now shows a dash. The "not counting N unpriced sessions" note counted every session on a non-Claude model, even after the Admin priced it; it now counts only sessions whose cost is still unknown. The note replaced the cost-per-minute sparkline on the Est. cost today tile; the sparkline now stays beside it. A session first heard of after midnight, whose start the server believed from just before it, counted $0 today; it now counts what it spent since its first sample. Already right and left alone: a session that switches from Claude to a local model keeps its Claude spend on its card and in the total when it started today (#117). Still open, noted in DECISIONS 23: a session that started before midnight and now reports no ledger cost counts nothing today.
+
 ## [1.0.1] - 2026-10-16
 
 ### Changed

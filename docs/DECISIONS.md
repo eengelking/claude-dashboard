@@ -75,7 +75,9 @@ table (`mod/podium-reporter/hooks/models.ts`), and the UI always labels it an es
 would be wrong.
 A model with no price (anything that is not a Claude model, such as one served by Ollama) gets no estimate at
 all: `null` in the report and "n/a" in the UI, and its sessions are left out of the fleet's cost total with a
-note. The earlier fallback priced it as Sonnet so the number was never zero, but an invented figure presented
+note (the note counts a session only while its model is unpriced: once the Admin prices the model the session has a
+cost and the note goes, #276; the cost-per-minute sparkline stays beside it). A loop that has not reported a model
+yet, with no spend, is also unknown and reads as a dash, not $0.00. The earlier fallback priced it as Sonnet so the number was never zero, but an invented figure presented
 as an estimate is worse than none (#66).
 **Cost.** Agent figures undershoot the ledger a little (known issue 7 in `ARCHITECTURE.md`).
 
@@ -290,6 +292,11 @@ that sends usage (0.12.0 and later); a person who sets a contracted rate in Clau
 here too. Reports grow by a few rows per model. The cost-per-minute sparkline still comes from the ledger's samples
 and does not follow the Admin's prices. Cache writes count at the 5-minute rate unless Claude Code reports the
 1-hour part; the `turn.step` usage fields in SPEC 5 carry no such split, so until it does the 1-hour price has no effect.
+A session first heard of after midnight, whose start the server believed from before it, counts what it spent since
+its first sample (#276). A session that started before midnight and now reports no ledger figure (the reporter sends
+`null` for a local model) cannot be split by the ledger, so it counts nothing today even when it spent on a Claude
+model earlier in the day; its card still shows the Claude spend from its usage. Splitting it from per-sample usage
+is possible once samples keep it.
 
 ## 24. An agent's activity is sent only while someone watches it, and never kept
 

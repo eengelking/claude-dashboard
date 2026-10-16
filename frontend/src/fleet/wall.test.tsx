@@ -425,6 +425,14 @@ describe("fleet cost with an unpriced session (#66)", () => {
     expect(screen.getByText("not counting 2 unpriced sessions")).toBeInTheDocument();
   });
 
+  it("keeps the cost sparkline next to the note, because the priced spend is still there (#276)", () => {
+    const st = stateFrom({ sessions: [makeSession()], kpis: makeKpis({ unpricedSessions: 1, costPerMinute: [0, 1, 2, 1] }) });
+    const { container } = render(<FleetView state={st} />);
+    const tile = [...container.querySelectorAll(".kpi")].find((t) => t.textContent?.includes("Est. cost today"))!;
+    expect(tile.textContent).toContain("not counting 1 unpriced session");
+    expect(tile.querySelector("svg.sp")).not.toBeNull();
+  });
+
   it("adds no note when every session is priced", () => {
     render(<FleetView state={stateFrom({ sessions: [makeSession()] })} />);
     expect(screen.queryByText(/unpriced/)).toBeNull();

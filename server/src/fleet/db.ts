@@ -440,13 +440,17 @@ export class FleetDb {
    * What each session spent at or after `since`, with its owner and the owner's group. A session that started
    * after `since` counts whole. One that started before counts the share of its cost that came after the ledger's
    * last sample before `since` (samples are cumulative), so a session left running over midnight adds only today's
-   * spend, and one with no sample before `since` adds nothing. `cost` says what a session costs in all (the Admin's
+   * spend. One first heard of after `since` has no sample before it and counts what it spent since its first sample; one with
+   * no sample at all adds nothing. `cost` says what a session costs in all (the Admin's
    * prices repriced from its usage); by default its stored cost_usd. That total is scaled by the ledger's share.
    */
   private spendSince(since: number, cost: CostOf): { owner: string | null; grp: string | null; usd: number }[] {
     const rows = this.stmt(
       `SELECT s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json, s.started_at AS started_at,
-         (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.t < :sec AND m.cost_usd IS NOT NULL ORDER BY m.t DESC LIMIT 1) AS base
+         COALESCE(
+           (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.t < :sec AND m.cost_usd IS NOT NULL ORDER BY m.t DESC LIMIT 1),
+           (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.cost_usd IS NOT NULL ORDER BY m.t ASC LIMIT 1)
+         ) AS base
        FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
        WHERE s.started_at >= :since OR s.ended_at IS NULL OR s.ended_at >= :since`,
     ).all({ since, sec: Math.floor(since / 1000) }) as unknown as (CostRow & {

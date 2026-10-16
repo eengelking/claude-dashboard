@@ -337,7 +337,8 @@ export function computeKpis(input: KpiInput, now: number): Kpis {
       k.planTotal += v.plan.steps.length;
       k.planDone += v.plan.steps.filter((s) => s.state === 'done').length;
     }
-    if (v.modelFamily === 'other' && v.model) k.unpricedSessions++;
+    // Unpriced means a non-Claude model nobody has priced: once the Admin does, the session has a cost and drops out.
+    if (v.modelFamily === 'other' && v.model && v.costUsd === null) k.unpricedSessions++;
     k.blowoutsTotal += v.blowouts.total;
     if (v.blowouts.level === 2) k.sessionsAtLevel2++;
   }
