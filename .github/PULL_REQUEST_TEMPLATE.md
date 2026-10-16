@@ -7,7 +7,7 @@
 - [ ] Targets `main` (or the batch's integration branch, for a parallel-batch sub-agent PR).
 - [ ] If this PR changes the mod (`mod/podium-reporter/`, other than its tests), the `version` in
       `mod/podium-reporter/.claude-plugin/plugin.json` and `VERSION` in `hooks/register.ts` were bumped
-      together. Installed copies only update when the version changes, and CI (`mod-version-check`)
+      together. Installed copies only update when the version changes, and CI (the "Mod version bump check" workflow)
       enforces it for PRs into `main`.
 - [ ] If the report format changed, `server/src/fleet/protocol.ts` and `mod/podium-reporter/hooks/protocol.ts`
       match (`npm test` compares them).

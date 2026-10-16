@@ -14,7 +14,7 @@ const HELP = `Usage: node scripts/podium-respond-demo.mjs --url <server> --secre
   --seconds  how long to keep the sessions alive (default 600)
   -h, --help show this help
 
-Prints the people's names and tokens so you can sign in to respond.`;
+Prints the people's names and tokens, and the Admin name with the admin secret, so you can sign in to respond.`;
 
 const args = process.argv.slice(2);
 if (args.includes('-h') || args.includes('--help')) {

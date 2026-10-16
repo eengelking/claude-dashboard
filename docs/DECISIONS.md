@@ -67,6 +67,8 @@ the mod was not moved to a separate repo (entry 12).
 
 ## 7. Cost is an estimate, except the session ledger
 
+*Superseded in part by 23 (#117): the server now prices the tokens, with `server/src/fleet/pricing.ts`.*
+
 **Choice.** An orchestrator's own cost is the session's ledger. Agent cost is token counts times a price
 table (`mod/podium-reporter/hooks/models.ts`), and the UI always labels it an estimate.
 **Why.** The engine only gives a ledger for the session, not per agent. Presenting an estimate as a bill
@@ -196,7 +198,7 @@ range on the mod's own version needs no new field on the wire, works for reporte
 patch number keeps a mod-only fix from warning anyone.
 **Cost.** Someone must move `min` or `max` when a change needs it. Forgetting `max` when a new mod minor
 ships makes every up-to-date mod show `upgrade server`, and a test cannot catch that on its own. The release
-steps in `CLAUDE.md` do not mention it yet.
+steps are in `CONTRIBUTING.md` ("The mod version bump"), which says to move `max`.
 
 ## 19. The changed-files list is a git diff against where the session started
 
@@ -231,8 +233,9 @@ A plain SHA-256 is enough because the tokens are random and long: there is no pa
 keeps a copied database from handing out working tokens. Keeping the old secret means an existing single-token setup
 works after upgrade with no change.
 **Cost.** Anyone with the admin secret can open Admin and make tokens, so the secret still has to be guarded
-(`podman inspect` shows it). Sessions live in memory, so a restart locks Admin. There are no accounts or roles, and a
-person cannot see or rotate their own token. Tokens still travel over plain HTTP: a network-reachable server needs a
+(`podman inspect` shows it). Sessions live in memory, so a restart locks Admin. There are no accounts, and a
+person cannot see or rotate their own token (the built-in Administrators group, #172, later let its members
+open Admin with their own name and token; see 30). Tokens still travel over plain HTTP: a network-reachable server needs a
 trusted network or a TLS proxy. Any valid credential can delete any session. The lockout is per source address, so
 behind a proxy that hides addresses it is shared.
 

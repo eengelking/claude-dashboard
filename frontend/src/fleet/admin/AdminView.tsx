@@ -166,7 +166,7 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
               <div className="solo-in">
                 <div className="lock">
                   <h1>Admin is off</h1>
-                  <p className="lead">This server is running without a token, so there is nothing to protect Admin with. Start it with one (podiumctl does this on first start), then reload.</p>
+                  <p className="lead">This server is running without a token, so there is nothing to protect Admin with. Run podiumctl config unset PODIUM_TOKEN and podiumctl restart (the first start makes one), then reload.</p>
                 </div>
               </div>
               <AdminFoot version={version} />

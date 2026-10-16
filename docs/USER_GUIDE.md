@@ -67,8 +67,8 @@ change who a session reports as, start a new one.
 
 In a session, run `/podium`. You should see `Connection: online`. Then send the session a prompt. A session
 appears in the browser within a couple of seconds of doing its first bit of work, not before, so a brand new
-session is not on the wall yet and its status line reads `podium v0.11.1 ● 0 live`. Once it has run, the status line
-reads `podium v0.11.1 ● 1 live`. If it says `podium v0.11.1 ○ offline`, see "Something is wrong" below, and for the other
+session is not on the wall yet and its status line reads `podium vX.Y.Z ● 0 live`. Once it has run, the status line
+reads `podium vX.Y.Z ● 1 live`. If it says `podium vX.Y.Z ○ offline`, see "Something is wrong" below, and for the other
 case see "Sessions that have not done anything yet".
 
 Give a session a name that shows on its card with `/podium name <text>`.
@@ -103,8 +103,8 @@ when nobody is looking.
 
 ### The wall
 
-The default view (`#/`) is a card per session. At the top are six tiles: sessions live, subagents running,
-context blowouts, plan steps done, estimated cost today and tokens in the last minute. Below them you can:
+The default view (`#/`) is a card per session. At the top are six tiles: Orchestrators live, Subagents running,
+Context blowouts, Plan steps done, Est. cost today and Tokens, last minute. Below them you can:
 
 - filter by status (All, Running, Waiting, Stale, Blowouts),
 - sort (Status, Model, Context blowouts, Context used, Cost, Newest),
@@ -215,7 +215,7 @@ amber with "update" or "upgrade server" when the server says it is outside the s
 Below that, on the left, is the plan, as a checklist with the agent that owns each step, with a **Files** tab
 beside it. The plan is Claude's task list, read from its `TaskCreate` and `TaskUpdate` tools (or
 `TodoWrite`). If those tools are not available to the session, or Claude does not use them for the work,
-the panel reads "No plan reported. Agents were launched ad hoc." Plan mode does not change that: Podium
+the panel reads "No plan reported. Agents were launched ad hoc, so only the agent tree is available." Plan mode does not change that: Podium
 does not read it. See [Gotchas](GOTCHAS.md#a-session-shows-no-plan) for how to turn the tools on. A plan with more than 10 steps
 shows 10 at a time, with page buttons under the list; the count and bar at the top still cover every step, and the panel
 opens on the page with the current step. Files lists every file the session changed since it started, committed or not, each with how many
@@ -388,7 +388,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   choose "I have saved it", because Podium keeps only a hash and cannot show the token again. The list shows
   the token's key id as `pdm_` and twelve characters, the same way Reporters shows it, when each person last reported and from which machines. Rotate gives a person a
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
-  stale and drop as usual. The search finds a person by name, group or machine. A person in the Administrators group has their name in orange.
+  stale and drop as usual; a revoked person's row offers **Issue new token** instead. The search finds a person by name, group or machine. A person in the Administrators group has their name in orange.
 - **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is
   a label for arranging the console (Group by Group, see "People" above). Only Administrators grants anything. Deleting a group
   moves its people to "No group". **Administrators** is built in and cannot be renamed or deleted. The admin secret is always
@@ -400,7 +400,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   them by state and filters the list: **Reporting** (heard from in the last 2 minutes), **Idle** (up to an
   hour ago), **Silent** (longer) and **Not since restart** (last heard before the server started). **Silent**
   means only that nothing has arrived: Podium cannot tell a reporter that is turned off from one that cannot
-  reach it (hover or focus the state for this). The list updates by itself every few seconds. Each row shows the machine, the person, the token it uses, the reporter
+  reach it (hover or focus the state for this). The list updates by itself every 10 seconds. Each row shows the machine, the person, the token it uses, the reporter
   version (with a warning when it is older or newer than this Podium supports), the last report and the number
   of sessions. Select a row for its details: version and compatibility, machine id, source address, the token's
   key id (never the token), then two panels: **Recent sessions**, paged like the other Admin lists so you can reach every session the server still holds for it, and **Reports the server turned away**. A reporter with no user
@@ -428,7 +428,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   empty, without a reload. The notes Podium shows at the bottom of the wall each have a switch here, and the X on a note
   turns its switch off for everyone. After you close one, Podium says so and links to this page. A second
   switch, **Show background sessions on the wall**, keeps sessions nobody is attached to in view (off by
-  default). **Forget old reporters** (off by default) removes a reporter from Admin > Reporters once the server has not heard from it for the number of **Days** you set (30 to start with); it is checked every hour, starting an hour after the server starts, and each run that removes any is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. These settings apply to every browser and stay after a restart.
+  default). **Forget old reporters** (off by default) removes a reporter from Admin > Reporters once the server has not heard from it for the number of **Days** you set (30 to start with); it is checked when the server starts and then every hour, and each run that removes any is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. These settings apply to every browser and stay after a restart.
 - **Model prices.** One row per model with five prices in US dollars per million tokens: input, output, cache
   read, cache write for 5 minutes and cache write for 1 hour. They start as the prices on Anthropic's pricing
   sheet (the date is shown). Edit a price and click **Save**; every cost in Podium (the wall, each
@@ -438,7 +438,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   model Podium has no price for, such as a local model, type its id in **Model id** under **Add a model**, fill in
   the five prices and save; until then its cost reads "n/a". Cache writes use the 5-minute price unless Claude
   Code reports which writes were 1-hour ones.
-- **Reporting and security.** A switch for reporting with the admin secret. When it is off, a reporter that still
+- **Reporting and security.** One switch, **Allow reporters to use the admin secret**. When it is off, a reporter that still
   sends the secret is refused. Sessions that report with the secret show under the owner **Admin**.
 - **Spend.** What each person, or each group, has spent since midnight today on the server, live or ended sessions, as bars or as a table. Choose **People** or **Groups** and **Chart** or **Table**; the total spent and the number of live sessions are at the top right, and the list is largest first, 25 rows at a time. The total and the table's Total row always count everyone, not just the page you are on, and the total equals the "Est. cost today" tile. These are estimates from tokens, not a bill. Someone whose sessions have all ended still has a row, but no band on the wall.
 - **Admin log.** Who made each change (a person, or the admin secret), unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
@@ -480,6 +480,7 @@ the table.
 | `reporter.connected` | info | A reporter (owner, machine, mod or settings hooks) was heard for the first time, or again after a silence |
 | `reporter.silent` | warn | A session stopped reporting and turned stale |
 | `session.started`, `session.ended`, `session.deleted` | info | A session's first report (or its return after leaving the wall), its end (`reason` is `done` or `heartbeat lost`), or a delete |
+| `reporters.forgotten` | info | The Forget old reporters setting removed reporters that had been silent for its number of days |
 | `sweep.removed` | info | The sweep took ended or heartbeat-lost sessions off the wall |
 | `admin.*` | info | An Admin change, named as in the Admin Log (`admin.person_created`, `admin.feature_changed`); a failed unlock is `admin.unlock_failed` at warn |
 | `ingest.failed`, `request.failed`, `sweeper.failed` | error | Something broke on the server |

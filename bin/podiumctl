@@ -65,8 +65,8 @@ Files (set PODIUMCTL_HOME to move them; default ~/.podium):
   data/          SQLite database (standalone mode); container mode uses the Podman volume "${VOLUME}".
   podium.log     Server log (standalone mode); container mode: \`podiumctl logs\`.
 
-Auth: the first \`start\` generates the admin secret and saves it as PODIUM_TOKEN in config.env. It opens
-the Admin section in the browser, where you make a token for each person. On your own machine a reporter can
+Auth: the first \`start\` generates the admin secret and saves it as PODIUM_TOKEN in config.env. Open the
+dashboard (\`podiumctl url\`), go to Admin and sign in with the name Admin and the secret to make a token for each person. On your own machine a reporter can
 send the secret itself as X-Podium-Token. Find it any time with \`podiumctl token\`. To run without auth (and
 without Admin): \`podiumctl config set PODIUM_TOKEN=\` (empty on purpose).
 
@@ -461,7 +461,7 @@ function cmdToken(flags) {
     const token = randomBytes(24).toString('hex');
     writeConfigFile({ ...file, PODIUM_TOKEN: token });
     say(token);
-    console.error('New token saved. Restart the server (podiumctl restart) and update the mod\'s `token` option.');
+    console.error('New admin secret saved. Restart the server (podiumctl restart). Only reporters that send the admin secret need the new value; people\'s own tokens keep working.');
   } else if (file.PODIUM_TOKEN === undefined) fail('no token yet; it is generated on the first `podiumctl start`');
   else if (file.PODIUM_TOKEN === '') fail('auth is off (PODIUM_TOKEN is empty)');
   else say(file.PODIUM_TOKEN);

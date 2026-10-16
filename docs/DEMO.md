@@ -40,7 +40,7 @@ viewer sees both at once.
 2. Open http://localhost:5173/#/ in the browser. With nothing reporting, the wall explains how to start
    a session. That empty state is a good first shot.
 
-3. Pick the theme you want from the toggle in the top bar and size the window before you start
+3. Pick the theme you want from the Theme dropdown in the row under the top bar and size the window before you start
    recording. Layout changes mid-take are distracting.
 
 4. In the second terminal, start Claude Code with the mod installed. Install it once from the
@@ -53,7 +53,7 @@ viewer sees both at once.
    ```
 
    The session appears on the wall once you send it a prompt, not before. Until then the status line under
-   the prompt reads `podium v0.11.1 ● 0 live`. After the first prompt it reads `podium v0.11.1 ● 1 live`.
+   the prompt reads `podium vX.Y.Z ● 0 live`. After the first prompt it reads `podium vX.Y.Z ● 1 live`.
 
 5. Type `/podium` to show the link, connection state and report counts. Then give the session a
    readable name, because the wall shows it on the card:

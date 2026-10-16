@@ -12,9 +12,11 @@ container image.
 A change fits if it makes Podium better at watching sessions. Some things are out on purpose, and
 `docs/SPEC.md` ("Non-goals") lists them:
 
-- **No control surface.** Podium never sends a prompt, stops an agent, approves a permission or edits a
-  session.
-- **One machine, one user.** No multi-machine fleets, accounts or cloud sync.
+- **Answers only when asked.** Podium never types into a terminal, stops or starts an agent, or changes a
+  session's permission rules. It can answer a session that waits on its person, but only where the Admin and
+  the session's owner both turn that on.
+- **One server you run.** No hosted service, accounts or cloud sync. Several people can report to it, each
+  with their own token.
 - **No billing accuracy.** Cost is an estimate and the UI says so.
 
 If your idea needs one of those, open an issue and say why before writing code.
@@ -46,7 +48,7 @@ npm run typecheck:mod  # the mod against Claude Code's plugin API declarations (
 npm run podium:smoke   # end to end: server, simulator, SSE
 ```
 
-CI runs `npm test` and `npm run build` on every PR. It cannot run the two mod checks, because a stock runner
+CI runs `npm test` and `npm run build` on every PR into `main`. It cannot run the two mod checks, because a stock runner
 has no Claude Code, so run those yourself when you touch the mod.
 
 When you fix a bug in code, add a test that fails for the right reason first, then fix it.
@@ -81,7 +83,7 @@ Update the docs that describe your change in the same PR, and add a line under `
 If your PR changes the mod (anything under `mod/podium-reporter/` other than its tests), bump `version` in
 `mod/podium-reporter/.claude-plugin/plugin.json` and `VERSION` in `mod/podium-reporter/hooks/register.ts`
 in the same PR (a test checks that they match). Installed copies only update when that
-number changes, so a mod fix that lands without a bump reaches nobody. CI (`mod-version-check`) fails a PR
+number changes, so a mod fix that lands without a bump reaches nobody. CI (the "Mod version bump check" workflow in `.github/workflows/mod-version-check.yml`) fails a PR
 that forgets. Bump the patch number for a fix and the minor number for new behavior. A release sets the mod
 and the `package.json` versions to the same number, and the maintainer handles that when cutting one.
 

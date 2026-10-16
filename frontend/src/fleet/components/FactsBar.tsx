@@ -56,7 +56,7 @@ function ReporterFact({ s }: { s: SessionView }) {
   const note = versionNote(s);
   if (!note && (s.reporterVersion === null || s.reporter === "hooks")) {
     return (
-      <div className="fact" title={`${HOOKS_NOTE} Load the mod with claude --plugin-dir mod/podium-reporter for the full view.`}>
+      <div className="fact" title={`${HOOKS_NOTE} Install podium-reporter from eengelking-marketplace for the full view.`}>
         <div className="k">Reporter</div>
         <div className="v soft">Settings hooks</div>
       </div>

@@ -22,7 +22,7 @@ from the spec and why, what was verified, and what is still open.
 **The mod** (`mod/podium-reporter/`) runs in each Claude Code process. Hooks only update an in-memory
 model through pure reducers (`state.ts`, `plan.ts`, `failures.ts`) and never wait on the network; a
 `$.clock.every` timer reads `$.session.id()`, `$.session.usage()` and `$.agent.list()`, and posts a full
-snapshot plus unacknowledged events (`transport.ts`). Git is polled every 10 s (`git.ts`). `session.end`
+snapshot plus unacknowledged events (`transport.ts`). Git is polled every 10 s (`pollGit` in `register.ts`, reading through `git.ts`). `session.end`
 sends the final report inside a 1 s deadline. A changed session id (after `/clear` or a resume) closes
 the old id with a `done` report and starts over under the new one.
 
@@ -100,8 +100,7 @@ for `every` seconds plus `ACTIVITY_LEASE_SLACK_MS` (15 s); the report route answ
 a live lease; `Fleet.ingest` hands each validated report to the store, which merges only watched loops' entries,
 skipping any stamped (through the session's clock skew) before the lease began and any it already has. The sweeper
 expires leases every second, and a session leaving the live set or being deleted drops its leases. The Admin's
-`activity-feed` flag (`server/src/fleet/featureFlags.ts`, a `feature.<id>` row in the settings table, on unless set to
-'0') sits above all of this: the store asks `Fleet.features` on each call, so while it is off `watched` is empty,
+`activity-feed` flag (`server/src/fleet/featureFlags.ts`, a `feature.<id>` row in the settings table, '1' or '0', or unset for the flag's `defaultOn` in `FEATURES`) sits above all of this: the store asks `Fleet.features` on each call, so while it is off `watched` is empty,
 `ingest` keeps only the reporter's option and no entries, and the route answers `enabled: false` without a lease. The
 flag's `onChange` in `Fleet` calls `ActivityStore.clear()` when it goes off and sends every browser a fresh snapshot,
 whose `features` map tells the panels. No table for the feed itself, no migration, no entries in the state or the stream; `ingest.ts` never sees the entries, because it copies named
@@ -201,6 +200,25 @@ without a logger is silent.
 **Shared contract.** The Report types live in `server/src/fleet/protocol.ts` and, byte for byte between
 markers, in `mod/podium-reporter/hooks/protocol.ts`; a test compares them. The UI imports the view types
 from the server's file. `docs/fixtures/report.sample.json` is the shared fixture.
+
+**Other server parts.**
+
+- *Model prices.* `pricing.ts` holds the built-in price per model family (per million tokens, dated by
+  `PRICES_AS_OF`). `modelPrices.ts` keeps the Admin's overrides and custom models (at most 100) under the
+  `model_prices` settings key. `Fleet` prices every session and agent through `Pricing`, so a change on
+  Admin > Model prices reaches every cost figure.
+- *Wall notices.* `wallSettings.ts` defines the notices (today, `background-sessions`) and the setting behind
+  them. `POST /api/fleet/notices/:id/close` and `PUT /api/fleet/wall/background-sessions` change only how the
+  wall looks, so they take no token. `components/NoticeStack.tsx` draws them.
+- *Compatibility.* `compat.ts` holds `REPORTER_SUPPORT`, the reporter versions this server reads. Only
+  `major.minor` is compared. A mod outside the range gets a version note on its card and a toast in the mod.
+- *The stream.* `sse.ts` sends `snapshot` (on every connect), `session`, `activity`, `removed`, `tick` (every
+  2 s) and `wall`, and accepts at most 100 clients.
+- *Admin pages.* `AdminView` lists eight pages in three groups: People, Groups and Reporters (People and
+  access); Settings, Model prices and Reporting and security (Server); Spend and Admin log (Activity). Each
+  has a `*Tab.tsx` file under `frontend/src/fleet/admin/`.
+- *Mounts.* The server mounts `/api/fleet` and `/api/admin`, then `/api/health` and a 404 for any other
+  `/api` path, then serves the built frontend with `*` falling back to `index.html`.
 
 ## Spec questions
 
@@ -625,7 +643,7 @@ Not verified: real touch input; screen reader output (roles and names are assert
 
 ### Phase 3: the reporter mod
 
-Built: `mod/podium-reporter/` with `plugin.json` (seven options), `hooks/hooks.json`, `register.ts`
+Built: `mod/podium-reporter/` with `plugin.json` (seven options at 0.5.0), `hooks/hooks.json`, `register.ts`
 (wiring), `state.ts`, `plan.ts`, `failures.ts`, `models.ts`, `report.ts`, `transport.ts`, `git.ts`,
 `protocol.ts`, their tests, a `tsconfig.json` from the types header, and
 `scripts/podium-mod-typecheck.sh`.
@@ -733,8 +751,8 @@ server in one of two modes, chosen with `--mode` and saved in `~/.podium/config.
   runtime stage has production deps for `server`, the two `dist` trees, user `node`, `/data` volume).
   `podiumctl` runs it as `podium` with `--restart unless-stopped`, port published on the chosen bind
   address, named volume `podium-data`, and a `--health-cmd` (the `HEALTHCHECK` instruction is dropped
-  by Podman's default OCI image format). Inside, the server binds `0.0.0.0:4317`; the host-side bind is
-  where access is limited.
+  by Podman's default OCI image format). It also passes the host's time zone as `TZ`, so the day for "Est. cost today"
+  is the host's. Inside, the server binds `0.0.0.0:4317`; the host-side bind is where access is limited.
 - **standalone**: a detached `node server/dist/index.js` with a pid file and `~/.podium/podium.log`. The
   pid file is only trusted if that pid's command line is `podiumctl` or the server entry, so a reused pid
   is never signalled. Under the boot service, `podiumctl run` writes its own pid (not the server child's),

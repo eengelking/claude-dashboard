@@ -28,8 +28,10 @@ problems that matter here are:
   level the session didn't allow, or from anyone but the session's owner or an Admin; to run any command but
   `/clear` and `/compact`; to change a session's permission rules ("always allow"); or to stop or start a session.
 
-A few things are by design, so they are not vulnerabilities on their own. Reads (`GET /api/fleet/*`) are
-open on localhost; only reports, hooks and deletes need a token. Tokens travel in a header over plain HTTP, so a
+A few things are by design, so they are not vulnerabilities on their own. Fleet reads (`GET /api/fleet/state`, `/stream`,
+`/sessions/...`, `/events`, `/history`) are open on localhost; only reports, hooks and deletes need a token, and a
+waiting session's question, plan or tool input (under `/api/fleet/respond`) is shown only to its owner or an Admin
+who has signed in. Tokens travel in a header over plain HTTP, so a
 server reachable over a network needs a trusted network or a TLS proxy, and a person who holds a valid token can
 delete any session. Anyone with access to your user
 account or to `~/.podium` can read the token and the data, and `podman inspect podium` shows the token
@@ -53,10 +55,10 @@ tool's permission prompt, a new message, `/clear` and `/compact`. What that expo
 - **What it needs.** It is off unless all of these are on: authentication (`PODIUM_TOKEN`), the Admin's Respond
   from Podium flag, the Admin's activity feed flag, and on the session's machine the reporter's `respond` option and
   `activityFeed` option. The reporter checks its own level itself and never relies on the server for it.
-- **The sign-in.** A random id in an `HttpOnly; SameSite=Strict` cookie scoped to `/api/fleet/respond`, held in the
+- **The sign-in.** A random id in an `HttpOnly; SameSite=Strict` cookie scoped to `/api`, held in the
   server's memory; it ends after 12 hours without use, on sign-out, on restart, and when the person's token is
-  rotated or revoked. Every change needs the header `X-Podium-Respond: 1` and a same-site `Origin`, and no CORS is
-  offered. Five wrong tries from one address lock signing in for 15 minutes, counted together with Admin unlocks.
+  rotated or revoked. Every change needs the header `X-Podium-Respond: 1` and, when the browser sends an `Origin`, that
+  Origin must name this server. No CORS is offered. Five wrong tries from one address lock signing in for 15 minutes, counted together with Admin unlocks.
 - **What is seen and kept.** A question, a plan or a tool's input is shown only to the session's owner or an Admin,
   and kept in the server's memory only. Each answer is written to the admin log with who sent it, the session and
   the kind of answer, never its text. The token, and the session cookie, travel over plain HTTP unless you put a TLS

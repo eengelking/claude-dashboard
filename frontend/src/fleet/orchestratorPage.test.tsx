@@ -258,7 +258,7 @@ describe("the Reporter cell", () => {
     const c = cell(page({ reporter: "hooks", reporterVersion: null }).container);
     expect(c.querySelector(".v")!.textContent).toBe("Settings hooks");
     expect(c.getAttribute("title")).toContain(HOOKS_NOTE);
-    expect(c.getAttribute("title")).toContain("Load the mod with claude --plugin-dir mod/podium-reporter for the full view.");
+    expect(c.getAttribute("title")).toContain("Install podium-reporter from eengelking-marketplace for the full view.");
   });
 
   it("out of range: the card chip's label in the warning color with a warning shape, the note as its tooltip", () => {

@@ -39,7 +39,7 @@ export function TopBar(props: { page: string; phase: Phase; reporters: number; o
       )}
       {props.wall}
       {admin && (
-        <a className="btn" href="#/admin" title="Tokens, groups and the admin log">
+        <a className="btn" href="#/admin" title="People, groups, reporters, settings, model prices, spend and the Admin log">
           Admin
         </a>
       )}

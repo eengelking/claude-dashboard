@@ -71,7 +71,7 @@ export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => 
           {row(
             "forget-reporters",
             "Forget old reporters",
-            "Remove a reporter from Admin > Reporters once the server has not heard from it for the number of days below. It is checked every hour and written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. Off by default.",
+            "Remove a reporter from Admin > Reporters once the server has not heard from it for the number of days below. It is checked every hour, and each removal is written to the Admin log. Sessions are not touched, and a reporter comes back if it reports again. Off by default.",
             data ? (data.forgetReporters?.enabled ?? false) : undefined,
             () => data && put({ forgetReporters: { enabled: !(data.forgetReporters?.enabled ?? false) } }),
           )}
