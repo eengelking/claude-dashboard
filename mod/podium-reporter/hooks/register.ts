@@ -656,10 +656,11 @@ function finish(a: OpenAsk): void {
 
 /**
  * Waits on the server for the next answer to an ask that `wanted` takes, until one comes, the ask is done, or the server
- * stops taking answers. An answer of another kind is refused (or, for a plan, handed to `other`).
+ * stops taking answers. An answer of another kind is refused (or, for a plan, handed to `other`); one that `skip` names
+ * is left alone for another wait on the same ask to act on.
  */
-async function waitForAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void): Promise<Delivery | null> {
-  const d = await pollAnswer($, a, wanted, other);
+async function waitForAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void, skip?: (d: Delivery) => boolean): Promise<Delivery | null> {
+  const d = await pollAnswer($, a, wanted, other, skip);
   if (!d && !a.done) {
     a.listening = false;
     if (rt) rt.state = { ...rt.state, dirty: true };
@@ -680,7 +681,7 @@ async function pause($: Engine, ms: number): Promise<boolean> {
   }
 }
 
-async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void): Promise<Delivery | null> {
+async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolean, other?: (d: Delivery) => void, skip?: (d: Delivery) => boolean): Promise<Delivery | null> {
   // `rt` is module state, so a wait from an older register would otherwise read a newer session's switches.
   const gen = generation;
   while (!a.done && gen === generation && rt?.transport.respond) {
@@ -701,6 +702,11 @@ async function pollAnswer($: Engine, a: OpenAsk, wanted: (d: Delivery) => boolea
     }
     const d = deliveryOf(res);
     if (!d) return null;
+    if (d.askId === a.ask.id && skip?.(d)) {
+      // Another wait on this ask acts on it (a plan's feedback is the tool.call hook's); ask again once it has.
+      if (!(await pause($, 500))) return null;
+      continue;
+    }
     if (!markActed($, d.id)) {
       // Already acted on and waiting for its result to reach the server: ask again shortly.
       if (!(await pause($, 1000))) return null;
@@ -772,16 +778,7 @@ async function questionRace($: Engine, r: Runtime, e: { tool_use_id: string; age
 async function planRace($: Engine, r: Runtime, e: { tool_use_id: string; agentId?: string }, terminal: Promise<ToolResult>): Promise<ToolResult> {
   const a = openAsk(r, planAsk(e.tool_use_id, e.agentId ?? null, e as unknown as Record<string, unknown>, nowMs()));
   await announce($, a);
-  const handApproval = (d: Delivery) => {
-    if (d.kind !== 'plan-approve' || !responding(rt, 'plan-approve') || a.approval) {
-      queueResult(a.sessionId, d.id, 'refused');
-      return;
-    }
-    a.approval = d;
-    for (const w of a.approvalWaiters.splice(0)) w(d);
-    void confirmApproval($, a, d);
-  };
-  const podium = waitForAnswer($, a, (d) => (d.kind === 'plan-feedback' || d.kind === 'reply') && responding(rt, 'plan-feedback'), handApproval);
+  const podium = waitForAnswer($, a, (d) => (d.kind === 'plan-feedback' || d.kind === 'reply') && responding(rt, 'plan-feedback'), (d) => takeApproval($, a, d));
   const first = await race(terminal, podium);
   if (first.d) {
     finish(a);
@@ -804,6 +801,37 @@ async function planRace($: Engine, r: Runtime, e: { tool_use_id: string; agentId
     else queueClose(a, 'closed');
   }
   return res;
+}
+
+/** A plan's approval, from either wait on its ask: handed to the PermissionRequest hook, and checked that it took. */
+function takeApproval($: Engine, a: OpenAsk, d: Delivery): void {
+  if (d.kind !== 'plan-approve' || !responding(rt, 'plan-approve') || a.approval) {
+    queueResult(a.sessionId, d.id, 'refused');
+    return;
+  }
+  a.approval = d;
+  for (const w of a.approvalWaiters.splice(0)) w(d);
+  void confirmApproval($, a, d);
+}
+
+/**
+ * The PermissionRequest hook's wait for a plan's approval. It polls the server itself, so a held request is in flight
+ * the whole time: that stops the hook's 10-second budget (HookBudget), where waiting on a promise alone would not, and
+ * an approval sent long after the dialog opened still finds the hook. An approval the tool.call hook's wait got first
+ * arrives through `approvalOf`; feedback and replies are left to that wait.
+ */
+async function approvalFromPodium($: Engine, a: OpenAsk): Promise<Delivery | null> {
+  const fromServer = waitForAnswer(
+    $,
+    a,
+    (d) => d.kind === 'plan-approve',
+    undefined,
+    (d) => d.kind === 'plan-feedback' || d.kind === 'reply',
+  ).then((d) => {
+    if (d) takeApproval($, a, d);
+    return a.approval;
+  });
+  return Promise.race([approvalOf(a), fromServer]);
 }
 
 /** An approval that the plan's tool call has not resolved as approved within the confirm window did not take. */
@@ -1293,7 +1321,7 @@ export const register: Register = (on, rawOptions) => {
     // A plan's approval from Podium (#206): `updatedInput` is the event's own tool_input, unchanged (SPEC 5.3).
     if (e.tool_name === 'ExitPlanMode') {
       const a = responding(r, 'plan-approve') ? planAskOf(agentId) : undefined;
-      const d = a ? await approvalOf(a) : null;
+      const d = a ? await approvalFromPodium($, a) : null;
       if (!d || !d.mode) return next(e);
       // The transcript line waits for the call to resolve approved (planRace), so it never claims one that didn't take.
       return planApproval(e.tool_input, d.mode);

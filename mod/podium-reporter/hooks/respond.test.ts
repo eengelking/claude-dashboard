@@ -27,6 +27,8 @@ interface World {
   server: { respond: boolean; deliveries: Delivery[] }
   /** Answers every held request now waiting, and the next one if none is. */
   deliver: (d: Delivery) => void
+  /** How many answer requests the fake server is holding open now. */
+  holding: () => number
   /** The server drops its asks (the Admin turned responding off): every held request, and each later one, is a 410. */
   dropAsks: () => void
   /** The terminal's dialog for the next AskUserQuestion or ExitPlanMode call: resolve it to answer there. */
@@ -34,6 +36,8 @@ interface World {
   /** What a tool's own call resolves to once it runs (or is refused). */
   toolRun: { resolve: ((r: unknown) => void) | null }
   sessionId: { value: string }
+  /** Runs as the terminal's dialog opens, inside the call, the way Claude Code fires its PermissionRequest then. */
+  onDialog: { run: (() => void) | null }
   checkDecision: { value: 'allow' | 'ask' | 'deny' }
 }
 
@@ -51,6 +55,7 @@ function world(on: On): World {
   const toolRun: World['toolRun'] = { resolve: null }
   const sessionId = { value: SID }
   const checkDecision: World['checkDecision'] = { value: 'ask' }
+  const onDialog: World['onDialog'] = { run: null }
   const clock = mock.clock(on, { now: NOW })
   mock.store(on, {})
   const ok = (body: unknown, status = 200) => ({ value: { status, ok: status < 300, headers: {}, text: body === undefined ? '' : JSON.stringify(body) } })
@@ -107,7 +112,10 @@ function world(on: On): World {
   })
   on('tool.check', () => ({ decision: checkDecision.value }))
   on('tool.call', (_$, e) => {
-    if (e.tool === 'AskUserQuestion' || e.tool === 'ExitPlanMode') return new Promise((resolve) => (dialog.resolve = resolve as (r: unknown) => void))
+    if (e.tool === 'AskUserQuestion' || e.tool === 'ExitPlanMode') {
+      onDialog.run?.()
+      return new Promise((resolve) => (dialog.resolve = resolve as (r: unknown) => void))
+    }
     if (e.tool === 'Bash') return new Promise((resolve) => (toolRun.resolve = resolve as (r: unknown) => void))
     return { result: { ok: true }, text: 'ok' }
   })
@@ -125,11 +133,13 @@ function world(on: On): World {
     toolRun,
     sessionId,
     checkDecision,
+    onDialog,
     deliver: (d) => {
       const all = holds.splice(0)
       if (!all.length) waiting = d
       for (const h of all) h(d)
     },
+    holding: () => holds.length,
     dropAsks: () => {
       dropped = true
       for (const h of holds.splice(0)) h(null)
@@ -350,6 +360,48 @@ describe('respond: a plan', () => {
     w.dialog.resolve!({ result: { plan: PLAN_INPUT.plan, isAgent: false } })
     await call
     expect(w.logs.some((l) => l.startsWith('Approved from Podium by Ed at '))).toBe(true)
+    await w.clock.advance(1000)
+    expect(results(w)).toEqual([[`dlv_plan-approve_${ask.id}`, 'took']])
+  })
+
+  test('the PermissionRequest hook waits for a plan approval with a held request of its own, so its 10-second budget stands still', { options: ON }, async ($, on) => {
+    // Seen live on 2.1.301: approved 12 s after the plan dialog opened, the hook had been let go and Claude Code never
+    // got the approval. A hook's clock stops only while a next(e) or $ call of its own is in flight (HookBudget), so
+    // waiting on a promise alone ran it out. The kit lets any mock wait past 10 s go too, so this checks the held
+    // request itself rather than waiting out the budget.
+    const w = world(on)
+    await started($, w)
+    const call = $.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never)
+    await settle(w)
+    const ask = puts(w)[0]!
+    const before = w.holding() // the tool.call hook's own wait, for "No, keep planning"
+    const pr = $.classic.PermissionRequest({ tool_name: 'ExitPlanMode', tool_input: PLAN_INPUT } as never)
+    await settle(w)
+    expect(w.holding()).toBe(before + 1)
+    w.deliver(by('plan-approve', ask.id, { mode: 'auto' }))
+    expect(await pr).toEqual({ decision: { behavior: 'allow', updatedInput: PLAN_INPUT, updatedPermissions: [{ type: 'setMode', mode: 'auto', destination: 'session' }] } })
+    w.dialog.resolve!({ result: { plan: PLAN_INPUT.plan, isAgent: false } })
+    await call
+    await w.clock.advance(1000)
+    expect(results(w)).toEqual([[`dlv_plan-approve_${ask.id}`, 'took']])
+  })
+
+  test('an approval reaches the PermissionRequest that fires as the plan dialog opens, inside the call', { options: ON }, async ($, on) => {
+    // Claude Code fires ExitPlanMode's PermissionRequest while the call is under way: the hook must still find the plan
+    // ask, or it passes the dialog through and an approval from Podium has nobody to answer it (seen live on 2.1.301).
+    const w = world(on)
+    await started($, w)
+    let pr: Promise<unknown> | null = null
+    w.onDialog.run = () => {
+      pr = $.classic.PermissionRequest({ tool_name: 'ExitPlanMode', tool_input: PLAN_INPUT } as never)
+    }
+    const call = $.tool.call({ tool: 'ExitPlanMode', ...PLAN_INPUT } as never)
+    await settle(w)
+    const ask = puts(w)[0]!
+    w.deliver(by('plan-approve', ask.id, { mode: 'acceptEdits' }))
+    expect(await pr).toEqual({ decision: { behavior: 'allow', updatedInput: PLAN_INPUT, updatedPermissions: [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }] } })
+    w.dialog.resolve!({ result: { plan: PLAN_INPUT.plan, isAgent: false } })
+    await call
     await w.clock.advance(1000)
     expect(results(w)).toEqual([[`dlv_plan-approve_${ask.id}`, 'took']])
   })

@@ -146,12 +146,14 @@ describe('RespondStore', () => {
   });
 
   it('keeps an approval Claude Code did not take as not-taken, open to the terminal and closed to another answer', () => {
-    const { s, sid } = store();
+    const { s, sid, feed } = store();
     s.announce(sid, PLAN);
     const out = s.answer(sid, 'toolu_p', 'Ed', { kind: 'plan-approve', mode: 'auto' });
     if (!out.ok) throw new Error('refused');
     s.result(sid, out.delivery.id, 'not-taken');
     expect(s.summaries(sid)[0]!.state).toBe('not-taken');
+    // It never happened, so the feed doesn't keep "approved the plan" (seen live, 2026-10-15).
+    expect(feed.at(-1)).toBe(`remove ${out.delivery.id}`);
     expect(s.answer(sid, 'toolu_p', 'Ed', { kind: 'plan-feedback', text: 'x' })).toMatchObject({ ok: false, err: { status: 409 } });
     s.close(sid, 'toolu_p', { outcome: 'terminal', at: T0, planApproved: true });
     expect(s.summaries(sid)[0]!.state).toBe('closed');

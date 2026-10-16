@@ -464,7 +464,8 @@ export class RespondStore {
       // The session would not take it, so the ask is open to an answer again, from the terminal or from here.
       e.delivery = null;
       this.feed?.remove(sessionId, deliveryId);
-    } else if (result === 'closed') {
+    } else if (result === 'closed' || result === 'not-taken') {
+      // It never reached Claude (closed first, or an approval Claude Code didn't take), so the feed doesn't claim it.
       this.feed?.remove(sessionId, deliveryId);
     }
     this.onChange(sessionId);
