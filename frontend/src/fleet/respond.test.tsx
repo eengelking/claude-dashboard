@@ -184,6 +184,23 @@ describe("signing in", () => {
     expect(screen.getByRole("dialog", { name: "Sign in" })).toHaveTextContent("To answer and message your own sessions");
   });
 
+  it("shows the Admin button only to an Administrator (#215)", async () => {
+    const top = async (me: RespondMe | null, provider = true) => {
+      const bar = <TopBar page="Fleet" phase="live" reporters={1} />;
+      const r = render(provider ? <RespondProvider api={fakeApi({}, me ?? ME)} flagsOn={me !== null}>{bar}</RespondProvider> : bar);
+      await flush();
+      const link = within(r.container.querySelector("header")!).queryByRole("link", { name: "Admin" });
+      r.unmount();
+      return link;
+    };
+    expect(await top({ ...ME, signedIn: true, admin: true })).toHaveAttribute("href", "#/admin");
+    expect(await top({ ...ME, signedIn: true, admin: false })).toBeNull();
+    expect(await top({ enabled: true, signedIn: false, name: null, admin: false })).toBeNull();
+    expect(await top({ enabled: false, signedIn: false, name: null, admin: false })).toBeNull();
+    expect(await top(null)).toBeNull();
+    expect(await top(null, false)).toBeNull();
+  });
+
   it("shows Signed in as and Sign out once signed in, and Sign out signs out", async () => {
     const api = fakeApi({ me: vi.fn().mockResolvedValueOnce(ME).mockResolvedValue({ ...ME, signedIn: false, name: null }) });
     const r = render(

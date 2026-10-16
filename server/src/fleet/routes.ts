@@ -11,6 +11,7 @@ import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
 import { createLogger, loggerFromLine, type Logger } from '../logging/logger.js';
 import { Lockout } from './lockout.js';
 import { mountRespondRoutes, replyFor } from './respondRoutes.js';
+import type { RespondBridge } from './respondBridge.js';
 
 export interface FleetRouterOptions {
   /** The admin secret (PODIUM_TOKEN). When set, POST /report, DELETE and POST /hook need a credential in X-Podium-Token: this, or a person's token. */
@@ -25,6 +26,8 @@ export interface FleetRouterOptions {
   log?: (line: string) => void;
   /** Wrong-try counter shared with Admin's unlock, for the sign-in to respond (#206). A fresh one when absent. */
   lockout?: Lockout;
+  /** Filled in so Admin can open for a browser already signed in to respond as an Administrator (#215). */
+  respondBridge?: RespondBridge;
 }
 
 export const BODY_LIMIT = '512kb';
@@ -446,6 +449,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     people: opts.people ?? null,
     logger,
     lockout: opts.lockout ?? new Lockout(fleet.now),
+    bridge: opts.respondBridge,
     requireToken,
     identityOf,
   });

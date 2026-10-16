@@ -44,7 +44,7 @@ const H = { 'X-Podium-Admin': '1' };
 async function unlocked(over: Parameters<typeof setup>[0] = {}) {
   const s = setup(over);
   const agent = request.agent(s.app);
-  const res = await agent.post('/api/admin/unlock').set(H).send({ secret: SECRET });
+  const res = await agent.post('/api/admin/unlock').set(H).send({ name: 'Admin', token: SECRET });
   expect(res.status).toBe(200);
   return { ...s, agent };
 }
@@ -55,7 +55,7 @@ describe('unlocking', () => {
     for (const [m, p] of [['get', '/people'], ['post', '/people'], ['get', '/groups'], ['get', '/log'], ['get', '/settings'], ['get', '/reporters'], ['get', '/reporters/x'], ['delete', '/reporters/x']] as const) {
       expect((await request(app)[m](`/api/admin${p}`).set(H)).status).toBe(401);
     }
-    const res = await request(app).post('/api/admin/unlock').set(H).send({ secret: SECRET });
+    const res = await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: SECRET });
     expect(res.status).toBe(200);
     const cookie = String(res.headers['set-cookie']);
     expect(cookie).toMatch(/HttpOnly/i);
@@ -66,7 +66,7 @@ describe('unlocking', () => {
 
   it('rejects a wrong secret and logs it without the secret', async () => {
     const { app, people, lines } = setup();
-    const res = await request(app).post('/api/admin/unlock').set(H).send({ secret: 'wrong-guess-value' });
+    const res = await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: 'wrong-guess-value' });
     expect(res.status).toBe(401);
     const log = people.listLog({ page: 1, pageSize: 50 }).rows;
     expect(log.map((r) => r.kind)).toEqual(['unlock_failed']);
@@ -76,19 +76,19 @@ describe('unlocking', () => {
   it('locks after 5 wrong tries for 15 minutes, even for the right secret, then lets it through', async () => {
     const { app, clock, people } = setup();
     for (let i = 0; i < 5; i++) {
-      expect((await request(app).post('/api/admin/unlock').set(H).send({ secret: 'nope' + i })).status).toBe(401);
+      expect((await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: 'nope' + i })).status).toBe(401);
     }
-    const locked = await request(app).post('/api/admin/unlock').set(H).send({ secret: SECRET });
+    const locked = await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: SECRET });
     expect(locked.status).toBe(429);
     expect(locked.body.retryAfterSec).toBeGreaterThan(0);
     expect(people.listLog({ page: 1, pageSize: 100 }).rows.filter((r) => r.kind === 'unlock_failed')).toHaveLength(5);
     clock.t += 15 * 60_000 + 1;
-    expect((await request(app).post('/api/admin/unlock').set(H).send({ secret: SECRET })).status).toBe(200);
+    expect((await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: SECRET })).status).toBe(200);
   });
 
   it('is off when the server runs without a token', async () => {
     const { app } = setup({ secret: null });
-    expect((await request(app).post('/api/admin/unlock').set(H).send({ secret: '' })).status).toBe(403);
+    expect((await request(app).post('/api/admin/unlock').set(H).send({ name: 'Admin', token: '' })).status).toBe(403);
     expect((await request(app).get('/api/admin/people').set(H)).status).toBe(403);
   });
 

@@ -4,14 +4,15 @@
 // take X-Podium-Token, checked as for a report, and the credential must own the session. The browser's routes live
 // under /respond and need a sign-in: a name and a token, the same pair as the reporter's userName and token options,
 // or Admin with the admin secret. A sign-in is a random id in an HttpOnly, SameSite=Strict cookie scoped to
-// /api/fleet/respond, held in memory only. Every change needs X-Podium-Respond: 1 and, when an Origin is sent, this
+// /api (so Admin, #215, sees it too), held in memory only. Every change needs X-Podium-Respond: 1 and, when an Origin is sent, this
 // server's own host; no CORS is offered. Nothing here logs or stores the text of an answer, a question or a plan.
 import { randomBytes } from 'node:crypto';
 import express, { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { Fleet } from './fleet.js';
 import type { Identity } from './routes.js';
 import { ADMIN_OWNER, ADMIN_SECRET_ACTOR, nameKey, sourceAddress, type PeopleStore } from './people.js';
-import { parsePersonToken, safeEqualStr, tokenMatches } from './tokens.js';
+import { checkNameToken } from './nameToken.js';
+import type { RespondBridge } from './respondBridge.js';
 import type { Lockout } from './lockout.js';
 import { logWords, type AnswerError } from './respond.js';
 import { DELIVERY_RESULTS, RESPOND_LIMITS, validateAsk, type AskCloseOutcome, type Delivery, type DeliveryResult, type RespondMe } from './protocol.js';
@@ -29,10 +30,13 @@ export interface RespondDeps {
   identityOf: (res: Response) => Identity;
   /** Idle time before a sign-in ends. */
   signInIdleMs?: number;
+  /** Filled in so Admin can open for a browser already signed in here as an Administrator (#215). */
+  bridge?: RespondBridge;
 }
 
 const COOKIE = 'podium_respond';
-const COOKIE_PATH = '/api/fleet/respond';
+const COOKIE_PATH = '/api';
+const LEGACY_COOKIE_PATH = '/api/fleet/respond';
 const SIGN_IN_IDLE_MS = 12 * 3600_000;
 const MAX_SIGN_INS = 200;
 const BODY_LIMIT = '64kb';
@@ -52,6 +56,8 @@ interface Viewer {
   /** As the admin log names the actor: a person's name, or `Admin secret`. */
   actor: string;
   admin: boolean;
+  /** The person signed in, or null for the admin secret. */
+  personId: number | null;
 }
 
 function readCookie(req: Request, name: string): string | null {
@@ -222,10 +228,10 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     if (!sid || !s) return null;
     let viewer: Viewer | null = null;
     if (now() - s.last <= idleMs) {
-      if (s.personId === null) viewer = d.token !== null ? { name: ADMIN_OWNER, actor: ADMIN_SECRET_ACTOR, admin: true } : null;
+      if (s.personId === null) viewer = d.token !== null ? { name: ADMIN_OWNER, actor: ADMIN_SECRET_ACTOR, admin: true, personId: null } : null;
       else {
         const p = people?.getPerson(s.personId);
-        if (p && p.revokedAt === null && p.tokenHash === s.tokenHash) viewer = { name: p.name, actor: p.name, admin: people!.isAdministrator(p.id) };
+        if (p && p.revokedAt === null && p.tokenHash === s.tokenHash) viewer = { name: p.name, actor: p.name, admin: people!.isAdministrator(p.id), personId: p.id };
       }
     }
     signIns.delete(sid);
@@ -233,6 +239,13 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     signIns.set(sid, { ...s, last: now() }); // re-inserted, so the oldest entry is the least recently used
     return viewer;
   };
+
+  if (d.bridge) {
+    d.bridge.administratorOf = (req) => {
+      const v = enabled() ? viewerOf(req) : null;
+      return v?.admin ? { personId: v.personId } : null;
+    };
+  }
 
   browser.get('/me', (req, res) => {
     const v = enabled() ? viewerOf(req) : null;
@@ -260,16 +273,14 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     // A person's token only with that person's name; the admin secret only with the name Admin (7.7).
     let signIn: SignIn | null = null;
     let viewer: Viewer | null = null;
-    const parsed = parsePersonToken(token);
-    if (parsed && people) {
-      const p = people.findByKeyId(parsed.keyId);
-      if (p && p.revokedAt === null && tokenMatches(token, p.tokenHash) && nameKey(p.name) === nameKey(name)) {
-        signIn = { personId: p.id, tokenHash: p.tokenHash, last: now() };
-        viewer = { name: p.name, actor: p.name, admin: people.isAdministrator(p.id) };
-      }
-    } else if (d.token !== null && nameKey(name) === nameKey(ADMIN_OWNER) && safeEqualStr(d.token, token)) {
+    const found = checkNameToken(people, d.token, name, token);
+    if (found?.person) {
+      const p = found.person;
+      signIn = { personId: p.id, tokenHash: p.tokenHash, last: now() };
+      viewer = { name: p.name, actor: p.name, admin: people!.isAdministrator(p.id), personId: p.id };
+    } else if (found) {
       signIn = { personId: null, tokenHash: null, last: now() };
-      viewer = { name: ADMIN_OWNER, actor: ADMIN_SECRET_ACTOR, admin: true };
+      viewer = { name: ADMIN_OWNER, actor: ADMIN_SECRET_ACTOR, admin: true, personId: null };
     }
     if (!signIn || !viewer) {
       const { n, locked } = lockout.fail(src);
@@ -282,6 +293,8 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     if (signIns.size >= MAX_SIGN_INS) signIns.delete(signIns.keys().next().value as string);
     const sid = randomBytes(32).toString('hex');
     signIns.set(sid, signIn);
+    // A browser signed in before #215 holds a cookie at the old, narrower path; it is sent first and would shadow this one.
+    res.clearCookie(COOKIE, { path: LEGACY_COOKIE_PATH });
     res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'strict', path: COOKIE_PATH, secure: req.secure });
     people?.log('respond_sign_in', 'Signed in to respond', src, now(), viewer.actor);
     logger.info('respond.sign_in', `podium: ${viewer.name} signed in to respond from ${src}`, { source: src, admin: viewer.admin });
@@ -292,6 +305,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     const sid = readCookie(req, COOKIE);
     if (sid) signIns.delete(sid);
     res.clearCookie(COOKIE, { path: COOKIE_PATH });
+    res.clearCookie(COOKIE, { path: LEGACY_COOKIE_PATH });
     res.json({ ok: true });
   });
 

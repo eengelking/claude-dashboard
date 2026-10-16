@@ -3,9 +3,12 @@ import type { Phase } from "../store";
 import { BrandLink } from "./BrandLink";
 import { ConnectionPill } from "./ConnectionPill";
 import { TopBarSignIn } from "./SignIn";
+import { useRespond } from "../useRespond";
 
 export function TopBar(props: { page: string; phase: Phase; reporters: number; outdated?: number; newer?: number; collapsed?: boolean; onCollapse?: () => void; wall?: ReactNode }) {
   const { phase, reporters } = props;
+  // Admin is offered only to a signed-in Administrator (#215). The server checks it again; hiding the button is not the gate.
+  const admin = useRespond()?.me?.admin === true;
   return (
     <header className="top" id="podium-top" hidden={props.collapsed}>
       <BrandLink />
@@ -35,9 +38,11 @@ export function TopBar(props: { page: string; phase: Phase; reporters: number; o
         </button>
       )}
       {props.wall}
-      <a className="btn" href="#/admin" title="Tokens, groups and the admin log">
-        Admin
-      </a>
+      {admin && (
+        <a className="btn" href="#/admin" title="Tokens, groups and the admin log">
+          Admin
+        </a>
+      )}
       {/* Sign in to respond (#206) stays at the far end, after a divider, so nothing before it moves on signing in or out. */}
       <TopBarSignIn />
     </header>

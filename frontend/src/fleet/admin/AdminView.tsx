@@ -1,6 +1,7 @@
 // #/admin (issue #36): create and revoke the tokens people report with, arrange them in groups, and read the admin log.
-// Opened with the admin secret. The secret is typed into a password field, sent once, and dropped; the session is an
-// HttpOnly cookie this page cannot read. A newly made token is held in state only until the owner says it is saved.
+// Opened with a name and a token: an Administrator's own, or the name Admin with the admin secret (#215). A browser already
+// signed in to respond as an Administrator opens without typing them. The token is typed into a password field, sent once,
+// and dropped; the session is an HttpOnly cookie this page cannot read. A newly made token is held in state only until the owner says it is saved.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import "../fleet.css";
 import "./admin.css";
@@ -75,23 +76,42 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  // A browser signed in to respond as an Administrator opens Admin with no second sign-in (#215).
+  const openFromRespond = useCallback(
+    () =>
+      api("POST", "/unlock/from-respond").then(
+        () => true,
+        () => false,
+      ),
+    [api],
+  );
   useEffect(() => {
     let live = true;
     api<{ enabled: boolean; unlocked: boolean; version?: string }>("GET", "/session")
-      .then((s) => live && (setVersion(s.version ?? null), setStatus(!s.enabled ? "disabled" : s.unlocked ? "open" : "locked")))
+      .then(async (s) => {
+        if (!live) return;
+        setVersion(s.version ?? null);
+        if (s.enabled && !s.unlocked && (await openFromRespond())) return live && setStatus("open");
+        if (live) setStatus(!s.enabled ? "disabled" : s.unlocked ? "open" : "locked");
+      })
       .catch(() => live && (setNotice("Could not reach the server."), setStatus("locked")));
     return () => {
       live = false;
     };
-  }, [api]);
+  }, [api, openFromRespond]);
 
   // Back to the lock screen: forget any token still on screen.
-  const lockedOut = useCallback((why = "Admin locked after 10 minutes without activity. Enter the secret or your token to continue.") => {
+  const lockedOut = useCallback((why = "Admin locked after 10 minutes without activity. Sign in with your name and token to continue.") => {
     setCreated(null);
     setNotice(why);
     setStatus("locked");
   }, []);
-  const onLocked = useCallback(() => lockedOut(), [lockedOut]);
+  // The idle lock: an Administrator still signed in to respond is let back in; anyone else gets the sign-in.
+  const onLocked = useCallback(() => {
+    setCreated(null);
+    setStatus("checking");
+    void openFromRespond().then((ok) => (ok ? setStatus("open") : lockedOut()));
+  }, [lockedOut, openFromRespond]);
   const lockNow = () => {
     void api("POST", "/lock").catch(() => undefined);
     lockedOut("Admin is locked.");
@@ -206,24 +226,25 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
 }
 
 function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>; notice: string; onUnlocked: () => void }) {
-  const [secret, setSecret] = useState("");
+  const [name, setName] = useState("");
+  const [token, setToken] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!secret) return setErr("Enter the admin secret or your token.");
+    if (!name.trim() || !token) return setErr("Enter your name and your token.");
     setBusy(true);
     setErr("");
     try {
-      await api("POST", "/unlock", { secret });
-      setSecret("");
+      await api("POST", "/unlock", { name: name.trim(), token });
+      setToken("");
       onUnlocked();
     } catch (e2) {
-      setSecret("");
+      setToken("");
       if (e2 instanceof AdminError && e2.status === 429) {
         setErr(`Too many wrong tries. Try again in ${Math.max(1, Math.ceil((e2.retryAfterSec ?? 900) / 60))} minutes.`);
       } else if (e2 instanceof AdminError && e2.status === 401) {
-        setErr("That is not the admin secret, or a token that can open Admin.");
+        setErr("That name and token do not open Admin.");
       } else {
         setErr(e2 instanceof Error ? e2.message : "Could not unlock.");
       }
@@ -235,15 +256,17 @@ function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>
     <form className="lock" onSubmit={submit} autoComplete="off">
       <div>
         <h1>Admin</h1>
-        <p className="lead">Create and revoke the tokens people use to report to this Podium. Enter the admin secret, or your own token if you are in the Administrators group.</p>
+        <p className="lead">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are already signed in as an Administrator, Admin opens without this.</p>
       </div>
       {notice && (
         <div className="hint ink2" role="status">
           {notice}
         </div>
       )}
-      <label htmlFor="admin-secret">Admin secret or personal token</label>
-      <input className="field mono" id="admin-secret" type="password" autoComplete="off" autoFocus value={secret} onChange={(e) => setSecret(e.target.value)} aria-describedby="admin-secret-hint" />
+      <label htmlFor="admin-name">Name</label>
+      <input className="field" id="admin-name" type="text" autoComplete="off" autoFocus value={name} onChange={(e) => setName(e.target.value)} aria-describedby="admin-secret-hint" />
+      <label htmlFor="admin-secret">Token</label>
+      <input className="field mono" id="admin-secret" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} aria-describedby="admin-secret-hint" />
       {err && (
         <div className="errbox" role="alert">
           {err}
@@ -255,7 +278,7 @@ function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>
         </button>
       </div>
       <div className="hint" id="admin-secret-hint">
-        Podium made this secret the first time the server started. On the server’s machine, <span className="mono">podiumctl token</span> prints it. A person’s token only opens Admin for people in Administrators. Admin locks again after 10 minutes without activity. After 5 wrong tries, a secret or token alike, it locks for 15 minutes.
+        Use your own name and token if you are in Administrators, or the name <span className="mono">Admin</span> with the admin secret. On the server’s machine, <span className="mono">podiumctl token</span> prints the secret. Admin locks again after 10 minutes without activity. After 5 wrong tries, a secret or token alike, it locks for 15 minutes.
       </div>
     </form>
   );

@@ -20,10 +20,12 @@ interface P {
 }
 
 /** A small in-memory stand-in for /api/admin. */
-function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boolean } = {}) {
+function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boolean; respondAdmin?: boolean } = {}) {
   const state = {
     enabled: opts.enabled ?? true,
     unlocked: opts.unlocked ?? false,
+    respondAdmin: opts.respondAdmin ?? false,
+    unlockBodies: [] as unknown[],
     people: Array.from({ length: opts.people ?? 0 }, (_, i): P => ({ id: i + 1, name: `person-${String(i).padStart(3, "0")}`, groupId: null, revokedAt: null })),
     groups: [] as { id: number; name: string; builtIn?: boolean }[],
     calls: [] as string[],
@@ -61,13 +63,19 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     const path = url.pathname.replace("/api/admin", "");
     state.calls.push(`${method} ${path}${url.search}`);
     if (path === "/session") return json(200, { enabled: state.enabled, unlocked: state.unlocked });
+    if (path === "/unlock/from-respond") {
+      if (!state.respondAdmin) return json(401, { ok: false, error: "not signed in as an Administrator" });
+      state.unlocked = true;
+      return json(200, { ok: true });
+    }
     if (path === "/unlock") {
-      const secret = JSON.parse(String(init?.body)).secret;
-      if (secret === "right") {
+      const body = JSON.parse(String(init?.body)) as { name?: string; token?: string };
+      state.unlockBodies.push(body);
+      if (body.name === "Priya" && body.token === "right") {
         state.unlocked = true;
         return json(200, { ok: true });
       }
-      return json(401, { ok: false, error: "wrong secret" });
+      return json(401, { ok: false, error: "wrong name or token" });
     }
     if (state.expire || !state.unlocked) return json(401, { ok: false, error: "locked" });
     if (path === "/lock") {
@@ -201,22 +209,34 @@ afterEach(() => {
 });
 
 async function unlock() {
-  fireEvent.change(await screen.findByLabelText("Admin secret or personal token"), { target: { value: "right" } });
+  fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Priya" } });
+  fireEvent.change(screen.getByLabelText("Token"), { target: { value: "right" } });
   fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
   await screen.findByRole("navigation", { name: "Admin sections" });
 }
 
 describe("Admin lock screen", () => {
-  it("asks for the secret, rejects a wrong one, and opens with the right one", async () => {
-    fakeServer();
+  it("asks for a name and a token, rejects a wrong pair, and opens with the right one", async () => {
+    const srv = fakeServer();
     render(<AdminView />);
-    fireEvent.change(await screen.findByLabelText("Admin secret or personal token"), { target: { value: "nope" } });
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Dana" } });
+    fireEvent.change(screen.getByLabelText("Token"), { target: { value: "nope" } });
     fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("That is not the admin secret, or a token that can open Admin.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("That name and token do not open Admin.");
+    expect(srv.unlockBodies).toEqual([{ name: "Dana", token: "nope" }]);
     expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
-    expect((screen.getByLabelText("Admin secret or personal token") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Token") as HTMLInputElement).value).toBe("");
     await unlock();
     expect(screen.getByRole("button", { name: /People/ })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("asks for the name as well when only a token is typed", async () => {
+    const srv = fakeServer();
+    render(<AdminView />);
+    fireEvent.change(await screen.findByLabelText("Token"), { target: { value: "right" } });
+    fireEvent.click(screen.getByRole("button", { name: "Unlock Admin" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter your name and your token.");
+    expect(srv.unlockBodies).toEqual([]);
   });
 
   it("opens straight away when this browser already has a session", async () => {
@@ -225,11 +245,26 @@ describe("Admin lock screen", () => {
     expect(await screen.findByRole("navigation", { name: "Admin sections" })).toBeInTheDocument();
   });
 
+  it("opens without a sign-in when the browser is already signed in to respond as an Administrator", async () => {
+    const srv = fakeServer({ respondAdmin: true });
+    render(<AdminView />);
+    expect(await screen.findByRole("navigation", { name: "Admin sections" })).toBeInTheDocument();
+    expect(srv.unlockBodies).toEqual([]);
+    expect(screen.queryByLabelText("Token")).toBeNull();
+  });
+
+  it("shows the sign-in when the browser is not signed in as an Administrator", async () => {
+    const srv = fakeServer({ respondAdmin: false });
+    render(<AdminView />);
+    expect(await screen.findByLabelText("Name")).toBeInTheDocument();
+    expect(srv.calls).toContain("POST /unlock/from-respond");
+  });
+
   it("says Admin is off when the server has no token", async () => {
     fakeServer({ enabled: false });
     render(<AdminView />);
     expect(await screen.findByText("Admin is off")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Admin secret or personal token")).toBeNull();
+    expect(screen.queryByLabelText("Token")).toBeNull();
   });
 });
 
@@ -273,7 +308,7 @@ describe("tokens", () => {
     await screen.findByText(/token: pdm_/);
     s.expire = true;
     fireEvent.click(screen.getByRole("button", { name: /Admin log/ }));
-    expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Token")).toBeInTheDocument();
     expect(screen.getByText(/locked after 10 minutes/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
   });
@@ -776,7 +811,7 @@ describe("Reporters tab (#142)", () => {
     const state = await openReporters();
     state.expire = true;
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by state" })).getByRole("button", { name: /Silent/ }));
-    expect(await screen.findByLabelText("Admin secret or personal token")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Token")).toBeInTheDocument();
   });
 });
 

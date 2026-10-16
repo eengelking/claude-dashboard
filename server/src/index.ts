@@ -16,6 +16,7 @@ import { createAdminRouter } from "./admin/adminRouter.js";
 import { PeopleStore } from "./fleet/people.js";
 import { ReporterStore } from "./fleet/reporters.js";
 import { Lockout } from "./fleet/lockout.js";
+import { createRespondBridge } from "./fleet/respondBridge.js";
 import { forgetReporters, startSweeper } from "./fleet/sweeper.js";
 import { REPORTER_SUPPORT } from "./fleet/compat.js";
 import { createServerLogging } from "./logging/setup.js";
@@ -42,8 +43,10 @@ app.disable("x-powered-by");
 app.use(requestLog(logger));
 // Five wrong credentials from one address lock it out of Admin's unlock and the sign-in to respond together (#206).
 const lockout = new Lockout();
-app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger, lockout }));
-app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout }));
+// Admin opens without a second sign-in for a browser already signed in to respond as an Administrator (#215).
+const respondBridge = createRespondBridge();
+app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger, lockout, respondBridge }));
+app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge }));
 app.use(createRouter());
 
 const frontendDist = path.join(REPO_ROOT, "frontend", "dist");

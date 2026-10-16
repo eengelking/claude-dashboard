@@ -8,6 +8,7 @@ import { PeopleStore } from './people.js';
 import { createFleetRouter } from './routes.js';
 import { createAdminRouter } from '../admin/adminRouter.js';
 import { Lockout } from './lockout.js';
+import { createRespondBridge } from './respondBridge.js';
 import { CLOSED_KEEP_MS, RespondStore, commandOf, parseAnswer, questionSummary } from './respond.js';
 import { MAIN_LOOP, RESPOND_LIMITS, type Ask, type Report, type RespondKind } from './protocol.js';
 import { fixtureReport } from './testing.js';
@@ -342,9 +343,10 @@ function setup(opts: { secret?: string | null; respond?: boolean } = {}) {
   const fleet = new Fleet(new FleetDb(db), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' });
   const people = new PeopleStore(db);
   const lockout = new Lockout(fleet.now);
+  const respondBridge = createRespondBridge();
   const app = express();
-  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, log: () => {} }));
-  app.use('/api/admin', createAdminRouter({ secret, people, features: fleet.features, lockout, log: () => {} }));
+  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, respondBridge, log: () => {} }));
+  app.use('/api/admin', createAdminRouter({ secret, people, features: fleet.features, lockout, respondBridge, log: () => {} }));
   closers.push(() => fleet.close());
   if (opts.respond !== false) fleet.features.setFeature('respond', true);
   const ed = people.createPerson('Ed');
@@ -415,7 +417,7 @@ describe('signing in', () => {
 
   it('locks an address out after five wrong tries, counted together with wrong Admin unlocks', async () => {
     const { app, ed } = setup();
-    for (let i = 0; i < 3; i++) expect((await request(app).post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ secret: 'nope' })).status).toBe(401);
+    for (let i = 0; i < 3; i++) expect((await request(app).post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ name: 'Admin', token: 'nope' })).status).toBe(401);
     for (let i = 0; i < 2; i++) expect((await request(app).post('/api/fleet/respond/sign-in').set(H).send({ name: 'Ed', token: 'nope' })).status).toBe(401);
     const locked = await request(app).post('/api/fleet/respond/sign-in').set(H).send({ name: 'Ed', token: ed.token });
     expect(locked.status).toBe(429);
@@ -525,5 +527,51 @@ describe('answering, end to end', () => {
     expect((await alexB.get('/api/fleet/respond/sessions/sess-ed/asks/toolu_p')).status).toBe(403);
     const admin = await signedIn(app, 'Admin', SECRET);
     expect((await admin.get('/api/fleet/respond/sessions/sess-ed/asks/toolu_p')).body.ask.plan.text).toBe('# Plan\n\n1. Page it');
+  });
+});
+
+describe('opening Admin from a sign-in to respond (#215)', () => {
+  const AH = { 'X-Podium-Admin': '1' };
+
+  it('scopes the sign-in cookie to /api so the Admin routes receive it', async () => {
+    const { app, ed } = setup();
+    const res = await request(app).post('/api/fleet/respond/sign-in').set(H).send({ name: 'Ed', token: ed.token });
+    expect(String(res.headers['set-cookie'])).toMatch(/podium_respond=[^;]+; Path=\/api;/);
+  });
+
+  it('opens Admin, with no second sign-in, for an Administrator signed in to respond', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const agent = await signedIn(app, 'Priya', priya.token);
+    expect((await agent.get('/api/admin/people').set(AH)).status).toBe(401);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect((await agent.get('/api/admin/people').set(AH)).status).toBe(200);
+    expect(people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'unlock')?.actor).toBe('Priya');
+  });
+
+  it('opens Admin for the admin secret signed in as Admin', async () => {
+    const { app, people } = setup();
+    const agent = await signedIn(app, 'Admin', SECRET);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect(people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'unlock')?.actor).toBe('Admin secret');
+  });
+
+  it('refuses an ordinary person, and a browser that is not signed in', async () => {
+    const { app, ed } = setup();
+    const agent = await signedIn(app, 'Ed', ed.token);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
+    expect((await agent.get('/api/admin/people').set(AH)).status).toBe(401);
+    expect((await request(app).post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
+  });
+
+  it('refuses once the person has left Administrators, and without the Admin header', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const agent = await signedIn(app, 'Priya', priya.token);
+    expect((await agent.post('/api/admin/unlock/from-respond')).status).toBe(403);
+    people.setGroup(priya.person.id, null);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
   });
 });

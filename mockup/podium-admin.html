@@ -404,12 +404,13 @@ serverUrl: http://192.168.1.20:7777</pre>
       <!-- LOCK -->
       <div data-view="lock" class="main-in" style="display:contents">
         <form class="lock" onsubmit="return false">
-          <div><h1>Admin</h1><p class="ink2" style="margin:4px 0 0">Create and revoke the tokens people use to report to this Podium. Enter the admin secret to continue.</p></div>
-          <p class="hint ink2" role="status">Admin locked after 10 minutes without activity. Enter the secret to continue.</p>
-          <div class="f"><label for="sec">Admin secret</label><input class="in mono" id="sec" type="password" aria-describedby="sec-h2"></div>
-          <div class="errbox" role="alert">That is not the admin secret.</div>
+          <div><h1>Admin</h1><p class="ink2" style="margin:4px 0 0">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are already signed in as an Administrator, Admin opens without this.</p></div>
+          <p class="hint ink2" role="status">Admin locked after 10 minutes without activity. Sign in to continue.</p>
+          <div class="f"><label for="sec-n">Name</label><input class="in" id="sec-n" type="text" autocomplete="username" aria-describedby="sec-h2"></div>
+          <div class="f"><label for="sec">Token</label><input class="in mono" id="sec" type="password" autocomplete="off" aria-describedby="sec-h2"></div>
+          <div class="errbox" role="alert">That name and token do not open Admin.</div>
           <div><button type="submit" class="btn pri">Unlock Admin</button></div>
-          <p class="hint" id="sec-h2">Podium made this secret the first time the server started. On the server’s machine, <span class="mono">podiumctl token</span> prints it. After 5 wrong tries it locks for 15 minutes.</p>
+          <p class="hint" id="sec-h2">Use your own name and token if you are in Administrators, or the name <span class="mono">Admin</span> with the admin secret. On the server’s machine, <span class="mono">podiumctl token</span> prints the secret. After 5 wrong tries it locks for 15 minutes. The Admin button in the top bar shows only to Administrators; anyone else reaches this screen by going to <span class="mono">#/admin</span>.</p>
         </form>
       </div>
 

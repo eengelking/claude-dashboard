@@ -86,8 +86,8 @@ describe('no secret and no typed text in a log line or a shipped batch', () => {
     await request(s.app).post(`/api/fleet/report?token=${dana.token}`).set('X-Podium-Token', dana.token).send({ v: 1, prompt: PROMPT });
     // Admin: a wrong secret, the right one, and a new person (whose token is in the response only).
     const agent = request.agent(s.app);
-    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ secret: `${SECRET}-wrong` });
-    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ secret: SECRET });
+    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ name: 'Admin', token: `${SECRET}-wrong` });
+    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ name: 'Admin', token: SECRET });
     const made = await agent.post('/api/admin/people').set('X-Podium-Admin', '1').send({ name: 'Finn' });
     expect(made.status).toBe(201);
 
@@ -215,7 +215,7 @@ describe('the events', () => {
   it('Admin changes are admin.* events with the action and the source, at info', async () => {
     const s = stack();
     const agent = request.agent(s.app);
-    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ secret: SECRET });
+    await agent.post('/api/admin/unlock').set('X-Podium-Admin', '1').send({ name: 'Admin', token: SECRET });
     await agent.put('/api/admin/settings').set('X-Podium-Admin', '1').send({ features: { 'activity-feed': false } });
     const rec = s.records().find((r) => r.event === 'admin.feature_changed')!;
     expect(rec).toMatchObject({ level: 'info', action: 'feature_changed', setting: 'activity-feed', on: false });

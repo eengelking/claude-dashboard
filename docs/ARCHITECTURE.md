@@ -46,11 +46,13 @@ functions in `logic.ts` and `chart.ts`. Styles are `fleet.css`, the mockup's tok
 into `sessions.owner`; for a person's token the report's `userName` must also match, so the token decides who
 and the name is only a consistency check. `people.ts` owns the migration-6 tables (people, groups,
 person_machines, admin_log, settings) and every paged query. The Admin API is a separate router mounted at
-`/api/admin`: an unlock exchanges the admin secret, or the token of a person in the built-in Administrators group (#172), for a random session id held in a process-memory map (with who opened it, checked again on every request) and an
+`/api/admin`: an unlock exchanges a name and token (an Administrator's own, #172, or `Admin` with the admin secret, checked by `fleet/nameToken.ts` as the sign-in to respond is) for a random session id held in a process-memory map (with who opened it, checked again on every request) and an
 `HttpOnly; SameSite=Strict` cookie, with idle expiry, a per-address lockout and a required `X-Podium-Admin`
 header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`) holds a new token in component
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
-admin secret ends them.
+admin secret ends them. A browser already signed in to respond as an Administrator opens Admin with no second sign-in (#215): the respond routes
+widen their cookie to `Path=/api` and fill in a `RespondBridge` (`fleet/respondBridge.ts`) that the Admin router asks on `POST unlock/from-respond`.
+The top bar's Admin button reads `me.admin` from `useRespond`; the server, not the button, is the check.
 
 **Admin page patterns** (`frontend/src/fleet/admin/Page.tsx`, `admin.css`, issue #143, mockup `mockup/podium-admin.html`). `AdminView`
 holds a side menu (`NAV` groups the pages, `PAGES` names each and gives its one-line lead) and renders one page component at a time;

@@ -14,6 +14,8 @@ be ahead, because a mod fix is bumped in its own PR.
 
 ### Changed
 
+- Admin access is one model (#215). The **Admin** button in the top bar shows only to someone signed in to the console as an Administrator, or as Admin with the secret. That person opens Admin with no second sign-in, including after the idle lock. Anyone else goes to `#/admin`, whose sign-in now takes a name and a token (an Administrator's own, or `Admin` with the admin secret) instead of a token alone. `POST /api/admin/unlock` takes `{ name, token }` and answers a wrong pair with `401 wrong name or token`; `POST /api/admin/unlock/from-respond` is new; the `podium_respond` cookie is scoped to `/api`. Anything that called `unlock` with `{ secret }` must send `name` too.
+
 - Admin > People names a person's token the way Reporters does, as `pdm_` and its twelve-character key id, such as `pdm_35fa525ce1b4`, instead of `pdm_…` and the last four characters of the secret (#218). The key id only finds a person and is not a secret; no part of the secret is shown or sent to the page any more. The token itself, and what is stored, are unchanged.
 - `bin/podiumctl.mjs` is now `bin/podiumctl`, so it runs as `bin/podiumctl status` with no `node` in front (#227). `package.json`'s `bin` entry and `npm run podiumctl` follow. A boot unit made by `podiumctl enable` before this change still points at the old file and stops working: `podiumctl status` now says `on boot: enabled, but stale` for it, and running `podiumctl enable` again rewrites it.
 

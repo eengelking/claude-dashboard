@@ -96,14 +96,14 @@ setup, you can also enter it in the mod's `token` option (see "Report a real ses
 `X-Podium-Token` header of the settings hooks below. To run without auth, `podiumctl config set PODIUM_TOKEN=`
 (empty on purpose). Admin is switched off then, because nothing would protect it.
 
-**Admin and per-person tokens.** When several people report to one Podium, open **Admin** (the button in the
-top bar's upper right, or `#/admin`) and enter the admin secret. Create a user and Podium makes a token for
+**Admin and per-person tokens.** When several people report to one Podium, open **Admin** (`#/admin`, or the button in the
+top bar's upper right once you are signed in to the console as an Administrator) and sign in with the name `Admin` and the admin secret. Create a user and Podium makes a token for
 them, shown once with the settings to paste: their name and the token. A token only works with the name it
 was made for, so a leaked token alone cannot claim someone else's name. From Admin you can also rotate or
 revoke a token, put people in groups (a label for arranging the console, nothing more), turn off reporting
 with the admin secret, and read the admin log. Tokens are stored hashed, so Podium cannot show one again.
 Reporting with the admin secret keeps working, and those sessions show under the owner **Admin**. Admin
-locks after 10 idle minutes, and five wrong secrets lock it for 15 minutes. Tokens travel in a header as
+locks after 10 idle minutes, and five wrong names or tokens lock it for 15 minutes. Tokens travel in a header as
 they do today, so a server reachable over a network needs a trusted network or a TLS proxy.
 
 **Several people on one Podium.** The server listens on `127.0.0.1` by default, so only your own machine

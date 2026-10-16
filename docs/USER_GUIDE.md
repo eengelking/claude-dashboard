@@ -380,9 +380,8 @@ Effort is drawn as five bars with no text: more lit bars mean more effort, and t
 
 ## Admin
 
-Admin is for the person who runs the server. Open it with the **Admin** button in the top bar's upper right
-(or `#/admin`) and enter the admin secret, which `podiumctl token` prints, or your own token if you are in the **Administrators** group (see Groups). It locks again after 10 minutes
-without activity, and five wrong secrets or tokens lock it for 15 minutes. A server started without a token has no Admin,
+Admin is for the person who runs the server. The **Admin** button in the top bar's upper right shows only when you are signed in to the console as someone in the **Administrators** group (see Groups), or as **Admin** with the admin secret, and it opens Admin with no second sign-in. Anyone else goes to `#/admin`, which asks for a name and a token: your own name and token if you are in Administrators, or the name **Admin** and the admin secret, which `podiumctl token` prints. It locks again after 10 minutes
+without activity (an Administrator who is still signed in to the console is let straight back in), and five wrong names or tokens lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
 Admin has seven pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged by the server, 50 rows at a time (25 and 100 are also offered).

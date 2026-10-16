@@ -100,7 +100,7 @@ function report(s, closed) {
   };
 }
 
-const unlocked = await admin('POST', '/unlock', { secret: SECRET });
+const unlocked = await admin('POST', '/unlock', { name: 'Admin', token: SECRET });
 if (!unlocked.ok) throw new Error(`could not unlock Admin: ${JSON.stringify(unlocked)}`);
 await admin('PUT', '/settings', { features: { respond: true, 'activity-feed': true } });
 const tokens = {};

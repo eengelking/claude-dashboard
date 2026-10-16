@@ -5,7 +5,8 @@
 import { randomBytes } from 'node:crypto';
 import express, { Router, type NextFunction, type Request, type Response } from 'express';
 import { ADMIN_SECRET_ACTOR, PeopleError, sourceAddress, type PeopleStore, type PersonRow } from '../fleet/people.js';
-import { safeEqualStr } from '../fleet/tokens.js';
+import { checkNameToken } from '../fleet/nameToken.js';
+import type { RespondBridge } from '../fleet/respondBridge.js';
 import { serverVersion } from '../fleet/compat.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
@@ -35,6 +36,8 @@ export interface AdminRouterOptions {
   lockMs?: number;
   /** The wrong-try counter, shared with the console's sign-in to respond (#206). Made from maxFails and lockMs when absent. */
   lockout?: Lockout;
+  /** Lets a browser already signed in to respond as an Administrator open Admin without signing in again (#215). */
+  respondBridge?: RespondBridge;
   /** The server's logger (#140): each Admin change is an `admin.<action>` event with the source address. */
   logger?: Logger;
   /** A plain line sink, kept for callers from before the logger. */
@@ -157,6 +160,17 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     return true;
   }
 
+  /** Opens a session for an Administrator (a person's id) or the admin secret (null), sets its cookie and logs it. */
+  function openSession(req: Request, res: Response, personId: number | null): void {
+    if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value as string);
+    const sid = randomBytes(32).toString('hex');
+    sessions.set(sid, { last: now(), personId });
+    res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'strict', path: '/api/admin', secure: req.secure });
+    const person = personId === null ? undefined : people.getPerson(personId);
+    audit(req, 'unlock', 'Admin unlocked', person ? { person_id: person.id } : {}, person ? person.name : ADMIN_SECRET_ACTOR);
+    res.json({ ok: true });
+  }
+
   router.post('/unlock', (req, res) => {
     const src = sourceOf(req);
     const lockedFor = lockout.lockedFor(src);
@@ -164,24 +178,34 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
       res.status(429).json({ ok: false, error: 'too many wrong tries', retryAfterSec: Math.ceil(lockedFor / 1000) });
       return;
     }
-    const given = typeof req.body?.secret === 'string' ? req.body.secret : '';
-    // The admin secret, or the token of a person in Administrators (issue #172). Both count toward the same lockout when wrong.
-    const bySecret = given !== '' && opts.secret !== null && safeEqualStr(opts.secret, given);
-    const administrator = bySecret || given === '' ? undefined : people.findAdministratorByToken(given);
-    if (bySecret || administrator) {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    if (!name || !token) {
+      res.status(400).json({ ok: false, error: 'enter your name and your token' });
+      return;
+    }
+    // The admin secret with the name Admin, or the token of a person in Administrators with their name (issues #172, #215).
+    // Both count toward the same lockout when wrong, and the answer never says which part was wrong.
+    const found = checkNameToken(people, opts.secret, name, token);
+    const administrator = found?.person && people.isAdministrator(found.person.id) ? found.person : undefined;
+    if (found && (administrator || found.person === null)) {
       lockout.succeed(src);
-      if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value as string);
-      const sid = randomBytes(32).toString('hex');
-      sessions.set(sid, { last: now(), personId: administrator?.id ?? null });
-      res.cookie(COOKIE, sid, { httpOnly: true, sameSite: 'strict', path: '/api/admin', secure: req.secure });
-      const actor = administrator ? administrator.name : ADMIN_SECRET_ACTOR;
-      audit(req, 'unlock', 'Admin unlocked', administrator ? { person_id: administrator.id } : {}, actor);
-      res.json({ ok: true });
+      openSession(req, res, administrator?.id ?? null);
       return;
     }
     const { n, locked } = lockout.fail(src);
-    audit(req, 'unlock_failed', locked ? `Wrong secret (${n}); locked for ${Math.round(lockout.lockMs / 60_000)} minutes` : `Wrong secret (${n})`, { failures: n, locked });
-    res.status(401).json({ ok: false, error: 'wrong secret' });
+    audit(req, 'unlock_failed', locked ? `Wrong name or token (${n}); locked for ${Math.round(lockout.lockMs / 60_000)} minutes` : `Wrong name or token (${n})`, { failures: n, locked });
+    res.status(401).json({ ok: false, error: 'wrong name or token' });
+  });
+
+  // A browser signed in to respond as an Administrator (or as Admin with the secret) opens Admin with no second sign-in (#215).
+  router.post('/unlock/from-respond', (req, res) => {
+    const administrator = opts.respondBridge?.administratorOf(req) ?? null;
+    if (!administrator) {
+      res.status(401).json({ ok: false, error: 'not signed in as an Administrator' });
+      return;
+    }
+    openSession(req, res, administrator.personId);
   });
 
   // Everything below needs an unlocked session.
