@@ -107,7 +107,7 @@ no formulaic constructions. Reread what you wrote once before opening the PR.
 
 ## Branching, PRs and merging
 
-`development` is the default branch and holds unreleased work. `main` moves only on a release. Every change
+`development` holds unreleased work and is where every PR goes. `main` is the GitHub default branch (so a clone and the mod's marketplace listing get released code) and moves only on a release. Every change
 lands on a branch, never directly on `development` or `main`, however small. Branch off a current `development`:
 
 ```sh
@@ -115,7 +115,7 @@ git checkout development && git pull
 git checkout -b <your-branch-name>
 ```
 
-When the change is ready, open a PR against `development`. Say in the PR body that it is to be squash-merged.
+When the change is ready, open a PR against `development` (`gh pr create --base development`). Say in the PR body that it is to be squash-merged.
 This repo keeps one commit per PR on `development`, however many commits your branch has. The PR template has a
 checklist. A release is a PR from `development` to `main`, merged with a regular merge commit and never squashed.
 A hotfix branches from `main`, goes to `main` by PR, and is cherry-picked back into `development` afterwards.

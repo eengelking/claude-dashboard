@@ -50,14 +50,16 @@ gh repo view --json defaultBranchRef --jq .defaultBranchRef.name
 ```
 
 - **Standard workflow** (default branch is `main`, or anything other than `development`): PRs merge into `main`, and each merge may be a release.
-- **Development-branch workflow** (default branch is `development`): a project opts in by making `development` its default branch. **This repo uses it.**
+- **Development-branch workflow** (default branch is `development`): a project opts in by making `development` its default branch. **This repo uses it, with one deviation: its GitHub default branch stays `main`.**
   - `development` holds unreleased work and may be broken at any given time. Feature PRs target it and are squash-merged.
   - `main` only moves on a release. A release is a PR from `development` to `main`, merged with a regular merge commit, never squashed (squashing makes the branches diverge). That PR is the release-candidate gate: it is valid only if all tests pass, with no breaking tests, conditions, or regressions.
   - The version bump happens in a `release-prep/<version>` PR into `development`, not in feature PRs. Feature PRs only add to `CHANGELOG.md`'s `[Unreleased]` section. The bump level comes from what accumulated there, per the SemVer rules in `github-release`. See Releases.
   - Hotfixes branch from `main`, go to `main` by PR, and bump the patch version. The fix is then cherry-picked into `development` by a follow-up PR, when the user instructs it, so the branches don't drift.
   - The integration branch keeps its meaning: the throwaway branch an orchestrator creates for a parallel batch. It is not `development`. Here it is created off `development` and its final PR targets `development`.
 
-Below, "the default branch" means whichever of the two the command returns. Procedure lives in `git-branching`, `github-pr-merge`, `github-issue-workflow`, and `github-release`.
+**This repo's deviation.** The default branch stays `main`, so a plain `git clone` and the `podium-reporter` marketplace listing (which follows the default branch) get released code. The skills pick the workflow from the default branch and will read this repo as standard, so this file overrides them: every PR goes branch → `development` → `main`; branch off `development`, pass `--base development` to `gh pr create`, and read "the default branch" in the skills and in the rest of this file as `development`. A hotfix is the one PR that goes to `main`. Closing keywords only fire for a PR into the default branch, so `Closes #N` in a feature PR into `development` does not close its issue. Put `Closes #N` in the feature PR anyway, so the link is recorded, and list `Closes #N` for every issue the release ships in the `development` to `main` release PR's body, which is what closes them.
+
+Below, "the default branch" means `development` for this repo, and whichever of the two the command returns for any other. Procedure lives in `git-branching`, `github-pr-merge`, `github-issue-workflow`, and `github-release`.
 
 ## Always Branch First
 
@@ -124,7 +126,7 @@ Order of operations for any tracked change. The policy is the invariant that hol
 - **Release sequence.**
   1. Verify `development` (the gate above).
   2. Branch `release-prep/<version>` from `development`; in one commit, change every file in the table. Open a PR into `development`, to be squash-merged. Run the release check below before opening it.
-  3. After the user merges it, open `development` to `main`. The body says it is to be merged with a regular merge commit and not squashed, names the version and quotes the CHANGELOG section. Check the merge dropdown before merging, since `gh pr merge` remembers the last method.
+  3. After the user merges it, open `development` to `main`. The body says it is to be merged with a regular merge commit and not squashed, names the version, quotes the CHANGELOG section and lists `Closes #N` for every issue the release ships. Check the merge dropdown before merging, since `gh pr merge` remembers the last method.
   4. After the user merges that, sync `main` and `development`, propose the tag and wait for approval.
 - **Hotfixes.** Branch `hotfix/<n>-<slug>` from `main`, write the failing test first, fix, bump the patch version in every file in the table and add a `[X.Y.Z]` section to `CHANGELOG.md` (a hotfix never moves `[Unreleased]`). PR into `main`; the user merges, then tag as above. The backport waits for the user to say so: branch `hotfix/<n>-<slug>-backport` from `development`, `git cherry-pick -x` every commit, keep the hotfix's CHANGELOG section below `[Unreleased]`, and put `Closes #N` in that PR. If a release-prep PR is already merged but unreleased, stop and ask how to order them.
 

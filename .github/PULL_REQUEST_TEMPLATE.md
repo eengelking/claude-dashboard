@@ -15,8 +15,8 @@
 - [ ] `npm test` and `npm run build` pass. If the mod changed, `npm run test:mod` and `npm run typecheck:mod`
       pass too (they need Claude Code installed).
 - [ ] `CHANGELOG.md` has a line under `[Unreleased]` for anything a user would notice.
-- [ ] If this PR targets `development`, the body says it is to be squash-merged, and it closes its tracking issue
-      (`Closes #N`) if one exists. A `development` to `main` release PR says instead that it is not to be squashed.
+- [ ] If this PR targets `development`, the body says it is to be squash-merged, and it references its tracking issue
+      (`Closes #N`) if one exists; the release PR is what closes it. A `development` to `main` release PR says instead that it is not to be squashed.
 
 ## Test plan
 
