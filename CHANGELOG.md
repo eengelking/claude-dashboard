@@ -14,6 +14,8 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-16
+
 ### Fixed
 
 - **The prompt and answer modal renders a fence inside a fence and a link with parentheses in its URL (#274).** A fenced block now closes only on a line of backticks at least as long as the one that opened it, so a shorter fence quoted inside a longer one stays text and the block renders as one. A link URL holding one level of balanced parentheses, such as `https://en.wikipedia.org/wiki/A_(b)`, now links the whole address instead of stopping at the first `)`. Only `http(s)` and `mailto` links open, as before.
@@ -26,6 +28,7 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 - **A documentation-only or chore PR is no longer a release.** `CLAUDE.md` and `CONTRIBUTING.md` now say that from 1.0.0 on only a PR that changes code or behavior carries a release. A PR that changes only documentation, comments, CI or chores bumps no version, adds its entry under `[Unreleased]` and gets no tag. The bump is chosen by what the PR changes, not by its issue's label, and the maintainer may bundle several issues into one release: each PR adds its entry under `[Unreleased]`, and a final release PR cuts the version once they have all merged. This replaces the 1.0.0 rule that made documentation-only PRs patch releases.
 - **The fleet store no longer keeps `lastMessageAt` (#278).** Nothing read it since #184 removed the "synced" counter. The field, its test assertion and the argument that fed it are gone; no behavior changes.
 - **The plan panel's empty state uses the shared sentence (#278).** It read "No plan reported. Agents were launched ad hoc, so only the agent tree is available."; it now reads "No plan reported. Agents were launched ad hoc.", as the card and the focus header do and as SPEC 7.x says. The user guide is updated.
+- **Dependencies.** CI uses `actions/checkout` 7 and `actions/setup-node` 7 (#8, #9). The dev group moves `supertest` to 7.3.1, `@types/supertest` to 7.2.1, `tsx` to 4.23.15 and `@testing-library/react` to 16.3.3 (#10). `dotenv` moves from 16.6.1 to 18.0.7 (#11); since `dotenv` 17 prints an "injected env" line at startup, which the logger's text output does not expect, the server now loads `.env` with `quiet: true`. React 19 (#12) and TypeScript 7 (#13) are not taken: each needs its own migration.
 
 ## [1.0.1] - 2026-10-16
 
@@ -428,7 +431,8 @@ and a plugin you can install from a marketplace.
 - The project was renamed from `claude-dashboard` to `podium`
   (`eengelking/podium`). (PR #5)
 
-[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/eengelking/podium/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/eengelking/podium/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/eengelking/podium/compare/v0.14.3...v1.0.0
 [0.14.3]: https://github.com/eengelking/podium/compare/v0.14.2...v0.14.3
