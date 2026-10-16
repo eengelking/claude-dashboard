@@ -351,14 +351,14 @@ describe("when Podium can't send the answer", () => {
   });
 
   it("Answered in the terminal, a plan approved there, and a tool allowed there", async () => {
-    await modal(session({}, QUESTION, "closed"), fakeApi({}, ME, detailOf(QUESTION, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: "25/50/100; The page number", planApproved: false } })));
+    await modal(session({ status: "running", waitReason: null }, QUESTION, "closed"), fakeApi({}, ME, detailOf(QUESTION, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: "25/50/100; The page number", planApproved: false } })));
     expect(screen.getByText(/^Answered in the terminal at \d\d:\d\d\.$/)).toBeInTheDocument();
     expect(screen.getByText(/Nothing from here was sent, and your draft was dropped\./)).toHaveTextContent("The answer there was 25/50/100; The page number.");
     cleanup();
-    await modal(session({}, PLAN, "closed"), fakeApi({}, ME, detailOf(PLAN, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: null, planApproved: true } })));
+    await modal(session({ status: "running", waitReason: null }, PLAN, "closed"), fakeApi({}, ME, detailOf(PLAN, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: null, planApproved: true } })));
     expect(screen.getByText(/The plan was approved there\./)).toBeInTheDocument();
     cleanup();
-    await modal(session({}, TOOL, "closed"), fakeApi({}, ME, detailOf(TOOL, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: "allowed", planApproved: false } })));
+    await modal(session({ status: "running", waitReason: null }, TOOL, "closed"), fakeApi({}, ME, detailOf(TOOL, { state: "closed", closed: { outcome: "terminal", at: T0, by: null, answer: "allowed", planApproved: false } })));
     expect(screen.getByText(/Nothing from here was sent/)).toHaveTextContent("The answer there was Allowed.");
   });
 
@@ -371,7 +371,7 @@ describe("when Podium can't send the answer", () => {
   });
 
   it("Closed in the session", async () => {
-    await modal(session({}, QUESTION, "closed"), fakeApi({}, ME, detailOf(QUESTION, { state: "closed", closed: { outcome: "closed", at: T0, by: null, answer: null, planApproved: false } })));
+    await modal(session({ status: "running", waitReason: null }, QUESTION, "closed"), fakeApi({}, ME, detailOf(QUESTION, { state: "closed", closed: { outcome: "closed", at: T0, by: null, answer: null, planApproved: false } })));
     expect(screen.getByText("This question was closed in the session before you answered.")).toBeInTheDocument();
     expect(screen.getByText(/It was closed without an answer at \d\d:\d\d, so Claude stopped waiting\./)).toBeInTheDocument();
     expect(screen.getByText("The session is now waiting for a new message.")).toBeInTheDocument();
@@ -452,6 +452,15 @@ describe("the orchestrator page", () => {
     fireEvent.click(screen.getByRole("button", { name: /Expand/ }));
     await flush();
     expect(openFor).toBe("sess-ed");
+  });
+});
+
+describe("a closed ask (#208)", () => {
+  it("does not lead the header with Waiting for…", async () => {
+    const closed = { outcome: "terminal" as const, at: T0, by: null, answer: null, planApproved: false };
+    await modal(session({ status: "running", waitReason: null }, QUESTION, "closed"), fakeApi(undefined, ME, detailOf(QUESTION, { state: "closed", closed })));
+    expect(screen.queryByText(/Waiting for your/)).toBeNull();
+    expect(screen.getByText("No longer waiting.")).toBeInTheDocument();
   });
 });
 

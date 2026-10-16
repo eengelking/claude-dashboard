@@ -121,7 +121,7 @@ watched loop that is still working, so the panel can be seen filling without a r
 
 **Responding** (#206, SPEC 5.3, 7.1, 7.2, 7.7). The server side is `server/src/fleet/respond.ts` (`RespondStore`,
 on the `Fleet`, in memory only: each session's last `respond` info, its asks with content, a closed ask's outcome
-for 10 minutes, the one answer taken per ask and up to 20 waiting messages, plus the held requests) and
+until the session reports idle with no open ask, or 10 minutes, the one answer taken per ask and up to 20 waiting messages, plus the held requests) and
 `respondRoutes.ts` (mounted on the fleet router: the mod's routes behind `requireToken` and an owner check, and the
 browser's under `/respond` with their own `HttpOnly` sign-in cookie, header and `Origin` checks). `Fleet.ingest`
 hands each report to the store, which learns asks a restarted server lost and takes as closed an open one a report

@@ -194,7 +194,7 @@ export function RespondModal(props: { s: SessionView; now: number; adminFeedOn: 
 
   // ---- the answer panel ----
   let panel: ReactNode = null;
-  const lead = askLead(kind);
+  const lead = ask?.state === "closed" ? "No longer waiting." : askLead(kind);
   const ago = ask ? `asked ${minSec(now - ask.openedAt)} ago` : "";
   if (!edge && !signedIn) {
     panel = (

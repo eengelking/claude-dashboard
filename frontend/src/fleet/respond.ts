@@ -11,7 +11,7 @@ export function openAsk(s: Pick<SessionView, "asks">): AskSummary | null {
   return pick(open.filter((a) => a.agentId === null)) ?? pick(open);
 }
 
-/** The ask the modal shows: the open one, else the one that closed last (its outcome still shows for a while). */
+/** The ask the modal shows: the open one, else the one that closed last (the server forgets it when its turn is over, #208). */
 export function shownAsk(s: Pick<SessionView, "asks">): AskSummary | null {
   return openAsk(s) ?? s.asks.slice().sort((a, b) => b.openedAt - a.openedAt)[0] ?? null;
 }

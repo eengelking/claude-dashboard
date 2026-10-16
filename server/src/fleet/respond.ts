@@ -60,6 +60,8 @@ interface AskEntry {
   ask: Ask;
   delivery: DeliveryEntry | null;
   closed: Closed | null;
+  /** A report made after the ask closed found the session running: the turn it closed in is going (#208). */
+  ran?: boolean;
 }
 
 export type HoldResult = { kind: 'delivery'; delivery: Delivery } | { kind: 'none' } | { kind: 'unknown' } | { kind: 'closed'; outcome: AskOutcome };
@@ -234,6 +236,32 @@ export class RespondStore {
       if (e.closed || listed.has(id) || e.ask.openedAt > report.sentAt - REPORT_GRACE_MS) continue;
       this.setClosed(sid, e, { outcome: 'closed', at: this.now(), by: null, answer: null, planApproved: false, implicit: true });
     }
+    this.forgetOnIdle(sid, report);
+  }
+
+  /**
+   * A closed ask's outcome is stale once its turn is over (#208): the session was seen running after the ask closed and
+   * now reports itself idle (`waiting`) with no open ask. An idle report with no running one between could still be the
+   * moment before the session takes the answer, and one made before the ask closed says nothing about it.
+   */
+  private forgetOnIdle(sessionId: string, report: Report): void {
+    const s = this.sessions.get(sessionId);
+    if (!s) return;
+    const status = report.session.status;
+    if (status === 'running') {
+      for (const e of s.asks.values()) if (e.closed && e.closed.at < report.sentAt) e.ran = true;
+      return;
+    }
+    if (status !== 'waiting') return;
+    for (const e of s.asks.values()) if (!e.closed) return;
+    let changed = false;
+    for (const [id, e] of s.asks) {
+      if (e.closed && e.ran) {
+        s.asks.delete(id);
+        changed = true;
+      }
+    }
+    if (changed) this.onChange(sessionId);
   }
 
   /** The mod announces an ask (PUT). Idempotent: a changed body replaces the stored one while no answer is pending. */

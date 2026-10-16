@@ -236,6 +236,50 @@ describe('RespondStore', () => {
     expect(s.summaries(sid).map((a) => a.id)).toEqual(['toolu_t']);
   });
 
+  it('forgets a closed ask once the session goes idle with no open ask (#208)', () => {
+    const { s, sid, tick } = store();
+    const report = (status: 'running' | 'waiting', open: Ask[] = []): Report => {
+      const r = fixtureReport();
+      r.session.status = status;
+      r.session.asks = open;
+      r.sentAt = T0 + 2000;
+      return r;
+    };
+    s.announce(sid, QUESTION);
+    tick(500);
+    s.close(sid, 'toolu_q', { outcome: 'terminal', at: T0 + 500 });
+    // Still the turn the ask closed in: the outcome stays readable.
+    tick(1500);
+    s.noteReport(report('running'), true);
+    expect(s.summaries(sid).map((a) => a.id)).toEqual(['toolu_q']);
+    // The turn ended and nothing is open: the outcome goes, long before ten minutes.
+    s.noteReport(report('waiting'), true);
+    expect(s.summaries(sid)).toEqual([]);
+  });
+
+  it('keeps a closed ask for an idle report that the session never ran between, or that predates the close (#208)', () => {
+    const { s, sid, tick } = store();
+    s.announce(sid, QUESTION);
+    tick(500);
+    s.close(sid, 'toolu_q', { outcome: 'terminal', at: T0 + 500 });
+    const idle = (sentAt: number): Report => {
+      const r = fixtureReport();
+      r.session.status = 'waiting';
+      r.session.asks = [];
+      r.sentAt = sentAt;
+      return r;
+    };
+    s.noteReport(idle(T0 + 2000), true);
+    expect(s.summaries(sid).map((a) => a.id)).toEqual(['toolu_q']);
+    const before = fixtureReport();
+    before.session.status = 'running';
+    before.session.asks = [];
+    before.sentAt = T0 + 100;
+    s.noteReport(before, true);
+    s.noteReport(idle(T0 + 3000), true);
+    expect(s.summaries(sid).map((a) => a.id)).toEqual(['toolu_q']);
+  });
+
   it('refuses a ninth open ask', () => {
     const { s, sid } = store();
     for (let i = 0; i < RESPOND_LIMITS.asks; i++) expect(s.announce(sid, { ...QUESTION, id: `q${i}` })).toBe('ok');

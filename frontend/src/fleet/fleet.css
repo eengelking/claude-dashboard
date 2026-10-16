@@ -682,6 +682,8 @@ body.modal-open #root { filter: blur(5px); }
 .podium .htable td { padding: 7px 12px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 .podium .htable th.num, .podium .htable td.num { text-align: right; }
 .podium .htable .lk { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+/* A /clear link sits on its own line under the end reason, wrapping rather than widening the table (#208). */
+.podium .htable .clr { white-space: normal; overflow-wrap: anywhere; margin-top: 2px; }
 /* The pager under the table (#195): the same markup as Admin's pager, dressed with the History page's own controls. */
 .podium .history .apager { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid var(--border); color: var(--ink2); font-size: 12px; }
 .podium .history .apager .row2 { display: inline-flex; align-items: center; gap: 8px; }

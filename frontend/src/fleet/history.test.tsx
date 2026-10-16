@@ -37,6 +37,16 @@ describe("history page", () => {
     expect(screen.getByRole("button", { name: "after /clear of 238da512" })).toBeInTheDocument();
   });
 
+  it("puts each /clear link on its own line under the end reason, so none is cut off (#208)", async () => {
+    server([{ ...row, clearedInto: "9c1e2f4a5b6c7d8e", clearedFrom: "238da512ffeeddcc" }]);
+    render(<HistoryView initialDay="2026-10-10" />);
+    const into = await screen.findByRole("button", { name: "continued in 9c1e2f4a" });
+    const from = screen.getByRole("button", { name: "after /clear of 238da512" });
+    expect(into.parentElement).toHaveClass("clr");
+    expect(from.parentElement).toHaveClass("clr");
+    expect(into.closest("td")?.textContent).not.toContain("·");
+  });
+
   it("lists a day's ended sessions with summary columns", async () => {
     const calls = server([row]);
     render(<HistoryView initialDay="2026-10-10" />);

@@ -230,20 +230,18 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
                               {r.endReason ?? "–"}
                               {/* A /clear links the two parts of one conversation (#206). */}
                               {r.clearedInto && (
-                                <>
-                                  {" · "}
+                                <div className="clr">
                                   <button type="button" className="lk" title="The session that went on after /clear" onClick={() => go({ open: r.clearedInto }, "push")}>
                                     continued in {r.clearedInto.slice(0, 8)}
                                   </button>
-                                </>
+                                </div>
                               )}
                               {r.clearedFrom && (
-                                <>
-                                  {" · "}
+                                <div className="clr">
                                   <button type="button" className="lk" title="The session this one went on from after /clear" onClick={() => go({ open: r.clearedFrom }, "push")}>
                                     after /clear of {r.clearedFrom.slice(0, 8)}
                                   </button>
-                                </>
+                                </div>
                               )}
                             </td>
                           </tr>
