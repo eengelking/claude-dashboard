@@ -32,6 +32,19 @@ describe("Markdown", () => {
     expect(c.querySelector("strong")).toBeNull();
   });
 
+  it("keeps a shorter fence inside a longer one as text (#274)", () => {
+    const c = dom("````md\nbefore\n```ts\ncode\n```\nafter\n````\n\ntail");
+    expect(c.querySelectorAll("pre")).toHaveLength(1);
+    expect(c.querySelector("pre code")!.textContent).toBe("before\n```ts\ncode\n```\nafter");
+    expect(c.querySelector("p")!.textContent).toBe("tail");
+  });
+
+  it("closes a fence on a longer fence, and not on a fence with an info string (#274)", () => {
+    const c = dom("```\na\n```js\nb\n`````\n\ntail");
+    expect(c.querySelector("pre code")!.textContent).toBe("a\n```js\nb");
+    expect(c.querySelector("p")!.textContent).toBe("tail");
+  });
+
   it("closes a fence the text never closes", () => {
     expect(dom("```\nunfinished").querySelector("pre code")!.textContent).toBe("unfinished");
   });
@@ -40,6 +53,18 @@ describe("Markdown", () => {
     const c = dom("> one\n> two\n\nafter");
     expect(c.querySelector("blockquote")!.textContent).toBe("one two");
     expect(c.querySelector("p")!.textContent).toBe("after");
+  });
+
+  it("links a URL with balanced parentheses in full (#274)", () => {
+    const a = dom("see [wiki](https://en.wikipedia.org/wiki/A_(b)) now").querySelector("a")!;
+    expect(a.getAttribute("href")).toBe("https://en.wikipedia.org/wiki/A_(b)");
+    expect(a.textContent).toBe("wiki");
+  });
+
+  it("does not take a closing parenthesis after the link into the URL (#274)", () => {
+    const c = dom("(see [x](https://example.com/p)) end");
+    expect(c.querySelector("a")!.getAttribute("href")).toBe("https://example.com/p");
+    expect(c.textContent).toBe("(see x) end");
   });
 
   it("opens links in a new tab without opener or referrer", () => {

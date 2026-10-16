@@ -62,18 +62,18 @@ export function useFleet(opts: UseFleetOptions = {}): FleetState {
       last = Date.now();
       const s = open(`${base}/stream`);
       source = s;
-      const on = <T,>(type: string, fn: (data: T, at: number) => void) =>
+      const on = <T,>(type: string, fn: (data: T) => void) =>
         s.addEventListener(type, (ev: MessageEvent) => {
           const data = parse<T>(ev);
           last = Date.now();
-          if (data !== null) fn(data, last);
+          if (data !== null) fn(data);
         });
-      on<StateBody>("snapshot", (body, at) => dispatch({ type: "snapshot", body, at }));
-      on<SessionView>("session", (view, at) => dispatch({ type: "session", view, at }));
-      on<ActivityView>("activity", (event, at) => dispatch({ type: "activity", event, at }));
-      on<{ sessionId: string; reason: RemovedReason }>("removed", (d, at) => dispatch({ type: "removed", sessionId: d.sessionId, reason: d.reason, at }));
-      on<WallSettingsView>("wall", (wall, at) => dispatch({ type: "wall", wall, at }));
-      on<{ serverTime: number; kpis: Kpis }>("tick", (d, at) => dispatch({ type: "tick", serverTime: d.serverTime, kpis: d.kpis, at }));
+      on<StateBody>("snapshot", (body) => dispatch({ type: "snapshot", body }));
+      on<SessionView>("session", (view) => dispatch({ type: "session", view }));
+      on<ActivityView>("activity", (event) => dispatch({ type: "activity", event }));
+      on<{ sessionId: string; reason: RemovedReason }>("removed", (d) => dispatch({ type: "removed", sessionId: d.sessionId, reason: d.reason, at: Date.now() }));
+      on<WallSettingsView>("wall", (wall) => dispatch({ type: "wall", wall }));
+      on<{ serverTime: number; kpis: Kpis }>("tick", (d) => dispatch({ type: "tick", serverTime: d.serverTime, kpis: d.kpis }));
       s.onerror = () => {
         if (stopped || source !== s) return;
         dispatch({ type: "disconnected", at: Date.now() });
@@ -84,7 +84,7 @@ export function useFleet(opts: UseFleetOptions = {}): FleetState {
 
     fetchState(`${base}/state`)
       .then((body) => {
-        if (!stopped) dispatch({ type: "snapshot", body, at: Date.now() });
+        if (!stopped) dispatch({ type: "snapshot", body });
       })
       .catch((err: Error) => {
         if (!stopped) dispatch({ type: "error", message: err.message });

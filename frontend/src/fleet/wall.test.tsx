@@ -20,7 +20,7 @@ describe("rail and wall", () => {
     const { rerender, container } = render(<FleetView state={st} />);
     expect(within(screen.getByRole("navigation", { name: "Orchestrators" })).getByText("api-refactor")).toBeInTheDocument();
     expect(container.querySelectorAll(".wall .card")).toHaveLength(1);
-    const next = fleetReducer(st, { type: "session", view: makeSession({ id: "s2", name: "new-one" }), at: Date.now() });
+    const next = fleetReducer(st, { type: "session", view: makeSession({ id: "s2", name: "new-one" }) });
     rerender(<FleetView state={next} />);
     expect(container.querySelectorAll(".wall .card")).toHaveLength(2);
     const card = [...container.querySelectorAll(".wall .card")].find((c) => c.textContent?.includes("new-one"))!;

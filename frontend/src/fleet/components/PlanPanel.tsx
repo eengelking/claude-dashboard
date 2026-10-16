@@ -144,7 +144,7 @@ export function PlanPanel({ s, onTab }: { s: SessionView; onTab?: (tab: PlanTab)
             {pages > 1 && <PageNav label="Plan pages" at={at} pages={pages} from={from} shown={shown.length} total={steps.length} perPage={STEPS_PER_PAGE} onPage={setPage} />}
           </>
         ) : (
-          <div className="empty">No plan reported. Agents were launched ad hoc, so only the agent tree is available.</div>
+          <div className="empty">No plan reported. Agents were launched ad hoc.</div>
         )}
       </div>
       <div role="tabpanel" id={`${id}-files-panel`} aria-labelledby={`${id}-files`} hidden={tab !== "files"}>
