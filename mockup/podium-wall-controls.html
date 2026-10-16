@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Podium Wall Controls</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout (#245, with #246): the people controls move into the wall's own control row instead of a row above it. One row holds the status filter, Sort by, the text filter, a ruled "People" cluster (Group by, Order by, You are, Only me) and the "N shown" caption. The cluster is a bordered pill group so Order by (orders the bands) reads as a different thing from Sort by (orders the cards inside a band). #246: the old "None" is "All together". Narrower toolbars give way in a fixed order: the text filter shrinks, then the People cluster drops to its own full-width line, then the cluster wraps inside itself. No control is hidden or moved into a menu at any width shown. Each frame below is the toolbar's own width, not the window's. Quiet Podium tokens; the one loud thing is the People cluster's outline. Example data only. */
+:root {
+  --bg: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.045); --sel: rgba(255,255,255,0.08);
+  --sonnet: #3987e5; --warn: #fab219;
+  --font-ui: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+    --sonnet: #2a78d6; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f9f9f7; --surface: #fcfcfb; --raised: #f1f0ec; --ink: #0b0b0b; --ink2: #52514e; --muted: #6b6a64;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.04); --sel: rgba(11,11,11,0.07);
+  --sonnet: #2a78d6; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 var(--font-ui); -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--sonnet); outline-offset: 1px; border-radius: 4px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.page { max-width: 1900px; margin: 0 auto; padding: 18px 16px 48px; }
+.head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.head h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.themebtn { margin-left: auto; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); font-size: 12px; font-weight: 500; }
+.lead { color: var(--ink2); max-width: 78ch; margin: 4px 0 14px; }
+.notes { display: grid; gap: 6px; margin: 0 0 22px; padding: 12px 14px 12px 28px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink2); max-width: 100ch; }
+.notes li { padding-left: 2px; }
+.notes b { color: var(--ink); font-weight: 600; }
+
+.case { margin: 0 0 26px; }
+.case h2 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+.case p.sub { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.scroll { overflow-x: auto; padding-bottom: 6px; }
+.frame { container-type: inline-size; container-name: tb; border: 1px dashed var(--axis); border-radius: 8px; padding: 12px; background: var(--bg); flex: none; }
+.ghost { display: flex; gap: 10px; margin-top: 12px; }
+.ghost i { flex: 1; height: 38px; border-radius: 8px; border: 1px solid var(--grid); background: var(--surface); }
+.ghost i:nth-child(n+3) { display: none; }
+@container tb (min-width: 700px) { .ghost i:nth-child(3) { display: block; } }
+.dims { color: var(--muted); font-size: 11.5px; margin: 0 0 6px; }
+
+/* The control row. */
+.tools { display: flex; align-items: center; gap: 10px 14px; flex-wrap: nowrap; }
+.fgrp { display: flex; align-items: center; gap: 10px 12px; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex: none; }
+.seg button { padding: 4px 10px; font-size: 12px; font-weight: 500; color: var(--ink2); border-right: 1px solid var(--border); white-space: nowrap; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--ink); }
+.seg button:hover { background: var(--hover); }
+.lab { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.sel { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; }
+.tg { display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.search { background: var(--raised); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; font-size: 12px; flex: 1 1 110px; min-width: 110px; max-width: 260px; }
+.chipbtn { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--ink2); white-space: nowrap; flex: none; }
+.chipbtn[aria-pressed="true"] { background: var(--sel); border-color: var(--axis); color: var(--ink); }
+.chipbtn:disabled { opacity: .45; cursor: default; }
+.counts { color: var(--muted); font-size: 12px; white-space: nowrap; flex: none; margin-left: auto; order: 3; }
+
+/* The People cluster: outlined, so its Order by (the bands) is visibly not Sort by (the cards). */
+.people { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; flex: none; order: 2; border: 1px solid var(--axis); border-radius: 10px; padding: 4px 10px; }
+.people .plab { color: var(--ink); font-size: 12px; font-weight: 600; padding-right: 10px; border-right: 1px solid var(--axis); align-self: stretch; display: inline-flex; align-items: center; }
+.fgrp { order: 1; }
+.info { display: none; position: relative; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border); color: var(--muted); align-items: center; justify-content: center; flex: none; order: 3; margin-left: auto; }
+.info svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.info:hover, .info:focus-visible { color: var(--ink); background: var(--sel); }
+.info .tip { display: none; position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; white-space: nowrap; background: var(--raised); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.28); pointer-events: none; }
+.info:hover .tip, .info:focus-visible .tip, .info.show .tip { display: block; }
+
+/* Give way in a fixed order as the toolbar narrows (each step is measured in the frames below):
+   1. the caption becomes an info icon; 2. the cluster takes its own line under the filter row;
+   3. its "People" label goes; 4. the buttons tighten. Nothing is hidden or moved into a menu. */
+@container tb (max-width: 1389px) {
+  .has-people .counts { display: none; }
+  .has-people .info { display: inline-flex; }
+}
+@container tb (max-width: 1225px) {
+  .tools { flex-wrap: wrap; }
+  .fgrp { flex: 1 1 0; }
+  .has-people .info { order: 2; }
+  .people { order: 3; flex: 1 1 100%; }
+}
+@container tb (max-width: 639px) {
+  .people .plab { display: none; }
+  .people { padding: 6px 10px; }
+}
+@container tb (max-width: 584px) {
+  .people .seg button { padding: 4px 6px; }
+  .fgrp .seg button { padding: 4px 8px; }
+}
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>Wall controls, one row</h1>
+    <button type="button" class="themebtn" id="themeBtn" aria-label="Toggle light and dark theme">Theme</button>
+  </div>
+  <p class="lead">Mockup for #245 and #246. With two or more people reporting, Group by, Order by, You are and Only me move into the wall's existing control row. Example data; the names are made up. Every frame is a live copy of the same markup at the toolbar's own width, so the wrapping you see is the wrapping the page will do. Click the buttons to see the pressed state.</p>
+  <ol class="notes">
+    <li><b>Order by and Sort by.</b> Both stay, because they order different things. Order by sits inside the outlined People cluster and orders the bands; Sort by sits with the filter and orders the cards inside each band. Their tooltips say so.</li>
+    <li><b>#246.</b> Group by reads People, Group, <b>All</b> and, when someone is signed in as a person, <b>Me</b>. "All" replaces "None" and saves about 50 px; it sits near the status filter's own "All", so check it reads clearly.</li>
+    <li><b>"Showing X" and Show everyone are gone.</b> The left list already narrows the wall to a person or group when you click its header, and "All orchestrators" undoes it, so the wall's own row no longer repeats that.</li>
+    <li><b>You are and Only me are gone.</b> Who "me" is comes from the browser's sign-in (<code>GET /respond/me</code>). Me shows a flat wall of just the signed-in person's orchestrators, and Order by is hidden for it, as for All. The "you" tag, your band first and "your group" follow the sign-in. Signed out, or signed in as Admin, there is no Me and no "you" marking (see the signed-out frame).</li>
+    <li><b>Give-way order</b>, each step measured in the frames below: the caption "9 shown · 14 cleared today" becomes an info icon with the same words as its tooltip (under about 1390 px of toolbar); the People cluster takes its own line under the filter row (under about 1225 px); its "People" label goes (under 640 px); the buttons tighten (under 585 px). The text filter grows to 260 px when there is room and gives that back down to 110 px before anything wraps. Nothing is hidden or moved into a menu.</li>
+    <li><b>One row</b> needs about 1390 px of toolbar for everything in full, or about 1225 px with the caption as an icon. That is a 1400 px window with both panels collapsed (1320 px) or a 1900 px window with them open (1300 px).</li>
+    <li><b>Assumed widths.</b> Left list 260 px and right panel 340 px open, about 40 px each collapsed, and the right panel hidden at 1100 px and below as in the people mockup. Check these against the app before the build.</li>
+    <li><b>No people reporting.</b> The People cluster is not drawn and the row is exactly today's: filter, Sort by, text filter, caption.</li>
+  </ol>
+
+  <div id="cases"></div>
+</div>
+
+<script>
+(function () {
+  var cases = [
+    { w: 1820, t: "1900 px window, both panels collapsed", s: "One row, with the caption in full." },
+    { w: 1300, t: "1900 px window, both panels open", s: "One row; the caption is an info icon (hover or focus it for the words)." },
+    { w: 1320, t: "1400 px window, both panels collapsed", s: "One row; the caption is an info icon." },
+    { w: 800, t: "1400 px window, both panels open", s: "Two lines: the filter row, then the whole People cluster." },
+    { w: 1020, show: true, t: "1100 px window, panels collapsed", s: "Two lines: the filter row, then the whole People cluster." },
+    { w: 870, t: "1100 px window, left list open", s: "Two lines. The right panel is hidden at this width." },
+    { w: 720, t: "800 px window, panels collapsed", s: "Two lines." },
+    { w: 570, t: "800 px window, left list open", s: "Two lines. Below 640 px the People label goes, and below 585 px the buttons tighten a little." },
+    { w: 1300, me: false, t: "Signed out, 1900 px window with both panels open", s: "No Me option: nobody is signed in as a person, so the wall has no \"me\" to show." }
+  ];
+  var host = document.getElementById("cases");
+  function seg(label, opts, on) {
+    return '<span class="seg" role="group" aria-label="' + label + '">' + opts.map(function (o) {
+      return '<button type="button" aria-pressed="' + (o === on) + '">' + o + '</button>';
+    }).join("") + "</span>";
+  }
+  function info(show) {
+    return '<button type="button" class="info' + (show ? " show" : "") + '" aria-label="9 shown, 14 cleared today"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.2v4M8 4.8v.2"/></svg><span class="tip mono" aria-hidden="true">9 shown · 14 cleared today</span></button>';
+  }
+  function toolbar(c) {
+    var opts = ["People", "Group", "All"];
+    if (c.me !== false) opts.push("Me");
+    return '<div class="tools has-people">' +
+      '<div class="fgrp">' +
+        seg("Filter by status", ["All", "Running", "Waiting", "Stale", "Blowouts"], "All") +
+        '<span class="tg"><label class="lab">Sort by</label><select class="sel" title="Orders the cards inside each band"><option>Status</option><option>Cost</option></select></span>' +
+        '<input class="search" type="search" placeholder="Filter by name, project or branch" aria-label="Filter orchestrators">' +
+      '</div>' +
+      '<div class="people" role="group" aria-label="People view">' +
+        '<span class="plab">People</span>' +
+        '<span class="tg"><span class="lab">Group by</span>' + seg("Group by", opts, "People") + '</span>' +
+        '<span class="tg" title="Orders the bands"><span class="lab">Order by</span>' + seg("Order by", ["Needs attention", "Spend", "Name"], "Needs attention") + '</span>' +
+      '</div>' +
+      '<span class="counts mono">9 shown · 14 cleared today</span>' + info(c.show) +
+    '</div>';
+  }
+  host.innerHTML = cases.map(function (c) {
+    return '<section class="case"><h2>' + c.t + '</h2><p class="sub">' + c.s + '</p>' +
+      '<p class="dims mono">toolbar ' + c.w + ' px</p>' +
+      '<div class="scroll"><div class="frame" style="width:' + (c.w + 24) + 'px">' + toolbar(c) + '<div class="ghost"><i></i><i></i><i></i></div></div></div></section>';
+  }).join("") +
+  '<section class="case"><h2>No people reporting</h2><p class="sub">The wall as it is today.</p><p class="dims mono">toolbar 1300 px</p><div class="scroll"><div class="frame" style="width:1324px">' +
+    '<div class="tools"><div class="fgrp">' + seg("Filter by status", ["All", "Running", "Waiting", "Stale", "Blowouts"], "All") +
+    '<span class="tg"><label class="lab">Sort by</label><select class="sel"><option>Status</option></select></span>' +
+    '<input class="search" type="search" placeholder="Filter by name, project or branch" aria-label="Filter orchestrators"></div>' +
+    '<span class="counts mono">9 shown · 14 cleared today</span></div><div class="ghost"><i></i><i></i><i></i></div></div></div></section>';
+
+  host.addEventListener("click", function (e) {
+    var b = e.target.closest(".seg button");
+    if (!b) return;
+    Array.prototype.forEach.call(b.parentNode.children, function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+  });
+  var root = document.documentElement;
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark" : !matchMedia("(prefers-color-scheme: light)").matches;
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+  });
+})();
+</script>
+</body>
+</html>
