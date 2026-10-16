@@ -14,6 +14,12 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-16
+
+### Fixed
+
+- **The prompt and answer modal renders a fence inside a fence and a link with parentheses in its URL (#274).** A fenced block now closes only on a line of backticks at least as long as the one that opened it, so a shorter fence quoted inside a longer one stays text and the block renders as one. A link URL holding one level of balanced parentheses, such as `https://en.wikipedia.org/wiki/A_(b)`, now links the whole address instead of stopping at the first `)`. Only `http(s)` and `mailto` links open, as before.
+
 ## [1.0.1] - 2026-10-16
 
 ### Changed
@@ -415,7 +421,8 @@ and a plugin you can install from a marketplace.
 - The project was renamed from `claude-dashboard` to `podium`
   (`eengelking/podium`). (PR #5)
 
-[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/eengelking/podium/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/eengelking/podium/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/eengelking/podium/compare/v0.14.3...v1.0.0
 [0.14.3]: https://github.com/eengelking/podium/compare/v0.14.2...v0.14.3
