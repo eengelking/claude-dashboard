@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(__dirname, "..", "..");
-loadEnv({ path: path.join(REPO_ROOT, ".env") });
+// quiet: dotenv 17 and later print an "injected env" line at startup, which the logger's text output pins (#11).
+loadEnv({ path: path.join(REPO_ROOT, ".env"), quiet: true });
 
 import fs from "node:fs";
 import express from "express";
