@@ -10,7 +10,8 @@ export interface Paged<T> {
 export interface PersonRow {
   id: number;
   name: string;
-  last4: string;
+  /** `pdm_<key id>`: how every page names a token. */
+  credential: string;
   groupId: number | null;
   groupName: string | null;
   createdAt: number;

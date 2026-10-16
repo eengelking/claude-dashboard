@@ -56,12 +56,12 @@ function readCookie(req: Request, name: string): string | null {
 
 const idParam = (v: string): number | null => (/^\d{1,12}$/.test(v) ? Number(v) : null);
 
-/** A person as the Admin UI sees one: never the key id or the hash. */
+/** A person as the Admin UI sees one: never the hash or any of the secret. The token is named by `pdm_<key id>` (#218). */
 function publicPerson(p: PersonRow, groupName: string | null) {
   return {
     id: p.id,
     name: p.name,
-    last4: p.last4,
+    credential: `pdm_${p.keyId}`,
     groupId: p.groupId,
     groupName,
     createdAt: p.createdAt,

@@ -135,9 +135,14 @@ describe('people and tokens', () => {
     expect(created.status).toBe(201);
     const token = created.body.token as string;
     expect(token).toMatch(/^pdm_/);
-    expect(created.body.person).toMatchObject({ name: 'Dana', last4: token.slice(-4) });
+    // The list names a token by its key id, `pdm_<key id>`, as Reporters does (#218); no part of the secret.
+    const keyId = /^pdm_([0-9a-f]{12})_/.exec(token)![1];
+    expect(created.body.person).toMatchObject({ name: 'Dana', credential: `pdm_${keyId}` });
+    expect(created.body.person).not.toHaveProperty('last4');
     const listed = await agent.get('/api/admin/people').set(H);
     expect(JSON.stringify(listed.body)).not.toContain(token);
+    expect(listed.body.rows[0]).toMatchObject({ credential: `pdm_${keyId}` });
+    expect(listed.body.rows[0]).not.toHaveProperty('last4');
     expect(JSON.stringify(listed.body)).not.toMatch(/tokenHash|token_hash|keyId/);
     expect(JSON.stringify(people.listLog({ page: 1, pageSize: 50 })) + lines.join('')).not.toContain(token);
     expect(people.listLog({ page: 1, pageSize: 50 }).rows.map((r) => r.kind)).toContain('person_created');

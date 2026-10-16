@@ -48,7 +48,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
     ] as { key: string; state: string; name: string; named: boolean; who: string; credential: string | null; adminSecret: boolean; version: string; compat: string; firstSeenAt: number; lastSeenAt: number; sessions: number; live: number }[],
   };
   const json = (status: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
-  const row = (p: P) => ({ id: p.id, name: p.name, last4: "ab12", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
+  const row = (p: P) => ({ id: p.id, name: p.name, credential: "pdm_0123456789ab", groupId: p.groupId, groupName: state.groups.find((g) => g.id === p.groupId)?.name ?? null, createdAt: 1, rotatedAt: null, revokedAt: p.revokedAt, lastReportAt: null, machines: [] });
   /** The sessions of one page of a reporter's details: session-1 is the newest. */
   const recentPage = (total: number, url: URL) => {
     const size = Number(url.searchParams.get("pageSize") ?? 50);
@@ -246,9 +246,9 @@ describe("tokens", () => {
     expect(screen.getByText(/token: pdm_aaaaaaaaaaaa_/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "I have saved it" }));
     expect(screen.queryByText(/pdm_aaaaaaaaaaaa_/)).toBeNull();
-    // After it, the list shows only the last four characters.
+    // After it, the list names the token by its key id, `pdm_<key id>`, with none of the secret.
     fireEvent.click(screen.getByRole("button", { name: /People/ }));
-    expect(await screen.findByText("pdm_…ab12")).toBeInTheDocument();
+    expect(await screen.findByText("pdm_0123456789ab")).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("pdm_aaaaaaaaaaaa_");
   });
 

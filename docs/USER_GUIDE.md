@@ -390,7 +390,7 @@ Admin has seven pages, listed in a menu down the left side: People, Groups and R
 - **People.** Under **Create user**, type a name and choose Create user. Podium shows the token once, above the page (it stays there when you switch pages), with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
   choose "I have saved it", because Podium keeps only a hash and cannot show the token again. The list shows
-  the last four characters, when each person last reported and from which machines. Rotate gives a person a
+  the token's key id as `pdm_` and twelve characters, the same way Reporters shows it, when each person last reported and from which machines. Rotate gives a person a
   new token and stops the old one. Revoke refuses their reports from the next one on, and their sessions go
   stale and drop as usual. The search finds a person by name, group or machine. A person in the Administrators group has their name in orange.
 - **Groups.** Under **Create group**, make groups such as Frontend or DevOps, and pick one for a person on the People page. A group is

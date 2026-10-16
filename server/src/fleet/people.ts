@@ -33,7 +33,9 @@ export interface PersonRow {
   revokedAt: number | null;
   lastReportAt: number | null;
 }
-export interface PersonListRow extends Omit<PersonRow, 'tokenHash' | 'keyId'> {
+export interface PersonListRow extends Omit<PersonRow, 'tokenHash' | 'keyId' | 'last4'> {
+  /** `pdm_<key id>`, the way Reporters names a token (#218). The key id only finds a person; it is not a secret. */
+  credential: string;
   groupName: string | null;
   machines: string[];
 }
@@ -231,10 +233,10 @@ export class PeopleStore {
       page,
       pageSize,
       rows: rows.map((r) => {
-        const { tokenHash: _h, keyId: _k, ...rest } = toPerson(r);
+        const { tokenHash: _h, keyId, last4: _l, ...rest } = toPerson(r);
         void _h;
-        void _k;
-        return { ...rest, groupName: r.group_name, machines: machines.get(r.id) ?? [] };
+        void _l;
+        return { ...rest, credential: `pdm_${keyId}`, groupName: r.group_name, machines: machines.get(r.id) ?? [] };
       }),
     };
   }

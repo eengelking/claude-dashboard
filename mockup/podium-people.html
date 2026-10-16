@@ -520,11 +520,11 @@ document.addEventListener("pointerleave", () => { tip.hidden = true; });
 const A = {
   tab: "people", pgs: { people: { page: 1, size: 50, q: "" }, groups: { page: 1, size: 50 }, log: { page: 1, size: 50 } }, gpend: null, gErr: "", open: false, unlocked: false, err: "", legacy: true, pending: null, created: null,
   people: [
-    { pid: "ed",     name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a", made: "Oct 9",  last: "now",    state: "active" },
-    { pid: "priya",  name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21d", made: "Oct 10", last: "now",    state: "active" },
-    { pid: "dana",   name: "Dana K.",   machines: ["dana-mbp"],             tail: "5b1c", made: "Oct 10", last: "now",    state: "active" },
-    { pid: "marcus", name: "Marcus T.", machines: ["build-01"],             tail: "09be", made: "Oct 10", last: "now",    state: "active" },
-    { name: "Sofia R.",  machines: ["sofia-air"],            tail: "e4a8", made: "Oct 6",  last: "3 days ago", state: "revoked" }
+    { pid: "ed",     name: "Ed E.",     machines: ["eds-mbp", "ed-studio"], tail: "7f3a7f3a7f3a", made: "Oct 9",  last: "now",    state: "active" },
+    { pid: "priya",  name: "Priya N.",  machines: ["priya-mbp"],            tail: "c21dc21dc21d", made: "Oct 10", last: "now",    state: "active" },
+    { pid: "dana",   name: "Dana K.",   machines: ["dana-mbp"],             tail: "5b1c5b1c5b1c", made: "Oct 10", last: "now",    state: "active" },
+    { pid: "marcus", name: "Marcus T.", machines: ["build-01"],             tail: "09be09be09be", made: "Oct 10", last: "now",    state: "active" },
+    { name: "Sofia R.",  machines: ["sofia-air"],            tail: "e4a8e4a8e4a8", made: "Oct 6",  last: "3 days ago", state: "revoked" }
   ],
   log: [
     ["15:10", "Added Dana K. to Backend"],
@@ -550,7 +550,7 @@ const initOf = (n) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2);
     if (used.has(name)) continue;
     used.add(name); n++;
     const revoked = rnd() < 0.08;
-    A.people.push({ name, machines: rnd() < 0.2 ? [f.toLowerCase() + "-mbp", f.toLowerCase() + "-linux"] : [f.toLowerCase() + "-mbp"], tail: Math.floor(rnd() * 65535).toString(16).padStart(4, "0"), made: ["Oct 2", "Oct 4", "Oct 7", "Oct 9", "Oct 10"][Math.floor(rnd() * 5)], last: revoked ? "4 days ago" : ["now", "now", "2h ago", "yesterday"][Math.floor(rnd() * 4)], state: revoked ? "revoked" : "active", g: revoked ? "" : ids[Math.floor(rnd() * ids.length)] });
+    A.people.push({ name, machines: rnd() < 0.2 ? [f.toLowerCase() + "-mbp", f.toLowerCase() + "-linux"] : [f.toLowerCase() + "-mbp"], tail: Math.floor(rnd() * 0xffffffffffff).toString(16).padStart(12, "0"), made: ["Oct 2", "Oct 4", "Oct 7", "Oct 9", "Oct 10"][Math.floor(rnd() * 5)], last: revoked ? "4 days ago" : ["now", "now", "2h ago", "yesterday"][Math.floor(rnd() * 4)], state: revoked ? "revoked" : "active", g: revoked ? "" : ids[Math.floor(rnd() * ids.length)] });
     if (n % 3 === 0) A.log.push([["Oct 9", "Oct 8", "Oct 7", "Oct 6"][n % 4], "Created a token for " + name]);
   }
   for (let i = 0; i < 12; i++) A.log.push(["Oct 5", "Failed unlock attempt from 10.0.4." + (20 + i), true]);
@@ -561,7 +561,7 @@ const nowT = () => new Date().toTimeString().slice(0, 5);
 function fakeToken() {
   const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const r = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => a[b % a.length]).join("");
-  return "pdm_" + r(6) + "_" + r(32);
+  return "pdm_" + r(12) + "_" + r(32);
 }
 function pager(key, total) {
   const g = A.pgs[key], pages = Math.max(1, Math.ceil(total / g.size));
@@ -582,7 +582,7 @@ function personRow([p, i]) {
   return `<tr class="${p.state}"><td><span class="who"><span class="mono-g sm" aria-hidden="true">${initOf(p.name)}</span>${esc(p.name)}</span></td>
     <td><label class="vh" for="grp${i}">Group for ${esc(p.name)}</label><select class="field" id="grp${i}" data-g="${i}" ${p.state === "revoked" ? "disabled" : ""}><option value="">No group</option>${GROUPS.map((g) => `<option value="${g.id}" ${pg(p) === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></td>
     <td><span class="mchips">${p.machines.map((m) => `<span class="chip mono">${esc(m)}</span>`).join("")}</span></td>
-    <td><span class="tail">pdm_&hellip;${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
+    <td><span class="tail">pdm_${p.tail}</span></td><td>${p.made}</td><td>${p.last}</td>
     <td>${p.state === "active" ? '<span class="badge ok"><span class="dot running"></span>active</span>' : '<span class="badge off"><span class="dot done"></span>revoked</span>'}</td><td>${acts}</td></tr>`;
 }
 function drawPeople() {
@@ -686,7 +686,7 @@ document.addEventListener("click", (e) => {
   }
   else if (t.dataset.yes) {
     const p = A.people[+t.dataset.yes];
-    if (A.pending.kind === "rotate") { p.tail = fakeToken().slice(-4).toLowerCase(); A.created = { name: p.name, token: fakeToken() }; A.log.unshift([nowT(), "Rotated the token for " + p.name]); }
+    if (A.pending.kind === "rotate") { p.tail = fakeToken().split("_")[1].toLowerCase(); A.created = { name: p.name, token: fakeToken() }; A.log.unshift([nowT(), "Rotated the token for " + p.name]); }
     else { p.state = "revoked"; A.log.unshift([nowT(), "Revoked the token for " + p.name]); }
     A.pending = null; renderAdmin(); if (A.created) q("#onceH").scrollIntoView({ block: "nearest" });
   }
@@ -722,7 +722,7 @@ document.addEventListener("submit", (e) => {
     if (!n) { A.addErr = "Enter a name."; renderAdmin(); q("#newName").focus(); return; }
     if (A.people.some((p) => p.name.toLowerCase() === n.toLowerCase())) { A.addErr = n + " already has a token. Rotate it instead."; renderAdmin(); q("#newName").focus(); return; }
     A.addErr = ""; const tk = fakeToken();
-    A.people.unshift({ name: n, machines: [], tail: tk.slice(-4).toLowerCase(), made: "Today", last: "never", state: "active" }); A.pgs.people.page = 1; A.pgs.people.q = "";
+    A.people.unshift({ name: n, machines: [], tail: tk.split("_")[1].toLowerCase(), made: "Today", last: "never", state: "active" }); A.pgs.people.page = 1; A.pgs.people.q = "";
     A.created = { name: n, token: tk }; A.log.unshift([nowT(), "Created a token for " + n]); renderAdmin(); q("#onceH").scrollIntoView({ block: "nearest" });
   }
 });

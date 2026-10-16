@@ -182,7 +182,7 @@ export function PeopleTab(props: {
                             </span>
                           </td>
                           <td>
-                            <span className="tail">pdm_…{p.last4}</span>
+                            <span className="tail">{p.credential}</span>
                           </td>
                           <td>{when(p.createdAt)}</td>
                           <td>{when(p.lastReportAt)}</td>
