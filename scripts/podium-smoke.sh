@@ -70,12 +70,14 @@ PIDS+=($!)
 for _ in $(seq 1 60); do curl -sf "http://127.0.0.1:$PORT/api/fleet/health" >/dev/null && break; sleep 0.25; done
 curl -sf "http://127.0.0.1:$PORT/api/fleet/health" >/dev/null || { echo "server did not start:"; cat "$TMP/server.log"; exit 2; }
 
-curl -sN --max-time 34 "http://127.0.0.1:$PORT/api/fleet/stream" >"$TMP/stream.txt" 2>/dev/null &
+# Long enough to outlast the simulator's duration plus the linger time even when starting Vite is slow; cleanup kills it.
+curl -sN --max-time 90 "http://127.0.0.1:$PORT/api/fleet/stream" >"$TMP/stream.txt" 2>/dev/null &
 PIDS+=($!)
 
 if [[ $VITE == 1 ]]; then
   VPORT="$(free_port)"
-  (cd "$ROOT/frontend" && PORT="$PORT" exec "$VITE_BIN" --port "$VPORT" --strictPort --clearScreen false) >"$TMP/vite.log" 2>&1 &
+  # --host 127.0.0.1: by default Vite binds only ::1 on some machines, and this script curls 127.0.0.1.
+  (cd "$ROOT/frontend" && PORT="$PORT" exec "$VITE_BIN" --host 127.0.0.1 --port "$VPORT" --strictPort --clearScreen false) >"$TMP/vite.log" 2>&1 &
   PIDS+=($!)
   for _ in $(seq 1 60); do curl -sf "http://127.0.0.1:$VPORT/api/fleet/health" >/dev/null && break; sleep 0.25; done
   # Stamp each line as it arrives: a buffering proxy would deliver everything at the end.
