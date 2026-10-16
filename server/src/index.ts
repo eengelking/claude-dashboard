@@ -47,8 +47,9 @@ const frontendDist = path.join(REPO_ROOT, "frontend", "dist");
 let pageScripts: string[] = [];
 try {
   pageScripts = inlineScriptHashes(fs.readFileSync(path.join(frontendDist, "index.html"), "utf8"));
-} catch {
+} catch (err) {
   // No built UI (the server alone, or the dev server serving the UI); there is no page to allow scripts for.
+  logger.warn("server.csp", `podium: no inline script allowed by the content security policy: ${(err as Error).message}`, { reason: (err as Error).message });
 }
 app.use(securityHeaders({ scriptHashes: pageScripts }));
 app.use(requestLog(logger));

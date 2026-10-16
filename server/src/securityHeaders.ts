@@ -29,7 +29,7 @@ export function securityHeaders(opts: { scriptHashes?: string[] } = {}): Request
 /** The `sha256-…` source of each inline `<script>` in a page, so the policy can allow those and no other inline script. */
 export function inlineScriptHashes(html: string): string[] {
   const out: string[] = [];
-  for (const m of html.matchAll(/<script(?<attrs>[^>]*)>(?<body>[\s\S]*?)<\/script>/gi)) {
+  for (const m of html.matchAll(/<script(?<attrs>(?:\s[^>]*)?)>(?<body>[\s\S]*?)<\/script>/gi)) {
     if (/\bsrc\s*=/i.test(m.groups!.attrs!)) continue;
     out.push(`sha256-${createHash('sha256').update(m.groups!.body!, 'utf8').digest('base64')}`);
   }

@@ -1,4 +1,5 @@
 // Response headers that keep the console from being framed, sniffed or fed outside script (#249).
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
@@ -45,5 +46,10 @@ describe('inlineScriptHashes', () => {
     const hashes = inlineScriptHashes(html);
     expect(hashes).toHaveLength(1);
     expect(hashes[0]).toMatch(/^sha256-[A-Za-z0-9+/]{43}=$/);
+  });
+
+  it('finds exactly the one inline script in the real page, so an edit to it cannot be blocked unnoticed', () => {
+    const html = readFileSync(new URL('../../frontend/index.html', import.meta.url), 'utf8');
+    expect(inlineScriptHashes(html)).toHaveLength(1);
   });
 });

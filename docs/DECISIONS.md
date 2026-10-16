@@ -439,10 +439,9 @@ settings screen.
 
 **Accepted.**
 - *Guessing the admin secret with `X-Podium-Token`.* The lockout covers only Admin's unlock and the sign-in to respond. Counting wrong report tokens as well would let one misconfigured reporter lock out every reporter and the person's own browser on a shared address (all local reporters arrive from `127.0.0.1`). `podiumctl` makes a 192-bit secret, so this matters only to someone who sets a short `PODIUM_TOKEN` by hand.
-- *DNS rebinding.* The reads are open by design (7.1), and the server does not check the `Host` header, so a page on another site that rebinds its name to `127.0.0.1` can read the fleet, including agents' full prompts. It cannot reach Admin or respond, which need a cookie that rebinding does not carry. A `Host` allowlist would break the `--bind` use from other machines, so it is left to the user's decision (#249 comment).
+- *DNS rebinding.* The reads are open by design (7.1), and the server does not check the `Host` header, so a page on another site that rebinds its name to `127.0.0.1` can read the fleet, including agents' full prompts. It cannot reach Admin or respond, which need a cookie that rebinding does not carry. A `Host` allowlist would break the `--bind` use from other machines, so it is not added without the maintainer deciding it.
 - *Open reads and three open writes.* `GET` routes, Remove on a lost card, closing a wall notice and the background-sessions switch take no token (7.1). They change only how the wall looks.
 - *Development dependencies.* `npm audit` still lists `vitest`, `vite`'s `esbuild` and `tinypool`. None ships in the image, and the fix is a major version bump of the test tooling.
 - *A server's own page loads Google Fonts,* which tells Google that someone opened Podium. The policy names that one origin.
 
 **Cost.** The policy must be edited by hand when the page gains an origin or an inline script.
-
