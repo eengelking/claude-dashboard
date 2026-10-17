@@ -67,7 +67,7 @@ interface AskEntry {
 /** What became of a delivery after the server took it, for the admin log (#304): never its text. */
 export type DeliveryTrail =
   | { kind: 'result'; sessionId: string; delivery: Delivery; result: DeliveryResult }
-  | { kind: 'dropped'; sessionId: string; delivery: Delivery; why: 'discarded' | 'ask-closed'; /** Who discarded it; the sender for a drop on close. */ by: string };
+  | { kind: 'dropped'; sessionId: string; delivery: Delivery; why: 'discarded' | 'ask-closed' | 'session-ended'; /** Who discarded it; the sender for a drop on close or at session end. */ by: string };
 
 export type HoldResult = { kind: 'delivery'; delivery: Delivery } | { kind: 'none' } | { kind: 'unknown' } | { kind: 'closed'; outcome: AskOutcome };
 
@@ -372,6 +372,11 @@ export class RespondStore {
     const s = this.sessions.get(sessionId);
     if (!s) return;
     for (const e of s.asks.values()) if (!e.closed) this.setClosed(sessionId, e, { outcome: 'ended', at: this.now(), by: null, answer: null, planApproved: false, implicit: false });
+    // A message or command with no result yet never reached the session; one with a result already has its row.
+    for (const m of s.messages) {
+      if (m.result !== null) continue;
+      this.trail({ kind: 'dropped', sessionId, delivery: m.d, why: 'session-ended', by: m.d.by });
+    }
     s.messages = [];
   }
 

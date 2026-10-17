@@ -127,9 +127,10 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     refused: 'the session refused it',
     closed: 'it had closed before the session got it',
   };
-  const DROP_WORDS: Record<'discarded' | 'ask-closed', string> = {
+  const DROP_WORDS: Record<'discarded' | 'ask-closed' | 'session-ended', string> = {
     discarded: 'discarded by its sender, so it never reached the session',
     'ask-closed': 'the ask closed first, so it never reached the session',
+    'session-ended': 'the session ended first, before any result came back',
   };
   fleet.respond.trail = (t: DeliveryTrail) => {
     // The store calls this mid-change; a failing log write must not leave a delivery half-updated.

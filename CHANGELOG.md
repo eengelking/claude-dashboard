@@ -28,6 +28,8 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ### Fixed
 
+- **A message dropped when its session ends is written to the Admin log (#326).** A message or `/clear` or `/compact` command that was accepted and still waiting for the mod when the session ended vanished without a trace, so the log showed `respond_sent` and nothing after it. Each one now gets a `respond_dropped` row with the same actor and short delivery id, saying the session ended first, before any result came back; the server log's `respond.dropped` has `why: session-ended`. A message the session already took or queued writes no extra row (a queued one is not followed up if the session ends before Claude Code gets to it), and no row carries the text. SPEC 7.7 and the user guide say so.
+
 - **A retried delivery result no longer logs `respond.delivered` twice (#330).** #327 stopped the second `respond_result` row, but the server log still got a second `respond.delivered` line for the same result. `RespondStore.result()` now says whether a result was new, a repeat or for a delivery the server no longer holds, and the route logs only a new one. What the route answers does not change.
 
 - **A retried delivery result no longer writes a second `respond_result` row (#327).** A mod that posted the same result twice for one delivery, as after a network timeout, left two identical rows in the Admin log. A repeat of the result a delivery already has is now ignored; a different result (`queued`, then `took`) still writes its own row. The route still answers `200` while the server holds the delivery; a message with a final result, or a refused answer, is no longer held, so a repeat of that one is a `404` as before and writes no row. SPEC 7.7 says so.
