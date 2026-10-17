@@ -6,6 +6,7 @@ import { openDb, FleetDb } from './db.js';
 import { DEFAULT_CONFIG, Fleet } from './fleet.js';
 import { PeopleStore } from './people.js';
 import { createFleetRouter } from './routes.js';
+import { createLogger, type Logger } from '../logging/logger.js';
 import { createAdminRouter } from '../admin/adminRouter.js';
 import { Lockout } from './lockout.js';
 import { createRespondBridge } from './respondBridge.js';
@@ -142,7 +143,7 @@ describe('RespondStore', () => {
     s.announce(sid, TOOL);
     const out = s.answer(sid, 'toolu_t', 'Ed', { kind: 'allow-once' });
     if (!out.ok) throw new Error('refused');
-    expect(s.result(sid, out.delivery.id, 'took')).toBe(true);
+    expect(s.result(sid, out.delivery.id, 'took')).toBe('new');
     expect(s.detail(sid, 'toolu_t', 'Ed', 0)).toMatchObject({ state: 'closed', closed: { outcome: 'podium', by: 'Ed' }, delivery: { result: 'took', mine: true } });
   });
 
@@ -292,7 +293,7 @@ describe('RespondStore', () => {
     const m = s.message(sid, 'Ed', { text: 'Also update the user guide.' });
     if (!m.ok) throw new Error('refused');
     expect(s.deliveriesFor(sid)).toEqual([m.delivery]);
-    expect(s.result(sid, m.delivery.id, 'queued')).toBe(true);
+    expect(s.result(sid, m.delivery.id, 'queued')).toBe('new');
     expect(feed.at(-1)).toBe(`update ${m.delivery.id} (queued until the session is idle)`);
     expect(s.deliveriesFor(sid)).toEqual([]);
     s.result(sid, m.delivery.id, 'took');
@@ -337,7 +338,7 @@ describe('RespondStore', () => {
 const SECRET = 'admin-secret';
 const H = { 'X-Podium-Respond': '1' };
 
-function setup(opts: { secret?: string | null; respond?: boolean; onSignIn?: express.RequestHandler } = {}) {
+function setup(opts: { secret?: string | null; respond?: boolean; onSignIn?: express.RequestHandler; logger?: Logger } = {}) {
   const secret = opts.secret === undefined ? SECRET : opts.secret;
   const db = openDb(':memory:');
   const fleet = new Fleet(new FleetDb(db), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' });
@@ -345,7 +346,7 @@ function setup(opts: { secret?: string | null; respond?: boolean; onSignIn?: exp
   const lockout = new Lockout(fleet.now);
   const respondBridge = createRespondBridge();
   const app = express();
-  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, respondBridge, onSignIn: opts.onSignIn, log: () => {} }));
+  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, respondBridge, onSignIn: opts.onSignIn, ...(opts.logger ? { logger: opts.logger } : { log: () => {} }) }));
   app.use('/api/admin', createAdminRouter({ secret, people, features: fleet.features, lockout, respondBridge, log: () => {} }));
   closers.push(() => fleet.close());
   if (opts.respond !== false) fleet.features.setFeature('respond', true);
@@ -557,6 +558,33 @@ describe('answering, end to end', () => {
       }
       const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_result');
       expect(rows.map((r) => r.detail.split(': ')[1]).sort()).toEqual(['the session queued it', 'the session took it']);
+    });
+
+    it('logs respond.delivered once when the mod posts the same result twice, and answers 200 both times (#330)', async () => {
+      const lines: string[] = [];
+      const { app, ed } = setup({ logger: createLogger({ format: 'json', write: (l) => lines.push(l) }) });
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const sent = await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'allow-once' });
+      const post = (result: string) => request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${sent.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result });
+      expect((await post('took')).status).toBe(200);
+      expect((await post('took')).status).toBe(200);
+      const events = () => lines.map((l) => JSON.parse(l) as Record<string, unknown>).filter((e) => e.event === 'respond.delivered');
+      expect(events()).toHaveLength(1);
+      expect(events()[0]).toMatchObject({ result: 'took' });
+    });
+
+    it('logs respond.delivered for each different result of one message (#330)', async () => {
+      const lines: string[] = [];
+      const { app, ed } = setup({ logger: createLogger({ format: 'json', write: (l) => lines.push(l) }) });
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const m = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'hello' });
+      for (const result of ['queued', 'queued', 'took']) {
+        expect((await request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${m.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result })).status).toBe(200);
+      }
+      const got = lines.map((l) => JSON.parse(l) as Record<string, unknown>).filter((e) => e.event === 'respond.delivered').map((e) => e.result);
+      expect(got).toEqual(['queued', 'took']);
     });
 
     it('writes no row for a result the server does not hold a delivery for', async () => {

@@ -230,11 +230,13 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
       res.status(400).json({ ok: false, error: `expected result ${DELIVERY_RESULTS.join(', ')}`, path: '$.result' });
       return;
     }
-    if (!withSource(sourceOf(req), () => fleet.respond.result(row.id, req.params.deliveryId!, result as DeliveryResult))) {
+    const got = withSource(sourceOf(req), () => fleet.respond.result(row.id, req.params.deliveryId!, result as DeliveryResult));
+    if (got === 'unknown') {
       res.status(404).json({ ok: false, error: 'unknown delivery' });
       return;
     }
-    logger.info('respond.delivered', `podium: a delivery to session ${row.id} came back ${result}`, { session_id: row.id, result });
+    // A retry of a result the delivery already has is answered 200 but logged once (#330).
+    if (got === 'new') logger.info('respond.delivered', `podium: a delivery to session ${row.id} came back ${result}`, { session_id: row.id, result });
     res.json({ ok: true });
   });
 

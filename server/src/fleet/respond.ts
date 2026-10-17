@@ -481,25 +481,25 @@ export class RespondStore {
       });
   }
 
-  /** The mod says what became of a delivery. Returns false for one the server no longer holds. */
-  result(sessionId: string, deliveryId: string, result: DeliveryResult): boolean {
+  /** The mod says what became of a delivery: 'new' for a result not yet recorded, 'repeat' for one it already has (#330), 'unknown' for a delivery the server no longer holds. */
+  result(sessionId: string, deliveryId: string, result: DeliveryResult): 'new' | 'repeat' | 'unknown' {
     const s = this.sessions.get(sessionId);
-    if (!s) return false;
+    if (!s) return 'unknown';
     const msg = s.messages.find((m) => m.d.id === deliveryId);
     if (msg) {
-      if (msg.result === result) return true; // a retry of what is already recorded (#327)
+      if (msg.result === result) return 'repeat'; // a retry of what is already recorded (#327)
       msg.result = result;
       this.trail({ kind: 'result', sessionId, delivery: msg.d, result });
       if (result === 'refused' || result === 'closed') this.feed?.remove(sessionId, deliveryId);
       else this.feed?.update(sessionId, deliveryId, noteFor(msg.d, null, result));
       // A message with its final result is done; keep only those still waiting for one.
       s.messages = s.messages.filter((m) => m.result === null || m.result === 'queued');
-      return true;
+      return 'new';
     }
     const e = [...s.asks.values()].find((a) => a.delivery?.d.id === deliveryId);
-    if (!e || !e.delivery) return false;
+    if (!e || !e.delivery) return 'unknown';
     const d = e.delivery;
-    if (d.result === result) return true; // a retry of what is already recorded (#327)
+    if (d.result === result) return 'repeat'; // a retry of what is already recorded (#327)
     d.result = result;
     this.trail({ kind: 'result', sessionId, delivery: d.d, result });
     if (result === 'took') {
@@ -514,7 +514,7 @@ export class RespondStore {
       this.feed?.remove(sessionId, deliveryId);
     }
     this.onChange(sessionId);
-    return true;
+    return 'new';
   }
 
   /** "Discard my answer": drops an answer or message the mod has not been handed yet. */
