@@ -26,14 +26,13 @@ export interface PersonRow {
   name: string;
   keyId: string;
   tokenHash: string;
-  last4: string;
   groupId: number | null;
   createdAt: number;
   rotatedAt: number | null;
   revokedAt: number | null;
   lastReportAt: number | null;
 }
-export interface PersonListRow extends Omit<PersonRow, 'tokenHash' | 'keyId' | 'last4'> {
+export interface PersonListRow extends Omit<PersonRow, 'tokenHash' | 'keyId'> {
   /** `pdm_<key id>`, the way Reporters names a token (#218). The key id only finds a person; it is not a secret. */
   credential: string;
   groupName: string | null;
@@ -102,7 +101,6 @@ interface DbPerson {
   name: string;
   key_id: string;
   token_hash: string;
-  token_last4: string;
   group_id: number | null;
   created_at: number;
   rotated_at: number | null;
@@ -114,7 +112,6 @@ const toPerson = (r: DbPerson): PersonRow => ({
   name: r.name,
   keyId: r.key_id,
   tokenHash: r.token_hash,
-  last4: r.token_last4,
   groupId: r.group_id,
   createdAt: r.created_at,
   rotatedAt: r.rotated_at,
@@ -149,9 +146,9 @@ export class PeopleStore {
     }
     const t = newPersonToken();
     const r = this.stmt(
-      `INSERT INTO people (name, name_lower, key_id, token_hash, token_last4, group_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(name, name.toLowerCase(), t.keyId, t.hash, t.last4, groupId, now);
+      `INSERT INTO people (name, name_lower, key_id, token_hash, group_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(name, name.toLowerCase(), t.keyId, t.hash, groupId, now);
     return { person: this.getPerson(Number(r.lastInsertRowid))!, token: t.token };
   }
 
@@ -177,8 +174,8 @@ export class PeopleStore {
     if (!this.getPerson(id)) return null;
     const t = newPersonToken();
     this.stmt(
-      'UPDATE people SET key_id = ?, token_hash = ?, token_last4 = ?, rotated_at = ?, revoked_at = NULL WHERE id = ?',
-    ).run(t.keyId, t.hash, t.last4, now, id);
+      'UPDATE people SET key_id = ?, token_hash = ?, rotated_at = ?, revoked_at = NULL WHERE id = ?',
+    ).run(t.keyId, t.hash, now, id);
     return { person: this.getPerson(id)!, token: t.token };
   }
 
@@ -233,9 +230,8 @@ export class PeopleStore {
       page,
       pageSize,
       rows: rows.map((r) => {
-        const { tokenHash: _h, keyId, last4: _l, ...rest } = toPerson(r);
+        const { tokenHash: _h, keyId, ...rest } = toPerson(r);
         void _h;
-        void _l;
         return { ...rest, credential: `pdm_${keyId}`, groupName: r.group_name, machines: machines.get(r.id) ?? [] };
       }),
     };

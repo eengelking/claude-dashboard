@@ -205,6 +205,12 @@ CREATE INDEX IF NOT EXISTS sessions_cleared_from ON sessions(cleared_from);`,
     // Admin's prices like every other figure. NULL for samples from before it existed and from older reporters.
     sql: 'ALTER TABLE samples ADD COLUMN usage_json TEXT;',
   },
+  {
+    version: 17,
+    // The last four characters of a person's token, stored since #36 and unread since #218 (issue #277). Only the
+    // SHA-256 of a token is kept now. The column is not indexed, so it can be dropped in place.
+    sql: 'ALTER TABLE people DROP COLUMN token_last4;',
+  },
 ];
 
 export interface SessionRow {
