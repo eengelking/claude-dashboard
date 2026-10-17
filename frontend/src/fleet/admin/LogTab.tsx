@@ -5,12 +5,11 @@ import { Panel, Section } from "./Page";
 import { when } from "./PeopleTab";
 import { useList } from "./useList";
 
-/** "90 days", "1 day", or hours when the period is under a day (#303). */
+/** The period as the setting gave it: whole days, else whole hours, else minutes (#303). */
 function kept(ms: number): string {
-  const days = Math.round(ms / 86_400_000);
-  if (days >= 1) return `${days} ${days === 1 ? "day" : "days"}`;
-  const hours = Math.max(1, Math.round(ms / 3_600_000));
-  return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  const unit = ms % 86_400_000 === 0 ? ["day", 86_400_000] : ms % 3_600_000 === 0 ? ["hour", 3_600_000] : ["minute", 60_000];
+  const n = Math.round(ms / (unit[1] as number));
+  return `${n} ${unit[0]}${n === 1 ? "" : "s"}`;
 }
 
 export function LogTab(props: {

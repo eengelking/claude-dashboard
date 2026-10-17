@@ -280,7 +280,7 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 16. **A repeated final report.** A `done` report for a session that already ended and left the live set
     is stored but does not bring the session back for another linger.
 17. **Retention env names.** 7.2 says the three thresholds are env-configurable but names none:
-    `RETAIN_SAMPLES_MS`, `RETAIN_EVENTS_MS`, `RETAIN_SESSIONS_MS`.
+    `RETAIN_SAMPLES_MS`, `RETAIN_EVENTS_MS`, `RETAIN_SESSIONS_MS`. `RETAIN_ADMIN_LOG_MS` joined them in #303.
 18. **`GET /history`** is listed under Phase 4 in 7.1 but has no Phase 4 task. It was cheap, so it exists
     from T1.5: summary rows for sessions that ended or were dropped on a local day.
 19. **Simulator haiku window.** The simulator runs its haiku agents as `claude-haiku-4-5` (200K window)
