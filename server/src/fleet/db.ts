@@ -341,7 +341,12 @@ export interface RetentionPolicy {
   samplesMs: number;
   eventsMs: number;
   sessionsMs: number;
+  /** Admin log rows older than this go, except the newest `ADMIN_LOG_KEEP` (#303). */
+  adminLogMs: number;
 }
+
+/** The admin log always keeps this many of its newest rows, however old, so a quiet server keeps some history. */
+export const ADMIN_LOG_KEEP = 100;
 
 /** Opens (and migrates) a database. `:memory:` for tests; a file path gets WAL and its folder made. */
 export function openDb(file: string): DatabaseSync {
@@ -749,8 +754,8 @@ export class FleetDb {
 
   // ---- retention ------------------------------------------------------------------------------
 
-  /** Deletes old samples, events and ended sessions (with their rows). Returns what was deleted. */
-  retain(now: number, p: RetentionPolicy): { samples: number; events: number; sessions: number } {
+  /** Deletes old samples, events, ended sessions (with their rows) and admin log rows. Returns what was deleted. */
+  retain(now: number, p: RetentionPolicy): { samples: number; events: number; sessions: number; adminLog: number } {
     return this.tx(() => {
       const samples = Number(this.stmt('DELETE FROM samples WHERE t < ?').run(Math.floor((now - p.samplesMs) / 1000)).changes);
       const events = Number(this.stmt('DELETE FROM events WHERE t < ?').run(now - p.eventsMs).changes);
@@ -766,7 +771,10 @@ export class FleetDb {
         this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM sessions WHERE id = ?').run(id);
       }
-      return { samples, events, sessions: old.length };
+      const adminLog = Number(
+        this.stmt('DELETE FROM admin_log WHERE t < ? AND id NOT IN (SELECT id FROM admin_log ORDER BY id DESC LIMIT ?)').run(now - p.adminLogMs, ADMIN_LOG_KEEP).changes,
+      );
+      return { samples, events, sessions: old.length, adminLog };
     });
   }
 }

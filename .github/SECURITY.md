@@ -61,7 +61,7 @@ by sending more than the session's level allows, is in scope.
 |---|---|
 | **The admin secret is a shared credential.** Anything done with it is attributed to "Admin secret", not to a person. | Give each person a token, and turn off reporting with the admin secret in Admin when you no longer need it. |
 | **The token and the session cookie travel over plain HTTP.** | On any network but your own machine, put a TLS proxy in front. |
-| **The admin log has no retention policy and no export.** It keeps every entry. | Ship the server log to VictoriaLogs if you need a copy or a retention rule. |
+| **The admin log has no export.** It keeps entries for 90 days (`RETAIN_ADMIN_LOG_MS`) and the newest 100 whatever their age. | Ship the server log to VictoriaLogs if you need a copy or a longer record. |
 
 If you think you have found something like this, please report it rather than opening a public issue.
 

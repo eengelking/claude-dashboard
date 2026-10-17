@@ -38,6 +38,8 @@ export interface AdminRouterOptions {
   lockout?: Lockout;
   /** Lets a browser already signed in to respond as an Administrator open Admin without signing in again (#215). */
   respondBridge?: RespondBridge;
+  /** How long the admin log is kept (#303); `GET /log` reports it so the Admin page can say so. */
+  logRetainMs?: number;
   /** The server's logger (#140): each Admin change is an `admin.<action>` event with the source address. */
   logger?: Logger;
   /** A plain line sink, kept for callers from before the logger. */
@@ -510,7 +512,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   });
 
   router.get('/log', (req, res) => {
-    res.json(people.listLog(paging(req)));
+    res.json({ ...people.listLog(paging(req)), ...(opts.logRetainMs === undefined ? {} : { retainMs: opts.logRetainMs }) });
   });
 
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

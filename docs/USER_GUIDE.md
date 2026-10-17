@@ -454,7 +454,8 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
 - **Spend.** What each person, or each group, has spent since midnight today on the server, live or ended sessions, as bars or as a table. Choose **People** or **Groups** and **Chart** or **Table**; the total spent and the number of live sessions are at the top right, and the list is largest first, 25 rows at a time. The total and the table's Total row always count everyone, not just the page you are on, and the total equals the "Est. cost today" tile. These are estimates from tokens, not a bill. Someone whose sessions have all ended still has a row, but no band on the wall.
 - **Admin log.** Who made each change (a person, or the admin secret), unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
-  address each came from. It never holds a token or the secret.
+  address each came from. It never holds a token or the secret. Entries are kept for 90 days (set `RETAIN_ADMIN_LOG_MS` to
+  change that), and the newest 100 are kept however old they are. The page says how long entries are kept.
 
 A report is accepted when its token belongs to the person whose name it also sends. The server decides who a
 report is from by the token, so a valid token with someone else's name is refused. A person cannot see or

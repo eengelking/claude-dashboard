@@ -40,7 +40,7 @@ export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   dropAfterMs: 60_000,
   lingerMs: 8_000,
   detachedHideAfterMs: 60_000,
-  retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
+  retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000, adminLogMs: 90 * 24 * 3600_000 },
   throttleMs: 500,
 };
 
@@ -70,6 +70,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
       samplesMs: envMs(env, 'RETAIN_SAMPLES_MS', d.retention.samplesMs),
       eventsMs: envMs(env, 'RETAIN_EVENTS_MS', d.retention.eventsMs),
       sessionsMs: envMs(env, 'RETAIN_SESSIONS_MS', d.retention.sessionsMs),
+      adminLogMs: envMs(env, 'RETAIN_ADMIN_LOG_MS', d.retention.adminLogMs),
     },
   };
 }
@@ -561,7 +562,7 @@ export class Fleet {
   }
 
   /** Hourly: retention. */
-  retain(): { samples: number; events: number; sessions: number } {
+  retain(): { samples: number; events: number; sessions: number; adminLog: number } {
     return this.db.retain(this.now(), this.cfg.retention);
   }
 

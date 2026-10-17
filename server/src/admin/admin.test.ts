@@ -12,7 +12,7 @@ import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
 
-function setup(over: { secret?: string | null; idleMs?: number } = {}) {
+function setup(over: { secret?: string | null; idleMs?: number; logRetainMs?: number } = {}) {
   const db = openDb(':memory:');
   const people = new PeopleStore(db);
   const wall = new WallSettings(db);
@@ -33,6 +33,7 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
       reporters,
       now: () => clock.t,
       idleMs: over.idleMs,
+      logRetainMs: over.logRetainMs,
       log: (l) => lines.push(l),
     }),
   );
@@ -359,6 +360,18 @@ describe('groups and settings', () => {
     expect(res.body.total).toBeGreaterThanOrEqual(60);
     expect(res.body.rows).toHaveLength(50);
     expect(res.body.rows[0].detail).toBe('n59');
+  });
+});
+
+describe('admin log retention (#303)', () => {
+  it('tells the Admin how long the log is kept', async () => {
+    const { agent } = await unlocked({ logRetainMs: 30 * 24 * 3600_000 });
+    expect((await agent.get('/api/admin/log').set(H)).body.retainMs).toBe(30 * 24 * 3600_000);
+  });
+
+  it('leaves the period out when the router was not told one', async () => {
+    const { agent } = await unlocked();
+    expect((await agent.get('/api/admin/log').set(H)).body.retainMs).toBeUndefined();
   });
 });
 

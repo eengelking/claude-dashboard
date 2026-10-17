@@ -69,7 +69,7 @@ const lockout = new Lockout();
 // Admin opens without a second sign-in for a browser already signed in to respond as an Administrator (#215).
 const respondBridge = createRespondBridge();
 app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger, lockout, respondBridge }));
-app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge }));
+app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, logRetainMs: fleetConfig.retention.adminLogMs, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge }));
 app.use(createRouter());
 
 app.use(express.static(frontendDist));
@@ -101,6 +101,7 @@ const server = app.listen(PORT, HOST, () => {
     retain_samples_ms: fleetConfig.retention.samplesMs,
     retain_events_ms: fleetConfig.retention.eventsMs,
     retain_sessions_ms: fleetConfig.retention.sessionsMs,
+    retain_admin_log_ms: fleetConfig.retention.adminLogMs,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
   logger.info("server.console", `Podium fleet console: http://${HOST}:${PORT}/#/  (database ${DB_PATH})`, { url: `http://${HOST}:${PORT}/#/` });

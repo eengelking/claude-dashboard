@@ -145,7 +145,7 @@ function fakeServer(opts: { people?: number; enabled?: boolean; unlocked?: boole
       return json(200, { ...r, kind: "mod", machineId: key.includes(":") ? null : key, source: "192.168.1.24", credential: "pdm_3f9a1c07b2e4", engineVersion: "2.1.299", recent: recentPage(r.sessions, url), recentTotal: r.sessions, recentPage: Number(url.searchParams.get("page") ?? 1), recentPageSize: Number(url.searchParams.get("pageSize") ?? 50), rejected: [{ t: 50_000, reason: "wrong token" }], serverTime: 100_000, serverStartedAt: 50_000 });
     }
     if (path === "/groups") return json(200, { total: 0, page: 1, pageSize: 50, rows: [] });
-    if (path === "/log") return json(200, { total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
+    if (path === "/log") return json(200, { retainMs: 90 * 86_400_000, total: 1, page: 1, pageSize: 50, rows: [{ id: 1, t: 1, kind: "unlock_failed", detail: "Wrong secret (1)", source: "10.0.0.1" }] });
     if (path === "/settings" && method === "PUT") {
       const b = JSON.parse(String(init?.body));
       state.bodies.push(b);
@@ -265,6 +265,16 @@ describe("Admin lock screen", () => {
     render(<AdminView />);
     expect(await screen.findByText("Admin is off")).toBeInTheDocument();
     expect(screen.queryByLabelText("Token")).toBeNull();
+  });
+});
+
+describe("admin log retention (#303)", () => {
+  it("says how long the log is kept", async () => {
+    fakeServer();
+    render(<AdminView />);
+    await unlock();
+    fireEvent.click(await screen.findByRole("button", { name: /Admin log/ }));
+    expect(await screen.findByText("Entries are kept for 90 days.")).toBeInTheDocument();
   });
 });
 

@@ -246,3 +246,33 @@ describe('openDb', () => {
     f.close();
   });
 });
+
+describe('admin log retention (#303)', () => {
+  const DAY = 24 * 3600_000;
+  const policy = { samplesMs: DAY, eventsMs: 30 * DAY, sessionsMs: 30 * DAY, adminLogMs: 90 * DAY };
+  const NOW = 1_000 * DAY;
+
+  it('removes rows older than the period and keeps newer ones', () => {
+    const f = new FleetDb(openDb(':memory:'));
+    const people = new PeopleStore(f.db);
+    for (let i = 0; i < 30; i++) people.log('old', `old${i}`, '1.2.3.4', NOW - 91 * DAY - i);
+    people.log('new', 'edge', '1.2.3.4', NOW - 89 * DAY);
+    for (let i = 0; i < 110; i++) people.log('new', `new${i}`, '1.2.3.4', NOW - i);
+    expect(f.retain(NOW, policy).adminLog).toBe(30);
+    expect(people.listLog({ page: 1, pageSize: 10 }).total).toBe(111);
+    expect(f.db.prepare(`SELECT COUNT(*) AS n FROM admin_log WHERE kind = 'old'`).get()).toEqual({ n: 0 });
+    expect(f.db.prepare(`SELECT COUNT(*) AS n FROM admin_log WHERE detail = 'edge'`).get()).toEqual({ n: 1 });
+    f.close();
+  });
+
+  it('always keeps the newest 100 rows, however old, so a quiet server keeps some history', () => {
+    const f = new FleetDb(openDb(':memory:'));
+    const people = new PeopleStore(f.db);
+    for (let i = 0; i < 120; i++) people.log('old', `n${i}`, '1.2.3.4', NOW - 365 * DAY + i);
+    expect(f.retain(NOW, policy).adminLog).toBe(20);
+    expect(people.listLog({ page: 1, pageSize: 10 }).total).toBe(100);
+    expect(people.listLog({ page: 1, pageSize: 10 }).rows[0]!.detail).toBe('n119');
+    expect(f.db.prepare(`SELECT MIN(id) AS m FROM admin_log`).get()).toEqual({ m: 21 });
+    f.close();
+  });
+});

@@ -140,7 +140,7 @@ describe('reporters', () => {
     store.record(seen(), START + MIN);
     db.prepare(`INSERT INTO sessions (id, name, status, started_at, last_seen_at, ended_at, cwd) VALUES ('s1', 'x', 'done', ?, ?, ?, '/x')`).run(START, START, START);
     const YEAR = 365 * 24 * 60 * MIN;
-    expect(new FleetDb(db).retain(START + YEAR, { samplesMs: 1, eventsMs: 1, sessionsMs: 30 * 24 * 60 * MIN }).sessions).toBe(1);
+    expect(new FleetDb(db).retain(START + YEAR, { samplesMs: 1, eventsMs: 1, sessionsMs: 30 * 24 * 60 * MIN, adminLogMs: 1 }).sessions).toBe(1);
     expect(store.list({}, START + 2 * MIN).total).toBe(1);
   });
 
