@@ -2,7 +2,7 @@
 // Opened with a name and a token: an Administrator's own, or the name Admin with the admin secret (#215). A browser already
 // signed in to respond as an Administrator opens without typing them. The token is typed into a password field, sent once,
 // and dropped; the session is an HttpOnly cookie this page cannot read. A newly made token is held in state only until the owner says it is saved.
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import "../fleet.css";
 import "./admin.css";
 import { BrandLink } from "../components/BrandLink";
@@ -38,11 +38,31 @@ const PAGES: Record<TabId, { name: string; lead: string }> = {
   log: { name: "Admin log", lead: "What happened in Admin, newest first." },
 };
 /** The side menu: pages in groups, in the order they are listed. */
-const NAV: { name: string; ids: TabId[] }[] = [
-  { name: "People and access", ids: ["people", "groups", "reporters"] },
-  { name: "Server", ids: ["settings", "prices", "reporting"] },
-  { name: "Activity", ids: ["spend", "log"] },
+const NAV: { name: string; icon: GroupIconName; ids: TabId[] }[] = [
+  { name: "People and access", icon: "access", ids: ["people", "groups", "reporters"] },
+  { name: "Server", icon: "server", ids: ["settings", "prices", "reporting"] },
+  { name: "Activity", icon: "activity", ids: ["spend", "log"] },
 ];
+
+type GroupIconName = "access" | "server" | "activity";
+/** Outline glyphs that lead a menu group's heading; on the narrow strip they stand in for the heading. */
+const GROUP_ICON: Record<GroupIconName, ReactNode> = {
+  access: (
+    <>
+      <circle cx="6" cy="5.5" r="2.5" />
+      <path d="M1.5 13.5c.4-2.4 2.2-3.8 4.5-3.8s4.1 1.4 4.5 3.8" />
+      <path d="M11 3.4a2.4 2.4 0 0 1 0 4.4M12.6 10c1.2.5 1.9 1.6 2.1 3.2" />
+    </>
+  ),
+  server: (
+    <>
+      <rect x="2" y="2.5" width="12" height="4.5" rx="1" />
+      <rect x="2" y="9" width="12" height="4.5" rx="1" />
+      <path d="M4.5 4.75h.01M4.5 11.25h.01" />
+    </>
+  ),
+  activity: <path d="M1.5 8h3l2-5 3 10 2-5h3" />,
+};
 
 /** Owns the fleet stream so its 2 s ticks re-render only this pill, not the whole Admin view. */
 function FleetPill({ options }: { options?: UseFleetOptions }) {
@@ -187,7 +207,10 @@ export function AdminView({ base = "/api/admin", fleetOptions }: { base?: string
                   {NAV.map((g) => (
                     <div key={g.name} className="ngroup" role="group" aria-label={g.name}>
                       <span className="gh" aria-hidden="true">
-                        {g.name}
+                        <svg className="gi" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                          {GROUP_ICON[g.icon]}
+                        </svg>
+                        <span className="gt">{g.name}</span>
                       </span>
                       {g.ids.map((id) => (
                         <button key={id} type="button" className="navbtn" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
@@ -260,7 +283,7 @@ function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>
     <form className="lock" onSubmit={submit} autoComplete="off">
       <div>
         <h1>Admin</h1>
-        <p className="lead">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are already signed in as an Administrator, Admin opens without this.</p>
+        <p className="lead">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are signed in to respond as an Administrator, Admin opens without this, unless you locked it with Lock Admin.</p>
       </div>
       {notice && (
         <div className="hint ink2" role="status">

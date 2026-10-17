@@ -1,0 +1,28 @@
+name: PR target check
+
+# A PR into main must be a release (head is development) or a hotfix (head is hotfix/*) opened from this repo.
+# Everything else goes to development. See CONTRIBUTING.md, "Branching, PRs and merging".
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check-target:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a release or hotfix head
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" = "$BASE_REPO" ] && { [ "$HEAD_REF" = "development" ] || [[ "$HEAD_REF" == hotfix/* ]]; }; then
+            echo "OK: $HEAD_REF into main is a release or a hotfix."
+            exit 0
+          fi
+          echo "::error::This PR targets main from '$HEAD_REF'. Only a release (from development) or a hotfix (from hotfix/*) goes to main. Change the base to development (Edit button next to the PR title). See CONTRIBUTING.md."
+          exit 1

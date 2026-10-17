@@ -51,11 +51,12 @@ person_machines, admin_log, settings) and every paged query. The Admin API is a 
 header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`) holds a new token in component
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them. A browser already signed in to respond as an Administrator opens Admin with no second sign-in (#215): the respond routes
-widen their cookie to `Path=/api` and fill in a `RespondBridge` (`fleet/respondBridge.ts`) that the Admin router asks on `POST unlock/from-respond`.
+widen their cookie to `Path=/api` and fill in a `RespondBridge` (`fleet/respondBridge.ts`) that the Admin router asks on `POST unlock/from-respond`. `POST lock` calls the bridge's `hold` to mark that sign-in so `administratorOf` answers
+null until `POST unlock` calls `release` for that same person or the person signs in to respond again (#272).
 The top bar's Admin button reads `me.admin` from `useRespond`; the server, not the button, is the check.
 
 **Admin page patterns** (`frontend/src/fleet/admin/Page.tsx`, `admin.css`, issue #143, mockup `mockup/podium-admin.html`). `AdminView`
-holds a side menu (`NAV` groups the pages, `PAGES` names each and gives its one-line lead) and renders one page component at a time;
+holds a side menu (`NAV` groups the pages and gives each group an outline icon from `GROUP_ICON`, `PAGES` names each page and gives its one-line lead; issue #244, mockup `mockup/podium-admin-menu.html`) and renders one page component at a time;
 the menu and the page scroll on their own inside `.adminv`, so the menu always runs the full height with Lock Admin and the footer at
 the bottom. A page component returns sections only: `AdminView` draws the header (`PageHeader`), and each section is `Section`
 (an H2 with an optional help line) around a `Panel`. A list is a panel holding an optional toolbar (`.tool`), the table (`.ptab`) and
@@ -63,6 +64,8 @@ the bottom. A page component returns sections only: `AdminView` draws the header
 copies the pattern instead of inventing one. Spacing steps are 4, 8, 12, 16, 24 and 32 px; buttons are 30 px, or 26 px (`.sm`) in a
 table row. Admin's CSS is scoped under `.adminv` and its layout classes are prefixed (`asec`, `apage`) because `fleet.css` already
 uses `.sec`, `.main`, `.code` and `.back` under `.podium`, with higher specificity.
+
+**Tooltips** (`frontend/src/fleet/components/Tip.tsx`, issue #275). A note on a word or badge is a `Tip`: a focusable `span.tip` holding a `role="tooltip"` child, which the trigger names with `aria-describedby`, so a screen reader reads the text whether or not the box is open. React un-hides the box on mouse enter and on focus and hides it on mouse leave (while the trigger is not focused), blur and Escape, so a test can drive it with `fireEvent`; a native `title` is not shown on keyboard focus, which is why `title` plus `tabIndex` is not used for these. The box is `position: fixed`, placed from the trigger's rectangle and kept inside the viewport, so the Reporters table's scroll container cannot clip it; it wraps and is at most 20 rem wide. Admin > Reporters (state, admin secret, "no name set") and the Kind row use it.
 
 **Fleet card** (`frontend/src/fleet/components/SessionCard.tsx`, issue #144, mockup `mockup/podium-card.html`). The card is one `button.card.sc` holding four children in a fixed order: `.z1` (who and where, plus the tags in `.notes`), `.z2` (plan and the agent strip with its sparkline), `.z3` (four readouts) and `.band`. `.z2` has `margin-top: auto`, so when a row makes a card taller than its content the spare height opens between `.z1` and `.z2`, and `.z2`, `.z3` and the band stay together on the card's bottom edge, so they line up across the row; the card is `overflow: hidden` so it can run edge to edge inside the rounded corners. `cardKind` in `Chips.tsx` maps a session to one of five kinds (running, waiting, bg, stale, done; background work wins over waiting, as in `idleOnBackground`), and `StateIcon` draws that kind's shape, so the name marker and the band use one source and state is never color alone. The kind class on the band (`.band.waiting`, `.band.bg`...) sets `--c` and `--c-text`; `.hot` is the heavier tint for waiting and stale; every kind has the same thin top line. Remove cannot sit inside the card's button, so on a heartbeat-lost card it is a sibling in `.card-slot`, laid over the right end of the band (`.remove-bar`, absolutely positioned from the bottom edge, which works because the band has a fixed `min-height`). The layout rules hang on `.card.sc`.
 
@@ -159,7 +162,7 @@ fields. Every record has `timestamp` (RFC 3339, UTC), `level`, `message`, `event
 (`os.hostname()`, the container id under Podman) and `version`. `PODIUM_LOG_FORMAT=text`, the default, prints the
 message alone, which is what the server always printed, and prints the events added in #140 (`quietInText`:
 `session.*`, `reporter.*`, `admin.*`, `sweep.removed`, `auth.failed`, `report.conflict`, `report.accepted`,
-`http.request`) only at debug, so the default text output is unchanged; `json` prints the whole record as one line,
+`http.request`, `http.aborted`) only at debug, so the default text output is unchanged; `json` prints the whole record as one line,
 every event at its own level, and the shipper always gets that JSON record. Debug and info
 go to stdout, warn and error to stderr. `PODIUM_LOG_LEVEL` (default `info`) filters both what is printed and what
 is shipped. `redact.ts` is the backstop for what a record may hold: callers pass named fields and never a body, a
@@ -187,7 +190,7 @@ describe.
 Request paths never await it. `setup.ts` reads the settings and turns a bad value into its default plus one
 `log.config_invalid` warning. Who emits what: `index.ts` (`server.start` with the settings, never the token;
 `server.stop`, then up to 1 s to send what is left), `requestLog.ts` (`http.request` at debug: method, path without
-query, route pattern, status, duration, source), `fleet/routes.ts` (`auth.failed`, `report.rejected`,
+query, route pattern, status, duration, source; `http.aborted` the same for a request the client dropped first), `fleet/routes.ts` (`auth.failed`, `report.rejected`,
 `report.accepted` at debug, `report.conflict`, `hook.rejected`, `ingest.failed`, `request.failed`),
 `admin/adminRouter.ts` (`admin.<kind>` for each Admin Log entry, with the action, source address and ids, never
 the entry's text), `fleet/fleet.ts` (`session.started`, `session.ended`, `session.deleted`, `reporter.connected`
@@ -279,7 +282,7 @@ Places where the spec was silent, ambiguous or wrong, the reading chosen, and wh
 16. **A repeated final report.** A `done` report for a session that already ended and left the live set
     is stored but does not bring the session back for another linger.
 17. **Retention env names.** 7.2 says the three thresholds are env-configurable but names none:
-    `RETAIN_SAMPLES_MS`, `RETAIN_EVENTS_MS`, `RETAIN_SESSIONS_MS`.
+    `RETAIN_SAMPLES_MS`, `RETAIN_EVENTS_MS`, `RETAIN_SESSIONS_MS`. `RETAIN_ADMIN_LOG_MS` joined them in #303.
 18. **`GET /history`** is listed under Phase 4 in 7.1 but has no Phase 4 task. It was cheap, so it exists
     from T1.5: summary rows for sessions that ended or were dropped on a local day.
 19. **Simulator haiku window.** The simulator runs its haiku agents as `claude-haiku-4-5` (200K window)
@@ -711,9 +714,10 @@ Done after Phases 0 to 4 passed.
   checked in Chrome by DOM (86 sessions listed for the day, one opened, no horizontal overflow); the
   window was hidden by then, so no screenshot.
 - **History paging (#195).** The server pages: `GET /history` takes `page` and `pageSize` (25, 50 or 100, default 50)
-  and answers `{ day, sessions, total, page, pageSize }`, so a busy day is not sent whole. It sorts newest first
-  with the session id breaking ties, so a row does not move between pages, and clamps a page past the end to
-  the last one. The page reuses Admin's `Pager`. Day, page, size and the opened session live in the hash
+  and answers `{ day, sessions, total, page, pageSize }`, so a busy day is not sent whole. `Fleet.historyPage`
+  filters out unused sessions and sorts the stored rows newest first (the session id breaks ties, so a row does
+  not move between pages), clamps a page past the end to the last one, and only then builds the rows of that
+  page, so the agents query and the repricing run once per row shown, not once per session of the day (#273). The page reuses Admin's `Pager`. Day, page, size and the opened session live in the hash
   (`#/history?day=&page=&size=&open=`); `HistoryView` writes it with `pushState` when a session opens and
   `replaceState` for every other change, and re-reads it on `popstate`, so the browser's Back button returns to the
   same page. `main.tsx` listens only to `hashchange`, which neither call fires, so the view is not remounted.

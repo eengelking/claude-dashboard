@@ -5,6 +5,13 @@ import { Panel, Section } from "./Page";
 import { when } from "./PeopleTab";
 import { useList } from "./useList";
 
+/** The period as the setting gave it: whole days, else whole hours, else minutes (#303). */
+function kept(ms: number): string {
+  const unit = ms % 86_400_000 === 0 ? ["day", 86_400_000] : ms % 3_600_000 === 0 ? ["hour", 3_600_000] : ["minute", 60_000];
+  const n = Math.round(ms / (unit[1] as number));
+  return `${n} ${unit[0]}${n === 1 ? "" : "s"}`;
+}
+
 export function LogTab(props: {
   api: AdminApi;
   page: number;
@@ -14,14 +21,14 @@ export function LogTab(props: {
   onLocked: () => void;
 }) {
   const { api, page, pageSize, onCount } = props;
-  const list = useList<Paged<LogRow>>(api, `/log${query({ page, pageSize })}`, props.onLocked);
+  const list = useList<Paged<LogRow> & { retainMs?: number }>(api, `/log${query({ page, pageSize })}`, props.onLocked);
   const total = list.data?.total;
   useEffect(() => {
     if (total !== undefined) onCount(total);
   }, [total, onCount]);
   const rows = list.data?.rows ?? [];
   return (
-    <Section id="admin-log-h" title="Recent activity">
+    <Section id="admin-log-h" title="Recent activity" help={list.data?.retainMs === undefined ? undefined : `Entries are kept for ${kept(list.data.retainMs)}.`}>
       <Panel>
         {list.error && (
           <div className="err" role="alert">

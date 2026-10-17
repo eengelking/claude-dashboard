@@ -22,9 +22,16 @@
 /* shell: a side menu that runs the full height, and a page that scrolls on its own */
 .adminv .shell { display: grid; grid-template-columns: var(--rail-base) minmax(0, 1fr); height: 100%; min-height: 0; }
 .adminv .nav { border-right: 1px solid var(--border); background: var(--surface); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-.adminv .navin { flex: 1; display: flex; flex-direction: column; gap: 16px; padding: 16px 12px; }
+.adminv .navin { flex: 1; display: flex; flex-direction: column; gap: 24px; padding: 16px 12px; }
 .adminv .ngroup { display: grid; gap: 2px; }
-.adminv .ngroup .gh { padding: 0 8px 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+/* a group's heading: an outline icon, the name in primary ink, and a rule under it; color stays out, it means model and status */
+.adminv .ngroup .gh { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); font-size: 18px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; color: var(--ink); }
+.adminv .ngroup .gi { width: 19px; height: 19px; flex: none; color: var(--ink2); }
+/* the rail is 224 px wide up to 1280 px of viewport (fleet.css), where 18 px would wrap "People and access" */
+@media (min-width: 761px) and (max-width: 1280px) {
+  .adminv .ngroup .gh { font-size: 16px; gap: 6px; padding-right: 0; }
+  .adminv .ngroup .gi { width: 17px; height: 17px; }
+}
 .adminv .navbtn { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border-left: 2px solid transparent; border-radius: 6px; color: var(--ink2); font-size: 13px; }
 .adminv .navbtn:hover { background: var(--hover); color: var(--ink); }
 .adminv .navbtn[aria-current="page"] { background: var(--sel); color: var(--ink); font-weight: 600; border-left-color: var(--ink); border-radius: 0 6px 6px 0; }
@@ -43,8 +50,13 @@
   .adminv .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .adminv .nav { border-right: 0; border-bottom: 1px solid var(--border); flex-direction: row; overflow-x: auto; overflow-y: hidden; }
   .adminv .navin { flex-direction: row; gap: 8px; padding: 8px 12px; }
-  .adminv .ngroup { display: flex; gap: 2px; }
-  .adminv .ngroup .gh, .adminv .navfoot .hint, .adminv .nav > .rail-foot { display: none; }
+  .adminv .ngroup { display: flex; align-items: center; gap: 2px; }
+  /* the strip drops the heading text; the icon stays as the leading glyph, and a hairline breaks the groups apart */
+  .adminv .ngroup .gh { padding: 0 4px 0 6px; margin: 0; border-bottom: 0; }
+  .adminv .ngroup .gt { display: none; }
+  .adminv .ngroup .gi { width: 16px; height: 16px; color: var(--muted); }
+  .adminv .ngroup + .ngroup { padding-left: 8px; border-left: 1px solid var(--border); }
+  .adminv .navfoot .hint, .adminv .nav > .rail-foot { display: none; }
   .adminv .navbtn { width: auto; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; }
   .adminv .navbtn[aria-current="page"] { border-left-color: transparent; border-bottom-color: var(--ink); border-radius: 6px 6px 0 0; }
   .adminv .navfoot { margin-top: 0; display: flex; margin-left: auto; }

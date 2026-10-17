@@ -12,6 +12,11 @@ Podium is a single pane of glass for Claude Code. Whether it's just you or your 
 shows up in one browser tab, so you can see what all of them are doing at a glance. Each session appears
 within about two seconds of its first prompt and leaves when it ends, with no refresh.
 
+**There are other tools like this.** Podium started as something I built for myself, because I run several
+Claude Code sessions at once and was tired of clicking through terminals to find the one that needed me. It
+turned out to be useful enough to share. I haven't compared it with every similar tool, so if another one fits
+how you work better, use that one. If you try Podium and something is missing, I'd like to hear about it.
+
 ![Podium showing nine simulated Claude Code sessions: running, stale and failing orchestrators, context blowouts, and the activity feed](docs/images/podium-chaos.png)
 
 For every session you see:
@@ -158,8 +163,8 @@ somewhere other than `~/.podium`. `podiumctl --help` lists everything.
 
 Start on boot: in container mode the boot service runs `podiumctl start`, which also starts the Podman
 machine on macOS; in standalone mode it runs the server in the foreground and restarts it if it crashes.
-On Linux, `loginctl enable-linger $USER` makes the user unit start before you log in. (The Linux unit is
-generated and unit-tested but has not been run on a Linux host.)
+On Linux, `loginctl enable-linger $USER` makes the user unit start before you log in. (The Linux unit has run on
+Bazzite, but not yet through a reboot.)
 
 ## Report a real session
 
@@ -246,8 +251,8 @@ Only to the server URL above, and only this:
   `/clear`, the new session also names the one it continues, so History can link them;
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
-  and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two
-  machines with the same host name stay apart. The id is random, not read from the hardware, and the
+  and keeps in one file (`~/.claude/podium-machine-id`, or under `CLAUDE_CONFIG_DIR` when that is set), so two
+  machines with the same host name stay apart and every copy of the mod on a machine reports the same id. The id is random, not read from the hardware, and the
   operating system user name and `git config` are never read.
 
 Before anything is sent, text is cut to those limits and anything that looks like a secret is replaced
@@ -306,6 +311,7 @@ and it chooses `PORT`, `HOST` and `PODIUM_DB` itself.
 | `RETAIN_SAMPLES_MS` | 24 hours | Per-second chart samples kept |
 | `RETAIN_EVENTS_MS` | 30 days | Activity events kept |
 | `RETAIN_SESSIONS_MS` | 30 days | Ended sessions kept |
+| `RETAIN_ADMIN_LOG_MS` | 90 days | Admin log entries kept; the newest 100 are always kept |
 | `PODIUM_LOG_LEVEL` | `info` | Lowest log level printed and shipped: `debug`, `info`, `warn` or `error`. `debug` adds one line per HTTP request, and in the text format the session, reporter, sweep and Admin lines |
 | `PODIUM_LOG_FORMAT` | `text` | `text` prints each line's message, as before; `json` prints one JSON object per line |
 | `PODIUM_LOG_SHIP_URL` | empty | Also push every log line to this endpoint, such as a VictoriaLogs server (`http://HOST:9428`; `/insert/jsonline` is added). Empty means nothing leaves the machine |
@@ -341,7 +347,7 @@ scripts/agent-tokens-sample.sh --help  # log a running agent's Tokens over time
 | [`docs/DEMO.md`](docs/DEMO.md) | A script and a paste-in prompt for showing Podium to other people |
 | [`docs/THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md) | Credits and licenses for the color theme palettes |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose and land a change |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to propose and land a change (PRs go to `development`, not `main`) |
 | [`.github/SECURITY.md`](.github/SECURITY.md) | How to report a vulnerability (privately) |
 | [`.github/CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md) | Community expectations |
 

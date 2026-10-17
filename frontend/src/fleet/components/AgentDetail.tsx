@@ -8,6 +8,7 @@ import { FailureBox } from "./FailureBox";
 import { IconBack, IconFork, IconSub } from "./Icons";
 import { ReportDocs } from "./ReportDocs";
 import { ActivityFeed } from "./ActivityFeed";
+import { Tip } from "./Tip";
 
 const TOOL_CHIPS_SHOWN = 5;
 
@@ -112,13 +113,10 @@ export function AgentDetail(props: { s: SessionView; a: AgentView; now: number; 
           </dd>
           <dt>Kind</dt>
           <dd>
-            <span className="kind" style={cssVar(FAMILY_COLOR[a.modelFamily])} tabIndex={0} data-tip={kindNote} aria-describedby={`kind-${a.id}`}>
+            <Tip className="kind" style={cssVar(FAMILY_COLOR[a.modelFamily])} text={kindNote}>
               {fork ? <IconFork /> : <IconSub />}
               {kindWord}
-            </span>
-            <span id={`kind-${a.id}`} hidden>
-              {kindNote}
-            </span>
+            </Tip>
           </dd>
           <dt>Type</dt>
           <dd className="mono">{a.type}</dd>

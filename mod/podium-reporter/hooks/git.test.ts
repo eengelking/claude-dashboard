@@ -66,7 +66,7 @@ const top = {
   [`-C /repo diff --name-status -z -M ${BASE}`]: { stdout: `M${Z}src/a.ts${Z}A${Z}src/new.ts${Z}D${Z}old.md${Z}R100${Z}x/was.ts${Z}x/now.ts${Z}` },
   [`-C /repo diff --numstat -z -M ${BASE}`]: { stdout: `12\t3\tsrc/a.ts${Z}40\t0\tsrc/new.ts${Z}0\t9\told.md${Z}2\t1\t${Z}x/was.ts${Z}x/now.ts${Z}` },
   '-C /repo ls-files -z --others --exclude-standard --full-name': { stdout: `notes.txt${Z}logo.png${Z}` },
-  '-C /repo diff --no-index --numstat -z -- /dev/null notes.txt': { exitCode: 1, stdout: `7\t0\t${Z}/dev/null${Z}notes.txt${Z}` },
+  '-C /repo --literal-pathspecs grep --no-index -I -c -z  -- logo.png notes.txt': { stdout: `notes.txt${Z}7\n` },
   '-C /repo diff --no-index --numstat -z -- /dev/null logo.png': { exitCode: 1, stdout: `-\t-\t${Z}/dev/null${Z}logo.png${Z}` },
 }
 
@@ -157,6 +157,58 @@ describe('changed files', () => {
     const r = await readChanges(runner(m), '/repo', BASE)
     expect(r!.files.files).toHaveLength(MAX_FILES)
     expect(r!.files).toMatchObject({ total: MAX_FILES + 50, added: (MAX_FILES + 50) * 2, removed: MAX_FILES + 50 })
+  })
+
+  test('500 untracked files are counted in a few git processes, not one each', async () => {
+    const names = Array.from({ length: 500 }, (_, i) => `big/f${String(i).padStart(4, '0')}.txt`)
+    const calls: string[][] = []
+    const run: Runner = async (argv) => {
+      calls.push(argv)
+      const key = argv.slice(1).join(' ')
+      if (key === '-C /repo ls-files -z --others --exclude-standard --full-name') return { exitCode: 0, stdout: names.map((n) => n + Z).join('') }
+      if (argv.includes('grep')) {
+        const paths = argv.slice(argv.indexOf('--') + 1)
+        return { exitCode: 0, stdout: paths.map((p) => `${p}${Z}3\n`).join('') }
+      }
+      const m: Record<string, { exitCode?: number; stdout?: string }> = {
+        ...top,
+        [`-C /repo diff --name-status -z -M ${BASE}`]: { stdout: '' },
+        [`-C /repo diff --numstat -z -M ${BASE}`]: { stdout: '' },
+      }
+      const r = m[key]
+      return { exitCode: r?.exitCode ?? (r ? 0 : 128), stdout: r?.stdout ?? '' }
+    }
+    const r = await readChanges(run, '/repo', BASE)
+    expect(r!.files.files).toHaveLength(MAX_FILES)
+    expect(r!.files.files.every((f) => f.added === 3 && f.removed === 0)).toBe(true)
+    // only the listed files are counted, as before
+    expect(r!.files).toMatchObject({ total: 500, added: MAX_FILES * 3, removed: 0 })
+    expect(calls.length).toBeLessThan(20)
+  })
+
+  test('untracked files that grep leaves out (empty, binary) keep their numstat result, up to a limit per read', async () => {
+    const names = Array.from({ length: 30 }, (_, i) => `b${String(i).padStart(2, '0')}.bin`)
+    let diffs = 0
+    const run: Runner = async (argv) => {
+      const key = argv.slice(1).join(' ')
+      if (key === '-C /repo ls-files -z --others --exclude-standard --full-name') return { exitCode: 0, stdout: names.map((n) => n + Z).join('') }
+      if (argv.includes('grep')) return { exitCode: 1, stdout: '' }
+      if (argv.includes('--no-index')) {
+        diffs++
+        return { exitCode: 1, stdout: `-\t-\t${Z}/dev/null${Z}${argv[argv.length - 1]}${Z}` }
+      }
+      const m: Record<string, { exitCode?: number; stdout?: string }> = {
+        ...top,
+        [`-C /repo diff --name-status -z -M ${BASE}`]: { stdout: '' },
+        [`-C /repo diff --numstat -z -M ${BASE}`]: { stdout: '' },
+      }
+      const r = m[key]
+      return { exitCode: r?.exitCode ?? (r ? 0 : 128), stdout: r?.stdout ?? '' }
+    }
+    const r = await readChanges(run, '/repo', BASE)
+    expect(r!.files.total).toBe(30)
+    expect(diffs).toBeLessThanOrEqual(20)
+    expect(r!.files).toMatchObject({ added: 0, removed: 0 })
   })
 
   test('outside a repository there is nothing to read', async () => {

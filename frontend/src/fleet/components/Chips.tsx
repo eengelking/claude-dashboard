@@ -141,9 +141,9 @@ export function StateIcon({ kind }: { kind: StateKind }) {
  * "delegating" state: the row is idle while agents it launched run. It is not a session status.
  */
 /** The dot class for a session: the pulsing blue ring while it is idle on background work (#119), the still blue ring while it delegates (#287), else its status. */
-export function sessionDot(s: Pick<SessionView, "status" | "waitReason" | "background" | "agents">): string {
+export function sessionDot(s: Pick<SessionView, "status" | "waitReason" | "background">, kind: StateKind): string {
   if (idleOnBackground(s)) return "dot ring bgwait";
-  return stateKind(s) === "deleg" ? "dot ring" : `dot ${s.status}`;
+  return kind === "deleg" ? "dot ring" : `dot ${s.status}`;
 }
 
 /** The background wait to hand to StatusChip, or undefined when the session waits on the person or is not waiting. */

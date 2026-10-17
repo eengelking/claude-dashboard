@@ -25,6 +25,8 @@ interface World {
   watch: { value: string[] }
   /** What each model request streams before it ends. */
   chunks: { value: TurnStepChunk[] }
+  /** The files the plugin reads and writes by path, from memory; `broken` makes every access fail. */
+  files: { text: Record<string, string>; broken: boolean }
 }
 
 const GIT: Record<string, string> = {
@@ -36,7 +38,7 @@ const GIT: Record<string, string> = {
 }
 
 /** Everything beneath the plugin: the engine's answers, from memory. */
-function world(on: On, store: Record<string, unknown> = {}): World {
+function world(on: On, store: Record<string, unknown> = {}, files: Record<string, string> = {}): World {
   const posts: Report[] = []
   const headers: Record<string, string>[] = []
   const sessionId = { value: SID }
@@ -45,6 +47,16 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   let toolUseId = ''
   const clock = mock.clock(on, { now: 1_800_000_000_000 })
   mock.store(on, store)
+  const kept: World['files'] = { text: { ...files }, broken: false }
+  on('fs.read', (_$, e) => {
+    if (kept.broken || !(e.path in kept.text)) throw new Error('ENOENT')
+    return { value: kept.text[e.path]! }
+  })
+  on('fs.write', (_$, e) => {
+    if (kept.broken) throw new Error('EACCES')
+    kept.text[e.path] = e.text
+    return { value: undefined }
+  })
   const ran: string[][] = []
   const watch: World['watch'] = { value: [] }
   const chunks: World['chunks'] = { value: [] }
@@ -107,7 +119,7 @@ function world(on: On, store: Record<string, unknown> = {}): World {
   })
   on('classic.PermissionRequest', () => ({}))
   on('classic.Notification', () => ({}))
-  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran, watch, chunks }
+  return { posts, headers, clock, lastToolUseId: () => toolUseId, sessionId, fetchMode, surfaces, ran, watch, chunks, files: kept }
 }
 
 type StepArgs = Parameters<Engine['turn']['step']>[0]
@@ -527,6 +539,61 @@ describe('podium-reporter end to end', () => {
 
   test('a machine id already kept in the store is reused', { options: { userName: 'Dana' } }, async ($, on) => {
     const w = world(on, { machineId: 'abcdef012345' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine).toEqual({ name: 'Devs-MBP', id: 'abcdef012345' })
+  })
+
+  const SHARED = '/Users/dev/.claude/podium-machine-id'
+
+  test('a machine id in the shared file wins over the one in this load\'s store, so two plugin loads agree (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: 'aaaaaaaaaaaa' }, { [SHARED]: 'cccccccccccc\n' })
+    mock.env(on, { HOME: '/Users/dev' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine!.id).toBe('cccccccccccc')
+  })
+
+  test('an id from this load\'s store is kept and shared, so the next load adopts it (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: 'abcdef012345' })
+    mock.env(on, { HOME: '/Users/dev' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine!.id).toBe('abcdef012345')
+    expect(w.files.text[SHARED]!.trim()).toBe('abcdef012345')
+  })
+
+  test('a new id is written to the shared file and reported (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on)
+    mock.env(on, { HOME: '/Users/dev' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    const id = w.posts[0]!.machine!.id
+    expect(id).toMatch(/^[0-9a-f]{12}$/)
+    expect(w.files.text[SHARED]!.trim()).toBe(id)
+  })
+
+  test('the shared file is under CLAUDE_CONFIG_DIR when that is set (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on)
+    mock.env(on, { HOME: '/Users/dev', CLAUDE_CONFIG_DIR: '/cfg' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.files.text['/cfg/podium-machine-id']!.trim()).toBe(w.posts[0]!.machine!.id)
+    expect(SHARED in w.files.text).toBe(false)
+  })
+
+  test('a junk shared file is ignored and the store id is used (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: 'abcdef012345' }, { [SHARED]: '<b>not-mine</b>' })
+    mock.env(on, { HOME: '/Users/dev' })
+    await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
+    await w.clock.advance(1000)
+    expect(w.posts[0]!.machine!.id).toBe('abcdef012345')
+  })
+
+  test('when the shared file cannot be read or written the store id still works (#267)', { options: { userName: 'Dana' } }, async ($, on) => {
+    const w = world(on, { machineId: 'abcdef012345' })
+    mock.env(on, { HOME: '/Users/dev' })
+    w.files.broken = true
     await $.session.start({ cwd: CWD, surface: null, isInteractive: false })
     await w.clock.advance(1000)
     expect(w.posts[0]!.machine).toEqual({ name: 'Devs-MBP', id: 'abcdef012345' })

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { openDb } from './db.js';
 import { ModelPriceStore } from './modelPrices.js';
 import { BUILTIN_PRICES, type ModelUsage } from './pricing.js';
@@ -12,11 +12,11 @@ const usage = (model: string, input: number, tier: ModelUsage['tier'] = 'std'): 
 });
 
 let db: ReturnType<typeof openDb>;
-let changed: ReturnType<typeof vi.fn>;
+let changed: Mock<() => void>;
 let store: ModelPriceStore;
 beforeEach(() => {
   db = openDb(':memory:');
-  changed = vi.fn();
+  changed = vi.fn<() => void>();
   store = new ModelPriceStore(db, changed);
 });
 

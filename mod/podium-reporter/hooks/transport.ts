@@ -19,6 +19,19 @@ export function isDelivery(v: unknown): v is Delivery {
   return !!d && typeof d === 'object' && typeof d.id === 'string' && typeof d.kind === 'string' && typeof d.by === 'string' && typeof d.at === 'number';
 }
 
+/** Whether a server URL is plain `http:` to a host that is not this machine, so the token it sends is not encrypted in transit (#306). */
+export function plainHttpRemote(serverUrl: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(serverUrl);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:') return false;
+  const h = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return !(h === 'localhost' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h));
+}
+
 export interface HttpResult {
   status: number;
   ok: boolean;
@@ -245,7 +258,7 @@ export class Transport {
   }
 
   statusText(): string {
-    const name = `podium v${this.cfg.version}`;
+    const name = `${plainHttpRemote(this.cfg.serverUrl) ? '⚠ ' : ''}podium v${this.cfg.version}`;
     if (this.refused) return `${name} ○ token refused`;
     if (this.ownerRefused) return `${name} ○ refused: session belongs to someone else`;
     if (this.online === false) return `${name} ○ offline`;
@@ -255,6 +268,13 @@ export class Transport {
     if (this.compat === 'newer') return `${live} · upgrade server`;
     if (this.behind) return `${live} · update available`;
     return live;
+  }
+
+  /** What to tell the user when the server is plain http beyond this machine (#306); null when it is not. Names no address and no token. */
+  plainHttpNotice(): string | null {
+    return plainHttpRemote(this.cfg.serverUrl)
+      ? 'The Podium server is reached over plain HTTP beyond this machine, so the token and everything reported are not encrypted in transit. Use an https:// server URL (a TLS proxy in front of Podium) in the podium-reporter settings.'
+      : null;
   }
 
   /** What to tell the user when the server refused the token or name; null when it did not. */

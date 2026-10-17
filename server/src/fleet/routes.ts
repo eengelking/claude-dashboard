@@ -1,5 +1,5 @@
 // Express router for Podium, mounted at /api/fleet (SPEC 7.1, 7.7).
-import express, { Router, type NextFunction, type Request, type Response } from 'express';
+import express, { Router, type NextFunction, type Request, type RequestHandler, type Response } from 'express';
 import type { Fleet } from './fleet.js';
 import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { MAIN_LOOP, validateReport } from './protocol.js';
@@ -30,6 +30,8 @@ export interface FleetRouterOptions {
   guesses?: GuessThrottle;
   /** Filled in so Admin can open for a browser already signed in to respond as an Administrator (#215). */
   respondBridge?: RespondBridge;
+  /** Runs ahead of the sign-in to respond, to note a plain-HTTP connection (#306). It never blocks. */
+  onSignIn?: RequestHandler;
 }
 
 export const BODY_LIMIT = '512kb';
@@ -105,7 +107,7 @@ function refuseIgnored(opts: FleetRouterOptions, logger: Logger, fleet: Fleet, r
 const ownerOf = (id: Identity): string | null => (id.kind === 'person' ? id.person.name : id.kind === 'admin' ? ADMIN_OWNER : null);
 
 /** Rows per page on `GET /history` (#195): the choices the page offers, and the default. */
-const HISTORY_PAGE_SIZES = [25, 50, 100];
+export const HISTORY_PAGE_SIZES = [25, 50, 100];
 const HISTORY_PAGE_SIZE = 50;
 
 function intParam(v: unknown): number | null | 'bad' {
@@ -456,11 +458,9 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     // The day's boundaries are the server's local midnight (the dashboard is for one machine).
     const from = start.getTime();
     const to = new Date(y, mo - 1, d + 1).getTime();
-    // Newest first, with the id breaking ties, so a row never moves between pages.
-    const all = fleet.history(from, to).sort((a, b) => b.endedAt - a.endedAt || (a.id < b.id ? -1 : 1));
     // A page past the end is the last page, so a day that shrank under an open tab still shows rows.
-    const at = Math.min(page ?? 1, Math.max(1, Math.ceil(all.length / pageSize)));
-    res.json({ day, sessions: all.slice((at - 1) * pageSize, at * pageSize), total: all.length, page: at, pageSize });
+    const { rows, total, page: at } = fleet.historyPage(from, to, page ?? 1, pageSize);
+    res.json({ day, sessions: rows, total, page: at, pageSize });
   });
 
   router.get('/health', (_req, res) => {
@@ -475,6 +475,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     logger,
     lockout: opts.lockout ?? new Lockout(fleet.now),
     bridge: opts.respondBridge,
+    onSignIn: opts.onSignIn,
     requireToken,
     identityOf,
   });

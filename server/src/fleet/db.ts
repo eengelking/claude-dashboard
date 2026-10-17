@@ -205,6 +205,12 @@ CREATE INDEX IF NOT EXISTS sessions_cleared_from ON sessions(cleared_from);`,
     // Admin's prices like every other figure. NULL for samples from before it existed and from older reporters.
     sql: 'ALTER TABLE samples ADD COLUMN usage_json TEXT;',
   },
+  {
+    version: 17,
+    // The last four characters of a person's token, stored since #36 and unread since #218 (issue #277). Only the
+    // SHA-256 of a token is kept now. The column is not indexed, so it can be dropped in place.
+    sql: 'ALTER TABLE people DROP COLUMN token_last4;',
+  },
 ];
 
 export interface SessionRow {
@@ -335,7 +341,12 @@ export interface RetentionPolicy {
   samplesMs: number;
   eventsMs: number;
   sessionsMs: number;
+  /** Admin log rows older than this go, except the newest `ADMIN_LOG_KEEP` (#303). */
+  adminLogMs: number;
 }
+
+/** The admin log always keeps this many of its newest rows, however old, so a quiet server keeps some history. */
+export const ADMIN_LOG_KEEP = 100;
 
 /** Opens (and migrates) a database. `:memory:` for tests; a file path gets WAL and its folder made. */
 export function openDb(file: string): DatabaseSync {
@@ -457,7 +468,7 @@ export class FleetDb {
    */
   private spendSince(since: number, cost: CostOf): { owner: string | null; grp: string | null; usd: number }[] {
     const rows = this.stmt(
-      `SELECT s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json, s.started_at AS started_at,
+      `SELECT s.id AS id, s.owner AS owner, g.name AS grp, s.cost_usd AS cost_usd, s.usage_json AS usage_json, s.started_at AS started_at,
          COALESCE(
            (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.t < :sec AND m.cost_usd IS NOT NULL ORDER BY m.t DESC LIMIT 1),
            (SELECT m.cost_usd FROM samples m WHERE m.session_id = s.id AND m.cost_usd IS NOT NULL ORDER BY m.t ASC LIMIT 1)
@@ -465,6 +476,7 @@ export class FleetDb {
        FROM sessions s LEFT JOIN people p ON p.name = s.owner LEFT JOIN groups g ON g.id = p.group_id
        WHERE s.started_at >= :since OR s.ended_at IS NULL OR s.ended_at >= :since`,
     ).all({ since, sec: Math.floor(since / 1000) }) as unknown as (CostRow & {
+      id: string;
       owner: string | null;
       grp: string | null;
       started_at: number;
@@ -473,10 +485,41 @@ export class FleetDb {
     return rows.map((r) => {
       const total = cost(r) ?? 0;
       if (r.started_at >= since) return { owner: r.owner, grp: r.grp, usd: total };
-      const ledger = r.cost_usd ?? 0;
+      // No ledger figure now (the mod sends none on a local model): split by the priced usage on the sample before
+      // `since` instead, so the Claude spend of an earlier part of the day is not lost (#286).
+      if (r.cost_usd === null) return { owner: r.owner, grp: r.grp, usd: Math.max(0, total - this.pricedUsageAt(r.id, since, cost)) };
+      const ledger = r.cost_usd;
       const share = r.base === null || ledger <= 0 ? 0 : Math.max(0, ledger - r.base) / ledger;
       return { owner: r.owner, grp: r.grp, usd: total * share };
     });
+  }
+
+  /**
+   * What a session had cost, priced from its usage, at its last sample before `since`; its first sample when it has
+   * none before (a session first heard of after `since`, as in `spendSince`). 0 when no sample kept any usage, so a
+   * session from a reporter older than 0.12.0 on a local model still counts nothing today. A sample may hold
+   * `SAME_USAGE` for the usage of the one before it, so the usage is the newest one stored in full at or before it.
+   */
+  private pricedUsageAt(sessionId: string, since: number, cost: CostOf): number {
+    const sec = Math.floor(since / 1000);
+    const at =
+      (this.stmt('SELECT t, usage_json FROM samples WHERE session_id = ? AND t < ? AND usage_json IS NOT NULL ORDER BY t DESC LIMIT 1').get(sessionId, sec) as
+        | { t: number; usage_json: string }
+        | undefined) ??
+      (this.stmt('SELECT t, usage_json FROM samples WHERE session_id = ? AND usage_json IS NOT NULL ORDER BY t ASC LIMIT 1').get(sessionId) as
+        | { t: number; usage_json: string }
+        | undefined);
+    if (!at) return 0;
+    let usage: string | null = at.usage_json;
+    if (usage === SAME_USAGE) {
+      const full = this.stmt('SELECT usage_json FROM samples WHERE session_id = ? AND t <= ? AND usage_json IS NOT NULL AND usage_json != ? ORDER BY t DESC LIMIT 1').get(
+        sessionId,
+        at.t,
+        SAME_USAGE,
+      ) as { usage_json: string } | undefined;
+      usage = full?.usage_json ?? null;
+    }
+    return usage === null ? 0 : (cost({ cost_usd: null, usage_json: usage }) ?? 0);
   }
 
   /** Σ spend at or after `since` (see `spendSince`). */
@@ -711,8 +754,8 @@ export class FleetDb {
 
   // ---- retention ------------------------------------------------------------------------------
 
-  /** Deletes old samples, events and ended sessions (with their rows). Returns what was deleted. */
-  retain(now: number, p: RetentionPolicy): { samples: number; events: number; sessions: number } {
+  /** Deletes old samples, events, ended sessions (with their rows) and admin log rows. Returns what was deleted. */
+  retain(now: number, p: RetentionPolicy): { samples: number; events: number; sessions: number; adminLog: number } {
     return this.tx(() => {
       const samples = Number(this.stmt('DELETE FROM samples WHERE t < ?').run(Math.floor((now - p.samplesMs) / 1000)).changes);
       const events = Number(this.stmt('DELETE FROM events WHERE t < ?').run(now - p.eventsMs).changes);
@@ -728,7 +771,10 @@ export class FleetDb {
         this.stmt('DELETE FROM agent_texts WHERE session_id = ?').run(id);
         this.stmt('DELETE FROM sessions WHERE id = ?').run(id);
       }
-      return { samples, events, sessions: old.length };
+      const adminLog = Number(
+        this.stmt('DELETE FROM admin_log WHERE t < ? AND id NOT IN (SELECT id FROM admin_log ORDER BY id DESC LIMIT ?)').run(now - p.adminLogMs, ADMIN_LOG_KEEP).changes,
+      );
+      return { samples, events, sessions: old.length, adminLog };
     });
   }
 }

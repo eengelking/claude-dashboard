@@ -1,6 +1,7 @@
 // Which machine a session runs on (issue #34). Pure: the mod passes in what `hostname` printed and a
-// random source. The id is random and kept in the mod's own store, so two machines that share a host
-// name stay apart and nothing about the hardware is read.
+// random source. The id is random and kept in one file under the Claude config directory (and in the
+// mod's own store as a fallback), so two machines that share a host name stay apart, two loads of the
+// mod on one machine agree, and nothing about the hardware is read.
 import type { MachineInfo } from './protocol.ts';
 
 /** The `$.store` key the machine id is kept under. */
@@ -18,6 +19,26 @@ export function hostOf(stdout: string | null | undefined): string | null {
 /** A stored id this reporter made: 8 to 32 lowercase hex characters. */
 export function isMachineId(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9a-f]{8,32}$/.test(v);
+}
+
+/** The file name the machine id is shared under, in the Claude config directory (#267). */
+export const MACHINE_ID_FILE = 'podium-machine-id';
+
+/**
+ * Where the shared machine id file lives: `CLAUDE_CONFIG_DIR` when set, else `~/.claude`. Null when
+ * neither is known, in which case the id stays in the mod's store alone.
+ */
+export function machineIdPath(configDir: string | undefined, home: string | undefined): string | null {
+  const trim = (p: string | undefined) => (p ?? '').trim().replace(/\/+$/, '');
+  const dir = trim(configDir) || (trim(home) ? `${trim(home)}/.claude` : '');
+  // A relative directory would land under each session's own working directory, so loads would disagree.
+  return /^(\/|[A-Za-z]:[\\/])/.test(dir) ? `${dir}/${MACHINE_ID_FILE}` : null;
+}
+
+/** The id the shared file holds: its one line, when that is an id this reporter made. Null otherwise. */
+export function parseMachineIdFile(text: string | null | undefined): string | null {
+  const id = (text ?? '').trim();
+  return isMachineId(id) ? id : null;
 }
 
 /** A new random id of 12 hex characters. */

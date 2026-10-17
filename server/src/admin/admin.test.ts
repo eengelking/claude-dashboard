@@ -1,5 +1,5 @@
 // The Admin API (issue #36): who may open it, what it does, and what it never reveals.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { openDb } from '../fleet/db.js';
@@ -12,7 +12,7 @@ import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
 
-function setup(over: { secret?: string | null; idleMs?: number } = {}) {
+function setup(over: { secret?: string | null; idleMs?: number; logRetainMs?: number; onRespondOn?: () => void } = {}) {
   const db = openDb(':memory:');
   const people = new PeopleStore(db);
   const wall = new WallSettings(db);
@@ -33,6 +33,8 @@ function setup(over: { secret?: string | null; idleMs?: number } = {}) {
       reporters,
       now: () => clock.t,
       idleMs: over.idleMs,
+      logRetainMs: over.logRetainMs,
+      onRespondOn: over.onRespondOn,
       log: (l) => lines.push(l),
     }),
   );
@@ -259,6 +261,20 @@ describe('groups and settings', () => {
       expect(log.map((x) => x.detail)).toEqual(['Feature respond turned on']);
     });
 
+    it('tells the plain-HTTP warning only when Respond from Podium goes from off to on (#306)', async () => {
+      const onRespondOn = vi.fn();
+      const { agent } = await unlocked({ onRespondOn });
+      await agent.put('/api/admin/settings').set(H).send({ features: { 'activity-feed': false } });
+      expect(onRespondOn).not.toHaveBeenCalled();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledOnce();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledOnce();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: false } });
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledTimes(2);
+    });
+
     it('turns a flag off and on, and logs each change', async () => {
       const { agent, features, people } = await unlocked();
       const res = await agent.put('/api/admin/settings').set(H).send({ features: { 'activity-feed': false } });
@@ -359,6 +375,18 @@ describe('groups and settings', () => {
     expect(res.body.total).toBeGreaterThanOrEqual(60);
     expect(res.body.rows).toHaveLength(50);
     expect(res.body.rows[0].detail).toBe('n59');
+  });
+});
+
+describe('admin log retention (#303)', () => {
+  it('tells the Admin how long the log is kept', async () => {
+    const { agent } = await unlocked({ logRetainMs: 30 * 24 * 3600_000 });
+    expect((await agent.get('/api/admin/log').set(H)).body.retainMs).toBe(30 * 24 * 3600_000);
+  });
+
+  it('leaves the period out when the router was not told one', async () => {
+    const { agent } = await unlocked();
+    expect((await agent.get('/api/admin/log').set(H)).body.retainMs).toBeUndefined();
   });
 });
 

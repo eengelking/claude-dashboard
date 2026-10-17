@@ -1,11 +1,12 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import express from 'express';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import request from 'supertest';
 import { openDb, FleetDb } from './db.js';
 import { DEFAULT_CONFIG, Fleet } from './fleet.js';
-import { createFleetRouter } from './routes.js';
+import { createFleetRouter, HISTORY_PAGE_SIZES } from './routes.js';
 import { MAIN_LOOP, type Report } from './protocol.js';
 import { fixtureReport } from './testing.js';
 
@@ -209,6 +210,27 @@ describe('reads', () => {
       expect(new Set(ids).size).toBe(60);
       const ended = [one, two, three].flatMap((r) => r.body.sessions.map((s: { endedAt: number }) => s.endedAt));
       expect(ended).toEqual([...ended].sort((a, b) => b - a));
+    });
+
+    it('builds rows for the requested page only (#273)', async () => {
+      const { app, day } = await endMany(60);
+      const agents = vi.spyOn(FleetDb.prototype, 'getAgents');
+      try {
+        await request(app).get(`/api/fleet/history?day=${day}&page=3&pageSize=25`);
+        expect(agents).toHaveBeenCalledTimes(10);
+        agents.mockClear();
+        await request(app).get(`/api/fleet/history?day=${day}&page=1&pageSize=25`);
+        expect(agents).toHaveBeenCalledTimes(25);
+      } finally {
+        agents.mockRestore();
+      }
+    });
+
+    it('offers the same page sizes as the frontend pager (#273)', () => {
+      const src = readFileSync(new URL('../../../frontend/src/fleet/admin/Pager.tsx', import.meta.url), 'utf8');
+      const m = /export const PAGE_SIZES = \[([^\]]*)\]/.exec(src);
+      expect(m).not.toBeNull();
+      expect(m![1]!.split(',').map((n) => Number(n.trim()))).toEqual(HISTORY_PAGE_SIZES);
     });
 
     it('clamps a page past the end to the last page', async () => {

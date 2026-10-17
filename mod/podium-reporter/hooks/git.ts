@@ -74,8 +74,10 @@ export async function readGit(run: Runner, cwd: string): Promise<GitInfo | null>
 export const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 /** The most files listed in a report; the totals still cover every file. */
 export const MAX_FILES = 200;
-/** Untracked files are counted in batches this size, so a big untracked folder cannot hold the poll up. */
-const UNTRACKED_BATCH = 20;
+/** Untracked files are line-counted by one `git grep` per chunk of this many paths. */
+const GREP_CHUNK = 100;
+/** Empty and binary untracked files `git grep` leaves out get their own `git diff --no-index`, this many per read; the rest stay uncounted. */
+const NUMSTAT_LIMIT = 20;
 
 export interface NameStatus {
   status: FileStatus;
@@ -174,16 +176,31 @@ export async function readChanges(run: Runner, cwd: string, base: string | null)
     // Only the files that will be listed need counts, so pick them after sorting; the rest still count toward the total.
     const tracked = new Set(parseNameStatus(names).map((n) => n.path));
     const pending = all.slice(0, MAX_FILES).filter((f) => !tracked.has(f.path));
-    for (let i = 0; i < pending.length; i += UNTRACKED_BATCH) {
-      const batch = pending.slice(i, i + UNTRACKED_BATCH);
-      const got = await Promise.all(
-        batch.map(async (f) => parseNumstat(await out(git('diff', '--no-index', '--numstat', '-z', '--', '/dev/null', f.path), [0, 1])).get(f.path) ?? { added: null, removed: null }),
-      );
-      batch.forEach((f, j) => {
-        f.added = got[j]!.added;
-        f.removed = got[j]!.removed;
-      });
+    // One `git grep -c` per chunk counts the lines of every text file in it. It leaves out empty and binary
+    // files, which keep the per-file numstat result below, for the first few only.
+    const grepable = pending.filter((f) => !f.path.includes('\n'));
+    const counted = new Set<string>();
+    for (let i = 0; i < grepable.length; i += GREP_CHUNK) {
+      const chunk = new Map(grepable.slice(i, i + GREP_CHUNK).map((f) => [f.path, f]));
+      const counts = await out(['git', '-C', top, '--literal-pathspecs', 'grep', '--no-index', '-I', '-c', '-z', '', '--', ...chunk.keys()], [0, 1]);
+      for (const line of counts.split('\n')) {
+        const cut = line.lastIndexOf('\0');
+        const f = cut > 0 ? chunk.get(line.slice(0, cut)) : undefined;
+        const n = Number(line.slice(cut + 1));
+        if (!f || !Number.isInteger(n)) continue;
+        f.added = n;
+        f.removed = 0;
+        counted.add(f.path);
+      }
     }
+    const rest = pending.filter((f) => !counted.has(f.path)).slice(0, NUMSTAT_LIMIT);
+    const got = await Promise.all(
+      rest.map(async (f) => parseNumstat(await out(git('diff', '--no-index', '--numstat', '-z', '--', '/dev/null', f.path), [0, 1])).get(f.path) ?? { added: null, removed: null }),
+    );
+    rest.forEach((f, j) => {
+      f.added = got[j]!.added;
+      f.removed = got[j]!.removed;
+    });
     const sum = (k: 'added' | 'removed') => all.reduce((n, f) => n + (f[k] ?? 0), 0);
     return { base: start, files: { files: all.slice(0, MAX_FILES), total: all.length, added: sum('added'), removed: sum('removed'), since } };
   } catch {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AdminError, type AdminApi } from "./adminApi";
 import { Panel, Section, SwitchRow } from "./Page";
 import { failText, useList } from "./useList";
+import { plainHttpCaution } from "./plainHttpCaution";
 
 interface NoticeRow {
   id: string;
@@ -44,7 +45,7 @@ export function SettingsTab({ api, onLocked }: { api: AdminApi; onLocked: () => 
       <Section id="admin-features-h" title="Feature flags" help="Turn a feature off for everyone on this server. A flag that is off hides the feature in the console and stops its data. New features that can be switched off appear here.">
         <Panel>
           {data
-            ? (data.features ?? []).map((f) => row(`feature-${f.id}`, f.name, f.description, f.on, () => put({ features: { [f.id]: !f.on } }), f.id))
+            ? (data.features ?? []).map((f) => row(`feature-${f.id}`, f.name, f.id === "respond" ? `${f.description} ${plainHttpCaution()}`.trim() : f.description, f.on, () => put({ features: { [f.id]: !f.on } }), f.id))
             : row("feature-loading", "Feature flags", "", undefined, () => {})}
         </Panel>
       </Section>

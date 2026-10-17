@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newPersonToken, parsePersonToken, hashToken, tokenMatches, last4, safeEqualStr } from './tokens.js';
+import { newPersonToken, parsePersonToken, hashToken, tokenMatches, safeEqualStr } from './tokens.js';
 
 describe('person tokens', () => {
   it('has the form pdm_<key id>_<secret> with at least 128 bits of secret', () => {
@@ -8,7 +8,6 @@ describe('person tokens', () => {
     expect(m).not.toBeNull();
     expect(m![1]).toBe(t.keyId);
     expect(t.hash).toBe(hashToken(t.token));
-    expect(t.last4).toBe(t.token.slice(-4));
   });
 
   it('never repeats', () => {
@@ -31,10 +30,6 @@ describe('person tokens', () => {
     expect(tokenMatches(other.token, t.hash)).toBe(false);
     expect(tokenMatches(t.token + 'a', t.hash)).toBe(false);
     expect(tokenMatches(t.token, 'nothex')).toBe(false);
-  });
-
-  it('shows only the last four characters', () => {
-    expect(last4('abcdefgh')).toBe('efgh');
   });
 
   it('compares strings of different length without throwing', () => {

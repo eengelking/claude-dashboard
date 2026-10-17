@@ -19,7 +19,7 @@ const INNER_PORT = 4317;
 /** Server settings podiumctl passes through to the server unchanged when they are set in the config. */
 export const PASSTHROUGH = [
   'STALE_AFTER_MS', 'HOOK_STALE_AFTER_MS', 'DROP_AFTER_MS', 'LINGER_MS', 'DETACHED_HIDE_AFTER_MS',
-  'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS',
+  'RETAIN_SAMPLES_MS', 'RETAIN_EVENTS_MS', 'RETAIN_SESSIONS_MS', 'RETAIN_ADMIN_LOG_MS',
   'TZ', 'PODIUM_ALLOWED_HOSTS',
   'PODIUM_LOG_LEVEL', 'PODIUM_LOG_FORMAT', 'PODIUM_LOG_SHIP_URL', 'PODIUM_LOG_SHIP_HEADERS', 'PODIUM_LOG_SHIP_BUFFER',
 ];
@@ -160,6 +160,11 @@ export function containerRunArgs(cfg, envNames) {
     ...envNames.flatMap((n) => ['-e', n]),
     IMAGE,
   ];
+}
+
+/** Homebrew installs node under Cellar/<formula>/<version>, a directory `brew upgrade` deletes; `opt/<formula>` is the link that survives it. */
+export function stableNodePath(execPath) {
+  return execPath.replace(/^(.*)\/Cellar\/([^/]+)\/[^/]+\/(.*)$/, '$1/opt/$2/$3');
 }
 
 export function launchdPlist({ label, args, keepAliveOnFailure, logPath, env }) {
@@ -529,7 +534,10 @@ function cmdEnable(cfg) {
   const { kind, file } = servicePaths();
   const standalone = cfg.mode === 'standalone';
   const script = fs.realpathSync(fileURLToPath(import.meta.url));
-  const args = [process.execPath, script, standalone ? 'run' : 'start', '--mode', cfg.mode];
+  const stable = stableNodePath(process.execPath);
+  // only trust the rewrite when it still leads to this node
+  const node = stable !== process.execPath && fs.existsSync(stable) && fs.realpathSync(stable) === fs.realpathSync(process.execPath) ? stable : process.execPath;
+  const args = [node, script, standalone ? 'run' : 'start', '--mode', cfg.mode];
   const env = { PATH: process.env.PATH ?? '', ...(process.env.PODIUMCTL_HOME ? { PODIUMCTL_HOME: process.env.PODIUMCTL_HOME } : {}) };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.mkdirSync(homeDir(), { recursive: true });
@@ -540,7 +548,7 @@ function cmdEnable(cfg) {
     if (spawnSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' }).status !== 0) fail('launchctl bootstrap failed');
     say(`Enabled: ${file}`);
   } else {
-    fs.writeFileSync(file, systemdUnit({ args, stopArgs: [process.execPath, script, 'stop', '--mode', cfg.mode], standalone, env }));
+    fs.writeFileSync(file, systemdUnit({ args, stopArgs: [node, script, 'stop', '--mode', cfg.mode], standalone, env }));
     const sc = (a) => spawnSync('systemctl', ['--user', ...a], { stdio: 'inherit' }).status === 0;
     if (!sc(['daemon-reload']) || !sc(['enable', '--now', 'podium.service'])) fail('systemctl failed');
     say(`Enabled: ${file}\nTo start before you log in: loginctl enable-linger $USER`);
@@ -557,7 +565,10 @@ function cmdDisable() {
   }
   fs.rmSync(file, { force: true });
   if (kind === 'systemd') spawnSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'ignore' });
-  say('Disabled. Check `podiumctl status`: a server the service was running (standalone mode) is stopped with it.');
+  // systemd's `disable --now` runs ExecStop, so a container stops too; launchd's bootout only ends a standalone server
+  say(kind === 'systemd'
+    ? 'Disabled. The server the service was running is stopped with it; check `podiumctl status`.'
+    : 'Disabled. Check `podiumctl status`: a server the service was running (standalone mode) is stopped with it.');
 }
 
 async function cmdRun(cfg) {

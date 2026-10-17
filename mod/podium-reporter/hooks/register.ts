@@ -50,7 +50,7 @@ import { nextCronAt } from './cron.ts';
 import { isDelivery, Transport, type FetchLike } from './transport.ts';
 import { activityCall, activityText, explainPrompt } from './failures.ts';
 import { pickIdentity, worthHolding, type Identity } from './identity.ts';
-import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
+import { hostOf, isMachineId, MACHINE_ID_KEY, machineIdPath, machineInfo, newMachineId, parseMachineIdFile } from './machine.ts';
 import type { Ask, Delivery, DeliveryResult, MachineInfo, RespondInfo, RespondKind, RespondLevel } from './protocol.ts';
 import {
   answeredLine,
@@ -112,6 +112,8 @@ interface Runtime {
   lastStatus: string | null;
   toastedOk: boolean;
   toastedFail: boolean;
+  /** Whether the plain-HTTP notice has been toasted in this session (#306). */
+  toastedPlain: boolean;
   /** The refusal notice last toasted, so a later refusal is news again once a report has gone through. */
   toastedRefusal: string | null;
   /** The version notice last toasted, so each distinct one shows once. */
@@ -322,6 +324,17 @@ function toastRefusalOnce($: Engine, r: Runtime): void {
   }
 }
 
+function toastPlainHttpOnce($: Engine, r: Runtime): void {
+  const notice = r.transport.plainHttpNotice();
+  if (!notice || r.toastedPlain) return;
+  r.toastedPlain = true;
+  try {
+    $.ui.toast(`Podium: ${notice}`);
+  } catch {
+    // no toasts on this host
+  }
+}
+
 function toastVersionOnce($: Engine, r: Runtime): void {
   const notice = r.transport.versionNotice();
   if (!notice) {
@@ -370,6 +383,7 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
   }
   else if (outcome === 'busy') r.state = { ...r.state, dirty: true };
   toastVersionOnce($, r);
+  toastPlainHttpOnce($, r);
   showStatus($, r);
 }
 
@@ -538,22 +552,46 @@ function random(): number {
 }
 
 /**
+ * The machine's id, one for every load of the mod on it (#267). The shared file under the Claude config
+ * directory decides; without a valid one, the id this load's store already holds is kept (so an install
+ * keeps its row) and shared, else a new one is made and shared. The file is read back after a write. Two loads
+ * that start in the same instant can still each keep the id they wrote for that session (the last write is
+ * the file's), and agree from their next session on. Where the file cannot be used, the store alone
+ * keeps the id, as before.
+ */
+async function machineId($: Engine): Promise<string> {
+  const path = machineIdPath(
+    await attempt(() => $.env.get('CLAUDE_CONFIG_DIR'), undefined),
+    await attempt(() => $.env.get('HOME'), undefined),
+  );
+  const shared = async () => (path ? parseMachineIdFile(await attempt(async () => (await $.fs.read(path)) as string, null)) : null);
+  const fromFile = await shared();
+  const kept = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
+  if (fromFile) {
+    // Keep this load's store in step, so the id survives the shared file being deleted.
+    if (fromFile !== kept) await attempt(() => $.store.set(MACHINE_ID_KEY, fromFile), undefined);
+    return fromFile;
+  }
+  const id = isMachineId(kept) ? kept : newMachineId(random);
+  if (id !== kept) await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
+  if (!path) return id;
+  await attempt(() => $.fs.write(path, `${id}\n`), undefined);
+  return (await shared()) ?? id;
+}
+
+/**
  * This machine's short host name and the random id the mod keeps for it in its own store (made on first
  * use). Read only when a userName is set: an unnamed reporter sends nothing that identifies the machine.
  */
 async function readMachine($: Engine): Promise<MachineInfo | null> {
   if (!who.userName.trim()) return null;
   try {
-    let id = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
-    if (!isMachineId(id)) {
-      id = newMachineId(random);
-      await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
-    }
+    const id = await machineId($);
     const host = await attempt(async () => {
       const res = await $.process.run(['hostname'], { timeoutMs: 2000 });
       return res.exitCode === 0 ? hostOf(res.stdout) : null;
     }, null);
-    return machineInfo(host, id as string);
+    return machineInfo(host, id);
   } catch (err) {
     record($, 'machine', err);
     return null;
@@ -1048,6 +1086,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     lastStatus: null,
     toastedOk: rt?.toastedOk ?? false,
     toastedFail: rt?.toastedFail ?? false,
+    toastedPlain: rt?.toastedPlain ?? false,
     toastedRefusal: rt?.toastedRefusal ?? null,
     toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,

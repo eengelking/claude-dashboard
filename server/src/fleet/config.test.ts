@@ -18,3 +18,11 @@ describe('configFromEnv home', () => {
     expect(configFromEnv({ PODIUM_HOST_HOME: '/' }, base).home).toBe('/home/node');
   });
 });
+
+describe('configFromEnv admin log retention (#303)', () => {
+  it('keeps the admin log for 90 days unless RETAIN_ADMIN_LOG_MS says otherwise', () => {
+    expect(configFromEnv({}, base).retention.adminLogMs).toBe(90 * 24 * 3600_000);
+    expect(configFromEnv({ RETAIN_ADMIN_LOG_MS: '86400000' }, base).retention.adminLogMs).toBe(86_400_000);
+    expect(configFromEnv({ RETAIN_ADMIN_LOG_MS: 'soon' }, base).retention.adminLogMs).toBe(90 * 24 * 3600_000);
+  });
+});

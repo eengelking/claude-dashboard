@@ -32,6 +32,8 @@ export interface RespondDeps {
   signInIdleMs?: number;
   /** Filled in so Admin can open for a browser already signed in here as an Administrator (#215). */
   bridge?: RespondBridge;
+  /** Runs ahead of the sign-in, to note a plain-HTTP connection (#306). It never blocks. */
+  onSignIn?: RequestHandler;
 }
 
 const COOKIE = 'podium_respond';
@@ -47,6 +49,8 @@ interface SignIn {
   personId: number | null;
   tokenHash: string | null;
   last: number;
+  /** Set by an explicit Lock Admin: this sign-in no longer opens Admin by itself (#272). A new sign-in starts without it. */
+  adminHeld?: boolean;
 }
 
 /** Who a signed-in browser is, worked out afresh on each request. */
@@ -241,9 +245,21 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
   };
 
   if (d.bridge) {
+    const signInOf = (req: Request) => {
+      const sid = readCookie(req, COOKIE);
+      return sid ? signIns.get(sid) : undefined;
+    };
     d.bridge.administratorOf = (req) => {
       const v = enabled() ? viewerOf(req) : null;
-      return v?.admin ? { personId: v.personId } : null;
+      return v?.admin && !signInOf(req)?.adminHeld ? { personId: v.personId } : null;
+    };
+    d.bridge.hold = (req) => {
+      const s = signInOf(req);
+      if (s) s.adminHeld = true;
+    };
+    d.bridge.release = (req, personId) => {
+      const s = signInOf(req);
+      if (s && s.personId === personId) s.adminHeld = false; // only the person who is signed in here lifts their own hold
     };
   }
 
@@ -253,7 +269,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     res.json(me);
   });
 
-  browser.post('/sign-in', (req, res) => {
+  browser.post('/sign-in', d.onSignIn ?? ((_req, _res, next) => next()), (req, res) => {
     if (!enabled()) {
       refuse(req, res, 403, 'responding is off');
       return;

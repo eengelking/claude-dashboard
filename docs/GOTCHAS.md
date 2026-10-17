@@ -69,13 +69,16 @@ Each running Claude Code session is its own card, and a machine can run several.
 three sessions on one Mac can look like extra reporters when they show as separate rows (the next entries say
 why they do). Count the cards on the wall for sessions and the machine ids on the page for machines.
 
-### One machine shows as two rows with different machine ids
+### One machine showed as two rows with different machine ids (fixed in #267)
 
-The mod makes a random machine id the first time it runs and keeps it in its own store, which is one file per
-plugin load under `~/.claude/plugins/store/`. A copy of the mod loaded inline and the marketplace install each
-keep their own id, so one machine reports as two. A session keeps its id for its whole life, so the older row
-stays live while that session does. Load the mod one way on a given machine. The id is made in
-`mod/podium-reporter/hooks/machine.ts`. Making it per machine, not per plugin load, is not done.
+Before #267 each load of the mod kept its own machine id in its own store, so an inline copy and the marketplace
+install reported as two machines. Every load now shares `podium-machine-id` in the Claude config directory
+(`CLAUDE_CONFIG_DIR`, else `~/.claude`). A machine that already had two ids settles on one: the first load to run
+after the upgrade writes the file and the others adopt it. Two sessions that start in the same instant can each
+keep the id they wrote until they end, and agree from the next session on. The other id's row stays live only
+while its session does. If the config directory is copied to
+another machine the id goes with it, and two machines then share one id. Where the file cannot be read or written
+the mod falls back to its own store, as before. The id is made in `mod/podium-reporter/hooks/machine.ts`.
 
 ### One machine shows an extra row ending in `#` and a name
 
@@ -178,9 +181,18 @@ Admin. The name and machine still travel in those reports and are stored, so the
 Admin's groups are read when a session's view is built, so moving someone to another group shows on the wall
 with their next report (the heartbeat is five seconds), not at once. The Spend page in Admin updates on the next tick.
 
-### The Linux start-on-boot unit has not run on Linux
+### `systemctl --user start podium.service` does nothing after `podiumctl stop` (container mode)
 
-`podiumctl enable` generates a systemd user unit that has only been tested as text. Try it and tell us.
+In container mode the unit is `Type=oneshot` with `RemainAfterExit=yes`. `podiumctl stop` stops the
+container but systemd still counts the unit as active, so a plain `start` is a no-op. Use `podiumctl start`,
+or `systemctl --user stop podium.service` and then `start`. A container that dies is not restarted by the
+unit; standalone mode restarts a crashed server after 3 seconds.
+
+### The Linux start-on-boot unit has not been through a reboot
+
+`podiumctl enable` has run on Bazzite 44 (Fedora Atomic, systemd 259, Podman 5.8.7, SELinux enforcing) in
+both modes, with Node from Homebrew (#268). Starting, `stop` and `disable` behave as described above. A
+reboot, with and without `loginctl enable-linger $USER`, has not been tried. If you have, tell us.
 
 ## What the dashboard shows
 
@@ -299,7 +311,18 @@ say `127.0.0.1` too, and a new test setup file that replaces `setupFiles` must k
 It binds with Node's internal `_listen2`, because supertest reads the port the moment `listen(0)` returns and a
 public `listen(0, '127.0.0.1')` is not synchronous; `testSetup.test.ts` fails if a Node upgrade breaks that. To
 check for the flake, run several full runs at once, for example six loops of `npx vitest run` in parallel, which
-failed about 7% of runs before the fix and none of 60 after.
+failed about 7% of runs before the fix and none of 60 after. Keep it to three loops, and let the sockets drain
+between rounds (`netstat -an -p tcp | grep -c TIME_WAIT` under a few hundred): a run opens about 3,000
+connections, macOS has about 16,000 ephemeral ports, and with vitest 5 six loops run out of them and fail with
+`listen EADDRNOTAVAIL 127.0.0.1` all over the suite. That is the machine, not a test. One real timing flake
+remains: `shipper.test.ts` "sends a full batch on its own" waits a fixed 20 ms for a gzip to finish and fails now
+and then under load, on vitest 2 as well.
+
+### The frontend build says `Property 'toBeInTheDocument' does not exist on type 'Assertion'`
+
+vitest 5 declares `Assertion<R, T>` with two type parameters, and `@testing-library/jest-dom` declares it with
+one, so TypeScript drops jest-dom's own matcher types. `frontend/src/jest-dom.d.ts` redeclares them for two
+parameters. If a jest-dom release fixes its types, delete that file.
 
 ### Finished nested agents are missing from `$.agent.list()`
 

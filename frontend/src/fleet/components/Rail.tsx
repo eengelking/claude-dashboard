@@ -50,13 +50,14 @@ export function Rail(props: {
     const cls = `ritem${props.entering(s.id) ? " enter" : ""}${props.leaving[s.id] ? " leave" : ""}${s.blowouts.level === 2 ? " risk" : ""}`;
     const removable = s.status === "stale" && !!props.onRemove;
     const owner = s.owner ?? "Unassigned";
+    const kind = stateKind(s);
     return (
       <div key={s.id} className={`ritem-slot${removable ? " has-remove" : ""}`}>
         <button type="button" className={cls} aria-current={props.selected === s.id} onClick={() => props.onSelect(s.id)} disabled={!!props.leaving[s.id]}>
           <div className="l1">
-            <i className={sessionDot(s)} aria-hidden="true" />
+            <i className={sessionDot(s, kind)} aria-hidden="true" />
             <span className="nm">{s.name}</span>
-            <span className="vh">{backgroundOf(s) ? backgroundStatus(s.background!) : stateKind(s) === "deleg" ? "delegating" : s.status}</span>
+            <span className="vh">{backgroundOf(s) ? backgroundStatus(s.background!) : kind === "deleg" ? "delegating" : s.status}</span>
             {showOwner && (
               <span title={owner}>
                 <Monogram name={owner} kind={s.owner === null ? "unassigned" : s.owner === ADMIN ? "admin" : "person"} size="sm" />

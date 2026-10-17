@@ -142,6 +142,29 @@ describe("history page", () => {
       expect(window.location.hash).not.toContain("open=");
     });
 
+    it("keeps the table on screen while the next page loads, but not across a change of day (#273)", async () => {
+      let release: (r: Response) => void = () => {};
+      let n = 0;
+      vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        const q = new URL(url, "http://x").searchParams;
+        const body = (name: string) => new Response(JSON.stringify({ day: q.get("day"), sessions: [{ ...row, name }], total: 120, page: Number(q.get("page")), pageSize: 50 }), { status: 200 });
+        if (++n === 1) return body("api-refactor");
+        return new Promise<Response>((resolve) => { release = () => resolve(body("page-two")); });
+      }));
+      render(<HistoryView initialDay="2026-10-10" />);
+      fireEvent.click(await screen.findByRole("button", { name: "Next" }));
+      await waitFor(() => expect(n).toBe(2));
+      expect(screen.getByRole("button", { name: "api-refactor" })).toBeInTheDocument();
+      expect(screen.queryByText("Loading…")).toBeNull();
+      release(new Response());
+      expect(await screen.findByRole("button", { name: "page-two" })).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Day"), { target: { value: "2026-10-09" } });
+      await waitFor(() => expect(n).toBe(3));
+      expect(await screen.findByText("Loading…")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "page-two" })).toBeNull();
+      release(new Response());
+    });
+
     it("shows no pager when nothing ended, and keeps the error message", async () => {
       server([]);
       render(<HistoryView initialDay="2026-10-10" />);

@@ -40,7 +40,7 @@ export const DEFAULT_CONFIG: Omit<FleetConfig, 'home' | 'dbPath'> = {
   dropAfterMs: 60_000,
   lingerMs: 8_000,
   detachedHideAfterMs: 60_000,
-  retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000 },
+  retention: { samplesMs: 24 * 3600_000, eventsMs: 30 * 24 * 3600_000, sessionsMs: 30 * 24 * 3600_000, adminLogMs: 90 * 24 * 3600_000 },
   throttleMs: 500,
 };
 
@@ -70,9 +70,13 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
       samplesMs: envMs(env, 'RETAIN_SAMPLES_MS', d.retention.samplesMs),
       eventsMs: envMs(env, 'RETAIN_EVENTS_MS', d.retention.eventsMs),
       sessionsMs: envMs(env, 'RETAIN_SESSIONS_MS', d.retention.sessionsMs),
+      adminLogMs: envMs(env, 'RETAIN_ADMIN_LOG_MS', d.retention.adminLogMs),
     },
   };
 }
+
+/** How many session ids a `sweep.removed` line names; the rest are counted in `session_ids_omitted`. */
+const SWEEP_IDS_LOGGED = 10;
 
 /** Reporters remembered for `reporter.connected`; the oldest is forgotten past this. */
 const MAX_REPORTERS = 1000;
@@ -86,6 +90,9 @@ interface LiveEntry {
   /** The status last broadcast, to notice stale transitions. */
   status: SessionStatusView | null;
 }
+
+/** When a session ended: dropped, else ended, else last seen. */
+const endedAtOf = (row: SessionRow): number => row.dropped_at ?? row.ended_at ?? row.last_seen_at;
 
 export class Fleet {
   readonly hub = new SseHub();
@@ -172,7 +179,7 @@ export class Fleet {
 
   /** A session that has done nothing yet is kept off the wall and out of every feed (see `isUnused`). */
   private unused(row: SessionRow | undefined): boolean {
-    return !!row && isUnused(row, this.db.getAgents(row.id).length);
+    return !!row && isUnused(row, () => this.db.getAgents(row.id).length);
   }
 
   // ---- ingest ---------------------------------------------------------------------------------
@@ -358,28 +365,48 @@ export class Fleet {
       .map((e) => activityView(e, sessions.get(e.session_id)));
   }
 
-  /** Sessions that ended or were dropped in [from, to), as summary rows. */
+  /** Sessions that ended or were dropped in [from, to), as summary rows, newest first. */
   history(from: number, to: number): HistoryRow[] {
-    return this.db.endedBetween(from, to).filter((row) => !this.unused(row)).map((row) => {
-      const agents = this.db.getAgents(row.id);
-      const end = row.dropped_at ?? row.ended_at ?? row.last_seen_at;
-      return {
-        id: row.id,
-        name: row.name,
-        project: shortenHome(row.project_root ?? row.cwd, this.cfg.home),
-        model: row.model,
-        modelFamily: family(row.model),
-        startedAt: row.started_at,
-        endedAt: end,
-        durationSec: Math.max(0, Math.round((end - row.started_at) / 1000)),
-        costUsd: repriced(this.prices.pricing(), row.usage_json, row.cost_usd),
-        blowouts: row.blowouts + agents.reduce((n, a) => n + a.blowouts, 0),
-        agents: agents.length,
-        endReason: row.dropped_at !== null ? 'heartbeat lost' : row.end_reason,
-        clearedFrom: row.cleared_from ?? null,
-        clearedInto: this.db.clearedInto(row.id),
-      };
-    });
+    return this.historyRows(from, to).map((row) => this.historyRow(row));
+  }
+
+  /**
+   * One page of `history`, with the day's total. The filter and the sort use the session rows alone; the agents
+   * query and the repricing run for the rows on the page only. A page past the end is the last page.
+   */
+  historyPage(from: number, to: number, page: number, pageSize: number): { rows: HistoryRow[]; total: number; page: number } {
+    const all = this.historyRows(from, to);
+    const at = Math.min(page, Math.max(1, Math.ceil(all.length / pageSize)));
+    return { rows: all.slice((at - 1) * pageSize, at * pageSize).map((row) => this.historyRow(row)), total: all.length, page: at };
+  }
+
+  /** The day's sessions that did something, newest end first, with the id breaking ties so a row never moves between pages. */
+  private historyRows(from: number, to: number): SessionRow[] {
+    return this.db
+      .endedBetween(from, to)
+      .filter((row) => !this.unused(row))
+      .sort((a, b) => endedAtOf(b) - endedAtOf(a) || (a.id < b.id ? -1 : 1));
+  }
+
+  private historyRow(row: SessionRow): HistoryRow {
+    const agents = this.db.getAgents(row.id);
+    const end = endedAtOf(row);
+    return {
+      id: row.id,
+      name: row.name,
+      project: shortenHome(row.project_root ?? row.cwd, this.cfg.home),
+      model: row.model,
+      modelFamily: family(row.model),
+      startedAt: row.started_at,
+      endedAt: end,
+      durationSec: Math.max(0, Math.round((end - row.started_at) / 1000)),
+      costUsd: repriced(this.prices.pricing(), row.usage_json, row.cost_usd),
+      blowouts: row.blowouts + agents.reduce((n, a) => n + a.blowouts, 0),
+      agents: agents.length,
+      endReason: row.dropped_at !== null ? 'heartbeat lost' : row.end_reason,
+      clearedFrom: row.cleared_from ?? null,
+      clearedInto: this.db.clearedInto(row.id),
+    };
   }
 
   state(): StateBody {
@@ -540,11 +567,14 @@ export class Fleet {
     }
     const n = removed.done.length + removed.dropped.length;
     if (n > 0) {
+      // A sweep after a long outage can remove hundreds; the line names the first few and the count it left out.
+      const ids = [...removed.done, ...removed.dropped];
       this.logger.info('sweep.removed', `podium: sweep removed ${n} session${n === 1 ? '' : 's'} from the wall (${removed.done.length} ended, ${removed.dropped.length} heartbeat lost)`, {
         removed: n,
         done: removed.done.length,
         dropped: removed.dropped.length,
-        session_ids: [...removed.done, ...removed.dropped].join(','),
+        session_ids: ids.slice(0, SWEEP_IDS_LOGGED).join(','),
+        ...(ids.length > SWEEP_IDS_LOGGED ? { session_ids_omitted: ids.length - SWEEP_IDS_LOGGED } : {}),
       });
     }
   }
@@ -555,7 +585,7 @@ export class Fleet {
   }
 
   /** Hourly: retention. */
-  retain(): { samples: number; events: number; sessions: number } {
+  retain(): { samples: number; events: number; sessions: number; adminLog: number } {
     return this.db.retain(this.now(), this.cfg.retention);
   }
 

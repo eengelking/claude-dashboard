@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'claude-code/testing'
-import { Transport, BACKOFF_MS, QUEUE_MAX, type FetchLike, type HttpResult } from './transport.ts'
+import { Transport, BACKOFF_MS, QUEUE_MAX, plainHttpRemote, type FetchLike, type HttpResult } from './transport.ts'
 import type { ActivityEvent, Report } from './protocol.ts'
 import { scriptedReport } from './scripted.ts'
 
@@ -34,7 +34,7 @@ describe('transport', () => {
 
   test('success clears the acknowledged events and records the live count', async () => {
     const f = fake([ok(2, 4)])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     t.enqueue([ev(1), ev(2), ev(3)])
     expect(await t.send(build, 10)).toBe('ok')
     expect(f.calls[0]!.body.events.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
@@ -46,7 +46,7 @@ describe('transport', () => {
   test('reads which loops someone is watching from the reply, and nothing from a server that does not say (#118)', async () => {
     const reply = (watch: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, watch }) })
     const run = async (r: HttpResult) => {
-      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.13.0' })
+      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.13.0' })
       await t.send(build, 0)
       return t.watch
     }
@@ -59,7 +59,7 @@ describe('transport', () => {
   test('reads whether the server takes answers, and the messages it hands over, and nothing from an older server (#206)', async () => {
     const d = { id: 'dlv_1', askId: null, by: 'Ed', at: 1, kind: 'message', text: 'hi' }
     const run = async (body: unknown) => {
-      const t = new Transport(fake([{ status: 200, ok: true, text: JSON.stringify(body) }]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.14.0' })
+      const t = new Transport(fake([{ status: 200, ok: true, text: JSON.stringify(body) }]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.14.0' })
       await t.send(build, 0)
       return [t.respond, t.deliveries]
     }
@@ -71,7 +71,7 @@ describe('transport', () => {
   test('reads where the server places this reporter, and says what to do about it', async () => {
     const reply = (c: unknown): HttpResult => ({ status: 200, ok: true, text: JSON.stringify({ ok: true, liveSessions: 2, serverVersion: '0.3.0', reporterCompat: c }) })
     const run = async (r: HttpResult) => {
-      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
       await t.send(build, 0)
       return t
     }
@@ -91,7 +91,7 @@ describe('transport', () => {
   test('clears the notice once the server says the versions match again', async () => {
     const bad = { status: 200, ok: true, text: '{"ok":true,"reporterCompat":"outdated"}' }
     const good = { status: 200, ok: true, text: '{"ok":true,"reporterCompat":"ok"}' }
-    const t = new Transport(fake([bad, good]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(fake([bad, good]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     await t.send(build, 0)
     expect(t.versionNotice()).not.toBeNull()
     await t.send(build, 10)
@@ -99,7 +99,7 @@ describe('transport', () => {
   })
 
   test('shows the version before the server has answered', () => {
-    const t = new Transport(fake([]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(fake([]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     expect(t.statusText()).toBe('podium v0.11.0 ○ connecting')
   })
 
@@ -110,7 +110,7 @@ describe('transport', () => {
       text: JSON.stringify({ ok: true, liveSessions: 3, serverVersion: '0.12.0', reporterSupport: { min: '0.9.0', max }, reporterCompat: compat }),
     })
     const run = async (version: string, r: HttpResult) => {
-      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version })
+      const t = new Transport(fake([r]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version })
       await t.send(build, 0)
       return t
     }
@@ -131,7 +131,7 @@ describe('transport', () => {
 
   test('sends at most 100 events per report', async () => {
     const f = fake([ok()])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     t.enqueue(Array.from({ length: 250 }, (_, i) => ev(i)))
     await t.send(build, 0)
     expect(f.calls[0]!.body.events).toHaveLength(100)
@@ -141,7 +141,7 @@ describe('transport', () => {
   test('a 400 drops that report and its events, and is not retried', async () => {
     const f = fake([{ status: 400, ok: false, text: '{"ok":false,"error":"bad","path":"$.v"}' }])
     const logs: string[] = []
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
     t.enqueue([ev(1)])
     expect(await t.send(build, 0)).toBe('rejected')
     expect(t.queue).toEqual([])
@@ -151,7 +151,7 @@ describe('transport', () => {
 
   test('a 409 (the session belongs to someone else) is a rejection, not an outage', async () => {
     const f = fake([{ status: 409, ok: false, text: '{"ok":false,"error":"that session belongs to someone else"}' }])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     t.enqueue([ev(1)])
     expect(await t.send(build, 0)).toBe('rejected')
     expect(t.queue).toEqual([])
@@ -161,7 +161,7 @@ describe('transport', () => {
   test('a rejected report backs off like a failure, so a persistently rejected snapshot is not re-posted every tick', async () => {
     const bad: HttpResult = { status: 400, ok: false, text: '{"ok":false}' }
     const f = fake([bad, bad, bad, ok()])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     expect(await t.send(build, 100)).toBe('rejected')
     expect(t.due(100, true)).toBe(false)
     expect(t.due(1099, true)).toBe(false)
@@ -180,7 +180,7 @@ describe('transport', () => {
     const no: HttpResult = { status: 401, ok: false, text: '{"ok":false,"error":"missing or wrong X-Podium-Token","path":"$"}' }
     const f = fake([no, no, ok()])
     const logs: string[] = []
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: 'pdm_x', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: 'pdm_x', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
     t.enqueue([ev(1)])
     expect(await t.send(build, 100)).toBe('refused')
     expect(t.queue.map((e) => e.id)).toEqual(['e1'])
@@ -201,7 +201,7 @@ describe('transport', () => {
     const conflict: HttpResult = { status: 409, ok: false, text: '{"ok":false,"error":"that session belongs to someone else","path":"$.session.id"}' }
     const f = fake([conflict, conflict, ok()])
     const logs: string[] = []
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: 'pdm_x', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: 'pdm_x', heartbeatMs: 5000, version: '0.11.0' }, (l) => logs.push(l))
     expect(t.ownerNotice()).toBeNull()
     expect(await t.send(build, 100)).toBe('rejected')
     expect(t.statusText()).toBe('podium v0.11.0 ○ refused: session belongs to someone else')
@@ -217,7 +217,7 @@ describe('transport', () => {
 
   test('a 400 is not shown as a refusal by someone else (#209)', async () => {
     const f = fake([{ status: 400, ok: false, text: '{"ok":false}' }])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     expect(await t.send(build, 100)).toBe('rejected')
     expect(t.ownerNotice()).toBeNull()
     expect(t.statusText()).toBe('podium v0.11.0 ○ connecting')
@@ -225,7 +225,7 @@ describe('transport', () => {
 
   test('a network error keeps the events and backs off 1, 2, 5, 10, 10 s', async () => {
     const f = fake([new Error('ECONNREFUSED'), new Error('x'), new Error('x'), new Error('x'), { status: 503, ok: false, text: '' }])
-    const t = new Transport(f.fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(f.fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     t.enqueue([ev(1), ev(2)])
     const waits: number[] = []
     let now = 0
@@ -248,7 +248,7 @@ describe('transport', () => {
   })
 
   test('the queue holds at most 500 events, dropping the oldest', () => {
-    const t = new Transport(fake([]).fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(fake([]).fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     t.enqueue(Array.from({ length: 520 }, (_, i) => ev(i)))
     expect(t.queue).toHaveLength(QUEUE_MAX)
     expect(t.queue[0]!.id).toBe('e20')
@@ -258,7 +258,7 @@ describe('transport', () => {
   test('due: on change, on queued events, or when the heartbeat is due; never twice at once', async () => {
     let release: (r: HttpResult) => void = () => {}
     const fetch: FetchLike = () => new Promise((res) => (release = res))
-    const t = new Transport(fetch, { serverUrl: 'http://h', token: '', heartbeatMs: 5000, version: '0.11.0' })
+    const t = new Transport(fetch, { serverUrl: 'http://127.0.0.1', token: '', heartbeatMs: 5000, version: '0.11.0' })
     expect(t.due(1000, false)).toBe(true) // never sent: heartbeat due
     const p = t.send(build, 1000)
     expect(t.due(1001, true)).toBe(false)
@@ -268,5 +268,35 @@ describe('transport', () => {
     expect(t.due(2000, false)).toBe(false)
     expect(t.due(2000, true)).toBe(true)
     expect(t.due(6000, false)).toBe(true)
+  })
+
+  test('plainHttpRemote is true only for http: to a host that is not loopback (#306)', () => {
+    for (const u of ['http://192.168.1.5:4317', 'http://podium.lan', 'http://10.0.0.2:4317/', 'http://[fe80::1]:4317', 'HTTP://Podium.LAN']) expect(plainHttpRemote(u), u).toBe(true)
+    for (const u of ['http://127.0.0.1:4317', 'http://localhost:4317', 'http://127.4.5.6', 'http://[::1]:4317', 'https://podium.example', 'https://192.168.1.5', 'not a url', '']) expect(plainHttpRemote(u), u).toBe(false)
+  })
+
+  test('the status line starts with a warning mark when the server is plain http beyond loopback, in every state, and reporting continues (#306)', async () => {
+    const mk = (serverUrl: string, r: (HttpResult | Error)[] = []) => new Transport(fake(r).fetch, { serverUrl, token: '', heartbeatMs: 5000, version: '1.0.2' })
+    expect(mk('http://192.168.1.5:4317').statusText()).toBe('⚠ podium v1.0.2 ○ connecting')
+    const live = mk('http://192.168.1.5:4317', [ok(0, 6)])
+    expect(await live.send(build, 0)).toBe('ok')
+    expect(live.statusText()).toBe('⚠ podium v1.0.2 ● 6 live')
+    const off = mk('http://192.168.1.5:4317', [new Error('down')])
+    await off.send(build, 0)
+    expect(off.statusText()).toBe('⚠ podium v1.0.2 ○ offline')
+    const loop = mk('http://127.0.0.1:4317', [ok(0, 6)])
+    await loop.send(build, 0)
+    expect(loop.statusText()).toBe('podium v1.0.2 ● 6 live')
+    const tls = mk('https://podium.example', [ok(0, 6)])
+    await tls.send(build, 0)
+    expect(tls.statusText()).toBe('podium v1.0.2 ● 6 live')
+  })
+
+  test('plainHttpNotice says what travels unencrypted for a plain-http remote and is null otherwise (#306)', () => {
+    const mk = (serverUrl: string) => new Transport(fake([]).fetch, { serverUrl, token: 't', heartbeatMs: 5000, version: '1.0.2' })
+    expect(mk('http://192.168.1.5:4317').plainHttpNotice()).toMatch(/token.*not encrypted/i)
+    expect(mk('http://192.168.1.5:4317').plainHttpNotice()).not.toContain('192.168.1.5')
+    expect(mk('http://127.0.0.1:4317').plainHttpNotice()).toBeNull()
+    expect(mk('https://podium.example').plainHttpNotice()).toBeNull()
   })
 })

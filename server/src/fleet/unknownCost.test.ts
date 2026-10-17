@@ -84,3 +84,38 @@ describe('a session first heard after the day began (#276)', () => {
     expect(fleet.kpis().costToday).toBeCloseTo(3, 9);
   });
 });
+
+describe('a session that started before midnight and now reports no ledger cost (#286)', () => {
+  const send = (fleet: Fleet, at: number, ledger: number | null, usage: ModelUsage[] | undefined) => {
+    const r: Report = fixtureReport();
+    r.sentAt = at;
+    r.session.startedAt = startOfDay(NOW) - 3_600_000;
+    r.session.costUsd = ledger;
+    if (usage) r.session.usageByModel = usage;
+    else delete r.session.usageByModel;
+    r.agents = [];
+    fleet.ingest(r);
+  };
+
+  it('counts the priced spend that came after midnight, from the usage on the last sample before it', () => {
+    const midnight = startOfDay(NOW);
+    let clock = midnight - 60_000;
+    const fleet = fleetAt(() => clock);
+    send(fleet, clock, 2, use('claude-sonnet-5-5', M)); // 1M tokens, $2 on Claude before midnight
+    clock = midnight + 3_600_000;
+    // It then switched to a local model: the mod sends no ledger cost, and the Claude usage has grown to 2M tokens ($4).
+    send(fleet, clock, null, [...use('claude-sonnet-5-5', 2 * M), ...use('qwen3-coder', M)]);
+    expect(fleet.kpis().costToday).toBeCloseTo(2, 9);
+    expect(fleet.kpis().costTodayByOwner.reduce((n, o) => n + o.costUsd, 0)).toBeCloseTo(2, 9);
+  });
+
+  it('still counts nothing when no sample has usage and there is no ledger cost', () => {
+    const midnight = startOfDay(NOW);
+    let clock = midnight - 60_000;
+    const fleet = fleetAt(() => clock);
+    send(fleet, clock, 3, undefined);
+    clock = midnight + 3_600_000;
+    send(fleet, clock, null, undefined);
+    expect(fleet.kpis().costToday).toBe(0);
+  });
+});

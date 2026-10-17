@@ -4,6 +4,7 @@
 // server cannot tell a reporter that is turned off from one that cannot reach it.
 import { useEffect, useState } from "react";
 import { AdminError, query, type AdminApi, type IgnoreRule, type RemoveBody, type ReporterDetail, type ReporterList, type ReporterRow, type ReporterSort, type ReporterState } from "./adminApi";
+import { Tip } from "../components/Tip";
 import { Pager } from "./Pager";
 import { Panel, Section } from "./Page";
 import { failText, useList } from "./useList";
@@ -97,10 +98,10 @@ function WarnIcon() {
 function Token({ r }: { r: Pick<ReporterRow, "adminSecret" | "credential"> }) {
   if (r.adminSecret) {
     return (
-      <span className="admsec" tabIndex={0} title={ADMIN_HINT} aria-label={`Admin secret. ${ADMIN_HINT}`}>
+      <Tip className="admsec" text={ADMIN_HINT}>
         <WarnIcon />
         Admin secret
-      </span>
+      </Tip>
     );
   }
   return r.credential ? <span className="tokid mono">{r.credential}</span> : <span className="tokid">none</span>;
@@ -111,10 +112,10 @@ function StateBadge({ r, serverTime, serverStartedAt }: { r: Pick<ReporterRow, "
   const s = stateOf(r.state);
   const text = stateDetail(r, serverTime, serverStartedAt);
   return (
-    <span className={`rstate ${r.state}`} title={text} tabIndex={0} aria-label={text}>
+    <Tip className={`rstate ${r.state}`} text={text}>
       <span className={`rdot ${r.state}`} aria-hidden="true" />
       {s.name}
-    </span>
+    </Tip>
   );
 }
 
@@ -329,9 +330,9 @@ export function ReportersTab(props: {
                           {r.name}
                         </button>
                         {nameDetail(r) && (
-                          <span className="sub tt" tabIndex={0} title={nameDetail(r)} aria-label={nameDetail(r)}>
+                          <Tip className="sub tt" text={nameDetail(r) ?? ""}>
                             no name set
-                          </span>
+                          </Tip>
                         )}
                         <span className="sub mono">{r.key.startsWith("addr:") || r.key.startsWith("hooks:") ? `no machine id, matched by address ${r.key.slice(r.key.indexOf(":") + 1)}` : r.key}</span>
                       </td>
@@ -634,7 +635,7 @@ function Detail(props: { api: AdminApi; id: string; onBack: () => void; onLocked
         <section className="dsec" aria-labelledby="rep-h2">
           <h3 id="rep-h2">Where it comes from</h3>
           {kv([
-            ["Machine", d.named || !nameDetail(d) ? d.name : <span key="n" className="tt" tabIndex={0} title={nameDetail(d)}>{d.name} (no name set)</span>],
+            ["Machine", d.named || !nameDetail(d) ? d.name : <Tip key="n" className="tt" text={nameDetail(d) ?? ""}>{d.name} (no name set)</Tip>],
             ...(d.named || !nameDetail(d) ? [] : ([["Why unnamed", nameDetail(d)]] as [string, React.ReactNode][])),
             ["Machine id", d.machineId ? <span key="m" className="mono">{d.machineId}</span> : <span key="m" className="tt" title="The reporter has no user name set, so it sends no machine id and is matched by source address.">Not sent</span>],
             ["Source address", <span key="a" className="mono">{d.source ?? "unknown"}</span>],

@@ -392,7 +392,7 @@ Admin is for the person who runs the server. The **Admin** button in the top bar
 without activity (an Administrator who is still signed in to the console is let straight back in), and five wrong names or tokens lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has eight pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and Spend and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged, 50 rows at a time (25 and 100 are also offered; Spend starts at 25 and offers 50 and 100).
+Admin has eight pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and Spend and the Admin log under Activity. Lock Admin is at the bottom of the menu; after you use it, reloading the page asks for your name and token again, even while you are still signed in to respond (the 10-minute idle lock, by contrast, lets a signed-in Administrator straight back in). On a narrow screen the menu becomes a strip along the top. Every list is paged, 50 rows at a time (25 and 100 are also offered; Spend starts at 25 and offers 50 and 100).
 
 - **People.** Under **Create user**, type a name and choose Create user. Podium shows the token once, above the page (it stays there when you switch pages), with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you
@@ -454,7 +454,8 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
 - **Spend.** What each person, or each group, has spent since midnight today on the server, live or ended sessions, as bars or as a table. Choose **People** or **Groups** and **Chart** or **Table**; the total spent and the number of live sessions are at the top right, and the list is largest first, 25 rows at a time. The total and the table's Total row always count everyone, not just the page you are on, and the total equals the "Est. cost today" tile. These are estimates from tokens, not a bill. Someone whose sessions have all ended still has a row, but no band on the wall.
 - **Admin log.** Who made each change (a person, or the admin secret), unlocks, failed unlocks, new people, rotations, revocations, group changes, reporters removed and changes to
   the feature flags, the wall settings and model prices, with the
-  address each came from. It never holds a token or the secret.
+  address each came from. It never holds a token or the secret. Entries are kept for 90 days (set `RETAIN_ADMIN_LOG_MS` to
+  change that), and the newest 100 are kept however old they are. The page says how long entries are kept.
 
 A report is accepted when its token belongs to the person whose name it also sends. The server decides who a
 report is from by the token, so a valid token with someone else's name is refused. A person cannot see or
@@ -492,10 +493,11 @@ the table.
 | `reporter.silent` | warn | A session stopped reporting and turned stale |
 | `session.started`, `session.ended`, `session.deleted` | info | A session's first report (or its return after leaving the wall), its end (`reason` is `done` or `heartbeat lost`), or a delete |
 | `reporters.forgotten` | info | The Forget old reporters setting removed reporters that had been silent for its number of days |
-| `sweep.removed` | info | The sweep took ended or heartbeat-lost sessions off the wall |
+| `sweep.removed` | info | The sweep took ended or heartbeat-lost sessions off the wall; it names the first 10 session ids and counts the rest in `session_ids_omitted` |
 | `admin.*` | info | An Admin change, named as in the Admin Log (`admin.person_created`, `admin.feature_changed`); a failed unlock is `admin.unlock_failed` at warn |
 | `ingest.failed`, `request.failed`, `sweeper.failed` | error | Something broke on the server |
 | `report.accepted`, `http.request` | debug | Every stored report, and every HTTP request (method, path, route, status, time; never the query string) |
+| `http.aborted` | debug | A request the client dropped before the server answered (the fields of `http.request` without a status, since none was sent) |
 
 Two settings change what you get, each with `podiumctl config set KEY=VALUE` and then `podiumctl restart`:
 
@@ -611,6 +613,7 @@ with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull,
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
 | A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. See "Updating the mod" below. It keeps reporting meanwhile |
+| The status line starts with `⚠` (`⚠ podium v1.0.2 ● 6 live`) | The mod's server URL is `http://` to another machine, so its token is not encrypted in transit. Put a TLS proxy in front of Podium and set the server URL to `https://...` in the podium-reporter settings, or accept the risk on a network you trust. Reporting continues |
 | The status line ends in `· update available` | Your mod works, but the server supports a newer one. See "Updating the mod" below |
 | A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (see "Updating the mod" below) |
 
