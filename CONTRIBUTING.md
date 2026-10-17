@@ -133,7 +133,7 @@ gh pr create --base development
 
 On github.com, change the "base" dropdown from `main` to `development` before you click "Create pull request".
 If you opened it against `main` by mistake, use the "Edit" button next to the PR title to change the base; no
-need to close it and start over.
+need to close it and start over. A CI check ("PR target check") fails any PR into `main` that is not a release or a hotfix from this repo, so a wrong base shows up as a red check.
 
 Say in the PR body that it is to be squash-merged. This repo keeps one commit per PR on `development`, however
 many commits your branch has. The PR template has a checklist. Put `Closes #N` in the body for the issue the PR
