@@ -50,7 +50,7 @@ import { nextCronAt } from './cron.ts';
 import { isDelivery, Transport, type FetchLike } from './transport.ts';
 import { activityCall, activityText, explainPrompt } from './failures.ts';
 import { pickIdentity, worthHolding, type Identity } from './identity.ts';
-import { hostOf, isMachineId, MACHINE_ID_KEY, machineInfo, newMachineId } from './machine.ts';
+import { hostOf, isMachineId, MACHINE_ID_KEY, machineIdPath, machineInfo, newMachineId, parseMachineIdFile } from './machine.ts';
 import type { Ask, Delivery, DeliveryResult, MachineInfo, RespondInfo, RespondKind, RespondLevel } from './protocol.ts';
 import {
   answeredLine,
@@ -538,22 +538,41 @@ function random(): number {
 }
 
 /**
+ * The machine's id, one for every load of the mod on it (#267). The shared file under the Claude config
+ * directory decides; without a valid one, the id this load's store already holds is kept (so an install
+ * keeps its row) and shared, else a new one is made and shared. The file is read back after a write, so two
+ * loads that start together settle on whichever wrote first. Where the file cannot be used, the store alone
+ * keeps the id, as before.
+ */
+async function machineId($: Engine): Promise<string> {
+  const path = machineIdPath(
+    await attempt(() => $.env.get('CLAUDE_CONFIG_DIR'), undefined),
+    await attempt(() => $.env.get('HOME'), undefined),
+  );
+  const shared = async () => (path ? parseMachineIdFile(await attempt(async () => (await $.fs.read(path)) as string, null)) : null);
+  const fromFile = await shared();
+  if (fromFile) return fromFile;
+  const kept = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
+  const id = isMachineId(kept) ? kept : newMachineId(random);
+  if (id !== kept) await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
+  if (!path) return id;
+  await attempt(() => $.fs.write(path, `${id}\n`), undefined);
+  return (await shared()) ?? id;
+}
+
+/**
  * This machine's short host name and the random id the mod keeps for it in its own store (made on first
  * use). Read only when a userName is set: an unnamed reporter sends nothing that identifies the machine.
  */
 async function readMachine($: Engine): Promise<MachineInfo | null> {
   if (!who.userName.trim()) return null;
   try {
-    let id = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
-    if (!isMachineId(id)) {
-      id = newMachineId(random);
-      await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
-    }
+    const id = await machineId($);
     const host = await attempt(async () => {
       const res = await $.process.run(['hostname'], { timeoutMs: 2000 });
       return res.exitCode === 0 ? hostOf(res.stdout) : null;
     }, null);
-    return machineInfo(host, id as string);
+    return machineInfo(host, id);
   } catch (err) {
     record($, 'machine', err);
     return null;

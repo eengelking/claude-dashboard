@@ -69,13 +69,14 @@ Each running Claude Code session is its own card, and a machine can run several.
 three sessions on one Mac can look like extra reporters when they show as separate rows (the next entries say
 why they do). Count the cards on the wall for sessions and the machine ids on the page for machines.
 
-### One machine shows as two rows with different machine ids
+### One machine showed as two rows with different machine ids (fixed in #267)
 
-The mod makes a random machine id the first time it runs and keeps it in its own store, which is one file per
-plugin load under `~/.claude/plugins/store/`. A copy of the mod loaded inline and the marketplace install each
-keep their own id, so one machine reports as two. A session keeps its id for its whole life, so the older row
-stays live while that session does. Load the mod one way on a given machine. The id is made in
-`mod/podium-reporter/hooks/machine.ts`. Making it per machine, not per plugin load, is not done.
+Before #267 each load of the mod kept its own machine id in its own store, so an inline copy and the marketplace
+install reported as two machines. Every load now shares `podium-machine-id` in the Claude config directory
+(`CLAUDE_CONFIG_DIR`, else `~/.claude`). A machine that already had two ids settles on whichever load wrote the
+file first; the other id's row stays live only while its session does. If the config directory is copied to
+another machine the id goes with it, and two machines then share one id. Where the file cannot be read or written
+the mod falls back to its own store, as before. The id is made in `mod/podium-reporter/hooks/machine.ts`.
 
 ### One machine shows an extra row ending in `#` and a name
 

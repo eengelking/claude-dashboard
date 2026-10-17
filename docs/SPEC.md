@@ -553,7 +553,7 @@ interface Report {
   agents: AgentReport[];                // every agent seen this session, running or finished
   events: ActivityEvent[];              // not yet acknowledged
   userName?: string;                    // the person this reporter is set up as (the `userName` option); omitted when empty. The server checks it against the token's owner (7.7)
-  machine?: { name: string; id: string };  // sent only with userName (0.9.0 and later): the short host name (`hostname` up to the first dot, ≤ 64) and a random 12-hex id the mod keeps in its own store under `machineId`, made on first use, so two machines with one host name stay apart
+  machine?: { name: string; id: string };  // sent only with userName (0.9.0 and later): the short host name (`hostname` up to the first dot, ≤ 64) and a random 12-hex id the mod keeps in one file, `podium-machine-id` in the Claude config directory (`CLAUDE_CONFIG_DIR`, else `~/.claude`), made on first use and shared by every load of the mod on the machine (#267; an id already in a load's own store under `machineId` is adopted into the file, and the store is used alone where the file cannot be), so two machines with one host name stay apart
 }
 
 interface FilesReport {

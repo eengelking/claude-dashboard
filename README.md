@@ -251,8 +251,8 @@ Only to the server URL above, and only this:
   `/clear`, the new session also names the one it continues, so History can link them;
 - only when you have set `userName`: that name, and which machine the session runs on: its short host name
   (what `hostname` prints, up to the first dot) and a random 12-character id the mod makes the first time
-  and keeps in its own store (`~/.claude/plugins/store/podium-reporter_…json`, key `machineId`), so two
-  machines with the same host name stay apart. The id is random, not read from the hardware, and the
+  and keeps in one file (`~/.claude/podium-machine-id`, or under `CLAUDE_CONFIG_DIR` when that is set), so two
+  machines with the same host name stay apart and every copy of the mod on a machine reports the same id. The id is random, not read from the hardware, and the
   operating system user name and `git config` are never read.
 
 Before anything is sent, text is cut to those limits and anything that looks like a secret is replaced
