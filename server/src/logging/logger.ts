@@ -27,7 +27,8 @@ export function quietInText(event: string): boolean {
     event === 'auth.failed' ||
     event === 'report.conflict' ||
     event === 'report.accepted' ||
-    event === 'http.request'
+    event === 'http.request' ||
+    event === 'http.aborted'
   );
 }
 

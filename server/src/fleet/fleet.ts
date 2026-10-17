@@ -74,6 +74,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv, base: { home: string; dbPa
   };
 }
 
+/** How many session ids a `sweep.removed` line names; the rest are counted in `session_ids_omitted`. */
+const SWEEP_IDS_LOGGED = 10;
+
 /** Reporters remembered for `reporter.connected`; the oldest is forgotten past this. */
 const MAX_REPORTERS = 1000;
 
@@ -540,11 +543,14 @@ export class Fleet {
     }
     const n = removed.done.length + removed.dropped.length;
     if (n > 0) {
+      // A sweep after a long outage can remove hundreds; the line names the first few and the count it left out.
+      const ids = [...removed.done, ...removed.dropped];
       this.logger.info('sweep.removed', `podium: sweep removed ${n} session${n === 1 ? '' : 's'} from the wall (${removed.done.length} ended, ${removed.dropped.length} heartbeat lost)`, {
         removed: n,
         done: removed.done.length,
         dropped: removed.dropped.length,
-        session_ids: [...removed.done, ...removed.dropped].join(','),
+        session_ids: ids.slice(0, SWEEP_IDS_LOGGED).join(','),
+        ...(ids.length > SWEEP_IDS_LOGGED ? { session_ids_omitted: ids.length - SWEEP_IDS_LOGGED } : {}),
       });
     }
   }

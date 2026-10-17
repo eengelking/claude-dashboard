@@ -492,10 +492,11 @@ the table.
 | `reporter.silent` | warn | A session stopped reporting and turned stale |
 | `session.started`, `session.ended`, `session.deleted` | info | A session's first report (or its return after leaving the wall), its end (`reason` is `done` or `heartbeat lost`), or a delete |
 | `reporters.forgotten` | info | The Forget old reporters setting removed reporters that had been silent for its number of days |
-| `sweep.removed` | info | The sweep took ended or heartbeat-lost sessions off the wall |
+| `sweep.removed` | info | The sweep took ended or heartbeat-lost sessions off the wall; it names the first 10 session ids and counts the rest in `session_ids_omitted` |
 | `admin.*` | info | An Admin change, named as in the Admin Log (`admin.person_created`, `admin.feature_changed`); a failed unlock is `admin.unlock_failed` at warn |
 | `ingest.failed`, `request.failed`, `sweeper.failed` | error | Something broke on the server |
 | `report.accepted`, `http.request` | debug | Every stored report, and every HTTP request (method, path, route, status, time; never the query string) |
+| `http.aborted` | debug | A request the client dropped before the server answered (the fields of `http.request` without a status, since none was sent) |
 
 Two settings change what you get, each with `podiumctl config set KEY=VALUE` and then `podiumctl restart`:
 

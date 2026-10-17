@@ -136,6 +136,27 @@ describe('the events', () => {
     expect(JSON.stringify(rec)).not.toContain('zzz');
   });
 
+  it('an aborted request is one http.aborted debug line, and no http.request line', async () => {
+    const s = stack();
+    s.app.get('/hang', () => {});
+    const server = await new Promise<import('node:http').Server>((resolve) => {
+      const srv = s.app.listen(0, '127.0.0.1', () => resolve(srv));
+    });
+    cleanups.push(() => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections(); }));
+    const ac = new AbortController();
+    const pending = fetch(`http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}/hang?secret=zzz`, { signal: ac.signal }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 50));
+    ac.abort();
+    await pending;
+    await vi.waitFor(() => expect(s.records().some((r) => r.event === 'http.aborted')).toBe(true));
+    const rec = s.records().find((r) => r.event === 'http.aborted')!;
+    expect(rec).toMatchObject({ level: 'debug', method: 'GET', path: '/hang' });
+    expect(typeof rec.duration_ms).toBe('number');
+    expect(rec).not.toHaveProperty('status');
+    expect(JSON.stringify(rec)).not.toContain('zzz');
+    expect(s.records().some((r) => r.event === 'http.request')).toBe(false);
+  });
+
   it('http.request is skipped at the default level', async () => {
     const s = stack({ level: 'info' });
     await request(s.app).get('/api/fleet/state');
@@ -154,6 +175,32 @@ describe('the events', () => {
     expect(recs.find((x) => x.event === 'session.started')).toMatchObject({ level: 'info', session_id: r.session.id, owner: 'Dana' });
     expect(recs.find((x) => x.event === 'session.ended')).toMatchObject({ level: 'info', session_id: r.session.id, reason: 'done', end_reason: 'prompt_input_exit' });
     expect(recs.find((x) => x.event === 'sweep.removed')).toMatchObject({ level: 'info', removed: 1, done: 1, dropped: 0 });
+  });
+
+  it('sweep.removed lists a bounded number of ids and the total for a large sweep', () => {
+    const clock = { t: T0 };
+    const s = stack({ clock });
+    for (let i = 0; i < 50; i++) {
+      const r = fixtureReport();
+      s.fleet.ingest({ ...r, session: { ...r.session, id: `bulk-${String(i).padStart(2, '0')}`, status: 'done', endReason: 'prompt_input_exit' } }, 'Dana');
+    }
+    clock.t += 9000;
+    s.fleet.sweep();
+    const rec = s.records().find((x) => x.event === 'sweep.removed')!;
+    expect(rec).toMatchObject({ removed: 50, done: 50, dropped: 0, session_ids_omitted: 40 });
+    expect(String(rec.session_ids).split(',')).toHaveLength(10);
+  });
+
+  it('sweep.removed lists every id when the sweep is small', () => {
+    const clock = { t: T0 };
+    const s = stack({ clock });
+    const r = fixtureReport();
+    s.fleet.ingest({ ...r, session: { ...r.session, status: 'done', endReason: 'prompt_input_exit' } }, 'Dana');
+    clock.t += 9000;
+    s.fleet.sweep();
+    const rec = s.records().find((x) => x.event === 'sweep.removed')!;
+    expect(rec.session_ids).toBe(r.session.id);
+    expect(rec).not.toHaveProperty('session_ids_omitted');
   });
 
   it('session.started says revived only for a session that had ended or been dropped and came back', () => {
