@@ -14,7 +14,7 @@ import { ADMIN_OWNER, ADMIN_SECRET_ACTOR, nameKey, sourceAddress, type PeopleSto
 import { checkNameToken } from './nameToken.js';
 import type { RespondBridge } from './respondBridge.js';
 import type { Lockout } from './lockout.js';
-import { logWords, shortDeliveryId, type AnswerError, type DeliveryTrail } from './respond.js';
+import { logWords, shortDeliveryId, type AnswerError, type DeliveryTrail, type DropWhy } from './respond.js';
 import { DELIVERY_RESULTS, RESPOND_LIMITS, validateAsk, type AskCloseOutcome, type Delivery, type DeliveryResult, type RespondMe } from './protocol.js';
 import type { Logger } from '../logging/logger.js';
 import type { SessionRow } from './db.js';
@@ -127,10 +127,13 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     refused: 'the session refused it',
     closed: 'it had closed before the session got it',
   };
-  const DROP_WORDS: Record<'discarded' | 'ask-closed' | 'session-ended', string> = {
+  const DROP_WORDS: Record<DropWhy, string> = {
     discarded: 'discarded by its sender, so it never reached the session',
     'ask-closed': 'the ask closed first, so it never reached the session',
     'session-ended': 'the session ended first, before any result came back',
+    'queued-session-ended': 'the session ended while it was still queued, so Podium cannot tell whether it was read',
+    'session-deleted': 'the session was deleted first, before any result came back',
+    'responding-off': 'responding was turned off first, before any result came back',
   };
   fleet.respond.trail = (t: DeliveryTrail) => {
     // The store calls this mid-change; a failing log write must not leave a delivery half-updated.

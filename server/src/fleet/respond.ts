@@ -64,10 +64,13 @@ interface AskEntry {
   ran?: boolean;
 }
 
+/** Why the server let go of a delivery that has no result (#304, #326, #333, #334). */
+export type DropWhy = 'discarded' | 'ask-closed' | 'session-ended' | 'queued-session-ended' | 'session-deleted' | 'responding-off';
+
 /** What became of a delivery after the server took it, for the admin log (#304): never its text. */
 export type DeliveryTrail =
   | { kind: 'result'; sessionId: string; delivery: Delivery; result: DeliveryResult }
-  | { kind: 'dropped'; sessionId: string; delivery: Delivery; why: 'discarded' | 'ask-closed' | 'session-ended'; /** Who discarded it; the sender for a drop on close or at session end. */ by: string };
+  | { kind: 'dropped'; sessionId: string; delivery: Delivery; why: DropWhy; /** Who discarded it; the sender for every other reason. */ by: string };
 
 export type HoldResult = { kind: 'delivery'; delivery: Delivery } | { kind: 'none' } | { kind: 'unknown' } | { kind: 'closed'; outcome: AskOutcome };
 
@@ -372,18 +375,26 @@ export class RespondStore {
     const s = this.sessions.get(sessionId);
     if (!s) return;
     for (const e of s.asks.values()) if (!e.closed) this.setClosed(sessionId, e, { outcome: 'ended', at: this.now(), by: null, answer: null, planApproved: false, implicit: false });
-    // A message or command with no result yet never reached the session; one with a result already has its row.
+    // A message or command with no result yet never reached the session. One the session queued may still be read, so the
+    // row for it says only that the session ended first (#334); one with a final result already has its row.
     for (const m of s.messages) {
-      if (m.result !== null) continue;
-      this.trail({ kind: 'dropped', sessionId, delivery: m.d, why: 'session-ended', by: m.d.by });
+      if (m.result === null) this.trail({ kind: 'dropped', sessionId, delivery: m.d, why: 'session-ended', by: m.d.by });
+      else if (m.result === 'queued') this.trail({ kind: 'dropped', sessionId, delivery: m.d, why: 'queued-session-ended', by: m.d.by });
     }
     s.messages = [];
+  }
+
+  /** A row for each answer, message or command held with no result yet, as the entry is about to go (#333). */
+  private dropPending(sessionId: string, s: SessionEntry, why: DropWhy): void {
+    const waiting = [...s.messages, ...[...s.asks.values()].flatMap((e) => (e.delivery ? [e.delivery] : []))];
+    for (const d of waiting) if (d.result === null) this.trail({ kind: 'dropped', sessionId, delivery: d.d, why, by: d.d.by });
   }
 
   /** The session is gone: everything it held goes. */
   dropSession(sessionId: string): void {
     const s = this.sessions.get(sessionId);
     if (!s) return;
+    this.dropPending(sessionId, s, 'session-deleted');
     for (const e of s.asks.values()) this.wake(sessionId, e.ask.id, { kind: 'closed', outcome: 'ended' });
     this.sessions.delete(sessionId);
   }
@@ -392,6 +403,7 @@ export class RespondStore {
   clear(): void {
     for (const w of [...this.waiters]) this.release(w, { kind: 'closed', outcome: 'ended' });
     const ids = [...this.sessions.keys()];
+    for (const [id, s] of this.sessions) this.dropPending(id, s, 'responding-off');
     this.sessions.clear();
     for (const id of ids) this.onChange(id);
   }

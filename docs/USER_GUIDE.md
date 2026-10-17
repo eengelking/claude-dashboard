@@ -432,7 +432,7 @@ Admin has eight pages, listed in a menu down the left side: People, Groups and R
   **Remove rule** undoes one. A source address and a machine name are personal data, so only Admin shows them.
 - **Settings.** **Feature flags**, at the top, turn a feature on or off for everyone on this server. **Respond from
   Podium** (`respond`), off by default, lets people answer and message the sessions they own (see "Answering a
-  session from Podium" above); each answer is written to the Admin log with who sent it, followed by a row saying what became of it (the session took it, refused it, or it never got there because its sender discarded it, its ask closed first, or the session ended first). **Agent activity feed**
+  session from Podium" above); each answer is written to the Admin log with who sent it, followed by a row saying what became of it (the session took it, refused it, or it never got there because its sender discarded it, its ask closed first, the session ended or was deleted first, or responding was turned off first; a message the session had queued when it ended says only that the session ended while it was still queued, because Podium cannot tell whether Claude Code read it). **Agent activity feed**
   (`activity-feed`) is on by default. Turned off, every agent and orchestrator
   panel says the Admin turned the feed off, the server asks no mod for activity and forgets what it held,
   whatever each machine's `activityFeed` option says. Turned back on, open panels start the feed again,

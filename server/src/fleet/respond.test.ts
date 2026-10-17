@@ -647,16 +647,107 @@ describe('answering, end to end', () => {
       expect(JSON.stringify(rows)).not.toContain('secret words');
     });
 
-    it('writes no dropped row for a message the session already took or queued when it ends (#326)', async () => {
+    it('writes no dropped row for a message the session already took when it ends (#326)', async () => {
       const { app, ed, people } = setup();
       await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
       const b = await signedIn(app, 'Ed', ed.token);
       const took = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'one' });
-      const queued = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'two' });
       await request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${took.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result: 'took' });
-      await request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${queued.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result: 'queued' });
       await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(ended());
       expect(people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped')).toEqual([]);
+    });
+
+    it('writes respond_dropped for a message still queued when the session ends, and not for one that later got took (#334)', async () => {
+      const { app, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const queued = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'secret words about issue #334' });
+      const later = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'two' });
+      const post = (id: string, result: string) => request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${id}/result`).set('X-Podium-Token', ed.token).send({ result });
+      await post(queued.body.deliveryId, 'queued');
+      await post(later.body.deliveryId, 'queued');
+      await post(later.body.deliveryId, 'took');
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(ended());
+      const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped');
+      expect(rows).toEqual([
+        expect.objectContaining({ actor: 'Ed', detail: `Sent a message in invoice-v2 (sess-ed) [${queued.body.deliveryId.slice(0, 12)}]: the session ended while it was still queued, so Podium cannot tell whether it was read` }),
+      ]);
+      expect(JSON.stringify(rows)).not.toContain('secret words');
+    });
+
+    it('writes respond_dropped for a message and an answer still waiting when the session is deleted (#333)', async () => {
+      const { app, fleet, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const msg = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'secret words about issue #333' });
+      const ans = await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'deny' });
+      fleet.deleteSession('sess-ed');
+      const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped');
+      expect(rows.map((r) => r.detail).sort()).toEqual(
+        [
+          `Sent a message in invoice-v2 (sess-ed) [${msg.body.deliveryId.slice(0, 12)}]: the session was deleted first, before any result came back`,
+          `Denied a tool in invoice-v2 (sess-ed) [${ans.body.deliveryId.slice(0, 12)}]: the session was deleted first, before any result came back`,
+        ].sort(),
+      );
+      expect(rows.every((r) => r.actor === 'Ed')).toBe(true);
+      expect(JSON.stringify(rows)).not.toContain('secret words');
+    });
+
+    it('writes no row when the session is deleted for a delivery that already has a result (#333)', async () => {
+      const { app, fleet, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const m = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'one' });
+      await request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${m.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result: 'queued' });
+      fleet.deleteSession('sess-ed');
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped')).toEqual([]);
+    });
+
+    it('writes respond_dropped for what is still waiting when responding is turned off (#333)', async () => {
+      const { app, fleet, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const msg = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'secret words about issue #333' });
+      const ans = await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'allow-once' });
+      fleet.features.setFeature('respond', false);
+      const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped');
+      expect(rows.map((r) => r.detail).sort()).toEqual(
+        [
+          `Sent a message in invoice-v2 (sess-ed) [${msg.body.deliveryId.slice(0, 12)}]: responding was turned off first, before any result came back`,
+          `Allowed a tool once in invoice-v2 (sess-ed) [${ans.body.deliveryId.slice(0, 12)}]: responding was turned off first, before any result came back`,
+        ].sort(),
+      );
+      expect(JSON.stringify(rows)).not.toContain('secret words');
+    });
+
+    it('writes one respond_dropped row per delivery when a session ends and is then deleted (#333)', async () => {
+      const { app, fleet, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'one' });
+      await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'deny' });
+      await request(app).get('/api/fleet/sessions/sess-ed/asks/toolu_t/answer?wait=1').set('X-Podium-Token', ed.token); // the mod has this answer; no result yet
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(ended());
+      fleet.deleteSession('sess-ed');
+      const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_dropped');
+      expect(rows).toHaveLength(2);
+      expect(new Set(rows.map((r) => r.detail.match(/\[(dlv_\w+)\]/)?.[1])).size).toBe(2);
+    });
+
+    it('answers 404 to a repeat of a final result, and writes one respond_result row (#329)', async () => {
+      const { app, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const m = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'hello' });
+      const a = await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'deny' });
+      const post = (id: string, result: string) => request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${id}/result`).set('X-Podium-Token', ed.token).send({ result });
+      for (const [id, result] of [[m.body.deliveryId, 'took'], [a.body.deliveryId, 'refused']] as const) {
+        expect((await post(id, result)).status).toBe(200);
+        const again = await post(id, result);
+        expect(again.status).toBe(404);
+        expect(again.body).toEqual({ ok: false, error: 'unknown delivery' });
+      }
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_result')).toHaveLength(2);
     });
   });
 

@@ -39,6 +39,8 @@ interface World {
   /** Runs as the terminal's dialog opens, inside the call, the way Claude Code fires its PermissionRequest then. */
   onDialog: { run: (() => void) | null }
   checkDecision: { value: 'allow' | 'ask' | 'deny' }
+  /** What the fake server answers to a delivery's result (#329); 200 unless a test changes it. */
+  resultStatus: { value: number }
 }
 
 function world(on: On): World {
@@ -56,6 +58,7 @@ function world(on: On): World {
   const sessionId = { value: SID }
   const checkDecision: World['checkDecision'] = { value: 'ask' }
   const onDialog: World['onDialog'] = { run: null }
+  const resultStatus: World['resultStatus'] = { value: 200 }
   const clock = mock.clock(on, { now: NOW })
   mock.store(on, {})
   const ok = (body: unknown, status = 200) => ({ value: { status, ok: status < 300, headers: {}, text: body === undefined ? '' : JSON.stringify(body) } })
@@ -96,6 +99,7 @@ function world(on: On): World {
       }
       return new Promise((resolve) => holds.push((d) => resolve(d ? ok({ delivery: d }) : gone())))
     }
+    if (url.pathname.includes('/deliveries/') && resultStatus.value !== 200) return ok({ ok: false, error: 'unknown delivery' }, resultStatus.value)
     return ok({ ok: true })
   })
   on('session.start', () => ({ cwd: CWD }))
@@ -134,6 +138,7 @@ function world(on: On): World {
     sessionId,
     checkDecision,
     onDialog,
+    resultStatus,
     deliver: (d) => {
       const all = holds.splice(0)
       if (!all.length) waiting = d
@@ -568,6 +573,17 @@ describe('respond: messages and commands', () => {
     expect(w.logs.some((l) => l.startsWith('Sent from Podium by Ed at '))).toBe(true)
     await w.clock.advance(1000)
     expect(results(w)).toEqual([['dlv_m1', 'took']])
+  })
+
+  test('a result the server answers 404 to is dropped, not sent again (#329)', { options: ON }, async ($, on) => {
+    const w = world(on)
+    await started($, w)
+    w.resultStatus.value = 404
+    w.server.deliveries.push(by('message', null, { id: 'dlv_m404', text: 'hello' }))
+    await w.clock.advance(5000)
+    await settle(w)
+    await w.clock.advance(30_000)
+    expect(results(w)).toEqual([['dlv_m404', 'took']])
   })
 
   test('/clear and /compact run as commands; anything else, or one handed over twice, does nothing', { options: ON }, async ($, on) => {
