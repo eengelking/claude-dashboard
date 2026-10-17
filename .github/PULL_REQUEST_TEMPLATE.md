@@ -1,3 +1,6 @@
+<!-- Open this PR against `development`, not `main`. Only the maintainer's release and hotfix PRs go to `main`.
+     Wrong base? Use the Edit button next to the title to change it. -->
+
 ## What this changes and why
 
 <!-- One or two sentences. Link the tracking issue if there is one. -->

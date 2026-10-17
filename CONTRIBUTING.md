@@ -107,20 +107,42 @@ no formulaic constructions. Reread what you wrote once before opening the PR.
 
 ## Branching, PRs and merging
 
-`development` holds unreleased work and is where every PR goes. `main` is the GitHub default branch (so a clone and the mod's marketplace listing get released code) and moves only on a release. Every change
-lands on a branch, never directly on `development` or `main`, however small. Branch off a current `development`:
+> **Open your PR against `development`, not `main`.** GitHub's default branch is `main`, so a fresh clone
+> starts on `main` and the "New pull request" button proposes `main` as the base. Both are the wrong
+> starting point for a change. `main` holds released code and moves only when the maintainer cuts a release.
+> `development` holds unreleased work, and every change lands there first.
+
+Every change lands on a branch, never directly on `development` or `main`, however small. If you work from a
+fork, fork the repo, then branch from `development`, not from the `main` your clone starts on:
 
 ```sh
-git checkout development && git pull
-git checkout -b <your-branch-name>
+git clone https://github.com/<you>/podium.git && cd podium
+git fetch origin development
+git checkout -b <your-branch-name> origin/development
+git config core.hooksPath scripts/hooks   # refuses a commit made on main or development
 ```
 
-When the change is ready, open a PR against `development` (`gh pr create --base development`). Say in the PR body that it is to be squash-merged.
-This repo keeps one commit per PR on `development`, however many commits your branch has. The PR template has a
-checklist. A release is a PR from `development` to `main`, merged with a regular merge commit and never squashed.
-A hotfix branches from `main`, goes to `main` by PR, and is cherry-picked back into `development` afterwards.
+If you have push access, skip the fork and branch from a current `development` in the main repo
+(`git checkout development && git pull`, then `git checkout -b <your-branch-name>`).
 
-Install the pre-commit hook that refuses a commit on either branch: `git config core.hooksPath scripts/hooks`.
+When the change is ready, open the PR with the base set to `development`:
+
+```sh
+gh pr create --base development
+```
+
+On github.com, change the "base" dropdown from `main` to `development` before you click "Create pull request".
+If you opened it against `main` by mistake, use the "Edit" button next to the PR title to change the base; no
+need to close it and start over.
+
+Say in the PR body that it is to be squash-merged. This repo keeps one commit per PR on `development`, however
+many commits your branch has. The PR template has a checklist. Put `Closes #N` in the body for the issue the PR
+resolves; the maintainer closes the issue when the PR merges, because GitHub only closes issues for a PR into `main`.
+
+Two kinds of PR go to `main`, and the maintainer opens both: a release (`development` into `main`, merged with a
+regular merge commit and never squashed) and a hotfix (branched from `main`, then cherry-picked back into
+`development`). If you think a fix cannot wait for the next release, say so on the issue instead of opening it
+against `main`.
 
 Only the maintainer merges PRs into `development` or `main`, however small the change looks. Open the PR and wait for
 review.
