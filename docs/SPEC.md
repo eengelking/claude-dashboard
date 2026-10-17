@@ -441,10 +441,12 @@ git merge-base --is-ancestor <start> HEAD        → still an ancestor? if not, 
 git merge-base HEAD @{upstream}                  → the fallback base; with no upstream, diff against HEAD and report since "worktree"
 git diff --name-status -z -M <base>              → status and rename pairs
 git diff --numstat -z -M <base>                  → added and removed lines per file (`-` for a binary file)
-git ls-files -z --others --exclude-standard --full-name   → untracked files, each counted with git diff --no-index --numstat -- /dev/null <path>
+git ls-files -z --others --exclude-standard --full-name   → untracked files
+git grep --no-index -I -c -z '' -- <paths>       → their line counts, one process per 100 files; it leaves out empty and binary files
+git diff --no-index --numstat -- /dev/null <path> → those left-out files, one process each, for at most 20 per read
 ```
 
-Only paths and counts are read, never file contents or diff text. The list is sorted by path and cut at 200 files; `total`, `added` and `removed` cover every file, except that an untracked file past the 200th is counted as a file but adds no lines (only the listed ones are line-counted, 20 at a time, on every poll). A repository with no commits yet is read too, against the empty tree. If any query fails the mod keeps the last list. Two sessions in the same checkout see the same changes, because the diff is of the working tree; worktrees avoid that.
+Only paths and counts are read, never file contents or diff text. The list is sorted by path and cut at 200 files; `total`, `added` and `removed` cover every file, except that an untracked file past the 200th is counted as a file but adds no lines (only the listed ones are line-counted, on every poll; an empty or binary one past the first 20 of those in a read shows no counts, as a binary file always does). A repository with no commits yet is read too, against the empty tree. If any query fails the mod keeps the last list. Two sessions in the same checkout see the same changes, because the diff is of the working tree; worktrees avoid that.
 
 ### 5.8 Session identity, `/clear`, restarts
 

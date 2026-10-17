@@ -216,7 +216,7 @@ id, so a hot reload does not move it.
 **Cost.** Two sessions in the same checkout both see the same changes, because the diff is of the working
 tree; worktrees avoid it. A session that switches to an unrelated branch reads as `upstream` or `worktree`
 rather than as its own changes. The mod runs five git queries every 10 seconds instead of one, and counts at
-most the first 200 files; an untracked folder with hundreds of files costs up to 200 extra `git diff --no-index` calls on every poll, and untracked files past the 200th add no lines to the totals. The report carries the list in every snapshot, since a report is a full snapshot
+most the first 200 files; untracked files are counted with one `git grep -c` per 100 files (#271), so a folder of hundreds costs a few processes a poll, but an empty or binary untracked file past the first 20 in a read shows no counts, and untracked files past the 200th add no lines to the totals. The report carries the list in every snapshot, since a report is a full snapshot
 (SPEC 6.7), and the mod only marks a report due when the list changes.
 
 ## 20. Per-person tokens bound to a name, and an Admin section gated by the old shared secret
