@@ -12,6 +12,11 @@ Podium is a single pane of glass for Claude Code. Whether it's just you or your 
 shows up in one browser tab, so you can see what all of them are doing at a glance. Each session appears
 within about two seconds of its first prompt and leaves when it ends, with no refresh.
 
+**There are other tools like this.** Podium started as something I built for myself, because I run several
+Claude Code sessions at once and was tired of clicking through terminals to find the one that needed me. It
+turned out to be useful enough to share. I haven't compared it with every similar tool, so if another one fits
+how you work better, use that one. If you try Podium and something is missing, I'd like to hear about it.
+
 ![Podium showing nine simulated Claude Code sessions: running, stale and failing orchestrators, context blowouts, and the activity feed](docs/images/podium-chaos.png)
 
 For every session you see:
