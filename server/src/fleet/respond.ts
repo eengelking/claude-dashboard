@@ -487,6 +487,7 @@ export class RespondStore {
     if (!s) return false;
     const msg = s.messages.find((m) => m.d.id === deliveryId);
     if (msg) {
+      if (msg.result === result) return true; // a retry of what is already recorded (#327)
       msg.result = result;
       this.trail({ kind: 'result', sessionId, delivery: msg.d, result });
       if (result === 'refused' || result === 'closed') this.feed?.remove(sessionId, deliveryId);
@@ -498,6 +499,7 @@ export class RespondStore {
     const e = [...s.asks.values()].find((a) => a.delivery?.d.id === deliveryId);
     if (!e || !e.delivery) return false;
     const d = e.delivery;
+    if (d.result === result) return true; // a retry of what is already recorded (#327)
     d.result = result;
     this.trail({ kind: 'result', sessionId, delivery: d.d, result });
     if (result === 'took') {

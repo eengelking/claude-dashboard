@@ -525,6 +525,40 @@ describe('answering, end to end', () => {
       expect(people.listLog({ page: 1, pageSize: 50 }).rows.find((r) => r.kind === 'respond_result')?.actor).toBe('Admin secret');
     });
 
+    it('writes one respond_result row when the mod posts the same result for an answer twice (#327)', async () => {
+      const { app, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed', 'sess-ed', [TOOL]));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const sent = await b.post('/api/fleet/respond/sessions/sess-ed/asks/toolu_t/answer').set(H).send({ kind: 'allow-once' });
+      const post = () => request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${sent.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result: 'took' });
+      expect((await post()).status).toBe(200);
+      expect((await post()).status).toBe(200);
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_result')).toHaveLength(1);
+    });
+
+    it('writes one respond_result row when the mod posts queued twice for a message (#327)', async () => {
+      const { app, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const m = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'hello' });
+      const post = (result: string) => request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${m.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result });
+      expect((await post('queued')).status).toBe(200);
+      expect((await post('queued')).status).toBe(200);
+      expect(people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_result')).toHaveLength(1);
+    });
+
+    it('still writes a row for each different result of one message, queued and then took (#327)', async () => {
+      const { app, ed, people } = setup();
+      await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
+      const b = await signedIn(app, 'Ed', ed.token);
+      const m = await b.post('/api/fleet/respond/sessions/sess-ed/messages').set(H).send({ text: 'hello' });
+      for (const result of ['queued', 'took']) {
+        expect((await request(app).post(`/api/fleet/sessions/sess-ed/deliveries/${m.body.deliveryId}/result`).set('X-Podium-Token', ed.token).send({ result })).status).toBe(200);
+      }
+      const rows = people.listLog({ page: 1, pageSize: 50 }).rows.filter((r) => r.kind === 'respond_result');
+      expect(rows.map((r) => r.detail.split(': ')[1]).sort()).toEqual(['the session queued it', 'the session took it']);
+    });
+
     it('writes no row for a result the server does not hold a delivery for', async () => {
       const { app, ed, people } = setup();
       await request(app).post('/api/fleet/report').set('X-Podium-Token', ed.token).send(report('Ed'));
