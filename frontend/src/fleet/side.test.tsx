@@ -238,12 +238,14 @@ describe("agent detail Kind row", () => {
     const dl = container.querySelector(".side dl")!;
     const dd = [...dl.querySelectorAll("dt")].find((d) => d.textContent === "Kind")!.nextElementSibling!;
     const el = dd.querySelector("[aria-describedby]")!;
-    expect(el.textContent).toBe(word);
+    expect([...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("")).toBe(word);
     expect(el.querySelector("svg")).toBeInTheDocument();
     const desc = document.getElementById(el.getAttribute("aria-describedby")!)!;
     expect(desc.textContent).toContain(note);
+    expect(desc).toHaveAttribute("role", "tooltip");
     expect(desc).not.toBeVisible();
-    expect(el.getAttribute("data-tip")).toContain(note);
+    fireEvent.focus(el);
+    expect(desc).toBeVisible();
   });
 });
 

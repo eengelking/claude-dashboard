@@ -579,13 +579,17 @@ describe("Reporters tab (#142)", () => {
     expect(rows[2]).toHaveTextContent("no machine id, matched by address 10.4.0.52");
     expect(rows[2]).toHaveTextContent("0.9.2 outdated");
     // Issue #181: the notes are tooltips, not running text under the table.
-    expect(screen.queryByText(/does not mean the reporter is turned off/)).toBeNull();
-    expect(screen.queryByText(/is what every reporter reads after this server restarts/)).toBeNull();
+    for (const note of [/does not mean the reporter is turned off/, /is what every reporter reads after this server restarts/]) {
+      for (const el of screen.queryAllByText(note)) {
+        expect(el).toHaveAttribute("role", "tooltip");
+        expect(el).toHaveAttribute("hidden");
+      }
+    }
     const strip = screen.getByRole("group", { name: "Filter by state" });
     expect(within(strip).getByRole("button", { name: /Silent/ })).toHaveAttribute("title", expect.stringContaining("does not mean the reporter is turned off"));
     expect(within(strip).getByRole("button", { name: /Not since restart/ })).toHaveAttribute("title", expect.stringContaining("is what every reporter reads after this server restarts"));
     const silentChip = within(rows[2]!).getByText("Silent");
-    expect(silentChip).toHaveAttribute("title", expect.stringContaining("does not mean the reporter is turned off"));
+    expect(silentChip).toHaveAccessibleDescription(expect.stringContaining("does not mean the reporter is turned off"));
     expect(within(strip).getByRole("button", { name: /Silent/ })).toHaveTextContent("1");
   });
 
@@ -594,11 +598,18 @@ describe("Reporters tab (#142)", () => {
     const rows = within(screen.getByRole("table")).getAllByRole("row");
     const silent = within(rows[2]!).getByText("Silent");
     expect(silent).toHaveAttribute("tabindex", "0");
-    expect(silent).toHaveAttribute("title", expect.stringContaining("Last heard"));
+    expect(silent).toHaveAccessibleDescription(expect.stringContaining("Last heard"));
+    const silentTip = within(rows[2]!).getAllByRole("tooltip", { hidden: true })[0]!;
+    expect(silentTip).not.toBeVisible();
+    fireEvent.focus(silent);
+    expect(silentTip).toBeVisible();
+    expect(silentTip).toHaveTextContent("Last heard");
     const why = within(rows[2]!).getByText("no name set");
     expect(why).toHaveAttribute("tabindex", "0");
-    expect(why).toHaveAttribute("title", expect.stringContaining("userName"));
-    expect(why).toHaveAttribute("title", expect.stringContaining("10.4.0.52"));
+    expect(why).toHaveAccessibleDescription(expect.stringContaining("userName"));
+    expect(why).toHaveAccessibleDescription(expect.stringContaining("10.4.0.52"));
+    fireEvent.focus(why);
+    expect(within(why).getByRole("tooltip")).toBeVisible();
     expect(within(rows[1]!).queryByText("no name set")).toBeNull();
     fireEvent.click(within(rows[2]!).getByRole("button", { name: /Open details/ }));
     expect(await screen.findByText("Why unnamed")).toBeInTheDocument();
@@ -611,7 +622,7 @@ describe("Reporters tab (#142)", () => {
     expect(within(rows[1]!).getByText("pdm_3f9a1c07b2e4")).toBeInTheDocument();
     const badge = within(rows[2]!).getByText("Admin secret");
     expect(badge).toHaveAttribute("tabindex", "0");
-    expect(badge).toHaveAttribute("title", expect.stringContaining("Admin > People"));
+    expect(badge).toHaveAccessibleDescription(expect.stringContaining("Admin > People"));
     expect(within(rows[2]!).getByText("Admin")).toBeInTheDocument();
     const banner = screen.getByRole("status", { name: "Reporters using the admin secret" });
     expect(banner).toHaveTextContent("1 reporter uses the admin secret.");

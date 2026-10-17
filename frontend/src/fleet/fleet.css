@@ -716,10 +716,10 @@ body.modal-open #root { filter: blur(5px); }
 }
 .podium .kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .podium .kind svg.i { color: var(--c); }
-/* Shared tooltip: any element with data-tip shows it on hover or keyboard focus. */
-.podium .det .grid2 dd { position: relative; }
-.podium .kind[data-tip] { position: static; }
-.podium [data-tip]:hover::after, .podium [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 6px); z-index: 20; width: max-content; max-width: 100%; box-sizing: border-box; white-space: normal; background: var(--raised); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.35; box-shadow: 0 4px 14px rgb(0 0 0 / .25); pointer-events: none; }
+/* Shared tooltip (Tip.tsx): the box is a role="tooltip" child that React un-hides on hover or focus and places from the
+   trigger's rectangle. It is fixed, so a table's scroll container cannot clip it; it wraps and is at most 20 rem, or the
+   viewport less a gutter, wide. */
+.podium .tipbox { position: fixed; z-index: 40; width: max-content; max-width: min(20rem, calc(100vw - 16px)); box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; font-weight: 400; text-align: left; background: var(--raised); color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.35; box-shadow: 0 4px 14px rgb(0 0 0 / .25); pointer-events: none; }
 
 /* history (#/history) */
 .podium .history { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
