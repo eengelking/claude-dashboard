@@ -14,6 +14,8 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-16
+
 ### Added
 
 - **A favicon.** The browser tab shows a white agent-tree mark on a dark tile, so the Podium tab is easy to pick out among many open tabs. It is a single SVG, `frontend/public/favicon.svg`, served from the app's own origin.
@@ -478,7 +480,8 @@ and a plugin you can install from a marketplace.
 - The project was renamed from `claude-dashboard` to `podium`
   (`eengelking/podium`). (PR #5)
 
-[Unreleased]: https://github.com/eengelking/podium/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/eengelking/podium/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/eengelking/podium/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/eengelking/podium/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/eengelking/podium/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/eengelking/podium/compare/v0.14.3...v1.0.0
