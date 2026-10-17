@@ -163,8 +163,9 @@ export interface DeriveConfig {
  * plan. Claude Code's daemon runs such sessions nobody asked for (a parked twin of an interactive window,
  * a pre-warmed spare), and each reports through the mod. They stay off the wall until they do something.
  * Hook-only sessions are never unused: hooks carry no usage, so they could never leave this state.
+ * `agentCount` may be a function, so the lookup runs only for a row that passes every other test.
  */
-export function isUnused(row: SessionRow, agentCount: number): boolean {
+export function isUnused(row: SessionRow, agentCount: number | (() => number)): boolean {
   return (
     row.reporter_version !== 'hooks' &&
     row.status !== 'running' &&
@@ -173,7 +174,7 @@ export function isUnused(row: SessionRow, agentCount: number): boolean {
     !row.context_tokens &&
     row.blowouts === 0 &&
     row.plan_json === null &&
-    agentCount === 0
+    (typeof agentCount === 'function' ? agentCount() : agentCount) === 0
   );
 }
 

@@ -52,6 +52,7 @@ function hashFor(w: Where): string {
 }
 
 interface Paged {
+  day: string;
   rows: HistoryRow[];
   total: number;
   page: number;
@@ -109,13 +110,14 @@ export function HistoryView({ base = "/api/fleet", initialDay }: { base?: string
 
   useEffect(() => {
     let live = true;
-    setRows({ state: "loading" });
+    // The table of the page being left stays up while the next one loads; another day's table does not.
+    setRows((r) => (r.state === "ok" && r.data.day === day ? r : { state: "loading" }));
     getJson<{ sessions: HistoryRow[]; total: number; page: number; pageSize: number }>(
       `${base}/history?day=${encodeURIComponent(day)}&page=${page}&pageSize=${size}`,
     )
       .then((b) => {
         if (!live) return;
-        setRows({ state: "ok", data: { rows: b.sessions, total: b.total, page: b.page, pageSize: b.pageSize } });
+        setRows({ state: "ok", data: { day, rows: b.sessions, total: b.total, page: b.page, pageSize: b.pageSize } });
         // The server moves a page past the end back to the last one; the address follows.
         if (b.page !== page) go({ page: b.page });
       })
