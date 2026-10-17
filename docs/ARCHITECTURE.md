@@ -56,7 +56,7 @@ null until `POST unlock` calls `release` for that same person or the person sign
 The top bar's Admin button reads `me.admin` from `useRespond`; the server, not the button, is the check.
 
 **Admin page patterns** (`frontend/src/fleet/admin/Page.tsx`, `admin.css`, issue #143, mockup `mockup/podium-admin.html`). `AdminView`
-holds a side menu (`NAV` groups the pages, `PAGES` names each and gives its one-line lead) and renders one page component at a time;
+holds a side menu (`NAV` groups the pages and gives each group an outline icon from `GROUP_ICON`, `PAGES` names each page and gives its one-line lead; issue #244, mockup `mockup/podium-admin-menu.html`) and renders one page component at a time;
 the menu and the page scroll on their own inside `.adminv`, so the menu always runs the full height with Lock Admin and the footer at
 the bottom. A page component returns sections only: `AdminView` draws the header (`PageHeader`), and each section is `Section`
 (an H2 with an optional help line) around a `Panel`. A list is a panel holding an optional toolbar (`.tool`), the table (`.ptab`) and
