@@ -49,7 +49,7 @@ export function StatusBand({
     detail = "The session may have crashed or been closed without a clean exit.";
   } else {
     // The band's sentence is the card's own.
-    lead = bandLine(s, kind, sinceSeen, now, config);
+    lead = bandLine(s, kind, sinceSeen, now, config, delegates);
     if (kind === "waiting") {
       const w = waitSummary(s);
       // With Respond on the band, the terminal is no longer the only place to answer.

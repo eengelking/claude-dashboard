@@ -51,7 +51,7 @@ export function delegatingLead(delegates: readonly AgentView[]): string {
 }
 
 /** What the status band says. One sentence, the same ones the orchestrator page and the activity feed use. */
-export function bandLine(s: SessionView, kind: StateKind, sinceSeen: number, now: number, config: LifecycleConfig, delegates: readonly AgentView[] = []) {
+export function bandLine(s: SessionView, kind: StateKind, sinceSeen: number, now: number, config: LifecycleConfig, delegates: readonly AgentView[]) {
   if (kind === "deleg") return <span className="bl" title={delegateText(delegates)}>{delegatingLead(delegates)}</span>;
   if (kind === "bg" && s.background) return <span className="bl" title={backgroundTitle(s.background)}>{backgroundLead(s.background)}</span>;
   if (kind === "waiting") return <span className="bl">{waitSummary(s).lead}</span>;
