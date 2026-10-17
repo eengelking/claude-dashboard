@@ -225,7 +225,7 @@ Added after the first build. `docs/ARCHITECTURE.md` ("Running as a service") rec
   command line.
 - **Start on boot.** `enable` and `disable` write and remove a launchd agent (macOS) or a systemd user unit
   (Linux). In container mode the unit runs `podiumctl start`; in standalone mode it runs `podiumctl run`
-  (foreground, restarted only after a non-zero exit, so `stop` is not undone). `status` reports a unit that does not name the current script path as stale; running `enable` again rewrites it.
+  (foreground, restarted only after a non-zero exit, so `stop` is not undone). The unit names the `node` that ran `enable`; when that is a Homebrew Cellar path (`<prefix>/Cellar/<formula>/<version>/bin/node`) it names `<prefix>/opt/<formula>/bin/node` instead, which a `brew upgrade` leaves in place. `status` reports a unit that does not name the current script path as stale; running `enable` again rewrites it.
 - **The mod is not containerized.** It runs inside each Claude Code process and posts to `serverUrl`.
   It is installed from `eengelking-marketplace`: `eengelking/skills` lists `podium-reporter` in its
   `.claude-plugin/marketplace.json` with a `git-subdir` source pointing at `mod/podium-reporter` in this

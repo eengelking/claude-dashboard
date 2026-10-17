@@ -163,8 +163,8 @@ somewhere other than `~/.podium`. `podiumctl --help` lists everything.
 
 Start on boot: in container mode the boot service runs `podiumctl start`, which also starts the Podman
 machine on macOS; in standalone mode it runs the server in the foreground and restarts it if it crashes.
-On Linux, `loginctl enable-linger $USER` makes the user unit start before you log in. (The Linux unit is
-generated and unit-tested but has not been run on a Linux host.)
+On Linux, `loginctl enable-linger $USER` makes the user unit start before you log in. (The Linux unit has run on
+Bazzite, but not yet through a reboot.)
 
 ## Report a real session
 

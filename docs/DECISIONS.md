@@ -118,7 +118,15 @@ restarts only after a non-zero exit.
 **Why.** A container restart policy is not enough on macOS: Podman runs in a VM that is not up at login,
 and `podiumctl start` also starts it. Restarting only on a failure keeps `podiumctl stop` from being undone
 by the service.
-**Cost.** The Linux path is generated and unit-tested but has not run on a Linux host.
+**Cost.** The Linux unit has run on Bazzite 44 (Fedora Atomic, systemd 259, Podman 5.8.7, SELinux
+enforcing) with Node from Homebrew, in both modes (2026-10-16, #268). Standalone: started, `stop` was not
+undone, a killed server came back in about 4 seconds, `disable` removed everything. Container: the same,
+except that `systemctl --user start` does nothing after `podiumctl stop`, because the unit is
+`Type=oneshot` with `RemainAfterExit=yes` and so still counts as active (use `podiumctl start`, or
+`systemctl --user stop` first). A container is not restarted when it dies; only the unit's start at login
+or boot brings it up. Not yet tested: a reboot, with and without `loginctl enable-linger`. The unit names
+Homebrew's `opt/<formula>` link for `node` rather than the `Cellar/<formula>/<version>` directory that
+`brew upgrade` deletes.
 
 ## 12. The mod stays in this repo and is listed from the skills marketplace
 

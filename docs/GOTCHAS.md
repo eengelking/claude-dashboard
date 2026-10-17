@@ -178,9 +178,18 @@ Admin. The name and machine still travel in those reports and are stored, so the
 Admin's groups are read when a session's view is built, so moving someone to another group shows on the wall
 with their next report (the heartbeat is five seconds), not at once. The Spend page in Admin updates on the next tick.
 
-### The Linux start-on-boot unit has not run on Linux
+### `systemctl --user start podium.service` does nothing after `podiumctl stop` (container mode)
 
-`podiumctl enable` generates a systemd user unit that has only been tested as text. Try it and tell us.
+In container mode the unit is `Type=oneshot` with `RemainAfterExit=yes`. `podiumctl stop` stops the
+container but systemd still counts the unit as active, so a plain `start` is a no-op. Use `podiumctl start`,
+or `systemctl --user stop podium.service` and then `start`. A container that dies is not restarted by the
+unit; standalone mode restarts a crashed server after 3 seconds.
+
+### The Linux start-on-boot unit has not been through a reboot
+
+`podiumctl enable` has run on Bazzite 44 (Fedora Atomic, systemd 259, Podman 5.8.7, SELinux enforcing) in
+both modes, with Node from Homebrew (#268). Starting, `stop` and `disable` behave as described above. A
+reboot, with and without `loginctl enable-linger $USER`, has not been tried. If you have, tell us.
 
 ## What the dashboard shows
 

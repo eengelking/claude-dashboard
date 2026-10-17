@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  bootUnitStale, containerRunArgs, launchdPlist, maskConfig, OWN_KEYS, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, systemdUnit,
+  bootUnitStale, containerRunArgs, launchdPlist, maskConfig, OWN_KEYS, parseArgs, parseEnvFile, PASSTHROUGH, resolveConfig, serializeEnv, serverEnv, stableNodePath, systemdUnit,
 // @ts-expect-error bin/podiumctl has no extension, so tsc cannot find it; vitest loads it as ESM
 } from "../bin/podiumctl";
 
@@ -197,6 +197,24 @@ describe("podiumctl command construction", () => {
     const co = systemdUnit({ args: ["/n", "/s p", "start"], stopArgs: ["/n", "/s p", "stop"], standalone: false, env: {} });
     expect(co).toContain('ExecStart=/n "/s p" start');
     expect(co).toContain('ExecStop=/n "/s p" stop');
+  });
+});
+
+describe("podiumctl boot unit node path (#268)", () => {
+  it("names Homebrew's unversioned opt link, not the Cellar directory a brew upgrade deletes", () => {
+    expect(stableNodePath("/var/home/linuxbrew/.linuxbrew/Cellar/node@24/24.22.0/bin/node")).toBe("/var/home/linuxbrew/.linuxbrew/opt/node@24/bin/node");
+    expect(stableNodePath("/opt/homebrew/Cellar/node/25.1.0/bin/node")).toBe("/opt/homebrew/opt/node/bin/node");
+  });
+
+  it("tells a systemd person disable stops the server in either mode, and a launchd one only standalone", () => {
+    const src = fs.readFileSync(BIN, "utf8");
+    expect(src).toContain("Disabled. The server the service was running is stopped with it");
+    expect(src).toContain("(standalone mode) is stopped with it");
+  });
+
+  it("leaves a node that is not in a Cellar alone", () => {
+    expect(stableNodePath("/usr/bin/node")).toBe("/usr/bin/node");
+    expect(stableNodePath("/home/me/.nvm/versions/node/v24.0.0/bin/node")).toBe("/home/me/.nvm/versions/node/v24.0.0/bin/node");
   });
 });
 
