@@ -294,9 +294,10 @@ sparkline can follow the Admin's prices too (#270). Cache writes count at the 5-
 1-hour part; the `turn.step` usage fields in SPEC 5 carry no such split, so until it does the 1-hour price has no effect.
 A session first heard of after midnight, whose start the server believed from before it, counts what it spent since
 its first sample (#276). A session that started before midnight and now reports no ledger figure (the reporter sends
-`null` for a local model) cannot be split by the ledger, so it counts nothing today even when it spent on a Claude
-model earlier in the day; its card still shows the Claude spend from its usage. Splitting it from per-sample usage
-is possible once samples keep it.
+`null` for a local model) cannot be split by the ledger, so it is split by the usage its last sample before midnight
+kept, priced with the Admin's prices: what it costs now minus what that usage cost, so a session that spent on a Claude
+model before midnight and on a local model after adds only its spend after midnight (#286). A session none of whose
+samples kept usage (a reporter older than 0.12.0 on a local model) has nothing to split by and counts nothing today.
 
 ## 24. An agent's activity is sent only while someone watches it, and never kept
 

@@ -18,6 +18,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 - **A CI check fails a PR into `main` that is not a release or a hotfix.** The "PR target check" workflow passes only when the PR's head is `development` or `hotfix/*` in this repo, and fails with a message that says to change the base to `development`. `main` is the GitHub default branch, so a contributor's "New pull request" proposes it by default. CI and documentation only; no behavior changes.
 
+### Fixed
+
+- **"Est. cost today" counts a session that started before midnight and now reports no ledger cost (#286).** The mod sends no ledger cost on a local model, so a session that spent on a Claude model earlier in the day and then switched counted $0 today, in the total and in the Spend tab. It now counts what it costs now minus what the usage on its last sample before midnight cost, priced with the Admin's prices, so only its spend after midnight is added; the owner split still adds up to the total. A session none of whose samples kept usage (a reporter older than 0.12.0 on a local model) still counts nothing. DECISIONS 23 and SPEC (KPIs) no longer list this as a gap.
+
 ### Changed
 
 - **This repo now uses the development-branch workflow.** `development` holds unreleased work; feature and fix PRs target it and are squash-merged. `main` stays the GitHub default branch, so a clone and the `podium-reporter` marketplace listing get released code, and it moves only on a release (a `development` to `main` PR merged with a merge commit) or a hotfix. Feature PRs no longer bump the version; a `release-prep/<version>` PR does, when the maintainer decides to release. `CLAUDE.md` "Releases", `CONTRIBUTING.md` and the PR template say so. CI runs on `development` as well, Dependabot opens its PRs against `development`, and `scripts/hooks/pre-commit` refuses a commit on `main` or `development`. Documentation and CI only; no behavior changes.
