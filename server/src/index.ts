@@ -25,6 +25,8 @@ import { createServerLogging } from "./logging/setup.js";
 import { requestLog } from "./logging/requestLog.js";
 import { inlineScriptHashes, securityHeaders } from "./securityHeaders.js";
 import { hostCheck, parseAllowedHosts } from "./hostCheck.js";
+import { createPlainHttpWatch } from "./plainHttp.js";
+import { RESPOND } from "./fleet/featureFlags.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4317;
 const HOST = process.env.HOST || "127.0.0.1";
@@ -68,8 +70,10 @@ app.use(requestLog(logger));
 const lockout = new Lockout();
 // Admin opens without a second sign-in for a browser already signed in to respond as an Administrator (#215).
 const respondBridge = createRespondBridge();
-app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger, lockout, respondBridge }));
-app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, logRetainMs: fleetConfig.retention.adminLogMs, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge }));
+// Responding over plain HTTP beyond loopback sends the sign-in unencrypted: say so, never block (#306).
+const plainHttp = createPlainHttpWatch({ bind: HOST, respondOn: () => fleet.features.featureOn(RESPOND), logger });
+app.use("/api/fleet", createFleetRouter(fleet, { token: TOKEN, people, reporters, logger, lockout, respondBridge, onSignIn: plainHttp.onSignIn }));
+app.use("/api/admin", createAdminRouter({ secret: TOKEN, people, reporters, logRetainMs: fleetConfig.retention.adminLogMs, wall: fleet.wall, prices: fleet.prices, features: fleet.features, logger, lockout, respondBridge, onRespondOn: plainHttp.onFlagOn }));
 app.use(createRouter());
 
 app.use(express.static(frontendDist));
@@ -105,6 +109,7 @@ const server = app.listen(PORT, HOST, () => {
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
   logger.info("server.console", `Podium fleet console: http://${HOST}:${PORT}/#/  (database ${DB_PATH})`, { url: `http://${HOST}:${PORT}/#/` });
+  plainHttp.atStart();
 });
 
 let closing = false;

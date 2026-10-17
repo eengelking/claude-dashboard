@@ -11,7 +11,7 @@ import { serverVersion } from '../fleet/compat.js';
 import { NOTICES, isNoticeId, type WallSettings } from '../fleet/wallSettings.js';
 import type { ModelPriceStore } from '../fleet/modelPrices.js';
 import { REPORTER_STATES, type IgnoreKind, type ReporterState, type ReporterStore } from '../fleet/reporters.js';
-import { FEATURES, isFeatureId, type FeatureFlags } from '../fleet/featureFlags.js';
+import { FEATURES, isFeatureId, RESPOND, type FeatureFlags } from '../fleet/featureFlags.js';
 import { PRICES_AS_OF, type PriceSet } from '../fleet/pricing.js';
 import { Lockout } from '../fleet/lockout.js';
 import { createLogger, loggerFromLine, type Fields, type Logger } from '../logging/logger.js';
@@ -38,6 +38,8 @@ export interface AdminRouterOptions {
   lockout?: Lockout;
   /** Lets a browser already signed in to respond as an Administrator open Admin without signing in again (#215). */
   respondBridge?: RespondBridge;
+  /** Called when the Admin turns Respond from Podium on, for the plain-HTTP warning (#306). */
+  onRespondOn?: () => void;
   /** How long the admin log is kept (#303); `GET /log` reports it so the Admin page can say so. */
   logRetainMs?: number;
   /** The server's logger (#140): each Admin change is an `admin.<action>` event with the source address. */
@@ -461,8 +463,10 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
         return void res.status(400).json({ ok: false, error: 'features must map known feature ids to true or false' });
       }
       for (const id of ids) {
+        const wasOn = features.featureOn(id);
         features.setFeature(id, f[id]);
         audit(req, 'feature_changed', `Feature ${id} turned ${f[id] ? 'on' : 'off'}`, { setting: id, on: f[id] });
+        if (id === RESPOND && f[id] && !wasOn) opts.onRespondOn?.(); // after the audit row, so a failing warning cannot lose it
       }
       return void res.json({ ok: true, features: featureList() });
     }

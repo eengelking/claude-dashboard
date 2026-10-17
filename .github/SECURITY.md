@@ -60,7 +60,7 @@ by sending more than the session's level allows, is in scope.
 | Limit | What to do about it |
 |---|---|
 | **The admin secret is a shared credential.** Anything done with it is attributed to "Admin secret", not to a person. | Give each person a token, and turn off reporting with the admin secret in Admin when you no longer need it. |
-| **The token and the session cookie travel over plain HTTP.** | On any network but your own machine, put a TLS proxy in front. |
+| **The token and the session cookie travel over plain HTTP.** The server warns in its log (`server.respond_plain_http`) when responding is on and it is bound beyond loopback, and when a sign-in reaches it over plain HTTP at a name that is not loopback; Admin > Settings and the mod's status line (`⚠`) say so too. None of them blocks anything. | On any network but your own machine, put a TLS proxy in front. Until Podium can trust a proxy's `X-Forwarded-Proto` (#305), the bind-address warning cannot tell a proxied server from a bare one: with a TLS proxy in front you can ignore it. |
 | **The admin log has no export.** It keeps entries for 90 days (`RETAIN_ADMIN_LOG_MS`) and the newest 100 whatever their age. | Ship the server log to VictoriaLogs if you need a copy or a longer record. |
 
 If you think you have found something like this, please report it rather than opening a public issue.

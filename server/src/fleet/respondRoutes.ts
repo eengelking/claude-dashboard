@@ -32,6 +32,8 @@ export interface RespondDeps {
   signInIdleMs?: number;
   /** Filled in so Admin can open for a browser already signed in here as an Administrator (#215). */
   bridge?: RespondBridge;
+  /** Runs ahead of the sign-in, to note a plain-HTTP connection (#306). It never blocks. */
+  onSignIn?: RequestHandler;
 }
 
 const COOKIE = 'podium_respond';
@@ -267,7 +269,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     res.json(me);
   });
 
-  browser.post('/sign-in', (req, res) => {
+  browser.post('/sign-in', d.onSignIn ?? ((_req, _res, next) => next()), (req, res) => {
     if (!enabled()) {
       refuse(req, res, 403, 'responding is off');
       return;

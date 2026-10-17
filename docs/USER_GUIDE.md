@@ -613,6 +613,7 @@ with `podiumctl build` and then `podiumctl restart` (a plain Node install: pull,
 | A card turned stale | The session stopped reporting (closed, crashed or lost the connection). It goes away by itself, or press Remove |
 | I changed the config and nothing happened | Run `podiumctl restart` |
 | A card shows `reporter 0.1.0 · update`, the top bar says reporters need an update, or the status line ends in `· update mod` | The mod in that session is older than the server supports. See "Updating the mod" below. It keeps reporting meanwhile |
+| The status line starts with `⚠` (`⚠ podium v1.0.2 ● 6 live`) | The mod's server URL is `http://` to another machine, so its token is not encrypted in transit. Put a TLS proxy in front of Podium and set the server URL to `https://...` in the podium-reporter settings, or accept the risk on a network you trust. Reporting continues |
 | The status line ends in `· update available` | Your mod works, but the server supports a newer one. See "Updating the mod" below |
 | A card shows `· upgrade server`, or the status line ends in `· upgrade server` | The mod is newer than the server supports. Upgrade the server (see "Updating the mod" below) |
 

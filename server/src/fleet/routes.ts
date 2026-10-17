@@ -1,5 +1,5 @@
 // Express router for Podium, mounted at /api/fleet (SPEC 7.1, 7.7).
-import express, { Router, type NextFunction, type Request, type Response } from 'express';
+import express, { Router, type NextFunction, type Request, type RequestHandler, type Response } from 'express';
 import type { Fleet } from './fleet.js';
 import { checkReporter, REPORTER_SUPPORT, serverVersion } from './compat.js';
 import { MAIN_LOOP, validateReport } from './protocol.js';
@@ -30,6 +30,8 @@ export interface FleetRouterOptions {
   guesses?: GuessThrottle;
   /** Filled in so Admin can open for a browser already signed in to respond as an Administrator (#215). */
   respondBridge?: RespondBridge;
+  /** Runs ahead of the sign-in to respond, to note a plain-HTTP connection (#306). It never blocks. */
+  onSignIn?: RequestHandler;
 }
 
 export const BODY_LIMIT = '512kb';
@@ -473,6 +475,7 @@ export function createFleetRouter(fleet: Fleet, opts: FleetRouterOptions = {}): 
     logger,
     lockout: opts.lockout ?? new Lockout(fleet.now),
     bridge: opts.respondBridge,
+    onSignIn: opts.onSignIn,
     requireToken,
     identityOf,
   });

@@ -1,5 +1,5 @@
 // Responding to a waiting session from Podium (#206): the in-memory store, and the routes for the mod and the browser.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { openDb, FleetDb } from './db.js';
@@ -337,7 +337,7 @@ describe('RespondStore', () => {
 const SECRET = 'admin-secret';
 const H = { 'X-Podium-Respond': '1' };
 
-function setup(opts: { secret?: string | null; respond?: boolean } = {}) {
+function setup(opts: { secret?: string | null; respond?: boolean; onSignIn?: express.RequestHandler } = {}) {
   const secret = opts.secret === undefined ? SECRET : opts.secret;
   const db = openDb(':memory:');
   const fleet = new Fleet(new FleetDb(db), { ...DEFAULT_CONFIG, home: '/Users/dev', dbPath: ':memory:' });
@@ -345,7 +345,7 @@ function setup(opts: { secret?: string | null; respond?: boolean } = {}) {
   const lockout = new Lockout(fleet.now);
   const respondBridge = createRespondBridge();
   const app = express();
-  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, respondBridge, log: () => {} }));
+  app.use('/api/fleet', createFleetRouter(fleet, { token: secret, people, lockout, respondBridge, onSignIn: opts.onSignIn, log: () => {} }));
   app.use('/api/admin', createAdminRouter({ secret, people, features: fleet.features, lockout, respondBridge, log: () => {} }));
   closers.push(() => fleet.close());
   if (opts.respond !== false) fleet.features.setFeature('respond', true);
@@ -368,6 +368,16 @@ async function signedIn(app: express.Express, name: string, token: string) {
   expect(res.status).toBe(200);
   return agent;
 }
+
+describe('the plain-HTTP note on sign-in (#306)', () => {
+  it('runs ahead of the sign-in and never changes its answer', async () => {
+    const seen = vi.fn((_req: express.Request, _res: express.Response, next: express.NextFunction) => next());
+    const { app, ed } = setup({ onSignIn: seen });
+    expect((await request(app).post('/api/fleet/respond/sign-in').set(H).send({ name: 'Ed', token: ed.token })).status).toBe(200);
+    expect((await request(app).post('/api/fleet/respond/sign-in').set(H).send({ name: 'Ed', token: 'wrong' })).status).toBe(401);
+    expect(seen).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('the switches', () => {
   it('is off with authentication off, and with either Admin flag off: the routes refuse and the reply says so', async () => {

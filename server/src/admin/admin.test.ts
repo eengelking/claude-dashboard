@@ -1,5 +1,5 @@
 // The Admin API (issue #36): who may open it, what it does, and what it never reveals.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { openDb } from '../fleet/db.js';
@@ -12,7 +12,7 @@ import { createAdminRouter } from './adminRouter.js';
 
 const SECRET = 'the-admin-secret-0123456789';
 
-function setup(over: { secret?: string | null; idleMs?: number; logRetainMs?: number } = {}) {
+function setup(over: { secret?: string | null; idleMs?: number; logRetainMs?: number; onRespondOn?: () => void } = {}) {
   const db = openDb(':memory:');
   const people = new PeopleStore(db);
   const wall = new WallSettings(db);
@@ -34,6 +34,7 @@ function setup(over: { secret?: string | null; idleMs?: number; logRetainMs?: nu
       now: () => clock.t,
       idleMs: over.idleMs,
       logRetainMs: over.logRetainMs,
+      onRespondOn: over.onRespondOn,
       log: (l) => lines.push(l),
     }),
   );
@@ -258,6 +259,20 @@ describe('groups and settings', () => {
       expect(features.featureOn('respond')).toBe(true);
       const log = people.listLog({ page: 1, pageSize: 50 }).rows.filter((x) => x.kind === 'feature_changed');
       expect(log.map((x) => x.detail)).toEqual(['Feature respond turned on']);
+    });
+
+    it('tells the plain-HTTP warning only when Respond from Podium goes from off to on (#306)', async () => {
+      const onRespondOn = vi.fn();
+      const { agent } = await unlocked({ onRespondOn });
+      await agent.put('/api/admin/settings').set(H).send({ features: { 'activity-feed': false } });
+      expect(onRespondOn).not.toHaveBeenCalled();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledOnce();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledOnce();
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: false } });
+      await agent.put('/api/admin/settings').set(H).send({ features: { respond: true } });
+      expect(onRespondOn).toHaveBeenCalledTimes(2);
     });
 
     it('turns a flag off and on, and logs each change', async () => {

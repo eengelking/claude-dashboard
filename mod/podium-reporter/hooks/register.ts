@@ -112,6 +112,8 @@ interface Runtime {
   lastStatus: string | null;
   toastedOk: boolean;
   toastedFail: boolean;
+  /** Whether the plain-HTTP notice has been toasted in this session (#306). */
+  toastedPlain: boolean;
   /** The refusal notice last toasted, so a later refusal is news again once a report has gone through. */
   toastedRefusal: string | null;
   /** The version notice last toasted, so each distinct one shows once. */
@@ -322,6 +324,17 @@ function toastRefusalOnce($: Engine, r: Runtime): void {
   }
 }
 
+function toastPlainHttpOnce($: Engine, r: Runtime): void {
+  const notice = r.transport.plainHttpNotice();
+  if (!notice || r.toastedPlain) return;
+  r.toastedPlain = true;
+  try {
+    $.ui.toast(`Podium: ${notice}`);
+  } catch {
+    // no toasts on this host
+  }
+}
+
 function toastVersionOnce($: Engine, r: Runtime): void {
   const notice = r.transport.versionNotice();
   if (!notice) {
@@ -370,6 +383,7 @@ async function flushOnce($: Engine, r: Runtime, now: number, force: boolean): Pr
   }
   else if (outcome === 'busy') r.state = { ...r.state, dirty: true };
   toastVersionOnce($, r);
+  toastPlainHttpOnce($, r);
   showStatus($, r);
 }
 
@@ -1072,6 +1086,7 @@ async function start($: Engine, e: { cwd: string; surface: string | null }): Pro
     lastStatus: null,
     toastedOk: rt?.toastedOk ?? false,
     toastedFail: rt?.toastedFail ?? false,
+    toastedPlain: rt?.toastedPlain ?? false,
     toastedRefusal: rt?.toastedRefusal ?? null,
     toastedVersion: rt?.toastedVersion ?? null,
     skillCalls: 0,

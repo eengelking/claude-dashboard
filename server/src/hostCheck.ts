@@ -36,7 +36,7 @@ export function hostnameOf(value: string | undefined): string | null {
   return /^[a-z0-9._-]+$/.test(h) ? h : null;
 }
 
-const isLoopback = (h: string): boolean => h === 'localhost' || h === '::1' || (isIP(h) === 4 && h.startsWith('127.'));
+export const isLoopback = (h: string): boolean => h === 'localhost' || h === '::1' || (isIP(h) === 4 && h.startsWith('127.'));
 const isWildcard = (bind: string): boolean => bind === '' || bind === '0.0.0.0' || bind === '::';
 
 /** `PODIUM_ALLOWED_HOSTS`: names or addresses separated by commas. */
