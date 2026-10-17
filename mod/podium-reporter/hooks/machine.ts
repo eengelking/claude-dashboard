@@ -31,7 +31,8 @@ export const MACHINE_ID_FILE = 'podium-machine-id';
 export function machineIdPath(configDir: string | undefined, home: string | undefined): string | null {
   const trim = (p: string | undefined) => (p ?? '').trim().replace(/\/+$/, '');
   const dir = trim(configDir) || (trim(home) ? `${trim(home)}/.claude` : '');
-  return dir ? `${dir}/${MACHINE_ID_FILE}` : null;
+  // A relative directory would land under each session's own working directory, so loads would disagree.
+  return /^(\/|[A-Za-z]:[\\/])/.test(dir) ? `${dir}/${MACHINE_ID_FILE}` : null;
 }
 
 /** The id the shared file holds: its one line, when that is an id this reporter made. Null otherwise. */

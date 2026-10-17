@@ -42,6 +42,7 @@ describe('machine', () => {
     expect(machineIdPath('/cfg/', undefined)).toBe('/cfg/podium-machine-id')
     expect(machineIdPath(undefined, undefined)).toBeNull()
     expect(machineIdPath('', '')).toBeNull()
+    expect(machineIdPath('relative/cfg', undefined)).toBeNull()
   })
 
   test('the shared id file holds one id; anything else reads as no id', () => {

@@ -73,8 +73,10 @@ why they do). Count the cards on the wall for sessions and the machine ids on th
 
 Before #267 each load of the mod kept its own machine id in its own store, so an inline copy and the marketplace
 install reported as two machines. Every load now shares `podium-machine-id` in the Claude config directory
-(`CLAUDE_CONFIG_DIR`, else `~/.claude`). A machine that already had two ids settles on whichever load wrote the
-file first; the other id's row stays live only while its session does. If the config directory is copied to
+(`CLAUDE_CONFIG_DIR`, else `~/.claude`). A machine that already had two ids settles on one: the first load to run
+after the upgrade writes the file and the others adopt it. Two sessions that start in the same instant can each
+keep the id they wrote until they end, and agree from the next session on. The other id's row stays live only
+while its session does. If the config directory is copied to
 another machine the id goes with it, and two machines then share one id. Where the file cannot be read or written
 the mod falls back to its own store, as before. The id is made in `mod/podium-reporter/hooks/machine.ts`.
 

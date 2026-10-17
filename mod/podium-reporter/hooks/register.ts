@@ -540,8 +540,9 @@ function random(): number {
 /**
  * The machine's id, one for every load of the mod on it (#267). The shared file under the Claude config
  * directory decides; without a valid one, the id this load's store already holds is kept (so an install
- * keeps its row) and shared, else a new one is made and shared. The file is read back after a write, so two
- * loads that start together settle on whichever wrote first. Where the file cannot be used, the store alone
+ * keeps its row) and shared, else a new one is made and shared. The file is read back after a write. Two loads
+ * that start in the same instant can still each keep the id they wrote for that session (the last write is
+ * the file's), and agree from their next session on. Where the file cannot be used, the store alone
  * keeps the id, as before.
  */
 async function machineId($: Engine): Promise<string> {
@@ -551,8 +552,12 @@ async function machineId($: Engine): Promise<string> {
   );
   const shared = async () => (path ? parseMachineIdFile(await attempt(async () => (await $.fs.read(path)) as string, null)) : null);
   const fromFile = await shared();
-  if (fromFile) return fromFile;
   const kept = await attempt(() => $.store.get(MACHINE_ID_KEY), undefined);
+  if (fromFile) {
+    // Keep this load's store in step, so the id survives the shared file being deleted.
+    if (fromFile !== kept) await attempt(() => $.store.set(MACHINE_ID_KEY, fromFile), undefined);
+    return fromFile;
+  }
   const id = isMachineId(kept) ? kept : newMachineId(random);
   if (id !== kept) await attempt(() => $.store.set(MACHINE_ID_KEY, id), undefined);
   if (!path) return id;
