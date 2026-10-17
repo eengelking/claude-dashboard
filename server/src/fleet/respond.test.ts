@@ -565,6 +565,59 @@ describe('opening Admin from a sign-in to respond (#215)', () => {
     expect((await request(app).post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
   });
 
+  it('stays locked after an explicit Lock Admin, until the person unlocks with a name and token or signs in again (#272)', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const agent = await signedIn(app, 'Priya', priya.token);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect((await agent.post('/api/admin/lock').set(AH)).status).toBe(200);
+    // A reload tries from-respond again and is refused, so it shows the sign-in.
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
+    expect((await agent.get('/api/admin/people').set(AH)).status).toBe(401);
+    // The console sign-in itself stands.
+    expect((await agent.get('/api/fleet/respond/me')).body.signedIn).toBe(true);
+    // Typing the name and token opens Admin and lifts the hold, so the idle lock lets the person back in as before.
+    expect((await agent.post('/api/admin/unlock').set(AH).send({ name: 'Priya', token: priya.token })).status).toBe(200);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+  });
+
+  it('keeps the hold when a different Administrator unlocks Admin with their own name and token in that browser (#272)', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const quinn = people.createPerson('Quinn', admins.id);
+    const agent = await signedIn(app, 'Priya', priya.token);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect((await agent.post('/api/admin/lock').set(AH)).status).toBe(200);
+    expect((await agent.post('/api/admin/unlock').set(AH).send({ name: 'Quinn', token: quinn.token })).status).toBe(200);
+    // Priya's console sign-in must not reopen Admin as Priya just because Quinn typed a token.
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
+  });
+
+  it('lets a new sign-in to respond open Admin again after Lock Admin (#272)', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const agent = await signedIn(app, 'Priya', priya.token);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect((await agent.post('/api/admin/lock').set(AH)).status).toBe(200);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(401);
+    expect((await agent.post('/api/fleet/respond/sign-in').set(H).send({ name: 'Priya', token: priya.token })).status).toBe(200);
+    expect((await agent.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+  });
+
+  it('does not hold another browser signed in as the same Administrator (#272)', async () => {
+    const { app, people } = setup();
+    const admins = people.allGroups().find((g) => g.name === 'Administrators')!;
+    const priya = people.createPerson('Priya', admins.id);
+    const laptop = await signedIn(app, 'Priya', priya.token);
+    const desk = await signedIn(app, 'Priya', priya.token);
+    expect((await laptop.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+    expect((await laptop.post('/api/admin/lock').set(AH)).status).toBe(200);
+    expect((await desk.post('/api/admin/unlock/from-respond').set(AH)).status).toBe(200);
+  });
+
   it('refuses once the person has left Administrators, and without the Admin header', async () => {
     const { app, people } = setup();
     const admins = people.allGroups().find((g) => g.name === 'Administrators')!;

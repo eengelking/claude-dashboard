@@ -260,7 +260,7 @@ function LockForm({ api, notice, onUnlocked }: { api: ReturnType<typeof makeApi>
     <form className="lock" onSubmit={submit} autoComplete="off">
       <div>
         <h1>Admin</h1>
-        <p className="lead">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are already signed in as an Administrator, Admin opens without this.</p>
+        <p className="lead">Create and revoke the tokens people use to report to this Podium. Sign in with your name and token to continue. If you are signed in to respond as an Administrator, Admin opens without this, unless you locked it with Lock Admin.</p>
       </div>
       {notice && (
         <div className="hint ink2" role="status">

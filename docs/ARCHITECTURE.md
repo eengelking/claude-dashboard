@@ -51,7 +51,8 @@ person_machines, admin_log, settings) and every paged query. The Admin API is a 
 header on changes. The Admin page (`frontend/src/fleet/admin/`, route `#/admin`) holds a new token in component
 state only until the owner says it is saved. A restart ends every Admin session, which is also how rotating the
 admin secret ends them. A browser already signed in to respond as an Administrator opens Admin with no second sign-in (#215): the respond routes
-widen their cookie to `Path=/api` and fill in a `RespondBridge` (`fleet/respondBridge.ts`) that the Admin router asks on `POST unlock/from-respond`.
+widen their cookie to `Path=/api` and fill in a `RespondBridge` (`fleet/respondBridge.ts`) that the Admin router asks on `POST unlock/from-respond`. `POST lock` calls the bridge's `hold` to mark that sign-in so `administratorOf` answers
+null until `POST unlock` calls `release` for that same person or the person signs in to respond again (#272).
 The top bar's Admin button reads `me.admin` from `useRespond`; the server, not the button, is the check.
 
 **Admin page patterns** (`frontend/src/fleet/admin/Page.tsx`, `admin.css`, issue #143, mockup `mockup/podium-admin.html`). `AdminView`

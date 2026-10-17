@@ -47,6 +47,8 @@ interface SignIn {
   personId: number | null;
   tokenHash: string | null;
   last: number;
+  /** Set by an explicit Lock Admin: this sign-in no longer opens Admin by itself (#272). A new sign-in starts without it. */
+  adminHeld?: boolean;
 }
 
 /** Who a signed-in browser is, worked out afresh on each request. */
@@ -241,9 +243,21 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
   };
 
   if (d.bridge) {
+    const signInOf = (req: Request) => {
+      const sid = readCookie(req, COOKIE);
+      return sid ? signIns.get(sid) : undefined;
+    };
     d.bridge.administratorOf = (req) => {
       const v = enabled() ? viewerOf(req) : null;
-      return v?.admin ? { personId: v.personId } : null;
+      return v?.admin && !signInOf(req)?.adminHeld ? { personId: v.personId } : null;
+    };
+    d.bridge.hold = (req) => {
+      const s = signInOf(req);
+      if (s) s.adminHeld = true;
+    };
+    d.bridge.release = (req, personId) => {
+      const s = signInOf(req);
+      if (s && s.personId === personId) s.adminHeld = false; // only the person who is signed in here lifts their own hold
     };
   }
 

@@ -392,7 +392,7 @@ Admin is for the person who runs the server. The **Admin** button in the top bar
 without activity (an Administrator who is still signed in to the console is let straight back in), and five wrong names or tokens lock it for 15 minutes. A server started without a token has no Admin,
 because there would be nothing to protect it.
 
-Admin has eight pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and Spend and the Admin log under Activity. Lock Admin is at the bottom of the menu, and on a narrow screen the menu becomes a strip along the top. Every list is paged, 50 rows at a time (25 and 100 are also offered; Spend starts at 25 and offers 50 and 100).
+Admin has eight pages, listed in a menu down the left side: People, Groups and Reporters under People and access; Settings, Model prices and Reporting and security under Server; and Spend and the Admin log under Activity. Lock Admin is at the bottom of the menu; after you use it, reloading the page asks for your name and token again, even while you are still signed in to respond (the 10-minute idle lock, by contrast, lets a signed-in Administrator straight back in). On a narrow screen the menu becomes a strip along the top. Every list is paged, 50 rows at a time (25 and 100 are also offered; Spend starts at 25 and offers 50 and 100).
 
 - **People.** Under **Create user**, type a name and choose Create user. Podium shows the token once, above the page (it stays there when you switch pages), with the
   settings to paste into that person's reporter: `userName`, `token` and `serverUrl`. Copy them before you

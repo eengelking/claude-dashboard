@@ -190,6 +190,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
     const administrator = found?.person && people.isAdministrator(found.person.id) ? found.person : undefined;
     if (found && (administrator || found.person === null)) {
       lockout.succeed(src);
+      opts.respondBridge?.release(req, administrator?.id ?? null); // the person just proved who they are, so the idle lock may let them back in (#272)
       openSession(req, res, administrator?.id ?? null);
       return;
     }
@@ -217,6 +218,7 @@ export function createAdminRouter(opts: AdminRouterOptions): Router {
   router.post('/lock', (req, res) => {
     const sid = readCookie(req, COOKIE);
     if (sid) sessions.delete(sid);
+    opts.respondBridge?.hold(req); // a reload must not reopen Admin from the console sign-in (#272)
     res.clearCookie(COOKIE, { path: '/api/admin' });
     res.json({ ok: true });
   });

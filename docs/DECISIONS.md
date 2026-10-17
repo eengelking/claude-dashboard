@@ -432,7 +432,9 @@ settings screen.
 
 **Alternatives.** One shared cookie for both sessions, which would tie the 10-minute Admin lock to the 12-hour console sign-in. Minting the Admin cookie at respond sign-in, which would not cover the idle lock and would not work if the Admin session had been locked on purpose. Dropping the idle lock.
 
-**Cost.** The respond cookie now travels to every `/api` route, though only the respond and Admin routes read it. The Admin button is gone while responding is switched off (the `respond` flag is off by default), since nobody can sign in at the top bar then; `#/admin` still works. "Lock Admin" does not stop a reload from reopening Admin while the console sign-in stands.
+**Cost.** The respond cookie now travels to every `/api` route, though only the respond and Admin routes read it. The Admin button is gone while responding is switched off (the `respond` flag is off by default), since nobody can sign in at the top bar then; `#/admin` still works. An explicit "Lock Admin" used to leave a reload free to reopen Admin while the console sign-in stood; #272 fixed that (below).
+
+**Update (#272).** "Lock Admin" marks that browser's respond sign-in as held, in memory, and `from-respond` refuses a held sign-in until that person unlocks with their name and token (which lifts the hold; another Administrator unlocking in the same browser does not) or signs in to respond again. The sign-in itself stands, so the person can still answer sessions, and the idle lock still lets a signed-in Administrator back in. Alternative not taken: ending the respond sign-in on Lock Admin, which would also stop the person answering sessions' prompts, something the button's name does not suggest.
 
 ## 31. Security sweep (#249): what was found, what was fixed, what is accepted
 
