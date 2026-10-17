@@ -26,7 +26,7 @@ describe('openDb', () => {
     const db = openDb(':memory:');
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['admin_log', 'agent_texts', 'agents', 'blowouts', 'events', 'groups', 'people', 'person_machines', 'reporter_ignores', 'reporter_sessions', 'reporters', 'samples', 'schema_migrations', 'sessions', 'settings']));
-    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }, { version: 15 }, { version: 16 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }, { version: 15 }, { version: 16 }, { version: 17 }]);
     db.close();
   });
 
@@ -98,9 +98,41 @@ describe('openDb', () => {
     old.exec('DELETE FROM schema_migrations WHERE version >= 2');
     old.close();
     const db = openDb(file);
-    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }, { version: 15 }, { version: 16 }]);
+    expect(db.prepare('SELECT version FROM schema_migrations ORDER BY version').all()).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 }, { version: 15 }, { version: 16 }, { version: 17 }]);
     expect(db.prepare("SELECT tool_calls, tool_counts_json FROM agents WHERE id = 'a'").get()).toEqual({ tool_calls: 7, tool_counts_json: null });
     expect(db.prepare("SELECT name, loop_json, files_json, attached, detached_at, owner, machine_json, cleared_from FROM sessions WHERE id = 's1'").get()).toEqual({ name: 'demo', loop_json: null, files_json: null, attached: null, detached_at: null, owner: null, machine_json: null, cleared_from: null });
+    db.close();
+  });
+
+  it('drops the unread people.token_last4 column and keeps the people it had (issue #277)', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'podium-db-'));
+    tmpDirs.push(dir);
+    const file = path.join(dir, 'fleet.db');
+    // A database made by 1.0.2: people has token_last4 (NOT NULL) and the migration 17 has not run.
+    const old = openDb(file);
+    if (!(old.prepare('PRAGMA table_info(people)').all() as { name: string }[]).some((c) => c.name === 'token_last4')) {
+      old.exec("ALTER TABLE people ADD COLUMN token_last4 TEXT NOT NULL DEFAULT ''");
+    }
+    old.exec(`INSERT INTO people (name, name_lower, key_id, token_hash, token_last4, created_at)
+      VALUES ('Ada', 'ada', 'aabbccddeeff', '${'0'.repeat(64)}', 'wxyz', 1000)`);
+    old.exec('DELETE FROM schema_migrations WHERE version = 17');
+    old.close();
+
+    const db = openDb(file);
+    const cols = (db.prepare('PRAGMA table_info(people)').all() as { name: string }[]).map((c) => c.name);
+    expect(cols).not.toContain('token_last4');
+    expect(cols).toEqual(expect.arrayContaining(['name', 'key_id', 'token_hash']));
+    expect(db.prepare('SELECT name, key_id, token_hash FROM people').all()).toEqual([
+      { name: 'Ada', key_id: 'aabbccddeeff', token_hash: '0'.repeat(64) },
+    ]);
+    // A person can still be made and given a new token, with nothing writing the dropped column.
+    const people = new PeopleStore(db);
+    const made = people.createPerson('Grace');
+    expect(made.token).toMatch(/^pdm_[0-9a-f]{12}_[0-9a-f]{48}$/);
+    const rotated = people.rotate(made.person.id);
+    expect(rotated?.token).not.toBe(made.token);
+    expect(people.findByKeyId('aabbccddeeff')?.name).toBe('Ada');
+    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 17 });
     db.close();
   });
 
@@ -113,7 +145,7 @@ describe('openDb', () => {
     a.close();
     const db = openDb(file);
     expect(db.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' });
-    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 16 });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()).toEqual({ n: 17 });
     expect(db.prepare('SELECT name FROM sessions').all()).toEqual([{ name: 'demo' }]);
     expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
     db.close();

@@ -24,7 +24,9 @@ describe('people', () => {
     expect(token).toMatch(/^pdm_/);
     const raw = JSON.stringify(store.db.prepare('SELECT * FROM people').all());
     expect(raw).not.toContain(token);
-    expect(raw).toContain(token.slice(-4));
+    // Not even its tail: only the hash is stored (#277).
+    expect(raw).not.toContain(token.slice(-8));
+    expect(Object.keys(store.db.prepare('SELECT * FROM people').get() as object)).not.toContain('token_last4');
     const found = store.findByKeyId(person.keyId)!;
     expect(tokenMatches(token, found.tokenHash)).toBe(true);
   });

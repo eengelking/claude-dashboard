@@ -10,21 +10,16 @@ export interface NewToken {
   token: string;
   keyId: string;
   hash: string;
-  last4: string;
 }
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-export function last4(token: string): string {
-  return token.slice(-4);
-}
-
 export function newPersonToken(): NewToken {
   const keyId = randomBytes(6).toString('hex');
   const token = `pdm_${keyId}_${randomBytes(24).toString('hex')}`;
-  return { token, keyId, hash: hashToken(token), last4: last4(token) };
+  return { token, keyId, hash: hashToken(token) };
 }
 
 /** The key id in a well-formed person token, or null (so a bad header never reaches the database). */
