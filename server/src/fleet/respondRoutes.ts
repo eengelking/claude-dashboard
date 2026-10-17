@@ -14,7 +14,7 @@ import { ADMIN_OWNER, ADMIN_SECRET_ACTOR, nameKey, sourceAddress, type PeopleSto
 import { checkNameToken } from './nameToken.js';
 import type { RespondBridge } from './respondBridge.js';
 import type { Lockout } from './lockout.js';
-import { logWords, type AnswerError } from './respond.js';
+import { logWords, shortDeliveryId, type AnswerError, type DeliveryTrail } from './respond.js';
 import { DELIVERY_RESULTS, RESPOND_LIMITS, validateAsk, type AskCloseOutcome, type Delivery, type DeliveryResult, type RespondMe } from './protocol.js';
 import type { Logger } from '../logging/logger.js';
 import type { SessionRow } from './db.js';
@@ -107,6 +107,50 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     res.status(status).json({ ok: false, error: reason, ...extra });
   };
 
+  // ---- what became of a delivery (#304) ----------------------------------------------------------
+
+  /** The address of the request that is changing a delivery's fate, for the admin log; 'server' when none is (a report's implicit close). */
+  let trailSource = 'server';
+  const withSource = <T>(src: string, fn: () => T): T => {
+    trailSource = src;
+    try {
+      return fn();
+    } finally {
+      trailSource = 'server';
+    }
+  };
+  const actorOf = (name: string): string => (name === ADMIN_OWNER ? ADMIN_SECRET_ACTOR : name);
+  const RESULT_WORDS: Record<DeliveryResult, string> = {
+    took: 'the session took it',
+    queued: 'the session queued it',
+    'not-taken': 'the session did not take it',
+    refused: 'the session refused it',
+    closed: 'it had closed before the session got it',
+  };
+  const DROP_WORDS: Record<'discarded' | 'ask-closed', string> = {
+    discarded: 'discarded by its sender, so it never reached the session',
+    'ask-closed': 'the ask closed first, so it never reached the session',
+  };
+  fleet.respond.trail = (t: DeliveryTrail) => {
+    // The store calls this mid-change; a failing log write must not leave a delivery half-updated.
+    try {
+      writeTrail(t);
+    } catch (err) {
+      logger.warn('respond.trail_failed', `podium: could not log what became of a delivery in session ${t.sessionId}`, { session_id: t.sessionId, error: String(err) });
+    }
+  };
+  const writeTrail = (t: DeliveryTrail) => {
+    const row = fleet.db.getSession(t.sessionId);
+    const where = `${logWords(t.delivery)} in ${row?.name ?? 'a session'} (${t.sessionId.slice(0, 8)}) [${shortDeliveryId(t.delivery)}]`;
+    if (t.kind === 'result') {
+      people?.log('respond_result', `${where}: ${RESULT_WORDS[t.result]}`, trailSource, now(), actorOf(t.delivery.by));
+      logger.info('respond.result', `podium: ${logWords(t.delivery).toLowerCase()} in session ${t.sessionId} came back ${t.result}`, { session_id: t.sessionId, kind: t.delivery.kind, result: t.result });
+    } else {
+      people?.log('respond_dropped', `${where}: ${DROP_WORDS[t.why]}`, trailSource, now(), actorOf(t.by));
+      logger.info('respond.dropped', `podium: ${logWords(t.delivery).toLowerCase()} in session ${t.sessionId} was dropped (${t.why})`, { session_id: t.sessionId, kind: t.delivery.kind, why: t.why });
+    }
+  };
+
   // ---- the mod's side ---------------------------------------------------------------------------
 
   /** The session a mod route is about, when responding is on and the credential owns it; otherwise answers and returns null. */
@@ -173,7 +217,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
     }
     const answer = typeof b?.answer === 'string' ? b.answer.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, RESPOND_LIMITS.answer) : null;
     const at = typeof b?.at === 'number' && Number.isFinite(b.at) ? b.at : now();
-    fleet.respond.close(row.id, req.params.askId!, { outcome: outcome as AskCloseOutcome, at, answer, planApproved: b?.planApproved === true });
+    withSource(sourceOf(req), () => fleet.respond.close(row.id, req.params.askId!, { outcome: outcome as AskCloseOutcome, at, answer, planApproved: b?.planApproved === true }));
     logger.debug('respond.closed', `podium: an ask in session ${row.id} closed (${outcome})`, { session_id: row.id, outcome });
     res.json({ ok: true });
   });
@@ -186,7 +230,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
       res.status(400).json({ ok: false, error: `expected result ${DELIVERY_RESULTS.join(', ')}`, path: '$.result' });
       return;
     }
-    if (!fleet.respond.result(row.id, req.params.deliveryId!, result as DeliveryResult)) {
+    if (!withSource(sourceOf(req), () => fleet.respond.result(row.id, req.params.deliveryId!, result as DeliveryResult))) {
       res.status(404).json({ ok: false, error: 'unknown delivery' });
       return;
     }
@@ -351,7 +395,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
   /** Each answer, message and command the server takes: the admin log and the server log, never its text (7.7). */
   const audit = (req: Request, v: Viewer, row: SessionRow, delivery: Delivery) => {
     const src = sourceOf(req);
-    people?.log('respond_sent', `${logWords(delivery)} in ${row.name} (${row.id.slice(0, 8)})`, src, now(), v.actor);
+    people?.log('respond_sent', `${logWords(delivery)} in ${row.name} (${row.id.slice(0, 8)}) [${shortDeliveryId(delivery)}]`, src, now(), v.actor);
     logger.info('respond.sent', `podium: ${logWords(delivery).toLowerCase()} in session ${row.id}`, { session_id: row.id, kind: delivery.kind, admin: v.admin, source: src });
   };
 
@@ -401,7 +445,7 @@ export function mountRespondRoutes(router: Router, d: RespondDeps): void {
       refuse(req, res, 403, 'sign in to respond');
       return;
     }
-    const out = fleet.respond.discard(req.params.deliveryId!, v.name, v.admin);
+    const out = withSource(sourceOf(req), () => fleet.respond.discard(req.params.deliveryId!, v.name, v.admin));
     if (out === 'unknown') res.status(404).json({ ok: false, error: 'unknown delivery' });
     else if (out === 'forbidden') refuse(req, res, 403, 'not your answer');
     else if (out === 'handed-over') res.status(409).json({ ok: false, error: 'handed over' });

@@ -64,6 +64,11 @@ interface AskEntry {
   ran?: boolean;
 }
 
+/** What became of a delivery after the server took it, for the admin log (#304): never its text. */
+export type DeliveryTrail =
+  | { kind: 'result'; sessionId: string; delivery: Delivery; result: DeliveryResult }
+  | { kind: 'dropped'; sessionId: string; delivery: Delivery; why: 'discarded' | 'ask-closed'; /** Who discarded it; the sender for a drop on close. */ by: string };
+
 export type HoldResult = { kind: 'delivery'; delivery: Delivery } | { kind: 'none' } | { kind: 'unknown' } | { kind: 'closed'; outcome: AskOutcome };
 
 interface Waiter {
@@ -189,9 +194,16 @@ function newId(): string {
   return `dlv_${randomBytes(12).toString('hex')}`;
 }
 
+/** The short id the admin log shows for a delivery, so its rows match: `dlv_` and the first 8 hex digits. */
+export function shortDeliveryId(d: Delivery): string {
+  return d.id.slice(0, 12);
+}
+
 export class RespondStore {
   private readonly sessions = new Map<string, SessionEntry>();
   private readonly waiters = new Set<Waiter>();
+  /** Told what became of each delivery (#304). The routes set it to write the admin log. */
+  trail: (t: DeliveryTrail) => void = () => {};
 
   constructor(
     private readonly now: () => number,
@@ -349,6 +361,7 @@ export class RespondStore {
     if (d && d.result === null && !d.handedOver) {
       d.result = 'closed';
       this.feed?.remove(sessionId, d.d.id);
+      this.trail({ kind: 'dropped', sessionId, delivery: d.d, why: 'ask-closed', by: d.d.by });
     }
     this.wake(sessionId, e.ask.id, { kind: 'closed', outcome: closed.outcome });
     this.onChange(sessionId);
@@ -475,6 +488,7 @@ export class RespondStore {
     const msg = s.messages.find((m) => m.d.id === deliveryId);
     if (msg) {
       msg.result = result;
+      this.trail({ kind: 'result', sessionId, delivery: msg.d, result });
       if (result === 'refused' || result === 'closed') this.feed?.remove(sessionId, deliveryId);
       else this.feed?.update(sessionId, deliveryId, noteFor(msg.d, null, result));
       // A message with its final result is done; keep only those still waiting for one.
@@ -485,6 +499,7 @@ export class RespondStore {
     if (!e || !e.delivery) return false;
     const d = e.delivery;
     d.result = result;
+    this.trail({ kind: 'result', sessionId, delivery: d.d, result });
     if (result === 'took') {
       if (!e.closed || e.closed.implicit) e.closed = { outcome: 'podium', at: this.now(), by: d.d.by, answer: null, planApproved: d.d.kind === 'plan-approve', implicit: false };
       this.wake(sessionId, e.ask.id, { kind: 'closed', outcome: 'podium' });
@@ -512,6 +527,7 @@ export class RespondStore {
       if (mi >= 0) s.messages.splice(mi, 1);
       else if (ask) ask.delivery = null;
       this.feed?.remove(sid, deliveryId);
+      this.trail({ kind: 'dropped', sessionId: sid, delivery: d.d, why: 'discarded', by: viewer });
       this.onChange(sid);
       return 'ok';
     }
