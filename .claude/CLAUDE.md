@@ -8,7 +8,7 @@ Podium is a live fleet console for Claude Code. It shows every session running o
 browser tab: each orchestrator's model, effort, plan, the agents it launched, what they cost, how full
 their context windows are, why anything failed, and which git branch it works in. It is for someone who
 runs several Claude Code sessions and agents at once and wants to see what they are doing and costing
-without watching each terminal. Podium watches, and since #206 it can also answer a session that waits on its person
+without watching each terminal. Podium watches, and it can also answer a session that waits on its person
 (a question, a plan, a tool's permission prompt, a message, `/clear` or `/compact`), only where the Admin and the
 session's owner have both turned that on. It never types into a terminal or changes a session's permission rules.
 
@@ -150,7 +150,7 @@ Everything below changes in the release-prep PR, in the same commit, never as a 
 | `mod/podium-reporter/hooks/register.ts` | `VERSION`, equal to `plugin.json` |
 | `server/src/fleet/compat.ts` | On a new **minor or major** only: move `max` in `REPORTER_SUPPORT` to the release's `MAJOR.MINOR.0`, or the server tells every up-to-date mod it is newer than the server supports (SPEC 6.8) |
 
-Then grep the repo for the old version string and look at every hit before assuming the table is complete. Known hits that are sample data and do not change: `docs/fixtures/report.sample.json`, the fixtures in `server/src/fleet/*.test.ts`, `mod/podium-reporter/hooks/scripted.ts`, the simulator's `0.1.0-sim`, and the manifest example in `docs/SPEC.md`.
+Then grep the repo for the old version string and look at every hit before assuming the table is complete. Known hits that are sample data and do not change: `docs/fixtures/report.sample.json`, the fixtures in `server/src/fleet/*.test.ts`, `docs/GOTCHAS.md`, `mod/podium-reporter/hooks/scripted.ts`, the simulator's `0.1.0-sim`, and the manifest example in `docs/SPEC.md`.
 
 **The release check.** Before the release-prep PR is opened, the main session starts a fresh, non-fork subagent on Haiku (the Agent tool with `model: "haiku"` and no `subagent_type: "fork"`) to check that the release is ready. Its prompt names the version and states its authority: "report a verdict; you do not have merge, tag or push authority, and you do not edit files." It checks that:
 
