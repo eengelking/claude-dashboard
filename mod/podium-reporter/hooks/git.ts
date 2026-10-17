@@ -182,12 +182,13 @@ export async function readChanges(run: Runner, cwd: string, base: string | null)
     const counted = new Set<string>();
     for (let i = 0; i < grepable.length; i += GREP_CHUNK) {
       const chunk = new Map(grepable.slice(i, i + GREP_CHUNK).map((f) => [f.path, f]));
-      const lines = await out(['git', '-C', top, '--literal-pathspecs', 'grep', '--no-index', '-I', '-c', '-z', '', '--', ...chunk.keys()], [0, 1]);
-      for (const line of lines.split('\n')) {
+      const counts = await out(['git', '-C', top, '--literal-pathspecs', 'grep', '--no-index', '-I', '-c', '-z', '', '--', ...chunk.keys()], [0, 1]);
+      for (const line of counts.split('\n')) {
         const cut = line.lastIndexOf('\0');
         const f = cut > 0 ? chunk.get(line.slice(0, cut)) : undefined;
-        if (!f) continue;
-        f.added = Number(line.slice(cut + 1));
+        const n = Number(line.slice(cut + 1));
+        if (!f || !Number.isInteger(n)) continue;
+        f.added = n;
         f.removed = 0;
         counted.add(f.path);
       }
