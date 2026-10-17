@@ -299,7 +299,18 @@ say `127.0.0.1` too, and a new test setup file that replaces `setupFiles` must k
 It binds with Node's internal `_listen2`, because supertest reads the port the moment `listen(0)` returns and a
 public `listen(0, '127.0.0.1')` is not synchronous; `testSetup.test.ts` fails if a Node upgrade breaks that. To
 check for the flake, run several full runs at once, for example six loops of `npx vitest run` in parallel, which
-failed about 7% of runs before the fix and none of 60 after.
+failed about 7% of runs before the fix and none of 60 after. Keep it to three loops, and let the sockets drain
+between rounds (`netstat -an -p tcp | grep -c TIME_WAIT` under a few hundred): a run opens about 3,000
+connections, macOS has about 16,000 ephemeral ports, and with vitest 5 six loops run out of them and fail with
+`listen EADDRNOTAVAIL 127.0.0.1` all over the suite. That is the machine, not a test. One real timing flake
+remains: `shipper.test.ts` "sends a full batch on its own" waits a fixed 20 ms for a gzip to finish and fails now
+and then under load, on vitest 2 as well.
+
+### The frontend build says `Property 'toBeInTheDocument' does not exist on type 'Assertion'`
+
+vitest 5 declares `Assertion<R, T>` with two type parameters, and `@testing-library/jest-dom` declares it with
+one, so TypeScript drops jest-dom's own matcher types. `frontend/src/jest-dom.d.ts` redeclares them for two
+parameters. If a jest-dom release fixes its types, delete that file.
 
 ### Finished nested agents are missing from `$.agent.list()`
 
