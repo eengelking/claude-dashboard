@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Changed
+
+- **The README and user guide give one command to update the mod.** `claude plugin marketplace update eengelking-marketplace && claude plugin update podium-reporter@eengelking-marketplace` refreshes the listing and updates the mod in one go. Documentation only.
+
 ## [1.1.0] - 2026-10-16
 
 ### Added

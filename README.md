@@ -195,7 +195,7 @@ off the wall, because Claude Code's background daemon also runs idle twins and s
 In the session, `/podium` prints the dashboard link, the connection state and report counts, and
 `/podium name <text>` gives the session a display name. The status line under the prompt reads
 `podium vX.Y.Z ● N live` (N is the cards on the wall, so a session that has not run yet reads 0), or `podium vX.Y.Z ○ offline` while the server is unreachable (reports queue up and go out
-when it is back). When the mod and the server are on versions that do not match, it ends in `· update mod` or `· upgrade server`, and in `· update available` when the server supports a newer mod than yours. To update the mod, run `claude plugin update podium-reporter@eengelking-marketplace` and then `/reload-plugins` in the session (see "Updating the mod" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)). Claude Code puts a `⚠` and the mod's name in front of the line; that is how it draws every
+when it is back). When the mod and the server are on versions that do not match, it ends in `· update mod` or `· upgrade server`, and in `· update available` when the server supports a newer mod than yours. To update the mod, run `claude plugin marketplace update eengelking-marketplace && claude plugin update podium-reporter@eengelking-marketplace` in a shell and then `/reload-plugins` in the session (see "Updating the mod" in [docs/USER_GUIDE.md](docs/USER_GUIDE.md)). Claude Code puts a `⚠` and the mod's name in front of the line; that is how it draws every
 mod's status line, not a Podium warning (see [docs/GOTCHAS.md](docs/GOTCHAS.md)). Effort is read from each model request, so a change made with `/effort` shows after
 the session's next prompt, not when you pick it.
 

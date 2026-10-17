@@ -582,17 +582,23 @@ in the README for the snippet to add to `~/.claude/settings.json`.
 The mod and the server are released separately, so you update them separately. A card marked `reporter 0.1.0 · update`
 means the mod in that session is older than the server supports. To update it:
 
-1. In a shell, run `claude plugin update podium-reporter@eengelking-marketplace`. It prints
-   `Checking for updates...` and then the new version, or says it is already at the latest version. Inside a
-   session you can use `/plugin`, open the Installed tab, pick `podium-reporter` and choose Update now.
+1. In a shell, refresh the marketplace listing and update the mod in one line:
+
+   ```bash
+   claude plugin marketplace update eengelking-marketplace && claude plugin update podium-reporter@eengelking-marketplace
+   ```
+
+   The update prints `Checking for updates...` and then the new version, or says it is already at the latest
+   version. Inside a session you can use `/plugin`, open the Installed tab, pick `podium-reporter` and choose
+   Update now.
 2. Apply it. A running session keeps the version it loaded, so run `/reload-plugins` in it, or start a new
    session. Sessions you do not reload keep reporting the old version and stay marked.
 3. Run `/podium`. The `Versions:` line shows the mod's version, and the `· update mod` or `· update available` ending on the status
    line goes away after the next report.
 
 If the command says it is already at the latest version but the card is still marked, the marketplace has
-not published a newer mod yet. Refresh its listing with `claude plugin marketplace update eengelking-marketplace`
-and run the update again. Refreshing the listing alone does not update the installed plugin.
+not published a newer mod yet. Refreshing the listing alone does not update the installed plugin, which is why
+the one-liner runs both.
 
 Marketplaces other than Anthropic's do not update plugins by themselves. To have Claude Code do it, open `/plugin`,
 choose the Marketplaces tab, pick `eengelking-marketplace` and turn on auto-update. It updates the plugin
