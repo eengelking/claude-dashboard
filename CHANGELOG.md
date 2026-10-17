@@ -14,6 +14,10 @@ the changes merged after the reporter's 0.14.3 bump, because it is the first rel
 
 ## [Unreleased]
 
+### Added
+
+- **A favicon.** The browser tab shows a white agent-tree mark on a dark tile, so the Podium tab is easy to pick out among many open tabs. It is a single SVG, `frontend/public/favicon.svg`, served from the app's own origin.
+
 ## [1.0.2] - 2026-10-16
 
 ### Fixed
